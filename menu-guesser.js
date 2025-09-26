@@ -8,8 +8,8 @@ async function sha256(message) {
 
 // Store username/hash pairs for login (replace hashes with yours!)
 const users = [
-  // Example: admin / password: letmein123!
-  { username: 'admin', hash: 'b109f3bbbc244eb82441917ed06d618b9008dd09c7f1e798d7d1d0f6b8b5b9b3' },
+  // Example: admin / password: My$ecureP@ssword
+  { username: 'admin', hash: '96f460c55f7ab570cc0a46aafef0237f5bf7ad3564789f8c18dcb0f142be060a' },
   // Example: user1 / password: user1pass!
   { username: 'user1', hash: '0c9a9b735e7f94d8e3e2f3c1b6a8f0d812b3cc8da70a34e4a7e3a2c1a4e0f9b2' }
 ];
