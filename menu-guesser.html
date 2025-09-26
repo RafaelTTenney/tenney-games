@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Menu Guesser</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h2>Menu Guesser Tool</h2>
+  <button onclick="logout()">Logout</button>
+  <div id="guesserApp"></div>
+  <script src="menu-guesser.js"></script>
+  <script>
+    if (!isLoggedIn()) {
+      window.location.replace('index.html');
+    } else {
+      showMenuGuesser();
+    }
+  </script>
+</body>
+</html>
