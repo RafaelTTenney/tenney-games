@@ -1,32 +1,50 @@
 body {
   font-family: Arial, sans-serif;
-  margin: 0;
-  padding: 0;
   background: #f0f3f8;
   color: #222;
+  margin: 0;
+  padding: 0;
 }
-header, footer {
-  background: #234;
-  color: #fff;
-  padding: 1em;
+.centered {
+  max-width: 400px;
+  margin: 5em auto;
+  background: #fff;
+  padding: 2em;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
   text-align: center;
 }
-main {
-  padding: 2em;
+input[type="text"], input[type="password"] {
+  width: 90%;
+  padding: 0.6em;
+  margin: 0.6em 0;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 1em;
 }
-h1, h2 {
-  margin-top: 0;
+button {
+  padding: 0.7em 1.6em;
+  border: none;
+  border-radius: 7px;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 1em;
+  cursor: pointer;
+}
+button:hover {
+  background: #1558b0;
+}
+.error {
+  color: #d43a2f;
+  margin-top: 1em;
 }
 ul {
   list-style: none;
   padding: 0;
 }
 li {
-  background: #fff;
-  margin: 1em 0;
-  padding: 1em;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  margin: 1.2em 0;
+  font-size: 1.1em;
 }
 a {
   color: #1a73e8;
