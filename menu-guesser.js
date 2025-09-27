@@ -11,7 +11,7 @@ const users = [
   // Example: admin / password: My$ecurePa$$word
   { username: 'admin', hash: '02079b31824a4d18a105f16b9d45e751a114ce5b4ff3d49c6f19633aed25abbc' },
   // Example: user1 / password: user1pass!
-  { username: 'user1', hash: '0c9a9b735e7f94d8e3e2f3c1b6a8f0d812b3cc8da70a34e4a7e3a2c1a4e0f9b2' }
+  { username: 'user1', hash: '6b6197ff809a6ec0af1ba56a0f5c02a2eb5cd6605a2d39b42263bea3070e2e7c' }
 ];
 
 function isLoggedIn() {
