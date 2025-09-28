@@ -3,13 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <title>Password & PIN Guessers</title>
-  <!-- Add any CSS you need here -->
 </head>
 <body>
   <button onclick="logout()">Logout</button>
   <div id="guesserApp"></div>
-
-  <!-- Load all guesser JS files -->
+  <!-- Load all guesser JS files here -->
   <script src="guesser/pin_4digit.js"></script>
   <script src="guesser/pin_6digit.js"></script>
   <script src="guesser/pin_8digit.js"></script>
@@ -23,8 +21,7 @@
   <script src="guesser/dictionary_guesser_advanced.js"></script>
   <script src="guesser/dictionary_guesser_rockyou.js"></script>
   <script src="guesser/dictionary_guesser_common_sha256.js"></script>
-  
-  <!-- Main menu guesser logic -->
+  <script src="login.js"></script>
   <script src="menu-guesser.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
