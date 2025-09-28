@@ -1,6 +1,4 @@
-// Secure email credential handling using dotenv
-
-require('dotenv').config(); // Loads variables from .env
+require('dotenv').config();
 
 const express = require('express');
 const nodemailer = require('nodemailer');
@@ -12,7 +10,6 @@ app.use(cors());
 
 const EMAIL_TO = process.env.EMAIL_USER;
 
-// Set up Nodemailer transporter with environment variables
 const transporter = nodemailer.createTransport({
   service: 'Outlook',
   auth: {
@@ -21,7 +18,6 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Account request endpoint
 app.post('/api/send-account-request', async (req, res) => {
   const { email, name, lastname, message } = req.body;
   if (!email || !name || !lastname || !message) {
@@ -41,7 +37,6 @@ app.post('/api/send-account-request', async (req, res) => {
   }
 });
 
-// Password reset endpoint
 app.post('/api/send-password-reset', async (req, res) => {
   const { name, email } = req.body;
   if (!name || !email) {
