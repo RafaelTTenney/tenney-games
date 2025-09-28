@@ -69,15 +69,35 @@
       e.preventDefault();
       document.getElementById('applyError').textContent = '';
       document.getElementById('applySuccess').textContent = '';
+      // Get entered values
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const newpass = document.getElementById('newpass').value;
+      const message = document.getElementById('message').value.trim();
+
+      // Calculate username for auto-reply (first letter of first name + last name, all lower case)
+      const nameParts = name.split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join('') : '';
+      const username = (firstName[0] + lastName).toLowerCase();
+
+      // Send main application to admin
       emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", {
-        name: document.getElementById('name').value,
-        email: document.getElementById('email').value,
-        newpass: document.getElementById('newpass').value,
-        message: document.getElementById('message').value,
-        time: new Date().toLocaleString() // optional, for {{time}}
+        name: name,
+        email: email,
+        newpass: newpass,
+        message: message,
+        time: new Date().toLocaleString()
       })
       .then(function(response) {
-        document.getElementById('applySuccess').textContent = 'Application sent! You will be contacted by email soon.';
+        // Send auto-reply to applicant
+        emailjs.send("YOUR_SERVICE_ID", "YOUR_AUTO_REPLY_TEMPLATE_ID", {
+          name: name,
+          username: username,
+          newpass: newpass,
+          email: email
+        });
+        document.getElementById('applySuccess').textContent = 'Application sent! You will be contacted by email within three days.';
         document.getElementById('applyForm').reset();
       }, function(error) {
         document.getElementById('applyError').textContent = 'Failed to send application. Please try again.';
