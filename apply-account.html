@@ -21,12 +21,11 @@
     .footer { text-align: center; padding: 2em 1em 1em; color: #999; font-size: 0.95em;}
     @media (max-width: 500px) { .login-container { padding: 1em; margin-top: 2em; } }
   </style>
-  <!-- EmailJS CDN for client-side email sending -->
   <script src="https://cdn.emailjs.com/dist/email.min.js"></script>
   <script>
-    (function(){
-      emailjs.init("YOUR_EMAILJS_USER_ID"); // Replace with your EmailJS user ID
-    })();
+    window.onload = function() {
+      emailjs.init("YOUR_PUBLIC_KEY"); // Replace with your EmailJS public key
+    };
   </script>
 </head>
 <body>
@@ -39,16 +38,12 @@
     </div>
     <form class="login-form" id="applyForm">
       <div>
+        <label for="name">Your Name*</label>
+        <input type="text" id="name" name="name" required autocomplete="name">
+      </div>
+      <div>
         <label for="email">Email Address*</label>
         <input type="email" id="email" name="email" required autocomplete="email">
-      </div>
-      <div>
-        <label for="name">First Name*</label>
-        <input type="text" id="name" name="name" required autocomplete="given-name">
-      </div>
-      <div>
-        <label for="lastname">Last Name*</label>
-        <input type="text" id="lastname" name="lastname" required autocomplete="family-name">
       </div>
       <div>
         <label for="message">Why do you want this account?*</label>
@@ -70,18 +65,17 @@
       e.preventDefault();
       document.getElementById('applyError').textContent = '';
       document.getElementById('applySuccess').textContent = '';
-      // Send form data using EmailJS
       emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", {
-        email: document.getElementById('email').value,
         name: document.getElementById('name').value,
-        lastname: document.getElementById('lastname').value,
-        message: document.getElementById('message').value
+        email: document.getElementById('email').value,
+        message: document.getElementById('message').value,
+        time: new Date().toLocaleString() // optional, for {{time}}
       })
       .then(function(response) {
         document.getElementById('applySuccess').textContent = 'Application sent! You will be contacted by email soon.';
         document.getElementById('applyForm').reset();
       }, function(error) {
-        document.getElementById('applyError').textContent = 'Failed to send application.';
+        document.getElementById('applyError').textContent = 'Failed to send application. Please try again.';
       });
     });
   </script>
