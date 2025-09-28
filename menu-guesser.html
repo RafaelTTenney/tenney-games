@@ -7,7 +7,7 @@
 <body>
   <button onclick="logout()">Logout</button>
   <div id="guesserApp"></div>
-  <!-- Load all guesser JS files here -->
+  <!-- Load all guesser JS files first -->
   <script src="guesser/pin_4digit.js"></script>
   <script src="guesser/pin_6digit.js"></script>
   <script src="guesser/pin_8digit.js"></script>
@@ -21,7 +21,7 @@
   <script src="guesser/dictionary_guesser_advanced.js"></script>
   <script src="guesser/dictionary_guesser_rockyou.js"></script>
   <script src="guesser/dictionary_guesser_common_sha256.js"></script>
-  <script src="login.js"></script>
+  <!-- Main menu logic last -->
   <script src="menu-guesser.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
