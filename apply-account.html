@@ -24,7 +24,7 @@
   <script src="https://cdn.emailjs.com/dist/email.min.js"></script>
   <script>
     window.onload = function() {
-      emailjs.init("YOUR_PUBLIC_KEY"); // Replace with your EmailJS public key
+      emailjs.init("hWBO8AkwBa8wkWNfu"); // Replace with your EmailJS public key
     };
   </script>
 </head>
@@ -82,7 +82,7 @@
       const username = (firstName[0] + lastName).toLowerCase();
 
       // Send main application to admin
-      emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", {
+      emailjs.send("service_o1rs29h", "template_h7uss93", {
         name: name,
         email: email,
         newpass: newpass,
@@ -91,7 +91,7 @@
       })
       .then(function(response) {
         // Send auto-reply to applicant
-        emailjs.send("YOUR_SERVICE_ID", "YOUR_AUTO_REPLY_TEMPLATE_ID", {
+        emailjs.send("service_o1rs29h", "template_ybp3h4d", {
           name: name,
           username: username,
           newpass: newpass,
