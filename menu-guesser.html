@@ -1,162 +1,39 @@
-// List of guessers and their metadata
-const GUESSERS = [
-  {
-    id: 'dictionary_rockyou',
-    label: 'RockYou Dictionary',
-    inputs: [{id: 'userPassword', placeholder: 'Enter password to guess'}],
-    handler: async ({userPassword}) => {
-      const rockyouFiles = ['rockyou_max_aa.txt', 'rockyou_max_ab.txt'];
-      return await dictionaryGuesserRockyou(userPassword, rockyouFiles)
-        ? 'Password found in RockYou!'
-        : 'Password NOT found in RockYou.';
-    }
-  },
-  {
-    id: 'dictionary_common',
-    label: 'Common Password Dictionary',
-    inputs: [{id: 'userPassword', placeholder: 'Enter password to guess'}],
-    handler: async ({userPassword}) => {
-      return await dictionaryGuesserCommon(userPassword, 'common_passwords.txt')
-        ? 'Password found in common passwords!'
-        : 'Password NOT found in common passwords.';
-    }
-  },
-  {
-    id: 'dictionary_advanced',
-    label: 'Advanced Dictionary',
-    inputs: [{id: 'userPassword', placeholder: 'Enter password to guess'}],
-    handler: async ({userPassword}) => {
-      return await dictionaryGuesserAdvanced(userPassword, 'advanced_common_passwords.txt')
-        ? 'Password found in advanced dictionary!'
-        : 'Password NOT found in advanced dictionary.';
-    }
-  },
-  {
-    id: 'pin_4digit',
-    label: '4-digit PIN Brute Force',
-    inputs: [{id: 'pinToFind', placeholder: 'Enter PIN for demo'}],
-    handler: ({pinToFind}) => {
-      const found = guessPin4Digit(pin => pin === pinToFind);
-      return found ? `PIN found: ${found}` : 'PIN NOT found.';
-    }
-  },
-  {
-    id: 'pin_6digit',
-    label: '6-digit PIN Brute Force',
-    inputs: [{id: 'pinToFind', placeholder: 'Enter PIN for demo'}],
-    handler: ({pinToFind}) => {
-      const found = guessPin6Digit(pin => pin === pinToFind);
-      return found ? `PIN found: ${found}` : 'PIN NOT found.';
-    }
-  },
-  {
-    id: 'pin_8digit',
-    label: '8-digit PIN Brute Force',
-    inputs: [{id: 'pinToFind', placeholder: 'Enter PIN for demo'}],
-    handler: ({pinToFind}) => {
-      const found = guessPin8Digit(pin => pin === pinToFind);
-      return found ? `PIN found: ${found}` : 'PIN NOT found.';
-    }
-  },
-  {
-    id: 'pin_8digit_updown',
-    label: '8-digit PIN Up-Down',
-    inputs: [{id: 'pinToFind', placeholder: 'Enter PIN for demo'}],
-    handler: ({pinToFind}) => {
-      const found = guessPin8DigitUpDown(pin => pin === pinToFind);
-      return found ? `PIN found: ${found}` : 'PIN NOT found.';
-    }
-  },
-  {
-    id: 'password_all_possible',
-    label: 'All Possible (ASCII Brute Force)',
-    inputs: [{id: 'passwordToFind', placeholder: 'Enter password'}],
-    handler: ({passwordToFind}) => {
-      const found = passwordGuesserAllPossible(passwordToFind);
-      return found ? `Password found: ${found}` : 'Password NOT found.';
-    }
-  },
-  {
-    id: 'password_basic_symbols',
-    label: 'Basic Symbols Brute Force',
-    inputs: [{id: 'passwordToFind', placeholder: 'Enter password'}],
-    handler: ({passwordToFind}) => {
-      const found = passwordGuesserBasicSymbols(passwordToFind);
-      return found ? `Password found: ${found}` : 'Password NOT found.';
-    }
-  },
-  {
-    id: 'password_keyboard',
-    label: 'Keyboard Symbols Brute Force',
-    inputs: [{id: 'passwordToFind', placeholder: 'Enter password'}],
-    handler: ({passwordToFind}) => {
-      const found = passwordGuesserKeyboard(passwordToFind);
-      return found ? `Password found: ${found}` : 'Password NOT found.';
-    }
-  },
-  {
-    id: 'password_lower_upper',
-    label: 'Lower/Upper Letters Brute Force',
-    inputs: [{id: 'passwordToFind', placeholder: 'Enter password'}],
-    handler: ({passwordToFind}) => {
-      const found = passwordGuesserLowerUpper(passwordToFind);
-      return found ? `Password found: ${found}` : 'Password NOT found.';
-    }
-  },
-  {
-    id: 'password_nums',
-    label: 'Letters & Numbers Brute Force',
-    inputs: [{id: 'passwordToFind', placeholder: 'Enter password'}],
-    handler: ({passwordToFind}) => {
-      const found = passwordGuesserNums(passwordToFind);
-      return found ? `Password found: ${found}` : 'Password NOT found.';
-    }
-  }
-];
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Password & PIN Guessers</title>
+  <!-- Add any CSS you need here -->
+</head>
+<body>
+  <button onclick="logout()">Logout</button>
+  <div id="guesserApp"></div>
 
-// Main UI loader
-function showMenuGuesser() {
-  const app = document.getElementById('guesserApp');
-  app.innerHTML = `
-    <h3>Password & PIN Guessers</h3>
-    <label for="guesserSelect">Choose Guessing Method:</label>
-    <select id="guesserSelect">
-      ${GUESSERS.map(g => `<option value="${g.id}">${g.label}</option>`).join('')}
-    </select>
-    <div id="guesserInputs" style="margin-top:1em;"></div>
-    <button id="guesserBtn" style="margin-top:1em;">Guess!</button>
-    <div id="guesserResult" style="margin-top:1em;"></div>
-  `;
-
-  const select = document.getElementById('guesserSelect');
-  const inputsDiv = document.getElementById('guesserInputs');
-  const resultDiv = document.getElementById('guesserResult');
-  const guesserBtn = document.getElementById('guesserBtn');
-
-  function updateInputs() {
-    const guesser = GUESSERS.find(g => g.id === select.value);
-    inputsDiv.innerHTML = guesser.inputs.map(
-      inp => `<input type="text" id="${inp.id}" placeholder="${inp.placeholder}">`
-    ).join('<br>');
-    resultDiv.textContent = '';
-  }
-
-  select.onchange = updateInputs;
-  updateInputs();
-
-  guesserBtn.onclick = async function() {
-    const guesser = GUESSERS.find(g => g.id === select.value);
-    const inputValues = {};
-    guesser.inputs.forEach(inp => {
-      inputValues[inp.id] = document.getElementById(inp.id).value;
+  <!-- Load all guesser JS files -->
+  <script src="guesser/pin_4digit.js"></script>
+  <script src="guesser/pin_6digit.js"></script>
+  <script src="guesser/pin_8digit.js"></script>
+  <script src="guesser/pin_8digit_updown.js"></script>
+  <script src="guesser/password_guesser_all_possible.js"></script>
+  <script src="guesser/password_guesser_basic_symbols.js"></script>
+  <script src="guesser/password_guesser_keyboard.js"></script>
+  <script src="guesser/password_guesser_lower_upper.js"></script>
+  <script src="guesser/password_guesser_nums.js"></script>
+  <script src="guesser/dictionary_guesser_common.js"></script>
+  <script src="guesser/dictionary_guesser_advanced.js"></script>
+  <script src="guesser/dictionary_guesser_rockyou.js"></script>
+  <script src="guesser/dictionary_guesser_common_sha256.js"></script>
+  
+  <!-- Main menu guesser logic -->
+  <script src="menu-guesser.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (!isLoggedIn()) {
+        window.location.replace('index.html');
+      } else {
+        showMenuGuesser();
+      }
     });
-    resultDiv.textContent = 'Guessing...';
-    let output;
-    try {
-      output = await guesser.handler(inputValues);
-    } catch (err) {
-      output = 'Error: ' + err;
-    }
-    resultDiv.textContent = output;
-  };
-}
+  </script>
+</body>
+</html>
