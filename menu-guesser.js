@@ -1,56 +1,74 @@
-// SHA-256 hashing function
-async function sha256(message) {
-  const msgBuffer = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+// This file assumes isLoggedIn and logout are defined globally (from login.js)
 
-// Store username/hash pairs for login (replace hashes with yours!)
-const users = [
-  // Example: admin / password: My$ecurePa$$word
-  { username: 'admin', hash: '02079b31824a4d18a105f16b9d45e751a114ce5b4ff3d49c6f19633aed25abbc' },
-  // Example: user1 / password: user1pass!
-  { username: 'user1', hash: '6b6197ff809a6ec0af1ba56a0f5c02a2eb5cd6605a2d39b42263bea3070e2e7c' }
+const GUESSERS = [
+  // ... (all previous guessers)
+  {
+    id: 'dictionary_common_sha256',
+    label: 'Common Password Dictionary (SHA-256 Hash)',
+    inputs: [{id: 'hashToFind', placeholder: 'Enter SHA-256 hash to guess'}],
+    handler: async ({hashToFind}) => {
+      const found = await dictionaryGuesserCommonSHA256(hashToFind, 'common_passwords.txt');
+      return found
+        ? `Password for hash is: ${found}`
+        : 'Hash NOT found in common passwords.';
+    }
+  }
+  // ... (rest of your guessers as before)
 ];
 
-function isLoggedIn() {
-  return localStorage.getItem('loggedIn') === 'true';
-}
-
-function logout() {
-  localStorage.removeItem('loggedIn');
-  window.location.replace('index.html');
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-  const loginForm = document.getElementById('loginForm');
-  if (loginForm) {
-    loginForm.addEventListener('submit', async function (e) {
-      e.preventDefault();
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
-      const user = users.find(u => u.username === username);
-      if (!user) {
-        document.getElementById('loginError').textContent = 'Invalid username or password.';
-        return;
-      }
-      const inputHash = await sha256(password);
-      if (inputHash === user.hash) {
-        localStorage.setItem('loggedIn', 'true');
-        window.location.replace('menu-guesser.html');
-      } else {
-        document.getElementById('loginError').textContent = 'Invalid username or password.';
-      }
-    });
-  }
-});
-
-// --- Menu Guesser logic placeholder ---
+// Main UI loader
 function showMenuGuesser() {
   const app = document.getElementById('guesserApp');
   app.innerHTML = `
-    <p>Menu Guesser goes here!</p>
-    <!-- Insert your menu guesser code and UI here -->
+    <h3>Password & PIN Guessers</h3>
+    <div id="guesserButtons" style="margin-bottom:1em;"></div>
+    <div id="guesserInputs"></div>
+    <button id="guesserBtn" style="margin-top:1em; display:none;">Guess!</button>
+    <div id="guesserResult" style="margin-top:1em;"></div>
   `;
+
+  const buttonsDiv = document.getElementById('guesserButtons');
+  const inputsDiv = document.getElementById('guesserInputs');
+  const resultDiv = document.getElementById('guesserResult');
+  const guesserBtn = document.getElementById('guesserBtn');
+
+  // Add buttons for each guesser
+  buttonsDiv.innerHTML = GUESSERS.map(
+    g => `<button class="guesserSelectBtn" data-id="${g.id}">${g.label}</button>`
+  ).join(' ');
+
+  let currentGuesser = null;
+
+  function loadGuesser(guesserId) {
+    const guesser = GUESSERS.find(g => g.id === guesserId);
+    currentGuesser = guesser;
+    // Show input fields for selected guesser
+    inputsDiv.innerHTML = guesser.inputs.map(
+      inp => `<input type="text" id="${inp.id}" placeholder="${inp.placeholder}">`
+    ).join('<br>');
+    guesserBtn.style.display = 'inline-block';
+    resultDiv.textContent = '';
+  }
+
+  // Button click listeners
+  document.querySelectorAll('.guesserSelectBtn').forEach(btn => {
+    btn.onclick = () => loadGuesser(btn.dataset.id);
+  });
+
+  // Handler for Guess button
+  guesserBtn.onclick = async function() {
+    if (!currentGuesser) return;
+    const inputValues = {};
+    currentGuesser.inputs.forEach(inp => {
+      inputValues[inp.id] = document.getElementById(inp.id).value;
+    });
+    resultDiv.textContent = 'Guessing...';
+    let output;
+    try {
+      output = await currentGuesser.handler(inputValues);
+    } catch (err) {
+      output = 'Error: ' + err;
+    }
+    resultDiv.textContent = output;
+  };
 }
