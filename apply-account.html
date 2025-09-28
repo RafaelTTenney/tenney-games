@@ -21,6 +21,13 @@
     .footer { text-align: center; padding: 2em 1em 1em; color: #999; font-size: 0.95em;}
     @media (max-width: 500px) { .login-container { padding: 1em; margin-top: 2em; } }
   </style>
+  <!-- EmailJS CDN for client-side email sending -->
+  <script src="https://cdn.emailjs.com/dist/email.min.js"></script>
+  <script>
+    (function(){
+      emailjs.init("YOUR_EMAILJS_USER_ID"); // Replace with your EmailJS user ID
+    })();
+  </script>
 </head>
 <body>
   <div class="login-container">
@@ -51,37 +58,31 @@
       <div id="applyError"></div>
       <div id="applySuccess"></div>
     </form>
+    <div style="text-align:center; margin-top: 1em;">
+      <a href="forgot-password.html" style="color:#22863a;font-size:0.98em;">Forgot your password?</a>
+    </div>
   </div>
   <div class="footer">
     &copy; 2025 Password & PIN Guessers | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </div>
   <script>
-    document.getElementById('applyForm').addEventListener('submit', async function(e) {
+    document.getElementById('applyForm').addEventListener('submit', function(e) {
       e.preventDefault();
       document.getElementById('applyError').textContent = '';
       document.getElementById('applySuccess').textContent = '';
-      const formData = {
+      // Send form data using EmailJS
+      emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", {
         email: document.getElementById('email').value,
         name: document.getElementById('name').value,
         lastname: document.getElementById('lastname').value,
         message: document.getElementById('message').value
-      };
-      try {
-        const res = await fetch('/api/send-account-request', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        });
-        const data = await res.json();
-        if (data.success) {
-          document.getElementById('applySuccess').textContent = 'Application sent! You will be contacted by email soon.';
-          document.getElementById('applyForm').reset();
-        } else {
-          document.getElementById('applyError').textContent = data.error || 'Failed to send application.';
-        }
-      } catch (err) {
-        document.getElementById('applyError').textContent = 'Network error. Please try again.';
-      }
+      })
+      .then(function(response) {
+        document.getElementById('applySuccess').textContent = 'Application sent! You will be contacted by email soon.';
+        document.getElementById('applyForm').reset();
+      }, function(error) {
+        document.getElementById('applyError').textContent = 'Failed to send application.';
+      });
     });
   </script>
 </body>
