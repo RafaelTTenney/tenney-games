@@ -2,57 +2,58 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Login | Password & PIN Guessers</title>
+  <title>Home | Password & PIN Guessers</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: "Roboto", "Arial", sans-serif; background: #f6f8fa; margin: 0; padding: 0; min-height: 100vh;}
-    .login-container { max-width: 380px; margin: 5em auto 0 auto; background: #fff; box-shadow: 0 8px 24px rgba(36,41,47,0.08); border-radius: 12px; padding: 2em; display: flex; flex-direction: column; align-items: center;}
-    .login-container h2 { margin-bottom: 1em; color: #24292f; font-size: 1.4em; font-weight: 600; letter-spacing: 1px;}
-    .login-form { width: 100%; display: flex; flex-direction: column; gap: 1.1em;}
-    label { font-size: 1em; color: #244; margin-bottom: 0.3em; font-weight: 500;}
-    input[type="text"], input[type="password"] { padding: 0.6em; font-size: 1em; border-radius: 5px; border: 1px solid #d1d5da; outline: none; transition: border-color 0.2s;}
-    input[type="text"]:focus, input[type="password"]:focus { border-color: #2ea44f;}
-    button[type="submit"] { background: #2ea44f; color: #fff; border: none; border-radius: 6px; padding: 0.75em 1.5em; font-size: 1.1em; cursor: pointer; transition: background 0.2s; margin-top: 0.5em; font-weight: bold; letter-spacing: 1px;}
-    button[type="submit"]:hover { background: #22863a;}
-    .info { font-size: 0.98em; color: #777; margin-bottom: 1em;}
-    #loginError { color: #e55353; font-weight: bold; margin-top: 0.5em; min-height: 1.5em; text-align: center;}
+    .home-container { max-width: 500px; margin: 5em auto 0 auto; background: #fff; box-shadow: 0 8px 24px rgba(36,41,47,0.08); border-radius: 12px; padding: 2.5em 2em 2em; display: flex; flex-direction: column; align-items: center;}
+    h1 { color: #24292f; font-size: 2em; font-weight: 700; margin-bottom: 0.7em;}
+    p { color: #444; font-size: 1.1em; margin-bottom: 1.4em; text-align: center;}
+    .nav-links { margin-top: 1em; }
+    .nav-links a { display: inline-block; margin: 0.4em 1em 0.4em 1em; color: #22863a; font-weight: bold; text-decoration: none; font-size: 1em; letter-spacing: 1px;}
+    .nav-links a:hover { text-decoration: underline; }
     .footer { text-align: center; padding: 2em 1em 1em; color: #999; font-size: 0.95em;}
-    .links { text-align:center; margin-top: 1em;}
-    .btn-home { display: inline-block; margin-top: 1em; padding: 0.6em 1.3em; background: #22863a; color: #fff; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 1em; letter-spacing: 1px; transition: background 0.2s;}
-    .btn-home:hover { background: #16682c; }
-    @media (max-width: 500px) { .login-container { padding: 1em; margin-top: 2em; } }
+    .guessers { margin: 2em 0 0 0; width:100%;}
+    .guesser-box { background: #f6f8fa; border-radius: 8px; box-shadow: 0 2px 8px rgba(36,41,47,0.06); padding: 1.3em 1em 1.3em 1em; margin-bottom: 1.2em; text-align: center;}
+    .guesser-title { font-weight: bold; color: #22863a; font-size: 1.1em; margin-bottom: .4em;}
+    .guesser-btn { background: #2ea44f; color: #fff; border: none; border-radius: 6px; padding: 0.55em 1.2em; font-size: 1em; cursor: pointer; transition: background .2s; font-weight: bold; letter-spacing: 1px;}
+    .guesser-btn:hover { background: #22863a; }
+    .login-top { position: absolute; top: 22px; right: 22px; }
+    .login-top a { background: #22863a; color: #fff; border-radius: 6px; padding: 0.5em 1.15em; font-weight: bold; text-decoration: none; letter-spacing: 1px; font-size: 1em;}
+    .login-top a:hover { background: #16682c; }
+    @media (max-width: 600px) { .home-container { padding: 1em; margin-top: 2em; } }
   </style>
 </head>
 <body>
-  <div class="login-container">
-    <h2>Login</h2>
-    <div class="info">
-      Please enter your username and password to access the Password & PIN Guessers.<br>
-      <span style="color:#22863a;font-weight:500;">No coding knowledge required!</span>
+  <div class="login-top">
+    <a href="login.html">Login</a>
+  </div>
+  <div class="home-container">
+    <h1>Welcome to Password & PIN Guessers</h1>
+    <p>
+      Your hub for secure password and PIN management.<br>
+      Use the links below to login, apply for an account, or reset your password.
+    </p>
+    <div class="nav-links">
+      <a href="login.html">Login</a>
+      <a href="apply-account.html">Apply for Account</a>
+      <a href="forgot-password.html">Forgot Password</a>
     </div>
-    <form class="login-form" id="loginForm">
-      <div>
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username" required autocomplete="username">
+    <div class="guessers">
+      <div class="guesser-box">
+        <div class="guesser-title">PIN 4-digit Guesser</div>
+        <div style="margin-bottom:.7em;">Try to brute force your 4-digit PIN.</div>
+        <a href="pin-guesser.html" class="guesser-btn">Try PIN Guesser</a>
       </div>
-      <div>
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" required autocomplete="current-password">
+      <div class="guesser-box">
+        <div class="guesser-title">Lower/Upper Password Guesser</div>
+        <div style="margin-bottom:.7em;">Brute force all lowercase/uppercase variants of your password.</div>
+        <a href="lowerupper-guesser.html" class="guesser-btn">Try Lower/Upper Guesser</a>
       </div>
-      <button type="submit">Login</button>
-      <div id="loginError"></div>
-    </form>
-    <div class="links">
-      <a href="apply-account.html" style="color:#22863a;font-size:0.98em;">Apply for an account</a>
-      <br>
-      <a href="forgot-password.html" style="color:#22863a;font-size:0.98em;">Forgot your password?</a>
-      <br>
-      <a href="home.html" class="btn-home">Home Page</a>
     </div>
   </div>
   <div class="footer">
     &copy; 2025 Password & PIN Guessers | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </div>
-  <script src="login.js"></script>
 </body>
 </html>
