@@ -21,11 +21,9 @@
 <body>
   <div class="guesser-container">
     <h2>Lower/Upper Password Guesser</h2>
-    <label for="baseWord">Enter base word:</label>
-    <input type="text" id="baseWord" class="input-field" placeholder="e.g. pass" />
-    <label for="userPassword">Password to guess:</label>
+    <label for="userPassword">Password to brute force:</label>
     <input type="text" id="userPassword" class="input-field" placeholder="e.g. PaSs" />
-    <button class="guess-btn" onclick="guessVariant()">Guess Password</button>
+    <button class="guess-btn" onclick="bruteForcePassword()">Brute Force</button>
     <div id="variantOutput" class="output-box"></div>
     <a href="home.html" class="btn-home">Home Page</a>
   </div>
@@ -33,30 +31,45 @@
     &copy; 2025 Password & PIN Guessers | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </div>
   <script>
-    function guessVariant() {
-      const word = document.getElementById('baseWord').value;
+    function bruteForcePassword() {
       const target = document.getElementById('userPassword').value;
       const output = document.getElementById('variantOutput');
-      if (!word || !target) {
-        output.innerText = 'Enter both a base word and a password to guess.';
+      if (!target) {
+        output.innerText = 'Enter a password to brute force.';
         return;
       }
-      let n = word.length;
-      let found = false;
-      let limit = 2048;
-      const start = performance.now();
-      for (let i = 0; i < (1 << n) && i < limit; i++) {
-        let v = '';
-        for (let j = 0; j < n; j++) {
-          v += ((i >> j) & 1) ? word[j].toUpperCase() : word[j].toLowerCase();
-        }
-        if (v === target) {
-          found = true;
-          const duration = performance.now() - start;
-          output.innerHTML = `Password <b>${v}</b> found after <b>${duration.toFixed(2)} ms</b>!<br>Success!`;
-          break;
+      const n = target.length;
+      if (n === 0 || n > 20) {
+        output.innerText = 'Password must be at least 1 and no more than 20 characters.';
+        return;
+      }
+      // Only brute force letters (a-zA-Z), other characters must match exactly
+      const chars = [];
+      for (let i = 0; i < n; i++) {
+        if (/[a-zA-Z]/.test(target[i])) {
+          chars.push([target[i].toLowerCase(), target[i].toUpperCase()]);
+        } else {
+          chars.push([target[i]]);
         }
       }
+      const start = performance.now();
+      let found = false;
+      let limit = Math.pow(2, chars.filter(p => p.length === 2).length);
+      function helper(pos, sofar) {
+        if (found) return;
+        if (pos === n) {
+          if (sofar === target) {
+            found = true;
+            const duration = performance.now() - start;
+            output.innerHTML = `Password <b>${sofar}</b> found after <b>${duration.toFixed(2)} ms</b>!<br>Success!`;
+          }
+          return;
+        }
+        for (let k = 0; k < chars[pos].length; k++) {
+          helper(pos+1, sofar + chars[pos][k]);
+        }
+      }
+      helper(0, "");
       if (!found) {
         const duration = performance.now() - start;
         output.innerHTML = `Could not guess your password. Tried for <b>${duration.toFixed(2)} ms</b>.`;
