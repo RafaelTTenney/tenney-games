@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Account Application Received - Password & PIN Guessers</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h2>Account Application Received</h2>
+        <div id="success-message"></div>
+        <p>
+            <a href="index.html">Back to login</a>
+        </p>
+    </div>
+    <script>
+    // Parse URL parameters
+    const params = new URLSearchParams(window.location.search);
+    const name = params.get('name');
+    const username = params.get('username');
+    const newpass = params.get('newpass');
+    document.getElementById('success-message').innerHTML = `
+        <p>
+            Dear ${name},<br><br>
+            Thank you for applying for an account with Password & PIN Guessers.<br>
+            Your request has been received and your account will be added within three days.<br><br>
+            <b>Your account details:</b><br>
+            Username: ${username}<br>
+            Password: ${newpass}<br><br>
+            Your username is the first letter of your first name, followed by your last name (all lower case).<br>
+            Your password is the one you entered in your application.<br><br>
+            If you have any questions or need assistance, feel free to contact us at <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>.<br><br>
+            Best regards,<br>
+            Password & PIN Guessers Team
+        </p>
+    `;
+    </script>
+</body>
+</html>
