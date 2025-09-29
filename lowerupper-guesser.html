@@ -43,24 +43,25 @@
       }
       let n = word.length;
       let found = false;
-      let tried = 0;
       let limit = 2048;
-      for (let i = 0; i < (1 << n) && tried < limit; i++) {
+      const start = performance.now();
+      for (let i = 0; i < (1 << n) && i < limit; i++) {
         let v = '';
         for (let j = 0; j < n; j++) {
           v += ((i >> j) & 1) ? word[j].toUpperCase() : word[j].toLowerCase();
         }
-        tried++;
         if (v === target) {
           found = true;
-          output.innerHTML = `Password <b>${v}</b> found after ${tried} guesses!<br>Success!`;
+          const duration = performance.now() - start;
+          output.innerHTML = `Password <b>${v}</b> found after <b>${duration.toFixed(2)} ms</b>!<br>Success!`;
           break;
         }
       }
-      if (!found) output.innerHTML = `Could not guess your password.`;
+      if (!found) {
+        const duration = performance.now() - start;
+        output.innerHTML = `Could not guess your password. Tried for <b>${duration.toFixed(2)} ms</b>.`;
+      }
     }
   </script>
-</body>
-</html>
 </body>
 </html>
