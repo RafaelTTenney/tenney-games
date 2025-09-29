@@ -1,39 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Account Application Received - Password & PIN Guessers</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <title>Application Received | Password & PIN Guessers</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: "Roboto", "Arial", sans-serif; background: #f6f8fa; margin: 0; padding: 0; min-height: 100vh;}
+    .login-container { max-width: 380px; margin: 5em auto 0 auto; background: #fff; box-shadow: 0 8px 24px rgba(36,41,47,0.08); border-radius: 12px; padding: 2em; display: flex; flex-direction: column; align-items: center;}
+    h2 { margin-bottom: 1em; color: #24292f; font-size: 1.4em; font-weight: 600; letter-spacing: 1px;}
+    .footer { text-align: center; padding: 2em 1em 1em; color: #999; font-size: 0.95em;}
+    .message { color: #244; font-size: 1em; line-height: 1.6; margin-top: 1em;}
+    a { color: #22863a; }
+    @media (max-width: 500px) { .login-container { padding: 1em; margin-top: 2em; } }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Account Application Received</h2>
-        <div id="success-message"></div>
-        <p>
-            <a href="index.html">Back to login</a>
-        </p>
+  <div class="login-container">
+    <h2>Account Application Received</h2>
+    <div class="message" id="success-message"></div>
+    <div style="margin-top:1.5em;">
+      <a href="index.html">Back to login</a>
     </div>
-    <script>
-    // Parse URL parameters
+  </div>
+  <div class="footer">
+    &copy; 2025 Password & PIN Guessers | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
+  </div>
+  <script>
     const params = new URLSearchParams(window.location.search);
     const name = params.get('name');
     const username = params.get('username');
     const newpass = params.get('newpass');
     document.getElementById('success-message').innerHTML = `
-        <p>
-            Dear ${name},<br><br>
-            Thank you for applying for an account with Password & PIN Guessers.<br>
-            Your request has been received and your account will be added within three days.<br><br>
-            <b>Your account details:</b><br>
-            Username: ${username}<br>
-            Password: ${newpass}<br><br>
-            Your username is the first letter of your first name, followed by your last name (all lower case).<br>
-            Your password is the one you entered in your application.<br><br>
-            If you have any questions or need assistance, feel free to contact us at <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>.<br><br>
-            Best regards,<br>
-            Password & PIN Guessers Team
-        </p>
+      <p>
+      Dear ${name},<br><br>
+      Thank you for applying for an account with Password & PIN Guessers.<br>
+      Your request has been received and your account will be added within three days.<br><br>
+      <b>Your account details:</b><br>
+      Username: ${username}<br>
+      Password: ${newpass}<br><br>
+      Your username is the first letter of your first name, followed by your last name (all lower case).<br>
+      Your password is the one you entered in your application.<br><br>
+      If you have any questions or need assistance, feel free to contact us at <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>.<br><br>
+      Best regards,<br>
+      Password & PIN Guessers Team
+      </p>
     `;
-    </script>
+  </script>
 </body>
 </html>
