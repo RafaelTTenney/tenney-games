@@ -38,21 +38,22 @@
         output.innerHTML = "Please enter a valid 4-digit PIN.";
         return;
       }
-      let guessCount = 0;
       let found = false;
+      const start = performance.now();
       for (let i = 0; i < 10000; i++) {
         let pin = i.toString().padStart(4,'0');
-        guessCount++;
         if (pin === userPIN) {
           found = true;
-          output.innerHTML = `Guessed PIN <b>${pin}</b> after ${guessCount} guesses!<br>Success!`;
+          const duration = performance.now() - start;
+          output.innerHTML = `Guessed PIN <b>${pin}</b> after <b>${duration.toFixed(2)} ms</b>!<br>Success!`;
           break;
         }
       }
-      if (!found) output.innerHTML = "Couldn't guess your PIN.";
+      if (!found) {
+        const duration = performance.now() - start;
+        output.innerHTML = `Couldn't guess your PIN. Tried for <b>${duration.toFixed(2)} ms</b>.`;
+      }
     }
   </script>
-</body>
-</html>
 </body>
 </html>
