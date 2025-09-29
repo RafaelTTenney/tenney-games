@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lower/Upper Password Guesser | Password & PIN Guessers</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: "Roboto", "Arial", sans-serif; background: #f6f8fa; margin: 0; padding: 0; min-height: 100vh;}
+    .guesser-container { max-width: 380px; margin: 5em auto 0 auto; background: #fff; box-shadow: 0 8px 24px rgba(36,41,47,0.08); border-radius: 12px; padding: 2em; display: flex; flex-direction: column; align-items: center;}
+    h2 { margin-bottom: 1em; color: #24292f; font-size: 1.3em; font-weight: 600; letter-spacing: 1px;}
+    .footer { text-align: center; padding: 2em 1em 1em; color: #999; font-size: 0.95em;}
+    .btn-home { display: inline-block; margin-top: 1em; padding: 0.6em 1.3em; background: #22863a; color: #fff; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 1em; letter-spacing: 1px; transition: background 0.2s;}
+    .btn-home:hover { background: #16682c;}
+    .output-box { background: #f6f8fa; border-radius: 8px; padding: 1em; margin-top: 1em; font-size: 1em; color: #244; width:100%; max-height:200px; overflow:auto;}
+    @media (max-width: 500px) { .guesser-container { padding: 1em; margin-top: 2em; } }
+  </style>
+</head>
+<body>
+  <div class="guesser-container">
+    <h2>Lower/Upper Password Guesser</h2>
+    <p>Enter a word to generate all possible lowercase/uppercase variants:</p>
+    <input type="text" id="wordInput" placeholder="Enter word (e.g. pass)" style="margin-bottom:1em; padding:0.5em; width:90%;" />
+    <button onclick="showVariants()">Show Variants</button>
+    <div id="variantOutput" class="output-box"></div>
+    <a href="home.html" class="btn-home">Home Page</a>
+  </div>
+  <div class="footer">
+    &copy; 2025 Password & PIN Guessers | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
+  </div>
+  <script>
+    function showVariants() {
+      const word = document.getElementById('wordInput').value;
+      if (!word) { document.getElementById('variantOutput').innerText = 'Enter a word.'; return; }
+      let variants = [];
+      let limit = 1024; // Prevent too many outputs
+      let n = word.length;
+      for (let i = 0; i < (1 << n) && variants.length < limit; i++) {
+        let v = '';
+        for (let j = 0; j < n; j++) {
+          v += ((i >> j) & 1) ? word[j].toUpperCase() : word[j].toLowerCase();
+        }
+        variants.push(v);
+      }
+      document.getElementById('variantOutput').innerHTML = variants.join(', ');
+    }
+  </script>
+</body>
+</html>
