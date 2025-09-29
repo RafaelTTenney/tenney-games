@@ -12,14 +12,18 @@
     .btn-home { display: inline-block; margin-top: 1em; padding: 0.6em 1.3em; background: #22863a; color: #fff; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 1em; letter-spacing: 1px; transition: background 0.2s;}
     .btn-home:hover { background: #16682c;}
     .output-box { background: #f6f8fa; border-radius: 8px; padding: 1em; margin-top: 1em; font-size: 1em; color: #244; width:100%; max-height:200px; overflow:auto;}
+    .input-field { padding:0.5em; border-radius:5px; border:1px solid #d1d5da; font-size: 1em; margin-bottom:1em; width:90%; }
+    .guess-btn { background:#2ea44f; color:#fff; border:none; border-radius:6px; padding:0.5em 1.2em; font-size:1em; cursor:pointer; margin-bottom:1em; font-weight:bold;}
+    .guess-btn:hover { background:#22863a;}
     @media (max-width: 500px) { .guesser-container { padding: 1em; margin-top: 2em; } }
   </style>
 </head>
 <body>
   <div class="guesser-container">
     <h2>PIN 4-digit Guesser</h2>
-    <p>All possible 4-digit PINs (from <b>0000</b> to <b>9999</b>):</p>
-    <button onclick="showPins()">Show All PINs</button>
+    <label for="userPIN">Enter your 4-digit PIN:</label>
+    <input type="text" maxlength="4" id="userPIN" class="input-field" placeholder="e.g. 1234" />
+    <button class="guess-btn" onclick="guessPin()">Guess PIN</button>
     <div id="pinOutput" class="output-box"></div>
     <a href="home.html" class="btn-home">Home Page</a>
   </div>
@@ -27,14 +31,28 @@
     &copy; 2025 Password & PIN Guessers | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </div>
   <script>
-    function showPins() {
-      let out = '';
-      for(let i=0; i<10000; i++) {
-        let pin = i.toString().padStart(4,'0');
-        out += pin + ((i+1)%10===0 ? '<br>' : ' ');
+    function guessPin() {
+      const userPIN = document.getElementById('userPIN').value;
+      const output = document.getElementById('pinOutput');
+      if (!/^\d{4}$/.test(userPIN)) {
+        output.innerHTML = "Please enter a valid 4-digit PIN.";
+        return;
       }
-      document.getElementById('pinOutput').innerHTML = out;
+      let guessCount = 0;
+      let found = false;
+      for (let i = 0; i < 10000; i++) {
+        let pin = i.toString().padStart(4,'0');
+        guessCount++;
+        if (pin === userPIN) {
+          found = true;
+          output.innerHTML = `Guessed PIN <b>${pin}</b> after ${guessCount} guesses!<br>Success!`;
+          break;
+        }
+      }
+      if (!found) output.innerHTML = "Couldn't guess your PIN.";
     }
   </script>
+</body>
+</html>
 </body>
 </html>
