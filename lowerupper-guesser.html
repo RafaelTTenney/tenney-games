@@ -12,15 +12,20 @@
     .btn-home { display: inline-block; margin-top: 1em; padding: 0.6em 1.3em; background: #22863a; color: #fff; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 1em; letter-spacing: 1px; transition: background 0.2s;}
     .btn-home:hover { background: #16682c;}
     .output-box { background: #f6f8fa; border-radius: 8px; padding: 1em; margin-top: 1em; font-size: 1em; color: #244; width:100%; max-height:200px; overflow:auto;}
+    .input-field { padding:0.5em; border-radius:5px; border:1px solid #d1d5da; font-size: 1em; margin-bottom:1em; width:90%; }
+    .guess-btn { background:#2ea44f; color:#fff; border:none; border-radius:6px; padding:0.5em 1.2em; font-size:1em; cursor:pointer; margin-bottom:1em; font-weight:bold;}
+    .guess-btn:hover { background:#22863a;}
     @media (max-width: 500px) { .guesser-container { padding: 1em; margin-top: 2em; } }
   </style>
 </head>
 <body>
   <div class="guesser-container">
     <h2>Lower/Upper Password Guesser</h2>
-    <p>Enter a word to generate all possible lowercase/uppercase variants:</p>
-    <input type="text" id="wordInput" placeholder="Enter word (e.g. pass)" style="margin-bottom:1em; padding:0.5em; width:90%;" />
-    <button onclick="showVariants()">Show Variants</button>
+    <label for="baseWord">Enter base word:</label>
+    <input type="text" id="baseWord" class="input-field" placeholder="e.g. pass" />
+    <label for="userPassword">Password to guess:</label>
+    <input type="text" id="userPassword" class="input-field" placeholder="e.g. PaSs" />
+    <button class="guess-btn" onclick="guessVariant()">Guess Password</button>
     <div id="variantOutput" class="output-box"></div>
     <a href="home.html" class="btn-home">Home Page</a>
   </div>
@@ -28,21 +33,34 @@
     &copy; 2025 Password & PIN Guessers | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </div>
   <script>
-    function showVariants() {
-      const word = document.getElementById('wordInput').value;
-      if (!word) { document.getElementById('variantOutput').innerText = 'Enter a word.'; return; }
-      let variants = [];
-      let limit = 1024; // Prevent too many outputs
+    function guessVariant() {
+      const word = document.getElementById('baseWord').value;
+      const target = document.getElementById('userPassword').value;
+      const output = document.getElementById('variantOutput');
+      if (!word || !target) {
+        output.innerText = 'Enter both a base word and a password to guess.';
+        return;
+      }
       let n = word.length;
-      for (let i = 0; i < (1 << n) && variants.length < limit; i++) {
+      let found = false;
+      let tried = 0;
+      let limit = 2048;
+      for (let i = 0; i < (1 << n) && tried < limit; i++) {
         let v = '';
         for (let j = 0; j < n; j++) {
           v += ((i >> j) & 1) ? word[j].toUpperCase() : word[j].toLowerCase();
         }
-        variants.push(v);
+        tried++;
+        if (v === target) {
+          found = true;
+          output.innerHTML = `Password <b>${v}</b> found after ${tried} guesses!<br>Success!`;
+          break;
+        }
       }
-      document.getElementById('variantOutput').innerHTML = variants.join(', ');
+      if (!found) output.innerHTML = `Could not guess your password.`;
     }
   </script>
+</body>
+</html>
 </body>
 </html>
