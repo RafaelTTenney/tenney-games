@@ -1,16 +1,109 @@
+:root {
+  --primary-blue: #3366cc;
+  --dark-blue: #254a99;
+  --light-blue: #e6f0ff;
+  --accent-blue: #99ccff;
+  --background: #f6f8fb;
+  --text-main: #222;
+  --text-light: #fff;
+}
+
 body {
-  font-family: sans-serif;
-  margin: 2em;
-  background: #f6f6f6;
+  background: var(--background);
+  font-family: 'Segoe UI', Arial, sans-serif;
+  margin: 0;
+  padding: 0;
 }
-form {
-  margin-top: 2em;
+
+.header, header, nav, footer {
+  background: var(--primary-blue);
+  color: var(--text-light);
+  padding: 0.5em 0;
+  text-align: center;
 }
-input {
-  margin: 0.5em 0;
-  padding: 0.5em;
+
+nav a {
+  color: var(--text-light);
+  text-decoration: none;
+  margin: 0 12px;
+  font-weight: 500;
 }
-button {
-  margin-top: 1em;
-  padding: 0.5em 2em;
+
+nav a:hover {
+  color: var(--accent-blue);
+  text-decoration: underline;
+}
+
+.container {
+  max-width: 400px;
+  margin: 60px auto 0 auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 16px rgba(51,102,204,0.08);
+  padding: 36px 28px 24px 28px;
+}
+
+h1, h2, h3 {
+  color: var(--primary-blue);
+  text-align: center;
+}
+
+label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--primary-blue);
+  font-weight: 500;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea {
+  width: 100%;
+  padding: 11px 9px;
+  margin-bottom: 22px;
+  border: 1px solid var(--accent-blue);
+  border-radius: 4px;
+  background: var(--light-blue);
+  font-size: 1em;
+  color: var(--text-main);
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+input:focus, textarea:focus {
+  border-color: var(--primary-blue);
+  outline: none;
+}
+
+button, .btn {
+  width: 100%;
+  padding: 13px 0;
+  font-size: 1em;
+  background: var(--primary-blue);
+  color: var(--text-light);
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: background 0.2s;
+}
+
+button:hover, .btn:hover, button:focus, .btn:focus {
+  background: var(--dark-blue);
+}
+
+.note {
+  color: #666;
+  font-size: 0.97em;
+  margin-top: 24px;
+  text-align: center;
+}
+
+@media (max-width: 500px) {
+  .container {
+    margin: 24px 8px;
+    padding: 20px 8px;
+  }
 }
