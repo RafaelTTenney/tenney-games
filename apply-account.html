@@ -43,6 +43,7 @@
     }
     input[type="text"],
     input[type="email"],
+    input[type="password"],
     textarea {
       width: 100%;
       padding: 11px 9px;
@@ -61,6 +62,7 @@
     }
     input[type="text"]:focus,
     input[type="email"]:focus,
+    input[type="password"]:focus,
     textarea:focus {
       border-color: var(--primary-blue);
       outline: none;
@@ -87,6 +89,22 @@
       margin-top: 24px;
       text-align: center;
     }
+    .btn-home {
+      display: inline-block;
+      margin-top: 18px;
+      padding: 0.6em 1.3em;
+      background: #3366cc;
+      color: #fff;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: bold;
+      font-size: 1em;
+      letter-spacing: 1px;
+      text-align: center;
+    }
+    .btn-home:hover {
+      background: #254a99;
+    }
     @media (max-width: 500px) {
       .container {
         margin: 24px 8px;
@@ -94,21 +112,48 @@
       }
     }
   </style>
+  <script>
+    function formatMailto(e) {
+      e.preventDefault();
+      // Gather form fields
+      var name = document.getElementById('name').value.trim();
+      var lastname = document.getElementById('lastname').value.trim();
+      var email = document.getElementById('email').value.trim();
+      var desiredPassword = document.getElementById('password').value.trim();
+      var reason = document.getElementById('reason').value.trim();
+      // Construct mailto link
+      var subject = encodeURIComponent('Account Application');
+      var body = encodeURIComponent(
+        `Name: ${name}\n` +
+        `Last name: ${lastname}\n` +
+        `Email: ${email}\n` +
+        `Desired password: ${desiredPassword}\n` +
+        `Reason for account:\n${reason}\n`
+      );
+      var mailto = `mailto:admin@example.com?subject=${subject}&body=${body}`;
+      window.location.href = mailto;
+    }
+  </script>
 </head>
 <body>
   <div class="container">
     <h1>Apply for an Account</h1>
-    <form action="mailto:admin@example.com" method="POST" enctype="text/plain">
-      <label for="username">Desired Username</label>
-      <input type="text" id="username" name="Username" required>
-      <label for="email">Your Email</label>
-      <input type="email" id="email" name="Email" required>
-      <label for="notes">Notes (optional)</label>
-      <textarea id="notes" name="Notes"></textarea>
+    <form onsubmit="formatMailto(event)">
+      <label for="name">First Name</label>
+      <input type="text" id="name" name="name" required>
+      <label for="lastname">Last Name</label>
+      <input type="text" id="lastname" name="lastname" required>
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" required>
+      <label for="password">Desired Password</label>
+      <input type="password" id="password" name="password" required>
+      <label for="reason">Why do you want the account?</label>
+      <textarea id="reason" name="reason" required></textarea>
       <button type="submit">Send Application</button>
     </form>
+    <a href="index.html" class="btn-home">Home</a>
     <div class="note">
-      <em>This will open your email client with the form data. You must send the email to complete the application.</em>
+      <em>After pressing "Send Application", your email client will open with a nicely formatted message to send.</em>
     </div>
   </div>
 </body>
