@@ -5,21 +5,23 @@
   <title>Login | Password & PIN Guessers</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: "Roboto", "Arial", sans-serif; background: #f6f8fa; margin: 0; padding: 0; min-height: 100vh;}
-    .login-container { max-width: 380px; margin: 5em auto 0 auto; background: #fff; box-shadow: 0 8px 24px rgba(36,41,47,0.08); border-radius: 12px; padding: 2em; display: flex; flex-direction: column; align-items: center;}
-    .login-container h2 { margin-bottom: 1em; color: #24292f; font-size: 1.4em; font-weight: 600; letter-spacing: 1px;}
+    body { font-family: "Roboto", "Arial", sans-serif; background: #f6f8fb; margin: 0; padding: 0; min-height: 100vh;}
+    .login-container { max-width: 380px; margin: 5em auto 0 auto; background: #fff; box-shadow: 0 8px 24px rgba(51,102,204,0.08); border-radius: 12px; padding: 2em; display: flex; flex-direction: column; }
+    .login-container h2 { margin-bottom: 1em; color: #3366cc; font-size: 1.4em; font-weight: 600; letter-spacing: 1px;}
     .login-form { width: 100%; display: flex; flex-direction: column; gap: 1.1em;}
-    label { font-size: 1em; color: #244; margin-bottom: 0.3em; font-weight: 500;}
-    input[type="text"], input[type="password"] { padding: 0.6em; font-size: 1em; border-radius: 5px; border: 1px solid #d1d5da; outline: none; transition: border-color 0.2s;}
-    input[type="text"]:focus, input[type="password"]:focus { border-color: #2ea44f;}
-    button[type="submit"] { background: #2ea44f; color: #fff; border: none; border-radius: 6px; padding: 0.75em 1.5em; font-size: 1.1em; cursor: pointer; transition: background 0.2s; margin-top: 0.5em; font-weight: bold; letter-spacing: 1px;}
-    button[type="submit"]:hover { background: #22863a;}
-    .info { font-size: 0.98em; color: #777; margin-bottom: 1em;}
+    label { font-size: 1em; color: #254a99; margin-bottom: 0.3em; font-weight: 500;}
+    input[type="text"], input[type="password"] { padding: 0.6em; font-size: 1em; border-radius: 5px; border: 1px solid #99ccff; outline: none; transition: border-color 0.2s; background: #e6f0ff; color: #222;}
+    input[type="text"]:focus, input[type="password"]:focus { border-color: #3366cc;}
+    button[type="submit"] { background: #3366cc; color: #fff; border: none; border-radius: 6px; padding: 0.75em 1.5em; font-size: 1.1em; cursor: pointer; transition: background 0.2s; margin-top: 0.5em; font-weight: bold; }
+    button[type="submit"]:hover { background: #254a99;}
+    .info { font-size: 0.98em; color: #666; margin-bottom: 1em;}
     #loginError { color: #e55353; font-weight: bold; margin-top: 0.5em; min-height: 1.5em; text-align: center;}
     .footer { text-align: center; padding: 2em 1em 1em; color: #999; font-size: 0.95em;}
     .links { text-align:center; margin-top: 1em;}
-    .btn-home { display: inline-block; margin-top: 1em; padding: 0.6em 1.3em; background: #22863a; color: #fff; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 1em; letter-spacing: 1px; transition: background 0.2s;}
-    .btn-home:hover { background: #16682c; }
+    .btn-home { display: inline-block; margin-top: 1em; padding: 0.6em 1.3em; background: #3366cc; color: #fff; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 1em; letter-spacing: 1px;}
+    .btn-home:hover { background: #254a99; }
+    .links a { color: #3366cc; font-size: 0.98em; text-decoration: none; }
+    .links a:hover { text-decoration: underline; color: #254a99; }
     @media (max-width: 500px) { .login-container { padding: 1em; margin-top: 2em; } }
   </style>
 </head>
@@ -28,7 +30,7 @@
     <h2>Login</h2>
     <div class="info">
       Please enter your username and password to access the Password & PIN Guessers.<br>
-      <span style="color:#22863a;font-weight:500;">No coding knowledge required!</span>
+      <span style="color:#3366cc;font-weight:500;">No coding knowledge required!</span>
     </div>
     <form class="login-form" id="loginForm">
       <div>
@@ -43,9 +45,9 @@
       <div id="loginError"></div>
     </form>
     <div class="links">
-      <a href="apply-account.html" style="color:#22863a;font-size:0.98em;">Apply for an account</a>
+      <a href="apply-account.html">Apply for an account</a>
       <br>
-      <a href="forgot-password.html" style="color:#22863a;font-size:0.98em;">Forgot your password?</a>
+      <a href="forgot-password.html">Forgot your password?</a>
       <br>
       <a href="index.html" class="btn-home">Home Page</a>
     </div>
