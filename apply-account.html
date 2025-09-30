@@ -3,23 +3,113 @@
 <head>
   <meta charset="UTF-8">
   <title>Apply for Account</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    :root {
+      --primary-blue: #3366cc;
+      --dark-blue: #254a99;
+      --light-blue: #e6f0ff;
+      --accent-blue: #99ccff;
+      --background: #f6f8fb;
+      --text-main: #222;
+      --text-light: #fff;
+    }
+    body {
+      background: var(--background);
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 400px;
+      margin: 60px auto 0 auto;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 16px rgba(51,102,204,0.08);
+      padding: 36px 28px 24px 28px;
+    }
+    h1 {
+      color: var(--primary-blue);
+      font-size: 2em;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    label {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--primary-blue);
+      font-weight: 500;
+    }
+    input[type="text"],
+    input[type="email"],
+    textarea {
+      width: 100%;
+      padding: 11px 9px;
+      margin-bottom: 22px;
+      border: 1px solid var(--accent-blue);
+      border-radius: 4px;
+      background: var(--light-blue);
+      font-size: 1em;
+      color: var(--text-main);
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+    textarea {
+      min-height: 60px;
+      resize: vertical;
+    }
+    input[type="text"]:focus,
+    input[type="email"]:focus,
+    textarea:focus {
+      border-color: var(--primary-blue);
+      outline: none;
+    }
+    button {
+      width: 100%;
+      padding: 13px 0;
+      font-size: 1em;
+      background: var(--primary-blue);
+      color: var(--text-light);
+      border: none;
+      border-radius: 4px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.2s;
+    }
+    button:hover, button:focus {
+      background: var(--dark-blue);
+    }
+    .note {
+      color: #666;
+      font-size: 0.97em;
+      margin-top: 24px;
+      text-align: center;
+    }
+    @media (max-width: 500px) {
+      .container {
+        margin: 24px 8px;
+        padding: 20px 8px;
+      }
+    }
+  </style>
 </head>
 <body>
-  <h1>Apply for an Account</h1>
-  <form action="mailto:admin@example.com" method="POST" enctype="text/plain">
-    <label for="username">Desired Username:</label>
-    <input type="text" id="username" name="Username" required><br>
-
-    <label for="email">Your Email:</label>
-    <input type="email" id="email" name="Email" required><br>
-
-    <label for="notes">Notes (optional):</label>
-    <textarea id="notes" name="Notes"></textarea><br>
-
-    <button type="submit">Send Application</button>
-  </form>
-  <p>
-    <em>This will open your email client with the form data. You must send the email to complete the application.</em>
-  </p>
+  <div class="container">
+    <h1>Apply for an Account</h1>
+    <form action="mailto:admin@example.com" method="POST" enctype="text/plain">
+      <label for="username">Desired Username</label>
+      <input type="text" id="username" name="Username" required>
+      <label for="email">Your Email</label>
+      <input type="email" id="email" name="Email" required>
+      <label for="notes">Notes (optional)</label>
+      <textarea id="notes" name="Notes"></textarea>
+      <button type="submit">Send Application</button>
+    </form>
+    <div class="note">
+      <em>This will open your email client with the form data. You must send the email to complete the application.</em>
+    </div>
+  </div>
 </body>
 </html>
