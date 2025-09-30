@@ -8,7 +8,8 @@ async function sha256(message) {
 const users = [
   { username: 'admin', hash: '02079b31824a4d18a105f16b9d45e751a114ce5b4ff3d49c6f19633aed25abbc' },
   { username: 'user1', hash: '6b6197ff809a6ec0af1ba56a0f5c02a2eb5cd6605a2d39b42263bea3070e2e7c' },
-  { username: 'amagee', hash: 'e52a1359297822655226696b53192f9085c5f161d1bda5cbaed8e9ceb64c904b'}
+  { username: 'amagee', hash: 'e52a1359297822655226696b53192f9085c5f161d1bda5cbaed8e9ceb64c904b'},
+  { username: 'ccarty', hash: ''}
 ];
 
 function isLoggedIn() {
