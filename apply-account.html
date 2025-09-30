@@ -28,6 +28,7 @@
     .btn-home { display: inline-block; margin-top: 18px; padding: 0.6em 1.3em; background: #3366cc; color: #fff; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 1em; letter-spacing: 1px; text-align: center; }
     .btn-home:hover { background: #254a99; }
     .reminder { color: #254a99; background: #e6f0ff; border-radius: 6px; padding: 10px; font-size: 1em; margin-bottom: 18px; text-align: center; }
+    .username-notice { background: #e6f0ff; color: #3366cc; padding: 8px 12px; border-radius: 6px; margin-bottom: 18px; font-size: 1em; text-align: center; border: 1px solid #99ccff;}
     @media (max-width: 500px) { .container { margin: 24px 8px; padding: 20px 8px; } }
   </style>
   <script>
@@ -43,9 +44,8 @@
       var body = encodeURIComponent(
         `Hello,\n\nMy name is ${name} ${lastname}.\n\nI would like to apply for an account on Password & PIN Guessers.\n\nHere are my details:\n\nEmail: ${email}\nDesired password: ${desiredPassword}\nReason for account:\n${reason}\n\nThank you!\n\nPlease note: I understand it may take up to three days for my account to be ready.`
       );
-      var mailto = `mailto:maintinence2025@outlook.com?subject=${subject}&body=${body}`;
+      var mailto = `mailto:admin@example.com?subject=${subject}&body=${body}`;
       window.location.href = mailto;
-      // After opening mail client, redirect to success page after a short delay
       setTimeout(function() {
         window.location.href = "account-application-sucess.html?name=" + encodeURIComponent(name) + "&lastname=" + encodeURIComponent(lastname) + "&email=" + encodeURIComponent(email);
       }, 500);
@@ -57,6 +57,14 @@
     <h1>Apply for an Account</h1>
     <div class="reminder">
       Reminder: It may take up to three days for your account to be ready.
+    </div>
+    <div class="username-notice">
+      <strong>Your username will be:</strong><br>
+      the first letter of your first name, followed by your last name.<br>
+      <em>(No spaces, all lowercase)</em>
+      <br>
+      <br>
+      <span style="font-size:0.95em;">Example: John Smith → <b>jsmith</b></span>
     </div>
     <form onsubmit="formatMailto(event)">
       <label for="name">First Name</label>
