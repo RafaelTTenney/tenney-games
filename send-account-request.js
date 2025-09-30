@@ -14,7 +14,7 @@ const transporter = nodemailer.createTransport({
   service: 'Outlook',
   auth: {
     user: 'maintinence2025@outlook.com',
-    pass: 'YOUR_OUTLOOK_PASSWORD' // Replace with your Outlook email password or app password!
+    pass: 'maintinence@web-ui' // Replace with your Outlook email password or app password!
   }
 });
 
