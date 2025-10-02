@@ -124,20 +124,25 @@ const GUESSERS = [
   }
 ];
 
+
 function showMenuGuesser() {
   const app = document.getElementById('guesserApp');
   app.innerHTML = `
     <h3>Password & PIN Guessers</h3>
     <div id="guesserButtons" style="margin-bottom:1em;"></div>
+    <div id="selectedGuesser" style="margin-bottom:0.5em; font-weight:500; color:#3366cc;"></div> <!-- NEW: Selected guesser name -->
     <div id="guesserInputs"></div>
     <button id="guesserBtn" style="margin-top:1em; display:none;">Guess!</button>
     <div id="guesserResult" style="margin-top:1em;"></div>
+    <div id="guesserTime" style="margin-top:0.5em; color:#666;"></div> <!-- NEW: Time taken -->
   `;
 
   const buttonsDiv = document.getElementById('guesserButtons');
+  const selectedDiv = document.getElementById('selectedGuesser'); // NEW
   const inputsDiv = document.getElementById('guesserInputs');
   const resultDiv = document.getElementById('guesserResult');
   const guesserBtn = document.getElementById('guesserBtn');
+  const timeDiv = document.getElementById('guesserTime'); // NEW
 
   buttonsDiv.innerHTML = GUESSERS.map(
     g => `<button class="guesserSelectBtn" data-id="${g.id}">${g.label}</button>`
@@ -148,11 +153,18 @@ function showMenuGuesser() {
   function loadGuesser(guesserId) {
     const guesser = GUESSERS.find(g => g.id === guesserId);
     currentGuesser = guesser;
+    // NEW: Show selected guesser name
+    selectedDiv.textContent = `Selected Guesser: ${guesser.label}`;
     inputsDiv.innerHTML = guesser.inputs.map(
       inp => `<input type="text" id="${inp.id}" placeholder="${inp.placeholder}">`
     ).join('<br>');
     guesserBtn.style.display = 'inline-block';
     resultDiv.textContent = '';
+    timeDiv.textContent = ''; // Clear time when switching guesser
+    // Highlight active button
+    document.querySelectorAll('.guesserSelectBtn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.id === guesserId);
+    });
   }
 
   document.querySelectorAll('.guesserSelectBtn').forEach(btn => {
@@ -166,12 +178,17 @@ function showMenuGuesser() {
       inputValues[inp.id] = document.getElementById(inp.id).value;
     });
     resultDiv.textContent = 'Guessing...';
+    timeDiv.textContent = '';
     let output;
+    let t0 = performance.now();
     try {
       output = await currentGuesser.handler(inputValues);
     } catch (err) {
       output = 'Error: ' + err;
     }
+    let t1 = performance.now();
     resultDiv.textContent = output;
+    // NEW: Show time taken
+    timeDiv.textContent = `Time taken: ${(t1 - t0).toFixed(2)} ms`;
   };
 }
