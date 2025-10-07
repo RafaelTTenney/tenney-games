@@ -39,6 +39,13 @@
     <div id="memory-board"></div>
   </div>
   <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        if (!isLoggedIn()) {
+          window.location.replace('index.html');
+        } else {
+          showMenuGuesser();
+      }
+    });
     // Menu logic
     function showGame(game) {
       document.getElementById('snake-game').style.display = (game === 'snake') ? 'flex' : 'none';
