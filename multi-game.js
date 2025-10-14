@@ -5,7 +5,6 @@ function showMultiGame() {
     document.getElementById('memory-game').style.display = (game === 'memory') ? 'flex' : 'none';
     document.getElementById('paperio-game').style.display = (game === 'paperio') ? 'flex' : 'none';
   }
-  // Start with menu only
   window.showGame('');
 
   // --- Snake Game Implementation ---
@@ -23,7 +22,7 @@ function showMultiGame() {
     gameOver = false;
     updateSnakeScore();
     clearInterval(snakeInterval);
-    snakeInterval = setInterval(gameLoop, 100);
+    snakeInterval = setInterval(gameLoop, 120); // Slowed from 100 to 120ms
     drawSnake();
   }
 
@@ -69,10 +68,8 @@ function showMultiGame() {
   function gameLoop() {
     if (gameOver) return;
 
-    // Move direction from queue, if any
     if (moveQueue.length) {
       const nextDir = moveQueue.shift();
-      // Prevent reverse direction
       if ((nextDir.x !== -direction.x || nextDir.y !== -direction.y)) {
         direction = nextDir;
       }
@@ -96,7 +93,7 @@ function showMultiGame() {
       return;
     }
 
-    snake.unshift(head); // add new head
+    snake.unshift(head);
 
     // Check food
     if (head.x === food.x && head.y === food.y) {
@@ -104,7 +101,7 @@ function showMultiGame() {
       updateSnakeScore();
       placeFood();
     } else {
-      snake.pop(); // remove tail
+      snake.pop();
     }
 
     drawSnake();
@@ -122,10 +119,13 @@ function showMultiGame() {
     if (document.getElementById('paperio-game').style.display === 'flex') {
       let player = paperioPlayers[0];
       if (!player.alive) return;
-      if (e.key === 'ArrowUp' && player.dir.y !== 1) { player.dir = {x:0,y:-1}; }
-      if (e.key === 'ArrowDown' && player.dir.y !== -1) { player.dir = {x:0,y:1}; }
-      if (e.key === 'ArrowLeft' && player.dir.x !== 1) { player.dir = {x:-1,y:0}; }
-      if (e.key === 'ArrowRight' && player.dir.x !== -1) { player.dir = {x:1,y:0}; }
+      // Improved: use direction queue for fluidity
+      let nextDir = null;
+      if (e.key === 'ArrowUp' && player.dir.y !== 1) nextDir = {x:0,y:-1};
+      if (e.key === 'ArrowDown' && player.dir.y !== -1) nextDir = {x:0,y:1};
+      if (e.key === 'ArrowLeft' && player.dir.x !== 1) nextDir = {x:-1,y:0};
+      if (e.key === 'ArrowRight' && player.dir.x !== -1) nextDir = {x:1,y:0};
+      if (nextDir) player.queuedDir = nextDir;
     }
   });
 
@@ -198,7 +198,6 @@ function showMultiGame() {
           memorySecondCard = null;
           memoryLock = false;
           renderMemoryBoard();
-          // Win condition!
           if (memoryMatched === memoryCards.length) {
             setTimeout(() => {
               alert("Congratulations! You matched all pairs!");
@@ -230,7 +229,7 @@ function showMultiGame() {
   window.resetPaperio = function() {
     paperioBoard = Array.from({length:paperioSize},()=>Array(paperioSize).fill(-1));
     paperioPlayers = [
-      {id:0, name:'You', color:paperioColors[0], x:2, y:2, dir:{x:1,y:0}, land:[], trail:[], alive:true, ai:false},
+      {id:0, name:'You', color:paperioColors[0], x:2, y:2, dir:{x:1,y:0}, queuedDir:null, land:[], trail:[], alive:true, ai:false},
       {id:1, name:'Bot1', color:paperioColors[1], x:17, y:2, dir:{x:-1,y:0}, land:[], trail:[], alive:true, ai:true},
       {id:2, name:'Bot2', color:paperioColors[2], x:2, y:17, dir:{x:0,y:-1}, land:[], trail:[], alive:true, ai:true},
       {id:3, name:'Bot3', color:paperioColors[3], x:17, y:17, dir:{x:0,y:-1}, land:[], trail:[], alive:true, ai:true}
@@ -239,10 +238,11 @@ function showMultiGame() {
       paperioBoard[p.y][p.x] = p.id;
       p.land = [{x:p.x,y:p.y}]; p.trail = [];
       p.alive = true;
+      p.queuedDir = null;
     }
     document.getElementById('paperio-elim').textContent = '';
     clearInterval(paperioInterval);
-    paperioInterval = setInterval(paperioTick, 120);
+    paperioInterval = setInterval(paperioTick, 180); // Slower: 180ms
     paperioDraw();
     paperioUpdateScore();
   }
@@ -280,23 +280,54 @@ function showMultiGame() {
     }
   }
 
+  // Helper: Is this trail cell still connected to owner's land?
+  function isTrailConnected(owner, trailCell) {
+    // BFS from any land cell, see if we can reach this trail cell via owner's trail or land
+    let visited = Array.from({length:paperioSize},()=>Array(paperioSize).fill(false));
+    let queue = [];
+    for (let l of owner.land) queue.push({x:l.x, y:l.y});
+    while (queue.length) {
+      let {x, y} = queue.shift();
+      if (x===trailCell.x && y===trailCell.y) return true;
+      visited[y][x] = true;
+      let neighbors = [
+        {x:x-1,y:y},{x:x+1,y:y},{x:x,y:y-1},{x:x,y:y+1}
+      ];
+      for (let nb of neighbors) {
+        if (nb.x<0||nb.x>=paperioSize||nb.y<0||nb.y>=paperioSize) continue;
+        if (visited[nb.y][nb.x]) continue;
+        // Owner's land or trail only
+        if (paperioBoard[nb.y][nb.x]===owner.id || owner.trail.some(t=>t.x===nb.x&&t.y===nb.y)) {
+          queue.push({x:nb.x, y:nb.y});
+        }
+      }
+    }
+    return false;
+  }
+
   function paperioTick() {
-    // Move bots
+    // Move bots, turn more often for action
     for (let p of paperioPlayers) {
       if (!p.alive || !p.ai) continue;
-      // Randomly turn sometimes, prefer not reversing
-      if (Math.random()<0.2) {
+      if (Math.random()<0.25) {
         let dirs = [
           {x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}
         ].filter(d => !(d.x === -p.dir.x && d.y === -p.dir.y));
-        // Avoid walls
         dirs = dirs.filter(d => p.x+d.x>=0 && p.x+d.x<paperioSize && p.y+d.y>=0 && p.y+d.y<paperioSize);
         if (dirs.length) p.dir = dirs[Math.floor(Math.random()*dirs.length)];
       }
     }
+
     // Move all
     for (let p of paperioPlayers) {
       if (!p.alive) continue;
+      // Human: consume queued direction for fluid movement
+      if (!p.ai && p.queuedDir) {
+        if (!(p.queuedDir.x === -p.dir.x && p.queuedDir.y === -p.dir.y)) {
+          p.dir = p.queuedDir;
+        }
+        p.queuedDir = null;
+      }
       let nx = p.x + p.dir.x, ny = p.y + p.dir.y;
       // Check bounds
       if (nx<0 || nx>=paperioSize || ny<0 || ny>=paperioSize) {
@@ -304,22 +335,30 @@ function showMultiGame() {
         continue;
       }
       // Check trail collision
+      let trailHit = null;
       for (let q of paperioPlayers) {
         if (!q.alive) continue;
         for (let t of q.trail) {
           if (t.x === nx && t.y === ny) {
-            paperioElim(p, "hit a trail");
+            trailHit = {owner: q, cell: t};
             break;
           }
         }
-        // Don't run into own trail
-        if (p.trail.some(t => t.x===nx && t.y===ny)) {
-          paperioElim(p, "hit own trail");
-          break;
-        }
         if (!p.alive) break;
       }
-      if (!p.alive) continue;
+      // Don't run into own trail
+      if (p.trail.some(t => t.x===nx && t.y===ny)) {
+        paperioElim(p, "hit own trail");
+        continue;
+      }
+      if (trailHit) {
+        // Is the trail cell still attached? If not, eliminate owner!
+        if (!isTrailConnected(trailHit.owner, trailHit.cell)) {
+          paperioElim(trailHit.owner, `trail was cut by ${p.name}`);
+        }
+        paperioElim(p, "hit a trail");
+        continue;
+      }
       // Move
       p.trail.push({x:nx,y:ny});
       p.x = nx; p.y = ny;
