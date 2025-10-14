@@ -19,11 +19,28 @@
       font-size: 1.5em;
       letter-spacing: 2px;
     }
-    h3 {
-      text-align: center;
+    nav {
+      background: #e6f0ff;
+      display: flex;
+      justify-content: flex-end;
+      gap: 1em;
+      padding: 0.5em 2em;
+      align-items: center;
     }
-    h4 {
-      text-align: center;
+    nav a {
+      background: #3366cc;
+      color: #fff;
+      border-radius: 6px;
+      padding: 0.5em 1.15em;
+      font-weight: bold;
+      text-decoration: none;
+      letter-spacing: 1px;
+      font-size: 1em;
+      transition: background 0.2s;
+    }
+    nav a:hover {
+      background: #254a99;
+      text-decoration: underline;
     }
     .logout-bar {
       display: flex;
@@ -126,21 +143,22 @@
     @media (max-width: 700px) {
       #guesserApp { padding: 1em; }
       header { font-size: 1.2em; padding: 1em 0.5em; }
-      .logout-bar { padding: 0.5em 0.5em; }
+      nav, .logout-bar { padding: 0.5em 0.5em; }
     }
   </style>
 </head>
 <body>
   <header>Password & PIN Guessers</header>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="multi-game.html">Games</a>
+  </nav>
   <h3>Dictionary Guessers are currently unavailable.</h3>
   <h4>Sorry for the inconvenience</h4>
   <div class="logout-bar">
     <button onclick="logout()">Logout</button>
   </div>
   <div id="guesserApp"></div>
-  <div class="game-bar">
-    <button onclick="goToGames()">Games</button>
-  </div>
   <footer>
     &copy; 2025 RafaelTTenney | For educational use only
   </footer>
