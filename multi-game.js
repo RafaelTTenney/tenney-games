@@ -22,7 +22,7 @@ function showMultiGame() {
     gameOver = false;
     updateSnakeScore();
     clearInterval(snakeInterval);
-    snakeInterval = setInterval(gameLoop, 1); // Slowed from 100 to 120ms
+    snakeInterval = setInterval(gameLoop, 200); // Slowed from 100 to 120ms
     drawSnake();
   }
 
