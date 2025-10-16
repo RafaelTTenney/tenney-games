@@ -10,7 +10,7 @@ function showMultiGame() {
   // --- Snake Game Implementation ---
   const canvas = document.getElementById('snake-canvas');
   const ctx = canvas.getContext('2d');
-  const gridSize = 16;
+  const gridSize = 24;
   let snake, direction, food, score, gameOver, moveQueue, snakeInterval;
 
   window.resetSnake = function() {
@@ -22,7 +22,7 @@ function showMultiGame() {
     gameOver = false;
     updateSnakeScore();
     clearInterval(snakeInterval);
-    snakeInterval = setInterval(gameLoop, 80); // Slowed from 100 to 120ms
+    snakeInterval = setInterval(gameLoop, 120); // Slowed from 100 to 120ms
     drawSnake();
   }
 
