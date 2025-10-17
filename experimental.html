@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Experimental | Password & PIN Guessers</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{
+      --primary:#3366cc;
+      --dark:#254a99;
+      --bg:#f6f8fb;
+      --card:#e6f0ff;
+      --muted:#666;
+    }
+    body{margin:0;font-family:Roboto,Arial,sans-serif;background:var(--bg);color:#222;min-height:100vh;}
+    header{background:var(--primary);color:#fff;padding:14px 18px;text-align:center;font-weight:700;}
+    .top{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;background:var(--card);gap:8px;flex-wrap:wrap;}
+    .top .links{display:flex;gap:10px;}
+    .btn{background:var(--primary);color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none;font-weight:700;}
+    .btn.secondary{background:#fff;color:var(--primary);border:1px solid #99ccff;}
+    .btn:hover{background:var(--dark);}
+    .container{max-width:900px;margin:28px auto;padding:18px;background:#fff;border-radius:12px;box-shadow:0 8px 24px rgba(51,102,204,0.08);}
+    h1{color:var(--primary);margin:0 0 8px 0;}
+    p.lead{color:var(--muted);margin:6px 0 16px 0;}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;}
+    .card{background:var(--card);padding:12px;border-radius:10px;border:1px solid #99ccff;min-height:120px;display:flex;flex-direction:column;gap:8px;}
+    .card h3{margin:0;color:var(--primary);}
+    .card .meta{color:var(--muted);font-size:0.95em;}
+    .card .actions{margin-top:auto;display:flex;gap:8px;justify-content:flex-end;}
+    .footer{text-align:center;color:#999;padding:20px 10px;font-size:0.95em;}
+    pre.demo { background:#fff; padding:8px; border-radius:6px; border:1px solid rgba(0,0,0,0.05); overflow:auto; max-height:160px;}
+    @media (max-width:520px){ .top{flex-direction:column;align-items:flex-start;} }
+  </style>
+</head>
+<body>
+  <header>Experimental Demos</header>
+
+  <div class="top" role="navigation" aria-label="experimental top">
+    <div class="links">
+      <a class="btn" href="loggedIn.html">Dashboard</a>
+      <a class="btn secondary" href="index.html">Home</a>
+    </div>
+    <div style="color:var(--primary);font-weight:700;">Add experiments below — each card is a formatted placeholder</div>
+  </div>
+
+  <main class="container">
+    <h1>Experimental</h1>
+    <p class="lead">This page is a lightweight, consistent template for adding experimental games or demos. Copy one of the cards below to create a new experiment. Each card has a title, description, space for a small demo or snippet, and actions.</p>
+
+    <div class="grid" id="experimentalGrid">
+      <!-- Example card 1 -->
+      <section class="card">
+        <h3>Example: Minimal Canvas Demo</h3>
+        <div class="meta">Small canvas-based experiment. Replace with your code.</div>
+        <pre class="demo">
+// Simple placeholder
+const canvas = document.createElement('canvas');
+canvas.width = 240;
+canvas.height = 120;
+document.body.appendChild(canvas);
+        </pre>
+        <div class="actions">
+          <a class="btn secondary" href="#" onclick="alert('Edit this card in experimental.html')">Edit</a>
+          <a class="btn" href="#" onclick="alert('Run demo (replace with real link)')">Run</a>
+        </div>
+      </section>
+
+      <!-- Example card 2 -->
+      <section class="card">
+        <h3>Example: Keyboard Test</h3>
+        <div class="meta">A small area to attach event listeners and debug input.</div>
+        <pre class="demo">// Attach to document and log keys</pre>
+        <div class="actions">
+          <a class="btn secondary" href="#" onclick="alert('Edit this card in experimental.html')">Edit</a>
+          <a class="btn" href="#" onclick="alert('Run demo (replace with real link)')">Run</a>
+        </div>
+      </section>
+    </div>
+
+    <hr style="margin:20px 0;border:none;border-top:1px solid #e6eefc;" />
+
+    <section style="margin-top:12px;">
+      <h3 style="color:var(--primary);margin-top:0;">How to add a new experiment</h3>
+      <ol style="color:var(--muted);line-height:1.6;">
+        <li>Duplicate one of the &lt;section class="card"&gt; blocks above.</li>
+        <li>Replace the title, description and the &lt;pre class="demo"&gt; content with your snippet or instructions.</li>
+        <li>Link a separate HTML/JS file in the "Run" action if the demo is larger than a snippet.</li>
+      </ol>
+    </section>
+  </main>
+
+  <div class="footer">
+    &copy; 2025 Password & PIN Guessers | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
+  </div>
+
+  <script src="login.js"></script>
+  <script>
+    // Simple auth guard to keep formatting safe for logged out users
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!isLoggedIn()) {
+        window.location.replace('index.html');
+      }
+    });
+  </script>
+</body>
+</html>
