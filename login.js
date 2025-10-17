@@ -17,6 +17,7 @@ function isLoggedIn() {
 }
 function logout() {
   localStorage.removeItem('loggedIn');
+  localStorage.removeItem('username');
   window.location.replace('index.html');
 }
 
@@ -38,7 +39,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const inputHash = await sha256(password);
     if (inputHash === user.hash) {
       localStorage.setItem('loggedIn', 'true');
-      window.location.replace('menu-guesser.html');
+      localStorage.setItem('username', username);
+      // Redirect to the new loggedIn landing page
+      window.location.replace('loggedIn.html');
     } else {
       document.getElementById('loginError').textContent = 'Invalid username or password.';
     }
