@@ -27,6 +27,7 @@
       padding: 0.5em 2em;
       align-items: center;
     }
+    /* Keep nav simple: no Games / Experimental buttons as requested */
     nav a {
       background: #3366cc;
       color: #fff;
@@ -47,6 +48,21 @@
       justify-content: flex-end;
       background: #e6f0ff;
       padding: 0.5em 2em;
+      gap: 0.6em;
+      align-items: center;
+    }
+    .logout-bar a.dashboard {
+      background: #ffffff;
+      color: #3366cc;
+      border: 1px solid #99ccff;
+      padding: 0.45em 0.9em;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .logout-bar a.dashboard:hover {
+      background: #e6f0ff;
+      color: #254a99;
     }
     .logout-bar button {
       background: #e55353;
@@ -149,17 +165,22 @@
 </head>
 <body>
   <header>Password & PIN Guessers</header>
+
+  <!-- Minimal nav: Home only (no Games / Experimental buttons) -->
   <nav>
     <a href="index.html">Home</a>
-    <a href="multi-game.html">Games</a>
-    <a href="experimental.html">Experimental</a>
   </nav>
+
+  <!-- Add a Dashboard link that goes back to loggedIn.html, next to Logout -->
   <div class="logout-bar">
+    <a class="dashboard" href="loggedIn.html">Dashboard</a>
     <button onclick="logout()">Logout</button>
   </div>
+
   <h3>Dictionary Guessers are currently unavailable.</h3>
   <h4>Sorry for the inconvenience</h4>
   <div id="guesserApp"></div>
+
   <footer>
     &copy; 2025 RafaelTTenney | For educational use only
   </footer>
