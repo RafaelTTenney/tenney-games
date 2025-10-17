@@ -3,8 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <title>Snake, Memory Match & Paper-io Games</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: Arial, sans-serif; background: #222; color: #eee; text-align: center; }
+    body { font-family: Arial, sans-serif; background: #222; color: #eee; text-align: center; margin:0; padding:0; min-height:100vh; }
+    .topbar { display:flex; gap:12px; justify-content:center; align-items:center; padding:18px 12px; background:#111; box-shadow:0 2px 6px rgba(0,0,0,0.4); }
+    .btn-home {
+      display:inline-block; padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:700;
+      background:#3366cc; color:#fff; border: 1px solid rgba(255,255,255,0.06);
+    }
+    .btn-home:hover { background:#254a99; }
     .menu { margin: 30px 0; }
     .game-container { display: none; justify-content: center; align-items: center; flex-direction: column; }
     canvas { background: #111; border: 2px solid #555; margin-top: 20px; }
@@ -16,11 +23,18 @@
     #paperio-info { margin-top: 12px; font-size: 1.08em; color: #1a8;}
     #paperio-scoreboard { margin-top: 8px; color: #eee; font-size: 1em; }
     #paperio-elim { color: #e55353; font-weight: bold; margin: 8px 0 0 0; }
+    @media (max-width:700px){ #memory-board{grid-template-columns: repeat(4,48px);} canvas{max-width:320px;} }
   </style>
 </head>
 <body>
-  <h1>Snake, Memory Match & Paper-io</h1>
-  <a href="index.html" class="btn-home">Home</a>
+  <div class="topbar">
+    <a href="index.html" class="btn-home">Home</a>
+    <!-- Dashboard button: returns to loggedIn.html -->
+    <a href="loggedIn.html" class="btn-home">Dashboard</a>
+  </div>
+
+  <h1 style="margin-top:18px">Snake, Memory Match & Paper-io</h1>
+
   <div class="menu">
     <button onclick="showGame('snake')">Play Snake</button>
     <button onclick="showGame('memory')">Play Memory Match</button>
@@ -54,6 +68,7 @@
     <div id="paperio-elim"></div>
     <button onclick="resetPaperio()">Restart</button>
   </div>
+
   <script>
       document.addEventListener('DOMContentLoaded', function () {
         if (!isLoggedIn()) {
@@ -63,6 +78,8 @@
       }
     });
   </script>
+
+  <!-- session/login logic + games -->
   <script src="login.js"></script>
   <script src="multi-game.js"></script>
 </body>
