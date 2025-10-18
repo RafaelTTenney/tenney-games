@@ -45,9 +45,9 @@
 
   <main class="container">
     <h1>Experimental</h1>
-    <p class="lead">This page is a lightweight, consistent template for adding experimental games or demos. Copy one of the cards below to create a new experiment. Each card has a title, description, space for a small demo or snippet, and actions.</p>
+    <p class="lead">This page is an admin area for uploading and testing experiments. Only administrators may access this page.</p>
 
-    <div class="grid" id="experimentalGrid">
+    <div class="grid" id="experimentalGrid" aria-live="polite">
       <!-- Example card 1 -->
       <section class="card">
         <h3>Example: Minimal Canvas Demo</h3>
@@ -95,11 +95,10 @@ document.body.appendChild(canvas);
 
   <script src="login.js"></script>
   <script>
-    // Simple auth guard to keep formatting safe for logged out users
+    // Access protection: only admins may enter
     document.addEventListener('DOMContentLoaded', () => {
-      if (!isLoggedIn()) {
-        window.location.replace('index.html');
-      }
+      // enforcePageAccess will redirect if not allowed.
+      if (!enforcePageAccess('experimental.html')) return;
     });
   </script>
 </body>
