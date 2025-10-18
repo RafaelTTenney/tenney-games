@@ -208,11 +208,9 @@
   <script src="menu-guesser.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      if (!isLoggedIn()) {
-        window.location.replace('index.html');
-      } else {
-        showMenuGuesser();
-      }
+      // enforcePageAccess will redirect to index or dashboard if needed
+      if (!enforcePageAccess('menu-guesser.html')) return;
+      showMenuGuesser();
     });
   </script>
 </body>
