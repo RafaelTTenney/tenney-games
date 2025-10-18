@@ -108,13 +108,15 @@
 <body>
   <header>Games & Programs</header>
   <nav>
-    <div class="nav-left">
+    <div class="nav-left" id="navLeft">
       <a href="index.html">Home</a>
       <a href="menu-guesser.html">Menu Guessers</a>
       <a href="multi-game.html">Games</a>
-      <a href="experimental.html">Experimental</a>
+      <!-- experimental/admin links added by JS if allowed -->
     </div>
-    <div style="color:#3366cc; font-weight:600;">Logged in</div>
+    <div style="color:#3366cc; font-weight:600;">
+      <a id="profileLink" href="profile.html" style="color: #3366cc; text-decoration: none;">Profile</a>
+    </div>
   </nav>
 
   <div class="logout-bar">
@@ -138,10 +140,22 @@
         <span class="btn">Play</span>
       </a>
 
-      <a class="card" href="experimental.html">
+      <a class="card" id="experimentalCard" href="experimental.html" style="display:none;">
         <div>Experimental</div>
-        <small>Try experimental tools and demos</small>
+        <small>Admin-only experiments</small>
         <span class="btn">Explore</span>
+      </a>
+
+      <a class="card" id="previewCard" href="preview-games.html" style="display:none;">
+        <div>Preview Games</div>
+        <small>Advance users: preview & report bugs</small>
+        <span class="btn">Preview</span>
+      </a>
+
+      <a class="card" id="adminCard" href="admin.html" style="display:none;">
+        <div>Admin Panel</div>
+        <small>Manage account statuses & monitor activity</small>
+        <span class="btn">Open</span>
       </a>
     </div>
   </div>
@@ -163,6 +177,16 @@
         title.textContent = `Welcome, ${username}!`;
       } else {
         title.textContent = 'Welcome!';
+      }
+      // Show experimental/admin links only if allowed
+      if (isAdmin()) {
+        document.getElementById('experimentalCard').style.display = '';
+        document.getElementById('adminCard').style.display = '';
+        document.getElementById('navLeft').insertAdjacentHTML('beforeend', '<a href="experimental.html">Experimental</a>');
+      }
+      // Show preview-games to advance users
+      if (isAdvance()) {
+        document.getElementById('previewCard').style.display = '';
       }
     });
   </script>
