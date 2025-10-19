@@ -1,27 +1,36 @@
-function showMultiGame() {
-  // Menu logic - Make showGame globally accessible
-  window.showGame = function(game) {
-    const sections = {
-      snake: 'snake-game',
-      memory: 'memory-game',
-      paperio: 'paperio-game',
-      racer: 'racer-game'
-    };
-    Object.values(sections).forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = 'none';
-    });
-    if (sections[game]) {
-      document.getElementById(sections[game]).style.display = 'flex';
-    }
+const GAME_SECTIONS = {
+  snake: 'snake-game',
+  memory: 'memory-game',
+  paperio: 'paperio-game',
+  racer: 'racer-game'
+};
 
-    if (game === 'racer') {
-      window.startRacer();
-    } else {
-      window.pauseRacer();
+window.showGame = function(game) {
+  Object.values(GAME_SECTIONS).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.display = 'none';
+    }
+  });
+
+  const targetId = GAME_SECTIONS[game];
+  if (targetId) {
+    const target = document.getElementById(targetId);
+    if (target) {
+      target.style.display = 'flex';
     }
   }
 
+  if (game === 'racer') {
+    if (typeof window.startRacer === 'function') {
+      window.startRacer();
+    }
+  } else if (typeof window.pauseRacer === 'function') {
+    window.pauseRacer();
+  }
+};
+
+function showMultiGame() {
   // --- Snake Game Implementation ---
   const canvas = document.getElementById('snake-canvas');
   const ctx = canvas.getContext('2d');
@@ -46,7 +55,8 @@ function showMultiGame() {
   }
 
   function placeFood() {
-@@ -85,72 +100,50 @@ function showMultiGame() {
+    while (true) {
+@@ -85,72 +109,50 @@ function showMultiGame() {
       return;
     }
 
@@ -97,7 +107,7 @@ function showMultiGame() {
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
-@@ -200,209 +193,554 @@ function showMultiGame() {
+@@ -200,209 +202,562 @@ function showMultiGame() {
           renderMemoryBoard();
           if (memoryMatched === memoryCards.length) {
             setTimeout(() => {
@@ -650,5 +660,13 @@ function showMultiGame() {
   window.resetMemory();
   window.resetPaperio();
   window.resetRacer();
-  window.showGame('');
+  window.showGame('snake');
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof isLoggedIn === 'function' && !isLoggedIn()) {
+    window.location.replace('index.html');
+    return;
+  }
+  showMultiGame();
+});
