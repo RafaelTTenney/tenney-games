@@ -171,6 +171,7 @@
         window.location.replace('index.html');
         return;
       }
+      const username = localStorage.getItem('username');
       const firstname = localStorage.getItem('firstName');
       const title = document.getElementById('welcomeTitle');
       if (username) {
