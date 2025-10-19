@@ -143,6 +143,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (inputHash === user.hash) {
       localStorage.setItem('loggedIn', 'true');
       localStorage.setItem('username', username);
+      localStorage.setItem('firstName', user.firstName);
       // Save initial accountStatus from users array (session); admin may override later
       localStorage.setItem('accountStatus', user.accountStatus || 'standard');
       // Redirect to the new loggedIn landing page
