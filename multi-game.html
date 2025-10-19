@@ -20,6 +20,7 @@
     .card.flipped, .card.matched { background: #1a8; color: #fff; cursor: default; }
     button { margin: 8px; padding: 10px 25px; font-size: 1em; border-radius: 5px; border: none; background: #1a8; color: #fff; cursor: pointer; }
     button:hover { background: #25d; }
+    .menu-button.active { background: #25d; box-shadow: 0 0 8px rgba(37, 85, 221, 0.6); }
     #paperio-info { margin-top: 12px; font-size: 1.08em; color: #1a8;}
     #paperio-scoreboard { margin-top: 8px; color: #eee; font-size: 1em; }
     #paperio-elim { color: #e55353; font-weight: bold; margin: 8px 0 0 0; min-height: 24px; }
@@ -38,12 +39,12 @@
   <h1 style="margin-top:18px">Snake, Memory Match, Paper-io & Neon Racer</h1>
 
   <div class="menu">
-    <button onclick="showGame('snake')">Play Snake</button>
-    <button onclick="showGame('memory')">Play Memory Match</button>
-    <button onclick="showGame('paperio')">Play Paper-io</button>
-    <button onclick="showGame('racer')">Play Neon Racer</button>
+    <button type="button" class="menu-button" data-game-target="snake" aria-pressed="false" aria-controls="snake-game">Play Snake</button>
+    <button type="button" class="menu-button" data-game-target="memory" aria-pressed="false" aria-controls="memory-game">Play Memory Match</button>
+    <button type="button" class="menu-button" data-game-target="paperio" aria-pressed="false" aria-controls="paperio-game">Play Paper-io</button>
+    <button type="button" class="menu-button" data-game-target="racer" aria-pressed="false" aria-controls="racer-game">Play Neon Racer</button>
   </div>
-  <div id="snake-game" class="game-container">
+  <div id="snake-game" class="game-container" aria-hidden="true">
     <h2>Snake Game</h2>
     <div>
       <span id="snake-score">Score: 0</span>
@@ -52,7 +53,7 @@
     <canvas id="snake-canvas" width="320" height="320"></canvas>
     <p>Use arrow keys to move the snake.</p>
   </div>
-  <div id="memory-game" class="game-container">
+  <div id="memory-game" class="game-container" aria-hidden="true">
     <h2>Memory Match</h2>
     <div>
       <span id="memory-moves">Moves: 0</span>
@@ -60,7 +61,7 @@
     </div>
     <div id="memory-board"></div>
   </div>
-  <div id="paperio-game" class="game-container">
+  <div id="paperio-game" class="game-container" aria-hidden="true">
     <h2>Paper-io</h2>
     <div id="paperio-info">
       Use arrow keys to move and claim territory.<br>
@@ -72,7 +73,7 @@
     <button onclick="resetPaperio()">Restart</button>
   </div>
 
-  <div id="racer-game" class="game-container">
+  <div id="racer-game" class="game-container" aria-hidden="true">
     <h2>Neon Racer</h2>
     <div id="racer-hud">
       <span id="racer-distance">Distance: 0m</span>
