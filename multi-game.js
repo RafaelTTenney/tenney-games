@@ -57,23 +57,42 @@ globalScope.showGame = function(game, docOverride) {
   }
 };
 
+let multiGameInitialized = false;
+
 function showMultiGame() {
+  if (multiGameInitialized) return;
+  if (typeof document === 'undefined') return;
+
   const menuButtons = document.querySelectorAll('[data-game-target]');
+  if (!menuButtons || !menuButtons.length) {
+    console.warn('Arcade menu buttons not found; multi-game setup skipped');
+    return;
+  }
+
+  const canvas = document.getElementById('snake-canvas');
+  if (!canvas || typeof canvas.getContext !== 'function') {
+    console.warn('Snake canvas missing; multi-game setup skipped');
+    return;
+  }
+
+  multiGameInitialized = true;
+
   menuButtons.forEach(btn => {
     if (btn.__gameBound) return;
-    btn.addEventListener('click', () => {
-      const game = typeof btn.getAttribute === 'function'
-        ? btn.getAttribute('data-game-target')
-        : btn.dataset && btn.dataset.gameTarget;
-      if (game) {
-        globalScope.showGame(game);
-      }
-    });
+    if (!btn.hasAttribute('onclick')) {
+      btn.addEventListener('click', () => {
+        const game = typeof btn.getAttribute === 'function'
+          ? btn.getAttribute('data-game-target')
+          : btn.dataset && btn.dataset.gameTarget;
+        if (game) {
+          globalScope.showGame(game);
+        }
+      });
+    }
     btn.__gameBound = true;
   });
 
   // --- Snake Game Implementation ---
-  const canvas = document.getElementById('snake-canvas');
   const ctx = canvas.getContext('2d');
   const gridSize = 16;
   let snake, direction, food, score, gameOver, moveQueue, snakeInterval;
@@ -96,7 +115,10 @@ function showMultiGame() {
   }
 
   function placeFood() {
-@@ -85,72 +150,50 @@ function showMultiGame() {
+    while (true) {
+      food = {
+        x: Math.floor(Math.random() * gridSize),
+@@ -85,72 +169,50 @@ function showMultiGame() {
       return;
     }
 
@@ -147,7 +169,7 @@ function showMultiGame() {
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
-@@ -200,209 +243,703 @@ function showMultiGame() {
+@@ -200,209 +262,709 @@ function showMultiGame() {
           renderMemoryBoard();
           if (memoryMatched === memoryCards.length) {
             setTimeout(() => {
@@ -839,13 +861,19 @@ function showMultiGame() {
 }
 
 if (typeof document !== 'undefined') {
-  document.addEventListener('DOMContentLoaded', () => {
+  const boot = () => {
     if (typeof isLoggedIn === 'function' && !isLoggedIn()) {
       globalScope.location.replace('index.html');
       return;
     }
     showMultiGame();
-  });
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
 }
 
 if (typeof module !== 'undefined') {
