@@ -21,6 +21,11 @@
     .login-top { position: absolute; top: 22px; right: 22px; }
     .login-top a { background: #3366cc; color: #fff; border-radius: 6px; padding: 0.5em 1.15em; font-weight: bold; text-decoration: none; letter-spacing: 1px; font-size: 1em;}
     .login-top a:hover { background: #254a99; }
+    .snake-container { background: #111; color: #fff; border-radius: 8px; padding: 1.5em; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.15); margin-top: 1.5em; display: flex; flex-direction: column; align-items: center; gap: 0.8em; }
+    .snake-controls { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 320px; }
+    .snake-controls button { background: #1a8; color: #fff; border: none; border-radius: 6px; padding: 0.45em 1.1em; font-size: 1em; cursor: pointer; font-weight: bold; letter-spacing: 0.5px; }
+    .snake-controls button:hover { background: #147; }
+    #snake-canvas { border: 2px solid #555; background: #000; }
     @media (max-width: 600px) { .home-container { padding: 1em; margin-top: 2em; } }
   </style>
 </head>
@@ -48,9 +53,30 @@
         <a href="lowerupper-guesser.html" class="guesser-btn">Try Lower/Upper Guesser</a>
       </div>
     </div>
+    <div id="snake-game" class="snake-container" aria-hidden="false">
+      <h2>Snake Game</h2>
+      <div class="snake-controls">
+        <span id="snake-score">Score: 0</span>
+        <button type="button" onclick="resetSnake()">Restart</button>
+      </div>
+      <canvas id="snake-canvas" width="320" height="320"></canvas>
+      <p>Use the arrow keys to move the snake.</p>
+    </div>
   </div>
   <div class="footer">
     &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </div>
+  <script src="multi-game.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof showGame === 'function') {
+        showGame('snake');
+      }
+      if (typeof resetSnake === 'function') {
+        // Start the game right away since the Snake section is always visible here.
+        resetSnake();
+      }
+    });
+  </script>
 </body>
 </html>
