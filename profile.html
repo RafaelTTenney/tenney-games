@@ -43,7 +43,8 @@
       if (!enforcePageAccess('profile.html')) return;
       const username = localStorage.getItem('username') || 'Unknown';
       document.getElementById('profileUser').textContent = username;
-      document.getElementById('profileName').textContent = username;
+      const firstname = localStorage.getItem('firstName') || 'Unknown';
+      document.getElementById('profileName').textContent = firstname;
       const status = getAccountStatus() || 'standard';
       document.getElementById('accountStatus').textContent = status.charAt(0).toUpperCase() + status.slice(1);
 
