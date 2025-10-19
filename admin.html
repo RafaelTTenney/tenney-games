@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Admin Panel | Games & Programs</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { --primary:#3366cc; --muted:#666; --bg:#f6f8fb; --card:#fff; }
+    body { background:var(--bg); font-family: Roboto, Arial, sans-serif; margin:0; padding:0; }
+    header { background:var(--primary); color:#fff; padding:12px 16px; text-align:center; font-weight:700; }
+    .container { max-width:980px; margin:24px auto; background:var(--card); padding:12px; border-radius:8px; box-shadow:0 8px 24px rgba(51,102,204,0.08); }
+    table { width:100%; border-collapse: collapse; margin-top:12px; }
+    th, td { text-align:left; padding:8px; border-bottom:1px solid #e6eefc; color:#254a99; }
+    select { padding:6px; border-radius:6px; border:1px solid #99ccff; background:#e6f0ff; }
+    .btn { background:var(--primary); color:#fff; padding:8px 10px; border-radius:6px; border:none; font-weight:700; }
+    .help { color:var(--muted); font-size:0.95em; }
+  </style>
+</head>
+<body>
+  <header>Admin Panel</header>
+
+  <div class="container">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <h2 style="margin:0;color:var(--primary);">Account Monitor</h2>
+        <div class="help">View and manage account statuses. Changes are saved to your browser (localStorage) for demo/testing. To persist server-side, implement a backend API.</div>
+      </div>
+      <div>
+        <a class="btn" href="loggedIn.html">Dashboard</a>
+      </div>
+    </div>
+
+    <table id="usersTable" aria-live="polite">
+      <thead>
+        <tr><th>Username</th><th>Current status</th><th>Change to</th><th>Action</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div style="margin-top:12px;color:var(--muted);">Note: This admin panel updates a client-side override map stored under <code>accountStatusOverrides</code> in localStorage. To make permanent across users, wire these changes to your server.</div>
+  </div>
+
+  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a></footer>
+
+  <script src="login.js"></script>
+  <script>
+    // Admin-only page to view and change account statuses
+    document.addEventListener('DOMContentLoaded', function() {
+      if (!enforcePageAccess('admin.html')) return;
+      // Load base user list from login.js 'users' variable accessible globally
+      // If not accessible, we'll show the currently-logged-in user as fallback
+      const tbody = document.querySelector('#usersTable tbody');
+
+      // build display list using 'users' array if present, otherwise fallback
+      const baseUsers = (typeof users !== 'undefined' && Array.isArray(users)) ? users : [{ username: localStorage.getItem('username') || 'unknown', accountStatus: getAccountStatus() }];
+
+      function render() {
+        tbody.innerHTML = '';
+        // Use copy to ensure stable iteration
+        baseUsers.forEach(u => {
+          const tr = document.createElement('tr');
+          const currentStatus = (function() {
+            // Show override if present
+            const overridesRaw = localStorage.getItem('accountStatusOverrides');
+            if (overridesRaw) {
+              try {
+                const overrides = JSON.parse(overridesRaw);
+                if (overrides && overrides[u.username]) return overrides[u.username];
+              } catch (e) {}
+            }
+            return u.accountStatus || 'standard';
+          })();
+          tr.innerHTML = `
+            <td>${u.username}</td>
+            <td>${currentStatus}</td>
+            <td>
+              <select data-user="${u.username}">
+                <option value="standard" ${currentStatus==='standard'?'selected':''}>Standard</option>
+                <option value="advance" ${currentStatus==='advance'?'selected':''}>Advance</option>
+                <option value="admin" ${currentStatus==='admin'?'selected':''}>Admin</option>
+              </select>
+            </td>
+            <td><button class="btn apply" data-user="${u.username}">Apply</button></td>
+          `;
+          tbody.appendChild(tr);
+        });
+        // Bind buttons
+        document.querySelectorAll('button.apply').forEach(btn => {
+          btn.onclick = () => {
+            const uname = btn.dataset.user;
+            const sel = document.querySelector(`select[data-user="${uname}"]`);
+            const newStatus = sel.value;
+            const ok = adminSetAccountStatusOverride(uname, newStatus);
+            if (ok) {
+              alert(`Status for ${uname} set to ${newStatus} (saved locally).`);
+              render();
+            } else {
+              alert('Error saving the status. Check console for details.');
+            }
+          };
+        });
+      }
+
+      render();
+    });
+  </script>
+</body>
+</html>
