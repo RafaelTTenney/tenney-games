@@ -1,11 +1,26 @@
 function showMultiGame() {
   // Menu logic - Make showGame globally accessible
   window.showGame = function(game) {
-    document.getElementById('snake-game').style.display = (game === 'snake') ? 'flex' : 'none';
-    document.getElementById('memory-game').style.display = (game === 'memory') ? 'flex' : 'none';
-    document.getElementById('paperio-game').style.display = (game === 'paperio') ? 'flex' : 'none';
+    const sections = {
+      snake: 'snake-game',
+      memory: 'memory-game',
+      paperio: 'paperio-game',
+      racer: 'racer-game'
+    };
+    Object.values(sections).forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    if (sections[game]) {
+      document.getElementById(sections[game]).style.display = 'flex';
+    }
+
+    if (game === 'racer') {
+      window.startRacer();
+    } else {
+      window.pauseRacer();
+    }
   }
-  window.showGame('');
 
   // --- Snake Game Implementation ---
   const canvas = document.getElementById('snake-canvas');
@@ -31,57 +46,7 @@ function showMultiGame() {
   }
 
   function placeFood() {
-    while (true) {
-      food = {
-        x: Math.floor(Math.random() * gridSize),
-        y: Math.floor(Math.random() * gridSize)
-      };
-      if (!snake.some(s => s.x === food.x && s.y === food.y)) break;
-    }
-  }
-
-  function drawSnake() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw food
-    ctx.fillStyle = "#1a8";
-    ctx.fillRect(food.x * 20, food.y * 20, 20, 20);
-
-    // Draw snake
-    for (let i = 0; i < snake.length; i++) {
-      ctx.fillStyle = i === 0 ? "#fff" : "#eee";
-      ctx.fillRect(snake[i].x * 20, snake[i].y * 20, 20, 20);
-    }
-
-    // Draw borders
-    ctx.strokeStyle = "#555";
-    ctx.strokeRect(0, 0, canvas.width, canvas.height);
-
-    if (gameOver) {
-      ctx.fillStyle = "#e55353";
-      ctx.font = "bold 32px Arial";
-      ctx.textAlign = "center";
-      ctx.fillText("Game Over", canvas.width/2, canvas.height/2);
-    }
-  }
-
-  function gameLoop() {
-    if (gameOver) return;
-
-    if (moveQueue.length) {
-      const nextDir = moveQueue.shift();
-      if ((nextDir.x !== -direction.x || nextDir.y !== -direction.y)) {
-        direction = nextDir;
-      }
-    }
-
-    const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
-
-    // Check wall collision
-    if (head.x < 0 || head.x >= gridSize || head.y < 0 || head.y >= gridSize) {
-      gameOver = true;
-      clearInterval(snakeInterval);
-      drawSnake();
+@@ -85,72 +100,50 @@ function showMultiGame() {
       return;
     }
 
@@ -106,28 +71,6 @@ function showMultiGame() {
 
     drawSnake();
   }
-
-  document.addEventListener('keydown', e => {
-    if (document.getElementById('snake-game').style.display === 'flex') {
-      let move;
-      if (e.key === 'ArrowUp') move = {x:0, y:-1};
-      if (e.key === 'ArrowDown') move = {x:0, y:1};
-      if (e.key === 'ArrowLeft') move = {x:-1, y:0};
-      if (e.key === 'ArrowRight') move = {x:1, y:0};
-      if (move) moveQueue.push(move);
-    }
-    if (document.getElementById('paperio-game').style.display === 'flex') {
-      let player = paperioPlayers[0];
-      if (!player.alive) return;
-      // Improved: use direction queue for fluidity
-      let nextDir = null;
-      if (e.key === 'ArrowUp' && player.dir.y !== 1) nextDir = {x:0,y:-1};
-      if (e.key === 'ArrowDown' && player.dir.y !== -1) nextDir = {x:0,y:1};
-      if (e.key === 'ArrowLeft' && player.dir.x !== 1) nextDir = {x:-1,y:0};
-      if (e.key === 'ArrowRight' && player.dir.x !== -1) nextDir = {x:1,y:0};
-      if (nextDir) player.queuedDir = nextDir;
-    }
-  });
 
   // --- Memory Match Game Implementation ---
   const memoryBoard = document.getElementById('memory-board');
@@ -154,49 +97,7 @@ function showMultiGame() {
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
-  }
-
-  function updateMemoryMoves() {
-    document.getElementById('memory-moves').textContent = 'Moves: ' + memoryMoves;
-  }
-
-  function renderMemoryBoard() {
-    memoryBoard.innerHTML = '';
-    memoryCards.forEach(card => {
-      const cardDiv = document.createElement('div');
-      cardDiv.className = 'card';
-      if (card.flipped || card.matched) cardDiv.classList.add('flipped');
-      if (card.matched) cardDiv.classList.add('matched');
-      cardDiv.textContent = (card.flipped || card.matched) ? card.symbol : '';
-      cardDiv.onclick = () => flipMemoryCard(card.id);
-      memoryBoard.appendChild(cardDiv);
-    });
-  }
-
-  function flipMemoryCard(id) {
-    if (memoryLock) return;
-    const card = memoryCards.find(c => c.id === id);
-    if (card.flipped || card.matched) return;
-
-    card.flipped = true;
-    renderMemoryBoard();
-
-    if (!memoryFirstCard) {
-      memoryFirstCard = card;
-    } else if (!memorySecondCard) {
-      memorySecondCard = card;
-      memoryLock = true;
-      memoryMoves++;
-      updateMemoryMoves();
-
-      if (memoryFirstCard.symbol === memorySecondCard.symbol) {
-        memoryFirstCard.matched = true;
-        memorySecondCard.matched = true;
-        memoryMatched += 2;
-        setTimeout(() => {
-          memoryFirstCard = null;
-          memorySecondCard = null;
-          memoryLock = false;
+@@ -200,209 +193,554 @@ function showMultiGame() {
           renderMemoryBoard();
           if (memoryMatched === memoryCards.length) {
             setTimeout(() => {
@@ -222,187 +123,532 @@ function showMultiGame() {
   const paperioCanvas = document.getElementById('paperio-canvas');
   const paperioCtx = paperioCanvas.getContext('2d');
   const paperioSize = 20; // 20x20 grid
-  let paperioPlayers, paperioBoard, paperioInterval;
+  let paperioPlayers, paperioBoard, paperioInterval, paperioMessages = [];
   const paperioColors = ['#1a8','#e55353','#ffe933','#1bbf48'];
   const paperioNames = ['You','Bot1','Bot2','Bot3'];
+  const paperioDirs = [
+    {x:0,y:-1},
+    {x:0,y:1},
+    {x:-1,y:0},
+    {x:1,y:0}
+  ];
 
   window.resetPaperio = function() {
     paperioBoard = Array.from({length:paperioSize},()=>Array(paperioSize).fill(-1));
     paperioPlayers = [
       {id:0, name:'You', color:paperioColors[0], x:2, y:2, dir:{x:1,y:0}, queuedDir:null, land:[], trail:[], alive:true, ai:false},
-      {id:1, name:'Bot1', color:paperioColors[1], x:17, y:2, dir:{x:-1,y:0}, land:[], trail:[], alive:true, ai:true},
-      {id:2, name:'Bot2', color:paperioColors[2], x:2, y:17, dir:{x:0,y:-1}, land:[], trail:[], alive:true, ai:true},
-      {id:3, name:'Bot3', color:paperioColors[3], x:17, y:17, dir:{x:0,y:-1}, land:[], trail:[], alive:true, ai:true}
+      {id:1, name:'Bot1', color:paperioColors[1], x:17, y:2, dir:{x:-1,y:0}, queuedDir:null, land:[], trail:[], alive:true, ai:true},
+      {id:2, name:'Bot2', color:paperioColors[2], x:2, y:17, dir:{x:0,y:-1}, queuedDir:null, land:[], trail:[], alive:true, ai:true},
+      {id:3, name:'Bot3', color:paperioColors[3], x:17, y:17, dir:{x:0,y:-1}, queuedDir:null, land:[], trail:[], alive:true, ai:true}
     ];
     for (let p of paperioPlayers) {
       paperioBoard[p.y][p.x] = p.id;
-      p.land = [{x:p.x,y:p.y}]; p.trail = [];
+      p.land = [{x:p.x,y:p.y}];
+      p.trail = [];
       p.alive = true;
       p.queuedDir = null;
     }
-    document.getElementById('paperio-elim').textContent = '';
+    paperioMessages = [];
+    updatePaperioMessages();
     clearInterval(paperioInterval);
-    paperioInterval = setInterval(paperioTick, 180); // Slower: 180ms
+    paperioInterval = setInterval(paperioTick, 160);
     paperioDraw();
     paperioUpdateScore();
+
+    const survivors = paperioPlayers.filter(p => p.alive);
+    if (survivors.length <= 1) {
+      if (survivors.length === 1) {
+        queuePaperioMessage(survivors[0].id === 0 ? 'You win! 🏆' : `${survivors[0].name} wins the arena!`);
+      } else {
+        queuePaperioMessage('No one survives the arena!');
+      }
+      clearInterval(paperioInterval);
+    }
   }
 
   function paperioDraw() {
     paperioCtx.clearRect(0,0,paperioCanvas.width,paperioCanvas.height);
-    // Draw land
-    for(let y=0;y<paperioSize;y++) for(let x=0;x<paperioSize;x++) {
-      let owner = paperioBoard[y][x];
-      if(owner >= 0) {
-        paperioCtx.fillStyle = paperioColors[owner];
-        paperioCtx.fillRect(x*20, y*20, 20, 20);
+    for(let y=0;y<paperioSize;y++) {
+      for(let x=0;x<paperioSize;x++) {
+        const owner = paperioBoard[y][x];
+        if (owner >= 0) {
+          paperioCtx.fillStyle = paperioColors[owner];
+          paperioCtx.fillRect(x*20, y*20, 20, 20);
+        }
       }
     }
-    // Draw trails
     for (let p of paperioPlayers) {
       if (!p.alive) continue;
-      paperioCtx.globalAlpha = 0.7;
+      paperioCtx.globalAlpha = 0.75;
       for (let t of p.trail) {
         paperioCtx.fillStyle = p.color;
         paperioCtx.fillRect(t.x*20, t.y*20, 20, 20);
       }
-      paperioCtx.globalAlpha = 1.0;
+      paperioCtx.globalAlpha = 1;
     }
-    // Draw players
     for (let p of paperioPlayers) {
       if (!p.alive) continue;
-      paperioCtx.strokeStyle = "#111";
+      paperioCtx.strokeStyle = '#111';
       paperioCtx.lineWidth = 2;
       paperioCtx.beginPath();
-      paperioCtx.arc(p.x*20+10, p.y*20+10, 8, 0, 2*Math.PI);
+      paperioCtx.arc(p.x*20+10, p.y*20+10, 8, 0, Math.PI*2);
       paperioCtx.fillStyle = p.color;
       paperioCtx.fill();
       paperioCtx.stroke();
     }
   }
 
-  // Helper: Is this trail cell still connected to owner's land?
-  function isTrailConnected(owner, trailCell) {
-    // BFS from any land cell, see if we can reach this trail cell via owner's trail or land
-    let visited = Array.from({length:paperioSize},()=>Array(paperioSize).fill(false));
-    let queue = [];
-    for (let l of owner.land) queue.push({x:l.x, y:l.y});
-    while (queue.length) {
-      let {x, y} = queue.shift();
-      if (x===trailCell.x && y===trailCell.y) return true;
-      visited[y][x] = true;
-      let neighbors = [
-        {x:x-1,y:y},{x:x+1,y:y},{x:x,y:y-1},{x:x,y:y+1}
-      ];
-      for (let nb of neighbors) {
-        if (nb.x<0||nb.x>=paperioSize||nb.y<0||nb.y>=paperioSize) continue;
-        if (visited[nb.y][nb.x]) continue;
-        // Owner's land or trail only
-        if (paperioBoard[nb.y][nb.x]===owner.id || owner.trail.some(t=>t.x===nb.x&&t.y===nb.y)) {
-          queue.push({x:nb.x, y:nb.y});
+  function queuePaperioMessage(msg) {
+    if (!msg) return;
+    paperioMessages.push(msg);
+    if (paperioMessages.length > 5) paperioMessages.shift();
+    updatePaperioMessages();
+  }
+
+  function updatePaperioMessages() {
+    const el = document.getElementById('paperio-elim');
+    if (!el) return;
+    el.innerHTML = paperioMessages.length ? paperioMessages.map(m => `• ${m}`).join('<br>') : '';
+  }
+
+  function clearPaperioPlayer(player) {
+    for (let y=0; y<paperioSize; y++) {
+      for (let x=0; x<paperioSize; x++) {
+        if (paperioBoard[y][x] === player.id) {
+          paperioBoard[y][x] = -1;
         }
       }
     }
-    return false;
+    player.trail = [];
+    player.land = [];
+  }
+
+  function paperioElim(player, reason) {
+    if (!player.alive) return;
+    player.alive = false;
+    clearPaperioPlayer(player);
+    let readableReason = reason;
+    if (player.id === 0) {
+      readableReason = readableReason.replace('their trail', 'your trail');
+      readableReason = readableReason.replace('their', 'your');
+    }
+    const message = player.id === 0
+      ? `You were eliminated: ${readableReason}.`
+      : `${player.name} was eliminated: ${reason}.`;
+    queuePaperioMessage(message);
+  }
+
+  function distanceToNearestLand(player, x, y) {
+    let best = Infinity;
+    for (let cell of player.land) {
+      const dist = Math.abs(cell.x - x) + Math.abs(cell.y - y);
+      if (dist < best) best = dist;
+    }
+    return best;
+  }
+
+  function nearestEnemyDistance(player, x, y) {
+    let best = Infinity;
+    for (let enemy of paperioPlayers) {
+      if (!enemy.alive || enemy.id === player.id) continue;
+      const dist = Math.abs(enemy.x - x) + Math.abs(enemy.y - y);
+      if (dist < best) best = dist;
+    }
+    return best;
+  }
+
+  function evaluateBotDirection(bot, dir) {
+    const nx = bot.x + dir.x;
+    const ny = bot.y + dir.y;
+    if (nx < 0 || nx >= paperioSize || ny < 0 || ny >= paperioSize) return -999;
+    if (bot.trail.some(t => t.x === nx && t.y === ny)) return -500;
+
+    let score = Math.random() * 1.5;
+    const owner = paperioBoard[ny][nx];
+    if (owner === bot.id) score += 12; // heading home
+    if (owner === -1) score += 6; // expanding into empty space
+
+    const enemyTrailHere = paperioPlayers.some(e => e.id !== bot.id && e.alive && e.trail.some(t => t.x === nx && t.y === ny));
+    if (enemyTrailHere) score += 40;
+
+    if (nx === 0 || ny === 0 || nx === paperioSize-1 || ny === paperioSize-1) score -= 3; // avoid walls
+
+    if (bot.trail.length >= 6) {
+      const dist = distanceToNearestLand(bot, nx, ny);
+      score += Math.max(0, 14 - dist * 2);
+    } else {
+      const center = (paperioSize-1)/2;
+      score += 4 - (Math.abs(nx-center) + Math.abs(ny-center)) * 0.4;
+    }
+
+    const threatDist = nearestEnemyDistance(bot, nx, ny);
+    if (threatDist <= 2) score -= 8;
+    else if (threatDist <= 4) score -= 2;
+
+    return score;
+  }
+
+  function chooseBotDirection(bot) {
+    const options = paperioDirs.filter(d => !(d.x === -bot.dir.x && d.y === -bot.dir.y));
+    let bestDir = bot.dir;
+    let bestScore = -Infinity;
+    for (let dir of options) {
+      const score = evaluateBotDirection(bot, dir);
+      if (score > bestScore) {
+        bestScore = score;
+        bestDir = dir;
+      }
+    }
+    bot.dir = bestDir;
   }
 
   function paperioTick() {
-    // Move bots, turn more often for action
-    for (let p of paperioPlayers) {
-      if (!p.alive || !p.ai) continue;
-      if (Math.random()<0.25) {
-        let dirs = [
-          {x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}
-        ].filter(d => !(d.x === -p.dir.x && d.y === -p.dir.y));
-        dirs = dirs.filter(d => p.x+d.x>=0 && p.x+d.x<paperioSize && p.y+d.y>=0 && p.y+d.y<paperioSize);
-        if (dirs.length) p.dir = dirs[Math.floor(Math.random()*dirs.length)];
+    const alivePlayers = paperioPlayers.filter(p => p.alive);
+    if (alivePlayers.length <= 1) {
+      if (alivePlayers.length === 1) {
+        queuePaperioMessage(alivePlayers[0].id === 0 ? 'You win! 🏆' : `${alivePlayers[0].name} wins the arena!`);
+      } else if (!paperioMessages.length) {
+        queuePaperioMessage('No one survives the arena!');
       }
+      clearInterval(paperioInterval);
+      return;
     }
 
-    // Move all
-    for (let p of paperioPlayers) {
-      if (!p.alive) continue;
-      // Human: consume queued direction for fluid movement
+    for (let bot of alivePlayers) {
+      if (!bot.ai) continue;
+      chooseBotDirection(bot);
+    }
+
+    const plannedMoves = [];
+    for (let p of alivePlayers) {
       if (!p.ai && p.queuedDir) {
         if (!(p.queuedDir.x === -p.dir.x && p.queuedDir.y === -p.dir.y)) {
           p.dir = p.queuedDir;
         }
         p.queuedDir = null;
       }
-      let nx = p.x + p.dir.x, ny = p.y + p.dir.y;
-      // Check bounds
-      if (nx<0 || nx>=paperioSize || ny<0 || ny>=paperioSize) {
-        paperioElim(p, "hit the wall");
-        continue;
-      }
-      // Check trail collision
-      let trailHit = null;
-      for (let q of paperioPlayers) {
-        if (!q.alive) continue;
-        for (let t of q.trail) {
-          if (t.x === nx && t.y === ny) {
-            trailHit = {owner: q, cell: t};
-            break;
-          }
-        }
-        if (!p.alive) break;
-      }
-      // Don't run into own trail
-      if (p.trail.some(t => t.x===nx && t.y===ny)) {
-        paperioElim(p, "hit own trail");
-        continue;
-      }
-      if (trailHit) {
-        // Is the trail cell still attached? If not, eliminate owner!
-        if (!isTrailConnected(trailHit.owner, trailHit.cell)) {
-          paperioElim(trailHit.owner, `trail was cut by ${p.name}`);
-        }
-        paperioElim(p, "hit a trail");
-        continue;
-      }
-      // Move
-      p.trail.push({x:nx,y:ny});
-      p.x = nx; p.y = ny;
-      // If returned to land, claim trail
-      if (p.land.some(l => l.x===nx && l.y===ny)) {
-        for (let t of p.trail) {
-          if (paperioBoard[t.y][t.x] !== p.id) {
-            paperioBoard[t.y][t.x] = p.id;
-            p.land.push({x:t.x,y:t.y});
-          }
-        }
-        p.trail = [];
-      }
-      paperioDraw();
+      plannedMoves.push({
+        player: p,
+        nx: p.x + p.dir.x,
+        ny: p.y + p.dir.y
+      });
     }
+
+    const eliminationReasons = new Map();
+    const headOnMap = new Map();
+
+    function markElimination(player, reason) {
+      if (!eliminationReasons.has(player) && player.alive) {
+        eliminationReasons.set(player, reason);
+      }
+    }
+
+    for (let move of plannedMoves) {
+      const {player, nx, ny} = move;
+      if (nx < 0 || nx >= paperioSize || ny < 0 || ny >= paperioSize) {
+        markElimination(player, 'hit the wall');
+        continue;
+      }
+      if (player.trail.some(t => t.x === nx && t.y === ny)) {
+        markElimination(player, 'ran into their own trail');
+        continue;
+      }
+
+      for (let enemy of paperioPlayers) {
+        if (!enemy.alive || enemy.id === player.id) continue;
+        if (enemy.trail.some(t => t.x === nx && t.y === ny)) {
+          markElimination(enemy, `had their trail cut by ${player.name}`);
+          queuePaperioMessage(`${player.name} sliced ${enemy.name}'s trail!`);
+        }
+      }
+
+      const key = `${nx},${ny}`;
+      if (!headOnMap.has(key)) headOnMap.set(key, []);
+      headOnMap.get(key).push(move);
+    }
+
+    for (let [key, moves] of headOnMap.entries()) {
+      const survivors = moves.filter(m => !eliminationReasons.has(m.player));
+      if (survivors.length > 1) {
+        const names = survivors.map(m => m.player.name).join(' vs ');
+        queuePaperioMessage(`${names} collided head-on!`);
+        for (let m of survivors) {
+          markElimination(m.player, 'collided head-on');
+        }
+      }
+    }
+
+    for (let [player, reason] of eliminationReasons.entries()) {
+      paperioElim(player, reason);
+    }
+
+    for (let move of plannedMoves) {
+      const {player, nx, ny} = move;
+      if (!player.alive) continue;
+      player.trail.push({x:nx, y:ny});
+      player.x = nx;
+      player.y = ny;
+
+      const returning = player.land.some(l => l.x === nx && l.y === ny);
+      if (returning) {
+        for (let t of player.trail) {
+          if (paperioBoard[t.y][t.x] !== player.id) {
+            paperioBoard[t.y][t.x] = player.id;
+            if (!player.land.some(l => l.x === t.x && l.y === t.y)) {
+              player.land.push({x:t.x, y:t.y});
+            }
+          }
+        }
+        player.trail = [];
+      }
+    }
+
+    paperioDraw();
     paperioUpdateScore();
-
-    // Check win
-    let alive = paperioPlayers.filter(p=>p.alive);
-    if (alive.length === 1) {
-      document.getElementById('paperio-elim').textContent = alive[0].id===0 ? "You win! 🏆" : `${alive[0].name} wins!`;
-      clearInterval(paperioInterval);
-    }
-    if (alive.length === 0) {
-      document.getElementById('paperio-elim').textContent = "No one wins!";
-      clearInterval(paperioInterval);
-    }
-  }
-
-  function paperioElim(p, reason) {
-    p.alive = false;
-    if (p.id===0) document.getElementById('paperio-elim').textContent = `You have been eliminated (${reason})!`;
   }
 
   function paperioUpdateScore() {
     let html = '<b>Scoreboard:</b><br>';
     for (let p of paperioPlayers) {
-      html += `<span style="color:${p.color};">${p.name}:</span> ${p.land.length} land ${p.alive?'':'(eliminated)'}<br>`;
+      const status = p.alive ? '' : ' (out)';
+      html += `<span style="color:${p.color};">${p.name}:</span> ${p.land.length} land${status}<br>`;
     }
     document.getElementById('paperio-scoreboard').innerHTML = html;
   }
+
+  // --- Neon Racer Game Implementation ---
+  const racerCanvas = document.getElementById('racer-canvas');
+  const racerCtx = racerCanvas ? racerCanvas.getContext('2d') : null;
+  const racerLaneCenters = racerCanvas
+    ? [
+        (racerCanvas.width / 3) / 2,
+        (racerCanvas.width / 3) * 1.5,
+        (racerCanvas.width / 3) * 2.5
+      ]
+    : [0,0,0];
+  const racerCar = { width: 60, height: 90, offsetY: 40 };
+  let racerAnimationId = null;
+  const racerState = {
+    running: false,
+    lane: 1,
+    distance: 0,
+    speed: 0,
+    dodged: 0,
+    obstacles: [],
+    spawnTimer: 0,
+    lastFrame: null,
+    lastSpawnLane: 1
+  };
+
+  function setRacerMessage(msg) {
+    const el = document.getElementById('racer-message');
+    if (el) el.textContent = msg;
+  }
+
+  function updateRacerHud() {
+    const distEl = document.getElementById('racer-distance');
+    const speedEl = document.getElementById('racer-speed');
+    const dodgeEl = document.getElementById('racer-obstacles');
+    if (distEl) distEl.textContent = `Distance: ${Math.floor(racerState.distance)}m`;
+    if (speedEl) speedEl.textContent = `Speed: ${Math.round(racerState.speed)} mph`;
+    if (dodgeEl) dodgeEl.textContent = `Dodged: ${racerState.dodged}`;
+  }
+
+  function drawRacer() {
+    if (!racerCtx || !racerCanvas) return;
+    racerCtx.fillStyle = '#05070a';
+    racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
+
+    racerCtx.strokeStyle = '#1f2933';
+    racerCtx.lineWidth = 4;
+    for (let i = 1; i < 3; i++) {
+      const x = (racerCanvas.width / 3) * i;
+      racerCtx.setLineDash([18, 18]);
+      racerCtx.beginPath();
+      racerCtx.moveTo(x, 0);
+      racerCtx.lineTo(x, racerCanvas.height);
+      racerCtx.stroke();
+    }
+    racerCtx.setLineDash([]);
+
+    for (let obs of racerState.obstacles) {
+      const centerX = racerLaneCenters[obs.lane];
+      const x = centerX - obs.width / 2;
+      racerCtx.fillStyle = obs.color;
+      racerCtx.fillRect(x, obs.y, obs.width, obs.height);
+    }
+
+    const carX = racerLaneCenters[racerState.lane] - racerCar.width / 2;
+    const carY = racerCanvas.height - racerCar.height - racerCar.offsetY;
+    const gradient = racerCtx.createLinearGradient(carX, carY, carX, carY + racerCar.height);
+    gradient.addColorStop(0, '#34d399');
+    gradient.addColorStop(1, '#0ea5e9');
+    racerCtx.fillStyle = gradient;
+    racerCtx.fillRect(carX, carY, racerCar.width, racerCar.height);
+
+    racerCtx.fillStyle = '#0f172a';
+    racerCtx.fillRect(carX + 10, carY + 15, racerCar.width - 20, 24);
+  }
+
+  function shiftRacerLane(delta) {
+    if (!racerCanvas) return;
+    const newLane = Math.min(2, Math.max(0, racerState.lane + delta));
+    if (newLane !== racerState.lane) {
+      racerState.lane = newLane;
+      drawRacer();
+    }
+  }
+
+  function spawnRacerObstacle() {
+    if (!racerCanvas) return;
+    let laneChoices = [0,1,2].filter(l => l !== racerState.lastSpawnLane);
+    if (!laneChoices.length) laneChoices = [0,1,2];
+    const lane = laneChoices[Math.floor(Math.random()*laneChoices.length)];
+    racerState.lastSpawnLane = lane;
+    racerState.obstacles.push({
+      lane,
+      y: -120,
+      width: 60,
+      height: 100,
+      color: ['#f87171','#facc15','#c4b5fd'][Math.floor(Math.random()*3)]
+    });
+  }
+
+  function handleRacerCrash() {
+    racerState.running = false;
+    setRacerMessage('Crashed! Press Reset or Start to try again.');
+    updateRacerHud();
+    drawRacer();
+  }
+
+  function racerLoop(timestamp) {
+    if (!racerState.running) {
+      racerState.lastFrame = null;
+      racerAnimationId = null;
+      return;
+    }
+    if (!racerState.lastFrame) {
+      racerState.lastFrame = timestamp;
+      drawRacer();
+      racerAnimationId = requestAnimationFrame(racerLoop);
+      return;
+    }
+
+    const delta = (timestamp - racerState.lastFrame) / 1000;
+    racerState.lastFrame = timestamp;
+
+    racerState.speed = Math.min(70 + racerState.distance * 0.12, 140);
+    const metersTraveled = racerState.speed * 0.44704 * delta;
+    racerState.distance += metersTraveled;
+    racerState.spawnTimer += delta;
+
+    if (racerState.spawnTimer >= Math.max(0.55, 1.45 - racerState.distance / 200)) {
+      spawnRacerObstacle();
+      racerState.spawnTimer = 0;
+    }
+
+    const fallSpeed = 140 + racerState.speed * 1.1;
+    const carY = racerCanvas.height - racerCar.height - racerCar.offsetY;
+    const carTop = carY;
+    const carBottom = carY + racerCar.height;
+
+    for (let obs of racerState.obstacles) {
+      obs.y += fallSpeed * delta;
+    }
+
+    racerState.obstacles = racerState.obstacles.filter(obs => {
+      if (obs.y > racerCanvas.height + obs.height) {
+        racerState.dodged++;
+        return false;
+      }
+      if (obs.lane === racerState.lane) {
+        const centerX = racerLaneCenters[obs.lane];
+        const carX = centerX - racerCar.width / 2;
+        const obsTop = obs.y;
+        const obsBottom = obs.y + obs.height;
+        const overlapY = !(obsBottom < carTop || obsTop > carBottom);
+        const overlapX = !(carX + racerCar.width < centerX - obs.width/2 || carX > centerX + obs.width/2);
+        if (overlapX && overlapY) {
+          handleRacerCrash();
+          return false;
+        }
+      }
+      return true;
+    });
+
+    updateRacerHud();
+    drawRacer();
+    racerAnimationId = requestAnimationFrame(racerLoop);
+  }
+
+  window.startRacer = function() {
+    if (!racerCanvas) return;
+    if (!racerState.running) {
+      racerState.running = true;
+      setRacerMessage('Dodge the neon traffic!');
+      racerAnimationId = requestAnimationFrame(racerLoop);
+    }
+  }
+
+  window.pauseRacer = function() {
+    if (!racerCanvas) return;
+    if (racerState.running) {
+      racerState.running = false;
+      setRacerMessage('Paused');
+    }
+  }
+
+  window.resetRacer = function() {
+    if (!racerCanvas) return;
+    window.pauseRacer();
+    racerState.lane = 1;
+    racerState.distance = 0;
+    racerState.speed = 0;
+    racerState.dodged = 0;
+    racerState.obstacles = [];
+    racerState.spawnTimer = 0;
+    racerState.lastFrame = null;
+    racerState.lastSpawnLane = 1;
+    setRacerMessage('Ready to race! Use ← and → to change lanes.');
+    updateRacerHud();
+    drawRacer();
+  }
+
+  document.addEventListener('keydown', e => {
+    if (document.getElementById('snake-game').style.display === 'flex') {
+      let move;
+      if (e.key === 'ArrowUp') move = {x:0, y:-1};
+      if (e.key === 'ArrowDown') move = {x:0, y:1};
+      if (e.key === 'ArrowLeft') move = {x:-1, y:0};
+      if (e.key === 'ArrowRight') move = {x:1, y:0};
+      if (move) moveQueue.push(move);
+    }
+    if (document.getElementById('paperio-game').style.display === 'flex') {
+      const player = paperioPlayers[0];
+      if (!player || !player.alive) return;
+      let nextDir = null;
+      if (e.key === 'ArrowUp' && player.dir.y !== 1) nextDir = {x:0,y:-1};
+      if (e.key === 'ArrowDown' && player.dir.y !== -1) nextDir = {x:0,y:1};
+      if (e.key === 'ArrowLeft' && player.dir.x !== 1) nextDir = {x:-1,y:0};
+      if (e.key === 'ArrowRight' && player.dir.x !== -1) nextDir = {x:1,y:0};
+      if (nextDir) player.queuedDir = nextDir;
+    }
+    if (document.getElementById('racer-game').style.display === 'flex') {
+      if (e.key === 'ArrowLeft') {
+        shiftRacerLane(-1);
+        e.preventDefault();
+      }
+      if (e.key === 'ArrowRight') {
+        shiftRacerLane(1);
+        e.preventDefault();
+      }
+    }
+  });
 
   // Initialize all games
   window.resetSnake();
   window.resetMemory();
   window.resetPaperio();
+  window.resetRacer();
+  window.showGame('');
 }
