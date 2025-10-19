@@ -39,10 +39,10 @@
   <h1 style="margin-top:18px">Snake, Memory Match, Paper-io & Neon Racer</h1>
 
   <div class="menu">
-    <button type="button" class="menu-button" data-game-target="snake" aria-pressed="false" aria-controls="snake-game">Play Snake</button>
-    <button type="button" class="menu-button" data-game-target="memory" aria-pressed="false" aria-controls="memory-game">Play Memory Match</button>
-    <button type="button" class="menu-button" data-game-target="paperio" aria-pressed="false" aria-controls="paperio-game">Play Paper-io</button>
-    <button type="button" class="menu-button" data-game-target="racer" aria-pressed="false" aria-controls="racer-game">Play Neon Racer</button>
+    <button type="button" class="menu-button" data-game-target="snake" aria-pressed="false" aria-controls="snake-game" onclick="showGame('snake')">Play Snake</button>
+    <button type="button" class="menu-button" data-game-target="memory" aria-pressed="false" aria-controls="memory-game" onclick="showGame('memory')">Play Memory Match</button>
+    <button type="button" class="menu-button" data-game-target="paperio" aria-pressed="false" aria-controls="paperio-game" onclick="showGame('paperio')">Play Paper-io</button>
+    <button type="button" class="menu-button" data-game-target="racer" aria-pressed="false" aria-controls="racer-game" onclick="showGame('racer')">Play Neon Racer</button>
   </div>
   <div id="snake-game" class="game-container" aria-hidden="true">
     <h2>Snake Game</h2>
