@@ -1,3 +1,5 @@
+const globalScope = typeof window !== 'undefined' ? window : globalThis;
+
 const GAME_SECTIONS = {
   snake: 'snake-game',
   memory: 'memory-game',
@@ -5,32 +7,71 @@ const GAME_SECTIONS = {
   racer: 'racer-game'
 };
 
-window.showGame = function(game) {
-  Object.values(GAME_SECTIONS).forEach(id => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.style.display = 'none';
+function toggleGameSections(game, doc = (typeof document !== 'undefined' ? document : null)) {
+  if (!doc) return false;
+  const targetId = GAME_SECTIONS[game];
+  if (!targetId) return false;
+
+  Object.entries(GAME_SECTIONS).forEach(([name, id]) => {
+    const el = doc.getElementById(id);
+    if (!el) return;
+    const active = id === targetId;
+    el.style.display = active ? 'flex' : 'none';
+    if (typeof el.setAttribute === 'function') {
+      el.setAttribute('aria-hidden', active ? 'false' : 'true');
     }
   });
 
-  const targetId = GAME_SECTIONS[game];
-  if (targetId) {
-    const target = document.getElementById(targetId);
-    if (target) {
-      target.style.display = 'flex';
+  return true;
+}
+
+function updateMenuButtons(game, doc = (typeof document !== 'undefined' ? document : null)) {
+  if (!doc || typeof doc.querySelectorAll !== 'function') return;
+  const buttons = doc.querySelectorAll('[data-game-target]');
+  buttons.forEach(btn => {
+    const target = typeof btn.getAttribute === 'function'
+      ? btn.getAttribute('data-game-target')
+      : btn.dataset && btn.dataset.gameTarget;
+    const isActive = target === game;
+    if (btn.classList && typeof btn.classList.toggle === 'function') {
+      btn.classList.toggle('active', isActive);
     }
-  }
+    if (typeof btn.setAttribute === 'function') {
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    }
+  });
+}
+
+globalScope.showGame = function(game, docOverride) {
+  const doc = docOverride || (typeof document !== 'undefined' ? document : null);
+  if (!doc) return;
+  if (!toggleGameSections(game, doc)) return;
+  updateMenuButtons(game, doc);
 
   if (game === 'racer') {
-    if (typeof window.startRacer === 'function') {
-      window.startRacer();
+    if (typeof globalScope.startRacer === 'function') {
+      globalScope.startRacer();
     }
-  } else if (typeof window.pauseRacer === 'function') {
-    window.pauseRacer();
+  } else if (typeof globalScope.pauseRacer === 'function') {
+    globalScope.pauseRacer();
   }
 };
 
 function showMultiGame() {
+  const menuButtons = document.querySelectorAll('[data-game-target]');
+  menuButtons.forEach(btn => {
+    if (btn.__gameBound) return;
+    btn.addEventListener('click', () => {
+      const game = typeof btn.getAttribute === 'function'
+        ? btn.getAttribute('data-game-target')
+        : btn.dataset && btn.dataset.gameTarget;
+      if (game) {
+        globalScope.showGame(game);
+      }
+    });
+    btn.__gameBound = true;
+  });
+
   // --- Snake Game Implementation ---
   const canvas = document.getElementById('snake-canvas');
   const ctx = canvas.getContext('2d');
@@ -55,8 +96,7 @@ function showMultiGame() {
   }
 
   function placeFood() {
-    while (true) {
-@@ -85,72 +109,50 @@ function showMultiGame() {
+@@ -85,72 +150,50 @@ function showMultiGame() {
       return;
     }
 
@@ -107,7 +147,7 @@ function showMultiGame() {
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
-@@ -200,209 +202,562 @@ function showMultiGame() {
+@@ -200,209 +243,568 @@ function showMultiGame() {
           renderMemoryBoard();
           if (memoryMatched === memoryCards.length) {
             setTimeout(() => {
@@ -663,10 +703,16 @@ function showMultiGame() {
   window.showGame('snake');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof isLoggedIn === 'function' && !isLoggedIn()) {
-    window.location.replace('index.html');
-    return;
-  }
-  showMultiGame();
-});
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    if (typeof isLoggedIn === 'function' && !isLoggedIn()) {
+      globalScope.location.replace('index.html');
+      return;
+    }
+    showMultiGame();
+  });
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { toggleGameSections, updateMenuButtons, GAME_SECTIONS };
+}
