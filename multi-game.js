@@ -70,7 +70,7 @@ function showMultiGame() {
   }
 
   const canvas = document.getElementById('snake-canvas');
-  if (!canvas || typeof canvas.getContext !== 'function') {
+ if (!canvas || typeof canvas.getContext !== 'function') {
     console.warn('Snake canvas missing; multi-game setup skipped');
     return;
   }
@@ -95,10 +95,11 @@ function showMultiGame() {
   // --- Snake Game Implementation ---
   const ctx = canvas.getContext('2d');
   const gridSize = 16;
+  const cellSize = Math.floor(canvas.width / gridSize);
   let snake, direction, food, score, gameOver, moveQueue, snakeInterval;
 
   window.resetSnake = function() {
-    snake = [{x:8, y:8}];
+    snake = [{x: 8, y: 8}];
     direction = {x: 0, y: -1};
     moveQueue = [];
     placeFood();
@@ -106,33 +107,72 @@ function showMultiGame() {
     gameOver = false;
     updateSnakeScore();
     clearInterval(snakeInterval);
-    snakeInterval = setInterval(gameLoop, 200); // Slowed from 100 to 120ms
+    snakeInterval = setInterval(gameLoop, 200);
     drawSnake();
-  }
+  };
 
   function updateSnakeScore() {
-    document.getElementById('snake-score').textContent = 'Score: ' + score;
+    const scoreEl = document.getElementById('snake-score');
+    if (scoreEl) {
+      scoreEl.textContent = 'Score: ' + score;
+    }
   }
 
   function placeFood() {
     while (true) {
-      food = {
+      const candidate = {
         x: Math.floor(Math.random() * gridSize),
-@@ -85,72 +169,50 @@ function showMultiGame() {
-      return;
+        y: Math.floor(Math.random() * gridSize)
+      };
+      const overlapsSnake = snake.some(segment => segment.x === candidate.x && segment.y === candidate.y);
+      if (!overlapsSnake) {
+        food = candidate;
+        break;
+      }
+    }
+  }
+
+  function isOppositeDirection(a, b) {
+    return a && b && a.x === -b.x && a.y === -b.y;
+  }
+
+  function applyQueuedMove() {
+    while (moveQueue.length) {
+      const nextMove = moveQueue.shift();
+      if (!isOppositeDirection(nextMove, direction) &&
+          (nextMove.x !== direction.x || nextMove.y !== direction.y)) {
+        direction = nextMove;
+        break;
+      }
+    }
+  }
+
+  function gameLoop() {
+    if (gameOver) return;
+
+    applyQueuedMove();
+
+    const head = {
+      x: snake[0].x + direction.x,
+      y: snake[0].y + direction.y
+    };
+
+    if (head.x < 0 || head.x >= gridSize || head.y < 0 || head.y >= gridSize) {
+      gameOver = true;
     }
 
-    // Check self collision
-    if (snake.some(segment => segment.x === head.x && segment.y === head.y)) {
+    if (!gameOver && snake.some(segment => segment.x === head.x && segment.y === head.y)) {
       gameOver = true;
+    }
+
+    if (gameOver) {
       clearInterval(snakeInterval);
-      drawSnake();
+      drawSnake(true);
       return;
     }
 
     snake.unshift(head);
 
-    // Check food
     if (head.x === food.x && head.y === food.y) {
       score++;
       updateSnakeScore();
@@ -144,6 +184,28 @@ function showMultiGame() {
     drawSnake();
   }
 
+  function drawSnake(showGameOver = false) {
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillRect(food.x * cellSize, food.y * cellSize, cellSize, cellSize);
+
+    snake.forEach((segment, index) => {
+      ctx.fillStyle = index === 0 ? '#2ecc71' : '#27ae60';
+      ctx.fillRect(segment.x * cellSize, segment.y * cellSize, cellSize, cellSize);
+    });
+
+    if (showGameOver) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#fff';
+      ctx.font = '20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2);
+    }
+  }
+
   // --- Memory Match Game Implementation ---
   const memoryBoard = document.getElementById('memory-board');
   let memoryCards, memoryFirstCard, memorySecondCard, memoryLock, memoryMoves, memoryMatched;
@@ -151,7 +213,10 @@ function showMultiGame() {
   window.resetMemory = function() {
     const symbols = ["🍎","🍎","🎲","🎲","🚗","🚗","🐍","🐍","🌵","🌵","🏀","🏀","🎸","🎸","🍩","🍩"];
     memoryCards = shuffle(symbols).map((symbol, idx) => ({
-      symbol, id: idx, flipped: false, matched: false
+      symbol,
+      id: idx,
+      flipped: false,
+      matched: false
     }));
     memoryFirstCard = null;
     memorySecondCard = null;
@@ -160,143 +225,83 @@ function showMultiGame() {
     memoryMatched = 0;
     updateMemoryMoves();
     renderMemoryBoard();
-  }
+  };
 
   function shuffle(array) {
-    let arr = array.slice();
+    const arr = array.slice();
     for (let i = arr.length - 1; i > 0; i--) {
-      let j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(Math.random() * (i + 1));
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
-@@ -200,209 +262,709 @@ function showMultiGame() {
-          renderMemoryBoard();
-          if (memoryMatched === memoryCards.length) {
-            setTimeout(() => {
-              alert("Congratulations! You matched all pairs!");
-              resetMemory();
-            }, 500);
-          }
-        }, 600);
-      } else {
-        setTimeout(() => {
-          memoryFirstCard.flipped = false;
-          memorySecondCard.flipped = false;
-          memoryFirstCard = null;
-          memorySecondCard = null;
-          memoryLock = false;
-          renderMemoryBoard();
-        }, 900);
+  }
+
+  function updateMemoryMoves() {
+    const movesEl = document.getElementById('memory-moves');
+    if (movesEl) {
+      movesEl.textContent = 'Moves: ' + memoryMoves;
+    }
+  }
+
+  function renderMemoryBoard() {
+    if (!memoryBoard) return;
+    memoryBoard.innerHTML = '';
+    memoryCards.forEach(card => {
+      const cardButton = document.createElement('button');
+      cardButton.type = 'button';
+      cardButton.className = 'memory-card';
+      cardButton.setAttribute('data-id', card.id);
+      cardButton.disabled = card.matched;
+      cardButton.textContent = card.flipped || card.matched ? card.symbol : '❓';
+      if (card.flipped && !card.matched) {
+        cardButton.classList.add('flipped');
       }
+      cardButton.addEventListener('click', () => handleMemorySelection(card));
+      memoryBoard.appendChild(cardButton);
+    });
+  }
+
+  function handleMemorySelection(card) {
+    if (memoryLock || card.flipped || card.matched) return;
+
+    card.flipped = true;
+    if (!memoryFirstCard) {
+      memoryFirstCard = card;
+      renderMemoryBoard();
+      return;
     }
-  }
 
-  // --- Paper-io Game Implementation ---
-  const paperioCanvas = document.getElementById('paperio-canvas');
-  const paperioCtx = paperioCanvas.getContext('2d');
-  const paperioSize = 20; // 20x20 grid
-  let paperioPlayers, paperioBoard, paperioInterval, paperioMessages = [];
-  const paperioColors = ['#1a8','#e55353','#ffe933','#1bbf48'];
-  const paperioNames = ['You','Bot1','Bot2','Bot3'];
-  const paperioDirs = [
-    {x:0,y:-1},
-    {x:0,y:1},
-    {x:-1,y:0},
-    {x:1,y:0}
-  ];
+    memorySecondCard = card;
+    memoryLock = true;
+    memoryMoves++;
+    updateMemoryMoves();
+    renderMemoryBoard();
 
-  function hexToRgb(hex) {
-    if (!hex) return {r:0, g:0, b:0};
-    let normalized = hex.replace('#', '').trim();
-    if (normalized.length === 3) {
-      normalized = normalized.split('').map(ch => ch + ch).join('');
-    }
-    const value = parseInt(normalized, 16);
-    if (Number.isNaN(value)) return {r:0, g:0, b:0};
-    return {
-      r: (value >> 16) & 255,
-      g: (value >> 8) & 255,
-      b: value & 255
-    };
-  }
-
-  function lightenChannel(channel, mix) {
-    return Math.min(255, Math.round(channel + (255 - channel) * mix));
-  }
-
-  function makeTrailStyles(color, emphasize = false) {
-    const {r, g, b} = hexToRgb(color);
-    const fillMix = emphasize ? 0.7 : 0.5;
-    const strokeMix = emphasize ? 0.9 : 0.65;
-    const fill = `rgba(${lightenChannel(r, fillMix)},${lightenChannel(g, fillMix)},${lightenChannel(b, fillMix)},${emphasize ? 0.95 : 0.85})`;
-    const stroke = `rgba(${lightenChannel(r, strokeMix)},${lightenChannel(g, strokeMix)},${lightenChannel(b, strokeMix)},${emphasize ? 0.95 : 0.85})`;
-    return {
-      fill,
-      stroke,
-      strokeWidth: emphasize ? 3 : 2
-    };
-  }
-
-  window.resetPaperio = function() {
-    paperioBoard = Array.from({length:paperioSize},()=>Array(paperioSize).fill(-1));
-    paperioPlayers = [
-      {id:0, name:'You', color:paperioColors[0], x:2, y:2, dir:{x:1,y:0}, queuedDir:null, land:[], trail:[], alive:true, ai:false, spawn:{x:2,y:2}},
-      {id:1, name:'Bot1', color:paperioColors[1], x:17, y:2, dir:{x:-1,y:0}, queuedDir:null, land:[], trail:[], alive:true, ai:true, spawn:{x:17,y:2}},
-      {id:2, name:'Bot2', color:paperioColors[2], x:2, y:17, dir:{x:0,y:-1}, queuedDir:null, land:[], trail:[], alive:true, ai:true, spawn:{x:2,y:17}},
-      {id:3, name:'Bot3', color:paperioColors[3], x:17, y:17, dir:{x:0,y:-1}, queuedDir:null, land:[], trail:[], alive:true, ai:true, spawn:{x:17,y:17}}
-    ];
-    for (let p of paperioPlayers) {
-      paperioBoard[p.y][p.x] = p.id;
-      p.land = [{x:p.x,y:p.y}];
-      p.trail = [];
-      p.alive = true;
-      p.queuedDir = null;
-      p.trailStyles = null;
-    }
-    paperioMessages = [];
-    updatePaperioMessages();
-    clearInterval(paperioInterval);
-    paperioInterval = setInterval(paperioTick, 160);
-    paperioDraw();
-    paperioUpdateScore();
-
-    const survivors = paperioPlayers.filter(p => p.alive);
-    if (survivors.length <= 1) {
-      if (survivors.length === 1) {
-        queuePaperioMessage(survivors[0].id === 0 ? 'You win! 🏆' : `${survivors[0].name} wins the arena!`);
-      } else {
-        queuePaperioMessage('No one survives the arena!');
-      }
-      clearInterval(paperioInterval);
-    }
-  }
-
-  function paperioDraw() {
-    paperioCtx.clearRect(0,0,paperioCanvas.width,paperioCanvas.height);
-    for(let y=0;y<paperioSize;y++) {
-      for(let x=0;x<paperioSize;x++) {
-        const owner = paperioBoard[y][x];
-        if (owner >= 0) {
-          paperioCtx.fillStyle = paperioColors[owner];
-          paperioCtx.fillRect(x*20, y*20, 20, 20);
+    if (memoryFirstCard.symbol === memorySecondCard.symbol) {
+      memoryFirstCard.matched = true;
+      memorySecondCard.matched = true;
+      memoryMatched += 2;
+      setTimeout(() => {
+        memoryFirstCard = null;
+        memorySecondCard = null;
+        memoryLock = false;
+        renderMemoryBoard();
+        if (memoryMatched === memoryCards.length) {
+          setTimeout(() => {
+            alert('Congratulations! You matched all pairs!');
+            window.resetMemory();
+          }, 300);
         }
-      }
-    }
-    paperioCtx.lineJoin = 'round';
-    for (let p of paperioPlayers) {
-      if (!p.alive) continue;
-      if (!p.trailStyles) {
-        p.trailStyles = makeTrailStyles(p.color, p.id === 0);
-      }
-      const styles = p.trailStyles;
-      for (let t of p.trail) {
-        const baseX = t.x * 20;
-        const baseY = t.y * 20;
-        paperioCtx.fillStyle = styles.fill;
-        paperioCtx.fillRect(baseX, baseY, 20, 20);
-        paperioCtx.strokeStyle = styles.stroke;
-        paperioCtx.lineWidth = styles.strokeWidth;
-        paperioCtx.strokeRect(baseX + 1, baseY + 1, 18, 18);
+      }, 400);
+    } else {
+      setTimeout(() => {
+        memoryFirstCard.flipped = false;
+        memorySecondCard.flipped = false;
+        memoryFirstCard = null;
+        memorySecondCard = null;
+        memoryLock = false;
+        renderMemoryBoard();
+      }, 900);
       }
     }
     for (let p of paperioPlayers) {
