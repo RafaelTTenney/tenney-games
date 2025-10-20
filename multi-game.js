@@ -334,15 +334,18 @@ function initMemoryGame() {
   resetMemory();
 }
 
-// ----------------- Paper-io (simplified) -----------------
+// ----------------- Paper-io (scrolling arena) -----------------
 function initPaperioGame() {
   const canvas = document.getElementById('paperio-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const gridSize = 20;
-  const cellSize = canvas.width / gridSize;
+  const boardSize = 60;
+  const cellSize = 20;
+  const totalCells = boardSize * boardSize;
+  const tickMs = 180;
 
-  let board = [];
+  let territory = [];
+  let trails = [];
   let players = [];
   let intervalId = null;
   const scoreboardEl = document.getElementById('paperio-scoreboard');
@@ -351,165 +354,455 @@ function initPaperioGame() {
   const COLORS = ['#1a8', '#e55353', '#ffe933', '#1bbf48'];
   const NAMES = ['You', 'Bot 1', 'Bot 2', 'Bot 3'];
 
-  function buildBoard() {
-    board = Array.from({ length: gridSize }, () => Array(gridSize).fill(-1));
+  function createGrid(fillValue) {
+    return Array.from({ length: boardSize }, () => Array(boardSize).fill(fillValue));
   }
 
-  function drawBoard() {
-    ctx.fillStyle = '#050505';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  function buildBoard() {
+    territory = createGrid(-1);
+    trails = createGrid(-1);
+  }
 
-    for (let y = 0; y < gridSize; y++) {
-      for (let x = 0; x < gridSize; x++) {
-        const owner = board[y][x];
-        if (owner >= 0 && players[owner] && players[owner].alive) {
-          ctx.fillStyle = players[owner].color;
-          ctx.fillRect(x * cellSize, y * cellSize, cellSize - 1, cellSize - 1);
-        } else {
-          ctx.fillStyle = '#111';
-          ctx.fillRect(x * cellSize, y * cellSize, cellSize - 1, cellSize - 1);
+  function clearTrailCells(player) {
+    for (let y = 0; y < boardSize; y++) {
+      for (let x = 0; x < boardSize; x++) {
+        if (trails[y][x] === player.id) {
+          trails[y][x] = -1;
+        }
+      }
+    }
+    player.tail = [];
+  }
+
+  function clearTerritoryCells(player) {
+    for (let y = 0; y < boardSize; y++) {
+      for (let x = 0; x < boardSize; x++) {
+        if (territory[y][x] === player.id) {
+          territory[y][x] = -1;
+
+
+
+
+        }
+      }
+    }
+  }
+
+  function layStartingZone(player, radius) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const nx = player.x + dx;
+        const ny = player.y + dy;
+        if (nx >= 0 && nx < boardSize && ny >= 0 && ny < boardSize) {
+          territory[ny][nx] = player.id;
         }
       }
     }
 
-    players.forEach(player => {
-      if (!player.alive) return;
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(
-        player.x * cellSize + cellSize * 0.25,
-        player.y * cellSize + cellSize * 0.25,
-        cellSize * 0.5,
-        cellSize * 0.5
-      );
-      ctx.fillStyle = player.color;
-      ctx.fillRect(
-        player.x * cellSize + cellSize * 0.3,
-        player.y * cellSize + cellSize * 0.3,
-        cellSize * 0.4,
-        cellSize * 0.4
-      );
+
+
+
+
+
+
+  }
+
+  function spawnPlayer(player, spawn) {
+    clearTrailCells(player);
+    clearTerritoryCells(player);
+    player.x = spawn.x;
+    player.y = spawn.y;
+    player.dir = { ...spawn.dir };
+    player.queued = null;
+    player.alive = true;
+    if (player.ai) {
+      player.respawnTimer = 0;
+    } else {
+      player.bestShare = 0;
+    }
+    layStartingZone(player, 2);
+  }
+
+  function createPlayer(id, name, color, ai) {
+    return {
+      id,
+      name,
+      color,
+      ai,
+      x: 0,
+      y: 0,
+      dir: { x: 1, y: 0 },
+      queued: null,
+      alive: true,
+      tail: [],
+      respawnTimer: 0,
+      bestShare: 0
+    };
+  }
+
+  function startingPositions() {
+    return [
+      { x: 4, y: 4, dir: { x: 1, y: 0 } },
+      { x: boardSize - 5, y: 4, dir: { x: -1, y: 0 } },
+      { x: 4, y: boardSize - 5, dir: { x: 0, y: -1 } },
+      { x: boardSize - 5, y: boardSize - 5, dir: { x: 0, y: -1 } }
+    ];
+
+  }
+
+  function resetPlayers() {
+    players = [
+      createPlayer(0, NAMES[0], COLORS[0], false),
+      createPlayer(1, NAMES[1], COLORS[1], true),
+      createPlayer(2, NAMES[2], COLORS[2], true),
+      createPlayer(3, NAMES[3], COLORS[3], true)
+    ];
+    const spawns = startingPositions();
+    players.forEach((player, index) => {
+      spawnPlayer(player, spawns[index]);
+
     });
   }
 
-  function randomDirection() {
-    const dirs = [
+  function territoryCount(playerId) {
+    let count = 0;
+    for (let y = 0; y < boardSize; y++) {
+      for (let x = 0; x < boardSize; x++) {
+        if (territory[y][x] === playerId) count += 1;
+
+
+      }
+    }
+    return count;
+  }
+
+  function updateScoreboard() {
+    if (!scoreboardEl) return;
+    const lines = players.map(player => {
+      const owned = territoryCount(player.id);
+      const share = owned / totalCells;
+      if (!player.ai) {
+        player.bestShare = Math.max(player.bestShare, share);
+      }
+      const percent = (share * 100).toFixed(1);
+      let status;
+      if (player.alive) {
+        status = 'alive';
+      } else if (player.ai) {
+        const seconds = Math.max(0, Math.ceil(player.respawnTimer * (tickMs / 1000)));
+        status = seconds > 0 ? `respawning in ${seconds}s` : 'respawning';
+      } else {
+        status = 'out';
+      }
+      const baseLine = `${player.name}: ${owned} cells (${percent}%) — ${status}`;
+      if (!player.ai) {
+        return `${baseLine} • best ${(player.bestShare * 100).toFixed(1)}%`;
+      }
+      return baseLine;
+    });
+    scoreboardEl.innerHTML = lines.join('<br>');
+  }
+
+  function setEliminationMessage(message) {
+    if (eliminationEl) {
+      eliminationEl.textContent = message;
+    }
+  }
+
+  function captureLoop(player) {
+    player.tail.forEach(({ x, y }) => {
+      territory[y][x] = player.id;
+      trails[y][x] = -1;
+    });
+
+    if (player.tail.length === 0) return;
+
+    const visited = createGrid(false);
+    const queue = [];
+
+    function enqueue(x, y) {
+      if (x < 0 || x >= boardSize || y < 0 || y >= boardSize) return;
+      if (visited[y][x]) return;
+      if (territory[y][x] === player.id) return;
+      visited[y][x] = true;
+      queue.push({ x, y });
+    }
+
+    for (let x = 0; x < boardSize; x++) {
+      enqueue(x, 0);
+      enqueue(x, boardSize - 1);
+    }
+    for (let y = 0; y < boardSize; y++) {
+      enqueue(0, y);
+      enqueue(boardSize - 1, y);
+    }
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      const { x, y } = current;
+      const neighbors = [
+        { x: x + 1, y },
+        { x: x - 1, y },
+        { x, y: y + 1 },
+        { x, y: y - 1 }
+      ];
+      neighbors.forEach(n => {
+        if (n.x < 0 || n.x >= boardSize || n.y < 0 || n.y >= boardSize) return;
+        if (visited[n.y][n.x]) return;
+        if (territory[n.y][n.x] === player.id) return;
+        visited[n.y][n.x] = true;
+        queue.push(n);
+      });
+    }
+
+    for (let y = 0; y < boardSize; y++) {
+      for (let x = 0; x < boardSize; x++) {
+        if (territory[y][x] !== player.id && !visited[y][x]) {
+          territory[y][x] = player.id;
+        }
+      }
+    }
+
+    player.tail = [];
+  }
+
+  function eliminate(player, reason) {
+    if (!player.alive) return;
+    const owned = territoryCount(player.id);
+    const share = owned / totalCells;
+    if (!player.ai) {
+      player.bestShare = Math.max(player.bestShare, share);
+    }
+    player.alive = false;
+    clearTrailCells(player);
+    clearTerritoryCells(player);
+    if (player.ai) {
+      player.respawnTimer = Math.ceil(2800 / tickMs);
+      setEliminationMessage(`${player.name} eliminated: ${reason}`);
+    } else {
+      setEliminationMessage(`Game over! Best territory: ${(player.bestShare * 100).toFixed(1)}%`);
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    }
+  }
+
+  function findSpawn(radius) {
+    const margin = radius + 2;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const edge = Math.floor(Math.random() * 4);
+      let x;
+      let y;
+      let dir;
+      if (edge === 0) {
+        x = margin + Math.floor(Math.random() * (boardSize - margin * 2));
+        y = margin;
+        dir = { x: 0, y: 1 };
+      } else if (edge === 1) {
+        x = margin + Math.floor(Math.random() * (boardSize - margin * 2));
+        y = boardSize - margin - 1;
+        dir = { x: 0, y: -1 };
+      } else if (edge === 2) {
+        x = margin;
+        y = margin + Math.floor(Math.random() * (boardSize - margin * 2));
+        dir = { x: 1, y: 0 };
+      } else {
+        x = boardSize - margin - 1;
+        y = margin + Math.floor(Math.random() * (boardSize - margin * 2));
+        dir = { x: -1, y: 0 };
+      }
+
+      let blocked = false;
+      for (let dy = -radius; dy <= radius && !blocked; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || nx >= boardSize || ny < 0 || ny >= boardSize) {
+            blocked = true;
+            break;
+          }
+          if (territory[ny][nx] !== -1 || trails[ny][nx] !== -1) {
+            blocked = true;
+            break;
+          }
+        }
+      }
+
+      if (!blocked) {
+        return { x, y, dir };
+      }
+    }
+    const fallback = startingPositions()[Math.floor(Math.random() * startingPositions().length)];
+    return fallback;
+  }
+
+  function handleRespawns() {
+    players.forEach(player => {
+      if (!player.ai || player.alive) return;
+      if (player.respawnTimer > 0) {
+        player.respawnTimer -= 1;
+      }
+      if (player.respawnTimer <= 0) {
+        const spawn = findSpawn(2);
+        spawnPlayer(player, spawn);
+        setEliminationMessage(`${player.name} is back in the arena!`);
+      }
+    });
+  }
+
+  function chooseTurn(player) {
+    const options = [
       { x: 0, y: -1 },
       { x: 0, y: 1 },
       { x: -1, y: 0 },
       { x: 1, y: 0 }
     ];
-    return dirs[Math.floor(Math.random() * dirs.length)];
-  }
-
-  function resetPlayers() {
-    players = [
-      { id: 0, name: NAMES[0], color: COLORS[0], x: 2, y: 2, dir: { x: 1, y: 0 }, queued: null, alive: true, ai: false },
-      { id: 1, name: NAMES[1], color: COLORS[1], x: 17, y: 2, dir: { x: -1, y: 0 }, queued: null, alive: true, ai: true },
-      { id: 2, name: NAMES[2], color: COLORS[2], x: 2, y: 17, dir: { x: 0, y: -1 }, queued: null, alive: true, ai: true },
-      { id: 3, name: NAMES[3], color: COLORS[3], x: 17, y: 17, dir: { x: 0, y: -1 }, queued: null, alive: true, ai: true }
-    ];
-
-    players.forEach(player => {
-      if (!board[player.y]) return;
-      board[player.y][player.x] = player.id;
-    });
-  }
-
-  function updateScoreboard() {
-    if (!scoreboardEl) return;
-    const totals = new Array(players.length).fill(0);
-    for (let y = 0; y < gridSize; y++) {
-      for (let x = 0; x < gridSize; x++) {
-        const owner = board[y][x];
-        if (owner >= 0) totals[owner] += 1;
-      }
-    }
-    const lines = players.map(player => {
-      const territory = totals[player.id];
-      const status = player.alive ? 'alive' : 'eliminated';
-      return `${player.name}: ${territory} cells (${status})`;
-    });
-    scoreboardEl.innerHTML = lines.join('<br>');
-  }
-
-  function eliminate(player, reason) {
-    if (!player.alive) return;
-    player.alive = false;
-    if (eliminationEl) {
-      eliminationEl.textContent = `${player.name} eliminated: ${reason}`;
-    }
-  }
-
-  function nextPosition(player) {
-    const dir = player.queued ? player.queued : player.dir;
-    if (player.queued) player.dir = player.queued;
-    player.queued = null;
-    return {
-      x: player.x + dir.x,
-      y: player.y + dir.y,
-      dir
-    };
+    const valid = options.filter(opt => opt.x !== -player.dir.x || opt.y !== -player.dir.y);
+    return valid[Math.floor(Math.random() * valid.length)];
   }
 
   function advanceGame() {
-    const moves = players.map(player => {
-      if (!player.alive) return null;
-      if (player.ai && Math.random() < 0.1) {
-        player.queued = randomDirection();
+    const moves = [];
+    players.forEach(player => {
+      if (!player.alive) return;
+      if (player.queued && (player.queued.x !== -player.dir.x || player.queued.y !== -player.dir.y)) {
+        player.dir = player.queued;
       }
-      const next = nextPosition(player);
-      return { player, next };
-    });
-
-    const collisions = new Map();
-    moves.forEach(move => {
-      if (!move) return;
-      const key = `${move.next.x},${move.next.y}`;
-      if (!collisions.has(key)) collisions.set(key, []);
-      collisions.get(key).push(move);
-    });
-
-    moves.forEach(move => {
-      if (!move || !move.player.alive) return;
-      const { player, next } = move;
-      if (next.x < 0 || next.x >= gridSize || next.y < 0 || next.y >= gridSize) {
+      player.queued = null;
+      if (player.ai && Math.random() < 0.12) {
+        player.dir = chooseTurn(player);
+      }
+      const nextX = player.x + player.dir.x;
+      const nextY = player.y + player.dir.y;
+      if (nextX < 0 || nextX >= boardSize || nextY < 0 || nextY >= boardSize) {
         eliminate(player, 'flew off the map');
         return;
       }
-      const key = `${next.x},${next.y}`;
-      if (collisions.get(key).length > 1) {
-        eliminate(player, 'head-on collision');
-        return;
-      }
-      player.x = next.x;
-      player.y = next.y;
-      board[player.y][player.x] = player.id;
+      moves.push({ player, nextX, nextY });
+
     });
 
-    const alivePlayers = players.filter(p => p.alive);
-    if (alivePlayers.length <= 1) {
-      clearInterval(intervalId);
-      if (eliminationEl) {
-        eliminationEl.textContent = alivePlayers.length === 1
-          ? `${alivePlayers[0].name} controls the arena!`
-          : 'Everyone crashed!';
+    const targetMap = new Map();
+    moves.forEach(move => {
+      const key = `${move.nextX},${move.nextY}`;
+      if (!targetMap.has(key)) targetMap.set(key, []);
+      targetMap.get(key).push(move.player);
+    });
+
+    targetMap.forEach((contestants, key) => {
+      if (contestants.length > 1) {
+        contestants.forEach(player => {
+          eliminate(player, 'head-on collision');
+        });
+      }
+    });
+
+    moves.forEach(move => {
+      const { player, nextX, nextY } = move;
+      if (!player.alive) return;
+
+      const tailOwner = trails[nextY][nextX];
+      if (tailOwner >= 0) {
+        if (tailOwner === player.id) {
+          eliminate(player, 'ran into their own trail');
+          return;
+        }
+        eliminate(players[tailOwner], `${player.name} clipped their tail`);
+        trails[nextY][nextX] = -1;
+      }
+
+      player.x = nextX;
+      player.y = nextY;
+
+      if (territory[nextY][nextX] !== player.id) {
+        if (!player.tail.some(cell => cell.x === nextX && cell.y === nextY)) {
+          player.tail.push({ x: nextX, y: nextY });
+        }
+        trails[nextY][nextX] = player.id;
+      } else if (player.tail.length > 0) {
+        captureLoop(player);
+      }
+
+
+
+    });
+  }
+
+  function drawBoard() {
+    const player = players[0];
+    const worldWidth = boardSize * cellSize;
+    const worldHeight = boardSize * cellSize;
+    const focusX = player.x * cellSize + cellSize / 2;
+    const focusY = player.y * cellSize + cellSize / 2;
+    const offsetX = Math.min(Math.max(focusX - canvas.width / 2, 0), Math.max(0, worldWidth - canvas.width));
+    const offsetY = Math.min(Math.max(focusY - canvas.height / 2, 0), Math.max(0, worldHeight - canvas.height));
+
+    ctx.fillStyle = '#02070d';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const startCol = Math.max(0, Math.floor(offsetX / cellSize));
+    const endCol = Math.min(boardSize, Math.ceil((offsetX + canvas.width) / cellSize));
+    const startRow = Math.max(0, Math.floor(offsetY / cellSize));
+    const endRow = Math.min(boardSize, Math.ceil((offsetY + canvas.height) / cellSize));
+
+    for (let y = startRow; y < endRow; y++) {
+      for (let x = startCol; x < endCol; x++) {
+        const screenX = x * cellSize - offsetX;
+        const screenY = y * cellSize - offsetY;
+        const owner = territory[y][x];
+        if (owner >= 0) {
+          ctx.fillStyle = players[owner].color;
+        } else {
+          ctx.fillStyle = '#0c1721';
+        }
+        ctx.fillRect(screenX, screenY, cellSize, cellSize);
+
+        const tailOwner = trails[y][x];
+        if (tailOwner >= 0) {
+          ctx.fillStyle = `${players[tailOwner].color}AA`;
+          ctx.fillRect(screenX + cellSize * 0.2, screenY + cellSize * 0.2, cellSize * 0.6, cellSize * 0.6);
+        }
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+        ctx.strokeRect(screenX, screenY, cellSize, cellSize);
       }
     }
 
-    drawBoard();
-    updateScoreboard();
+    players.forEach(p => {
+      if (!p.alive) return;
+      const screenX = p.x * cellSize - offsetX;
+      const screenY = p.y * cellSize - offsetY;
+      ctx.fillStyle = '#111';
+      ctx.fillRect(screenX + 3, screenY + 3, cellSize - 6, cellSize - 6);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(screenX + 6, screenY + 6, cellSize - 12, cellSize - 12);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(screenX + 6, screenY + 6, cellSize - 12, cellSize - 12);
+    });
+
+    ctx.strokeStyle = '#0ff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
   }
 
   function resetPaperio() {
-    clearInterval(intervalId);
-    if (eliminationEl) {
-      eliminationEl.textContent = '';
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = null;
     }
+    setEliminationMessage('');
     buildBoard();
     resetPlayers();
     drawBoard();
     updateScoreboard();
-    intervalId = setInterval(advanceGame, 400);
+    intervalId = setInterval(() => {
+      advanceGame();
+      handleRespawns();
+      drawBoard();
+      updateScoreboard();
+    }, tickMs);
   }
 
   function handleKey(event) {
@@ -527,7 +820,10 @@ function initPaperioGame() {
     }
   }
 
-  document.addEventListener('keydown', handleKey);
+  if (!document.__paperioBound) {
+    document.addEventListener('keydown', handleKey);
+    document.__paperioBound = true;
+  }
 
   globalScope.resetPaperio = resetPaperio;
   resetPaperio();
@@ -543,27 +839,47 @@ function initRacerGame() {
 
   const playerCar = {
     lane: 1,
-    width: laneWidth * 0.6,
-    height: 50,
-    y: canvas.height - 70
+    width: laneWidth * 0.55,
+    height: 58,
+    y: canvas.height - 90
   };
 
   const state = {
     running: false,
     lastTimestamp: 0,
-    speed: 150,
+    speed: 180,
     distance: 0,
     dodged: 0,
     obstacles: [],
+    speedLines: [],
+    spawnTimer: 0,
     animationFrame: null
   };
 
+  const obstacleHeight = 60;
+  const laneCenters = Array.from({ length: laneCount }, (_, i) => i * laneWidth + laneWidth / 2);
+
   function drawBackground() {
-    ctx.fillStyle = '#06060a';
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, '#050417');
+    gradient.addColorStop(1, '#0a0e24');
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = '#0ff';
-    ctx.setLineDash([10, 18]);
+
+    ctx.fillStyle = '#0b1329';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#02040c';
+    ctx.fillRect(0, 0, 40, canvas.height);
+    ctx.fillRect(canvas.width - 40, 0, 40, canvas.height);
+
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
+
+    ctx.setLineDash([16, 24]);
     ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
     ctx.beginPath();
     ctx.moveTo(laneWidth, 0);
     ctx.lineTo(laneWidth, canvas.height);
@@ -573,74 +889,147 @@ function initRacerGame() {
     ctx.setLineDash([]);
   }
 
+  function drawSpeedLines() {
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.35)';
+    ctx.lineWidth = 2;
+    state.speedLines.forEach(line => {
+      ctx.beginPath();
+      ctx.moveTo(line.x, line.y);
+      ctx.lineTo(line.x, line.y + line.length);
+      ctx.stroke();
+    });
+  }
+
   function drawPlayer() {
-    ctx.fillStyle = '#1a8';
-    const x = playerCar.lane * laneWidth + (laneWidth - playerCar.width) / 2;
-    ctx.fillRect(x, playerCar.y, playerCar.width, playerCar.height);
+    const centerX = laneCenters[playerCar.lane];
+    const left = centerX - playerCar.width / 2;
+    ctx.save();
+    ctx.shadowColor = '#2cf5ff';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = '#19d7ff';
+    ctx.fillRect(left, playerCar.y, playerCar.width, playerCar.height);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#0b1f3a';
+    ctx.fillRect(left + 6, playerCar.y + 10, playerCar.width - 12, playerCar.height - 20);
+    ctx.fillStyle = '#19d7ff';
+    ctx.fillRect(left + playerCar.width / 2 - 6, playerCar.y + 6, 12, playerCar.height - 12);
+    ctx.restore();
   }
 
   function drawObstacles() {
-    ctx.fillStyle = '#f55';
+
     state.obstacles.forEach(ob => {
-      const x = ob.lane * laneWidth + (laneWidth - playerCar.width) / 2;
-      ctx.fillRect(x, ob.y, playerCar.width, playerCar.height * 0.8);
+      const top = ob.y;
+      const bottom = ob.y + obstacleHeight;
+      const gapLeft = ob.gapCenter - ob.gapWidth / 2;
+      const gapRight = ob.gapCenter + ob.gapWidth / 2;
+
+      ctx.save();
+      ctx.shadowColor = ob.color;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = ob.color;
+      if (gapLeft > 0) {
+        ctx.fillRect(0, top, gapLeft, obstacleHeight);
+      }
+      if (gapRight < canvas.width) {
+        ctx.fillRect(gapRight, top, canvas.width - gapRight, obstacleHeight);
+      }
+      ctx.restore();
+
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(gapLeft, top, ob.gapWidth, 4);
     });
   }
 
   function spawnObstacle() {
-    const lane = Math.floor(Math.random() * laneCount);
-    state.obstacles.push({ lane, y: -60 });
+    const gapLane = Math.floor(Math.random() * laneCount);
+    const colorHue = Math.floor(Math.random() * 360);
+    const gapCenter = laneCenters[gapLane];
+    const gapWidth = playerCar.width * 1.35;
+    state.obstacles.push({
+      y: -obstacleHeight,
+      gapCenter,
+      gapWidth,
+      color: `hsl(${colorHue}, 90%, 60%)`
+    });
+    state.spawnTimer = 180 + Math.random() * 140;
   }
 
   function resetObstacles() {
     state.obstacles = [];
+    state.spawnTimer = 0;
+  }
+
+  function ensureSpeedLines() {
+    while (state.speedLines.length < 12) {
+      state.speedLines.push({
+        x: 60 + Math.random() * (canvas.width - 120),
+        y: Math.random() * canvas.height,
+        length: 18 + Math.random() * 26
+      });
+    }
   }
 
   function updateRacer(delta) {
-    const speedPerMs = state.speed / 1000;
-    state.distance += speedPerMs * delta;
+    const pixelsPerMs = (state.speed / 1000) * 1.25;
+    const traveled = pixelsPerMs * delta;
+    state.distance += traveled;
+    state.spawnTimer -= traveled;
+
+    if (state.spawnTimer <= 0) {
+      spawnObstacle();
+    }
 
     state.obstacles.forEach(ob => {
-      ob.y += speedPerMs * delta * 1.6;
+      ob.y += traveled;
     });
 
     state.obstacles = state.obstacles.filter(ob => {
       if (ob.y > canvas.height) {
         state.dodged += 1;
+        state.speed = Math.min(340, state.speed + 8);
         return false;
       }
       return true;
     });
 
-    if (Math.random() < 0.02) {
-      spawnObstacle();
-    }
+    state.speedLines.forEach(line => {
+      line.y += traveled * 1.4;
+    });
+    state.speedLines = state.speedLines.filter(line => line.y < canvas.height + 40);
+    ensureSpeedLines();
 
-    const playerX = playerCar.lane;
-    const playerYTop = playerCar.y;
-    const playerYBottom = playerCar.y + playerCar.height;
+    const carCenter = laneCenters[playerCar.lane];
+    const carLeft = carCenter - playerCar.width / 2;
+    const carRight = carCenter + playerCar.width / 2;
+    const carTop = playerCar.y;
+    const carBottom = playerCar.y + playerCar.height;
 
     for (const ob of state.obstacles) {
       const obTop = ob.y;
-      const obBottom = ob.y + playerCar.height * 0.8;
-      if (ob.lane === playerX && obBottom > playerYTop && obTop < playerYBottom) {
+      const obBottom = ob.y + obstacleHeight;
+      if (carBottom <= obTop || carTop >= obBottom) continue;
+      const gapLeft = ob.gapCenter - ob.gapWidth / 2;
+      const gapRight = ob.gapCenter + ob.gapWidth / 2;
+      if (carLeft < gapLeft || carRight > gapRight) {
         state.running = false;
-        cancelAnimationFrame(state.animationFrame);
+        if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
         const message = document.getElementById('racer-message');
         if (message) {
-          message.textContent = 'Crash! Tap reset to try again.';
+          message.textContent = 'Crash! Reset to roll out again.';
         }
         return;
       }
     }
 
-    if (state.dodged > 0 && state.dodged % 5 === 0) {
-      state.speed = Math.min(260, state.speed + 10);
-    }
+
+
+
   }
 
   function renderRacer() {
     drawBackground();
+    drawSpeedLines();
     drawObstacles();
     drawPlayer();
   }
@@ -652,14 +1041,16 @@ function initRacerGame() {
     updateRacer(delta);
     renderRacer();
     updateRacerHud();
-    state.animationFrame = requestAnimationFrame(gameLoop);
+    if (state.running) {
+      state.animationFrame = requestAnimationFrame(gameLoop);
+    }
   }
 
   function startRacer() {
     if (state.running) return;
     const message = document.getElementById('racer-message');
     if (message) {
-      message.textContent = 'Speeding through neon streets!';
+      message.textContent = 'Neon boost engaged!';
     }
     state.running = true;
     state.lastTimestamp = performance.now();
@@ -672,47 +1063,55 @@ function initRacerGame() {
     if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
     const message = document.getElementById('racer-message');
     if (message) {
-      message.textContent = 'Paused. Press start to race again.';
+      message.textContent = 'Paused. Hit start to keep racing.';
     }
   }
 
   function resetRacer() {
     pauseRacer();
     playerCar.lane = 1;
-    state.speed = 150;
+    state.speed = 180;
     state.distance = 0;
     state.dodged = 0;
+    state.speedLines = [];
     resetObstacles();
+    ensureSpeedLines();
     renderRacer();
     updateRacerHud();
     const message = document.getElementById('racer-message');
     if (message) {
-      message.textContent = 'Ready to race! Use ← and → to change lanes.';
+      message.textContent = 'Ready! Use ← and → to slide through the gaps.';
     }
   }
 
   function shiftLane(offset) {
     const nextLane = Math.min(laneCount - 1, Math.max(0, playerCar.lane + offset));
+    if (nextLane === playerCar.lane) return;
     playerCar.lane = nextLane;
+    renderRacer();
+    updateRacerHud();
   }
 
   function handleKey(event) {
     if (document.getElementById('racer-game').style.display !== 'flex') return;
     if (event.key === 'ArrowLeft') {
       shiftLane(-1);
-      renderRacer();
-      updateRacerHud();
+
+
       event.preventDefault();
     }
     if (event.key === 'ArrowRight') {
       shiftLane(1);
-      renderRacer();
-      updateRacerHud();
+
+
       event.preventDefault();
     }
   }
 
-  document.addEventListener('keydown', handleKey);
+  if (!document.__racerBound) {
+    document.addEventListener('keydown', handleKey);
+    document.__racerBound = true;
+  }
 
   function updateHud() {
     const distanceEl = document.getElementById('racer-distance');
@@ -720,7 +1119,7 @@ function initRacerGame() {
     const obstaclesEl = document.getElementById('racer-obstacles');
     if (distanceEl) distanceEl.textContent = `Distance: ${Math.floor(state.distance)}m`;
     if (speedEl) speedEl.textContent = `Speed: ${Math.floor(state.speed)} mph`;
-    if (obstaclesEl) obstaclesEl.textContent = `Dodged: ${state.dodged}`;
+    if (obstaclesEl) obstaclesEl.textContent = `Gaps cleared: ${state.dodged}`;
   }
 
   globalScope.startRacer = startRacer;
