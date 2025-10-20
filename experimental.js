@@ -1,56 +1,42 @@
-// --- Initialize Supabase ---
-const SUPABASE_URL = 'https://crvmgootjfbqkokrwsuu.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNydm1nb290amZicWtva3J3c3V1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA4MzkyNTQsImV4cCI6MjA3NjQxNTI1NH0.Em26tIW4z2ulfRePTOVhkCmcMGOa0OOjBqC3kPJ-LpU';
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// --- TETRIS GAME SCRIPT ---
 
-// Set-up
+// Get modal elements
+const tetrisModal = document.getElementById('tetrisModal');
+const runTetrisBtn = document.getElementById('runTetrisBtn');
+const modalCloseBtn = document.getElementById('modalCloseBtn');
+
+// Get game elements (INSIDE the modal)
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+const scoreP = document.getElementById('score');
+const startBtn = document.getElementById('startBtn');
+const controlsBtn = document.getElementById('controlsBtn');
 
 const box = 24;
-const speed = 50;
-const scoreP = document.getElementById('score');
+const speed = 50; // Milliseconds per frame
 
 let fastFall = false;
 let score = 0;
-
-
-// High score
 let highScore;
 
-async function getHighScore() {
-  const { data, error } = await supabaseClient
-    .from('HighScores')
-    .select('highScoreTetris')
-    .eq('id', JSON.parse(localStorage.getItem('user')).id)
-    .single();
-
-  if (error) {
-    console.error(error);
-  } else {
-    highScore = data.highScoreTetris;
-  }
-}
-
-getHighScore().then(function() {
+// High score (localStorage version)
+function loadHighScore() {
+  highScore = parseInt(localStorage.getItem('tetrisHighScore')) || 0;
   scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
-});
-
-async function updateHighScore() {
-  const { data, error } = await supabaseClient
-    .from('HighScores')
-    .update({ highScoreTetris: highScore })
-    .eq('id', JSON.parse(localStorage.getItem('user')).id);
-
-  if (error) {
-    console.error(error);
-  }
 }
+
+function saveHighScore() {
+  localStorage.setItem('tetrisHighScore', highScore);
+  scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
+}
+
+// Load high score on script start
+loadHighScore();
 
 // In-game variables
 let block;
 let rows;
-let game;
+let game; // This will hold the setInterval ID
 let count;
 
 // Block types
@@ -93,33 +79,36 @@ const blocks = {
 };
 
 function start() {
-  // Rows
+  // Rows (10 wide, 20 high)
   rows = [];
-
   for (let i = 0; i < 20; i++) {
     let row = [];
-
     for (let x = 0; x < 10; x++) {
       row.push(0);
     }
-  
     rows.push(row);
   }
 
   score = 0;
-  
-  scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore; 
+  loadHighScore(); // Resets score text
 
   // Resets count
   count = 10;
   
+  // Clear any existing game loop
+  if (game) {
+    clearInterval(game);
+  }
+
   // Draws the frames of the game
   game = setInterval(drawFrame, speed);
+  startBtn.textContent = 'Restart';
 }
 
 
 // Rotate
 function rotate() {
+  if (!block) return;
   block[0] = transpose(block[0]);
   block[0] = reverse(block[0]);
 
@@ -132,47 +121,27 @@ function rotate() {
 
 // Move
 function moveRight() {
+  if (!block) return;
   block[1] += 1;
-
   if (isColliding(block)) {
     block[1] -= 1;
   }
 }
 
 function moveLeft() {
+  if (!block) return;
   block[1] -= 1;
-
   if (isColliding(block)) {
     block[1] += 1;
   }
 }
 
-
-// Checks keys
-document.addEventListener('keydown', event => {
-  if (
-    ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(event.key) ||
-    event.code === 'Space'
-  ) {
-    event.preventDefault();
-  }
-  if (event.key === 'ArrowLeft') moveLeft();
-  if (event.key === 'ArrowRight') moveRight();
-  if (event.code === 'Space') rotate();
-  if (event.key === 'ArrowDown') fastFall = true;
-});
-
-document.addEventListener('keyup', event => {if (event.key === 'ArrowDown') fastFall = false;});
-
-
 // Transposes rows and columns in a 2d matrix
 function transpose(L) {
   let final = [];
-  
   for (let i = 0; i < L[0].length; i++) {
     final.push([]);
   }
-
   for (let i = 0; i < L.length; i++) {
     for (let x = 0; x < L[i].length; x++) {
       final[x].push(L[i][x]);
@@ -196,15 +165,17 @@ function isColliding(B) {
   for (let y = 0; y < B[0].length; y++) {
     for (let x = 0; x < B[0][y].length; x++) {
       if (B[0][y][x] === 1) {
+        // Check boundaries
         if (
-          (B[1] + x) < 0 ||
-          (B[1] + x) >= 10 ||
-          (B[2] + y) >= 20
+          (B[1] + x) < 0 ||    // Left wall
+          (B[1] + x) >= 10 ||   // Right wall
+          (B[2] + y) >= 20    // Bottom wall
         ) {
           return true;
         }
-
-        if (rows[B[2] + y][B[1] + x] === 1) {
+        
+        // Check against other blocks (if row exists)
+        if (rows[B[2] + y] && rows[B[2] + y][B[1] + x] === 1) {
           return true;
         }
       }
@@ -214,116 +185,172 @@ function isColliding(B) {
 }
 
 
-
 // Draws a frame
 function drawFrame() {
   // Creates a falling block if none already exist
   if (!block) {
     block = [blocks[Math.floor(Math.random() * 7)], 4, 0];
+    // Check for game over on new block spawn
+    if (isColliding(block)) {
+      clearInterval(game);
+      game = null;
+      startBtn.textContent = 'Start';
+      if (score > highScore) {
+        alert('Game Over! New high score: ' + score);
+        highScore = score;
+        saveHighScore();
+      } else {
+         alert('Game Over! Score: ' + score);
+      }
+      return; // Stop the frame draw
+    }
     return;
   }
   
-  // Clears frame
-  ctx.fillStyle = 'rgb(255, 255, 255)';
+  // Clears frame to neon background
+  ctx.fillStyle = '#050505';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
   
   // Gravity
   if (count === 0 || (fastFall && (count % 2 === 0))) {
     count = 10;
-    block[2] += 1;
-  
-    // If the the block is colliding it gets set permentently in rows
+    block[2] += 1; // Move block down
+    
+    // If the the block is colliding, set it permanently
     if (isColliding(block)) {
-      block[2] -= 1;
+      block[2] -= 1; // Move it back up
       
       for (let y = 0; y < block[0].length; y++) {
         for (let x = 0; x < block[0][y].length; x++) {
-          
-          // Sets rows
           if (block[0][y][x] === 1) {
-            rows[block[2] + y][block[1] + x] = 1;
+            // Set block in rows grid
+            if (rows[block[2] + y]) {
+               rows[block[2] + y][block[1] + x] = 1;
+            }
           }
         }
       }
-        
-      block = null;
-  
+      
+      block = null; // Get a new block next frame
+      
+      // Check for completed rows
       for (let i = 0; i < 20; i++) {
-        if (!rows[i].some(b => b === 0)) {
-          rows.splice(i, 1);
-  
+        if (rows[i] && !rows[i].some(b => b === 0)) {
+          rows.splice(i, 1); // Remove full row
+          
+          // Add a new empty row at the top
           let row = []
-  
           for (let x = 0; x < 10; x++) {
             row.push(0);
           }
-          
           rows.unshift(row);
           
           score += 10;
           scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
+          
+          // Re-check this index
+          i--;
         }
       }
     }
   }
 
-  // Add blocks
+  // Add active block to a temporary render grid
   let RaB = rows.map(row => [...row]);
-
   if (block) {
     for (let y = 0; y < block[0].length; y++) {
       for (let x = 0; x < block[0][y].length; x++) {
         if (block[0][y][x] === 1) {
-          RaB[block[2] + y][block[1] + x] = 1;
+          if (RaB[block[2] + y]) {
+             RaB[block[2] + y][block[1] + x] = 1;
+          }
         }
       }
     }
   }
 
+  // Render the grid
+  ctx.fillStyle = '#00FFFF'; // Neon Cyan
+  ctx.strokeStyle = '#33FFFF';
+  ctx.lineWidth = 1;
+  ctx.shadowColor = '#00FFFF';
+  ctx.shadowBlur = 5;
+
   for (let y = 0; y < RaB.length; y++) {
     for (let x = 0; x < RaB[y].length; x++) {
       if (RaB[y][x] === 1) {
-        ctx.fillStyle = 'rgb(0, 120, 200)';
-        ctx.fillRect(x * box, y * box, box, box);
+        ctx.fillRect(x * box, y * box, box - 1, box - 1);
+        ctx.strokeRect(x * box, y * box, box - 1, box - 1);
       }
     }
   }
-
-  // End game
-  if (rows[0].some(b => b === 1)) {
-    clearInterval(game);
-    game = null;
-    if (score > highScore) {
-      alert('New high score!');
-      highScore = score;
-
-      updateHighScore().then(function() {
-        scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
-      });
-    }
-  }
+  
+  // Reset shadow for next frame
+  ctx.shadowBlur = 0;
 
   count -= 1;
 }
 
 
-// Buttons
-const homeBtn = document.getElementById('homeBtn');
-const startBtn = document.getElementById('startBtn');
-const controlsBtn = document.getElementById('controlsBtn');
+// --- Modal and Game Listeners ---
 
-homeBtn.addEventListener('click', function() {
-  window.location.href = 'home.html';
+// Checks keys (only when modal is open)
+document.addEventListener('keydown', event => {
+  // Don't run game logic if modal is closed
+  if (tetrisModal.style.display !== 'flex' || !game) return;
+
+  if (
+    ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(event.key) ||
+    event.code === 'Space'
+  ) {
+    event.preventDefault();
+  }
+  if (event.key === 'ArrowLeft') moveLeft();
+  if (event.key === 'ArrowRight') moveRight();
+  if (event.code === 'Space') rotate();
+  if (event.key === 'ArrowDown') fastFall = true;
 });
 
+document.addEventListener('keyup', event => {
+  if (event.key === 'ArrowDown') fastFall = false;
+});
+
+// Modal Control Buttons
 startBtn.addEventListener('click', function() {
-  if (!game) {
-    start();
-    startBtn.textContent = 'Restart';
-  }
-});  
+  start();
+});
 
 controlsBtn.addEventListener('click', function() {
   alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
+});
+
+// Modal Open/Close Logic
+runTetrisBtn.addEventListener('click', function(e) {
+  e.preventDefault();
+  tetrisModal.style.display = 'flex';
+  // Reset score text when opening
+  loadHighScore(); 
+  startBtn.textContent = 'Start';
+});
+
+function closeModal() {
+  tetrisModal.style.display = 'none';
+  // Stop the game when closing
+  if (game) {
+    clearInterval(game);
+    game = null;
+  }
+  block = null; // Clear active block
+  // Clear canvas
+  ctx.fillStyle = '#050505';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+modalCloseBtn.addEventListener('click', closeModal);
+
+// Also close if user clicks outside the modal content
+tetrisModal.addEventListener('click', function(e) {
+  if (e.target === tetrisModal) {
+    closeModal();
+  }
 });
