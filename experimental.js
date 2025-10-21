@@ -38,9 +38,20 @@ let block;
 let rows;
 let game; // This will hold the setInterval ID
 let count;
+let currentLevel = 0; // --- NEW --- Tracks game level based on score
 
-// Block types
-const blocks = {
+// --- NEW --- Color palettes for different levels
+const colorPalettes = [
+  { fill: '#00FFFF', stroke: '#33FFFF', shadow: '#00FFFF' }, // Level 0 (Cyan)
+  { fill: '#FF00FF', stroke: '#FF33FF', shadow: '#FF00FF' }, // Level 1 (Magenta)
+  { fill: '#00FF00', stroke: '#33FF33', shadow: '#00FF00' }, // Level 2 (Lime)
+  { fill: '#FFA500', stroke: '#FFB733', shadow: '#FFA500' }, // Level 3 (Orange)
+  { fill: '#FFFF00', stroke: '#FFFF33', shadow: '#FFFF00' }  // Level 4 (Yellow)
+];
+
+// Block types - MODIFIED to 'all_blocks' and added new shapes
+const all_blocks = {
+  // --- Original 7 Blocks (0-6) ---
   0: [
     [0, 0, 0, 0],
     [1, 1, 1, 1],
@@ -75,6 +86,19 @@ const blocks = {
     [0, 0, 1],
     [1, 1, 1],
     [0, 0, 0]
+  ],
+  // --- NEW Custom Blocks (7+) ---
+  // Unlocked at level 1 (250 points)
+  7: [ // "Plus" shape
+    [0, 1, 0],
+    [1, 1, 1],
+    [0, 1, 0]
+  ],
+  // Unlocked at level 2 (500 points)
+  8: [ // "U" shape
+    [1, 0, 1],
+    [1, 1, 1],
+    [0, 0, 0]
   ]
 };
 
@@ -90,6 +114,7 @@ function start() {
   }
 
   score = 0;
+  currentLevel = 0; // --- NEW --- Reset level on start
   loadHighScore(); // Resets score text
 
   // Resets count
@@ -189,7 +214,21 @@ function isColliding(B) {
 function drawFrame() {
   // Creates a falling block if none already exist
   if (!block) {
-    block = [blocks[Math.floor(Math.random() * 7)], 4, 0];
+    
+    // --- MODIFIED --- Block spawning logic
+    // Determine how many block types to choose from based on level
+    let blockPoolSize = 7 + currentLevel; // Starts with 7 (0-6)
+    
+    // Cap the pool size to the total number of blocks we defined
+    // We have 9 blocks total (0-8)
+    if (blockPoolSize > 9) {
+        blockPoolSize = 9;
+    }
+    
+    let newBlockIndex = Math.floor(Math.random() * blockPoolSize);
+    block = [all_blocks[newBlockIndex], 4, 0];
+    // --- End of MODIFIED section ---
+
     // Check for game over on new block spawn
     if (isColliding(block)) {
       clearInterval(game);
@@ -246,6 +285,16 @@ function drawFrame() {
           rows.unshift(row);
           
           score += 10;
+          
+          // --- NEW --- Check for level up
+          let newLevel = Math.floor(score / 250);
+          if (newLevel > currentLevel) {
+              currentLevel = newLevel;
+              // You could add a sound effect or visual cue here
+              console.log("Level up! Now on level " + currentLevel);
+          }
+          // --- End of NEW section ---
+          
           scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
           
           // Re-check this index
@@ -269,12 +318,17 @@ function drawFrame() {
     }
   }
 
-  // Render the grid
-  ctx.fillStyle = '#00FFFF'; // Neon Cyan
-  ctx.strokeStyle = '#33FFFF';
+  // --- MODIFIED --- Render the grid with dynamic colors
+  // Get the current color palette based on the level
+  // Use modulo (%) to loop back to the first palette if the level gets too high
+  let palette = colorPalettes[currentLevel % colorPalettes.length];
+
+  ctx.fillStyle = palette.fill;
+  ctx.strokeStyle = palette.stroke;
   ctx.lineWidth = 1;
-  ctx.shadowColor = '#00FFFF';
+  ctx.shadowColor = palette.shadow;
   ctx.shadowBlur = 5;
+  // --- End of MODIFIED section ---
 
   for (let y = 0; y < RaB.length; y++) {
     for (let x = 0; x < RaB[y].length; x++) {
