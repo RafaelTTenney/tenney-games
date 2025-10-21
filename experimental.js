@@ -287,7 +287,7 @@ function drawFrame() {
           score += 10;
           
           // --- NEW --- Check for level up
-          let newLevel = Math.floor(score / 250);
+          let newLevel = Math.floor(score / 100);//potentially 250
           if (newLevel > currentLevel) {
               currentLevel = newLevel;
               // You could add a sound effect or visual cue here
