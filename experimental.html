@@ -207,7 +207,7 @@
     }
     
     /* Specific game canvas style */
-    #game, #racer-canvas {
+    #game, #racer-canvas, #invaders-canvas {
       background: var(--bg);
       border: 2px solid var(--primary);
       box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.5);
@@ -266,16 +266,18 @@
           <a class="btn" href="#" id="runRacerBtn">Run</a>
         </div>
       </section>
+
       <section class="card">
-        <h3>Example: Keyboard Test</h3>
-        <div class="meta">A small area to attach event listeners and debug input.</div>
-        <pre class="demo">// Attach to document and log keys</pre>
+        <h3>Corrupted Invaders</h3>
+        <div class="meta">A "simple" space invaders demo. Warning: Unstable.</div>
+        <pre class="demo">// JS canvas demo, runs in modal
+// Render loop is intentionally broken
+// Collision detection... works?</pre>
         <div class="actions">
-          <a class="btn secondary" href="#" onclick="alert('Edit this card in experimental.html')">Edit</a>
-          <a class="btn" href="#" onclick="alert('Run demo (replace with real link)')">Run</a>
+          <a class="btn" href="#" id="runInvadersBtn">Run</a>
         </div>
       </section>
-    </div>
+      </div>
 
     <hr style="margin:20px 0;border:none;border-top:1px solid #333;" />
 
@@ -334,6 +336,19 @@
       
     </div>
   </div>
+  <div id="invadersModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Corrupted Invaders</h2>
+        <span class="modal-close" id="invadersModalCloseBtn">&times;</span>
+      </div>
+      <canvas id="invaders-canvas" width="300" height="400" style="background:#000; border: 2px solid #F0F; box-shadow: inset 0 0 10px #F0F;"></canvas>
+      <p id="invaders-message" style="color:#F0F; min-height: 1.2em; margin: 10px 0;">[SYSTEM UNSTABLE. RUNNING...]</p>
+      <div class="modal-controls">
+        <button id="startInvadersBtn" class="btn">Initialize</button>
+      </div>
+    </div>
+  </div>
   <script src="login.js"></script>
   <script>
     // Access protection: only admins may enter
@@ -344,13 +359,16 @@
           return;
       }
       
-      // Since both games are now on this page, we must initialize both.
+      // Since all games are now on this page, we must initialize all.
       // Their scripts are in experimental.js
       if (typeof initTetrisGame === 'function') {
         initTetrisGame();
       }
       if (typeof initRacerGame === 'function') {
         initRacerGame();
+      }
+      if (typeof initInvadersGame === 'function') {
+        initInvadersGame();
       }
     });
   </script>
