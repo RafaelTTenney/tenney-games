@@ -359,11 +359,16 @@ function drawFrame() {
   ctx.shadowColor = palette.shadow;
   ctx.shadowBlur = 5;
 
+// Draw the blocks with a larger separation
+  const size = box - 3; // New size (e.g., 21px)
+  const offset = 1.5;   // Offset to center the 21px block in the 24px cell
+
   for (let y = 0; y < RaB.length; y++) {
     for (let x = 0; x < RaB[y].length; x++) {
       if (RaB[y][x] === 1) {
-        ctx.fillRect(x * box, y * box, box - 1, box - 1);
-        ctx.strokeRect(x * box, y * box, box - 1, box - 1);
+        // Use new size and offset
+        ctx.fillRect(x * box + offset, y * box + offset, size, size);
+        ctx.strokeRect(x * box + offset, y * box + offset, size, size);
       }
     }
   }
