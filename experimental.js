@@ -151,7 +151,8 @@ const all_blocks = {
   6: [[0, 0, 1], [1, 1, 1], [0, 0, 0]],
   7: [[0, 1, 0], [1, 1, 1], [0, 1, 0]],
   8: [[1, 0, 1], [1, 1, 1], [0, 0, 0]],
-  9: [[1, 0, 0], [1, 1, 1], [0, 0, 1]]
+  9: [[1, 0, 0], [1, 1, 1], [0, 0, 1]],
+  10: [[1, 1, 1], [0, 1, 0], [0, 1, 0]]
 };
 
 function start() {
@@ -233,7 +234,7 @@ function drawFrame() {
   
   if (!block) {
     let blockPoolSize = 7 + currentLevel; 
-    if (blockPoolSize > 9) blockPoolSize = 9;
+    if (blockPoolSize > 11) blockPoolSize = 11;
     let newBlockIndex = Math.floor(Math.random() * blockPoolSize);
     block = [all_blocks[newBlockIndex], 4, 0];
 
@@ -285,7 +286,7 @@ function drawFrame() {
           
           score += 10;
           
-          let newLevel = Math.floor(score / 100); // 100 points per level
+          let newLevel = Math.floor(score / 50); // potentially 100 points per level
           if (newLevel > currentLevel) {
               currentLevel = newLevel;
               console.log("Level up! Now on level " + currentLevel);
