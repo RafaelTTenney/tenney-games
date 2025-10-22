@@ -57,6 +57,7 @@
       border: 1px solid var(--primary);
       transition: all 0.2s ease;
       box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.4);
+      cursor: pointer; /* Added for buttons */
     }
 
     .btn.secondary {
@@ -205,7 +206,8 @@
       text-decoration: none;
     }
     
-    #game {
+    /* Specific game canvas style */
+    #game, #racer-canvas {
       background: var(--bg);
       border: 2px solid var(--primary);
       box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.5);
@@ -255,21 +257,15 @@
       </section>
 
       <section class="card">
-        <h3>Example: Minimal Canvas Demo</h3>
-        <div class="meta">Small canvas-based experiment. Replace with your code.</div>
-        <pre class="demo">
-// Simple placeholder
-const canvas = document.createElement('canvas');
-canvas.width = 240;
-canvas.height = 120;
-document.body.appendChild(canvas);
-        </pre>
+        <h3>Neon Racer</h3>
+        <div class="meta">A high-speed avoidance game with a retro-neon theme.</div>
+        <pre class="demo">// Runs in a pop-up modal
+// Use Arrow Keys to move
+// Difficulty increases</pre>
         <div class="actions">
-          <a class="btn secondary" href="#" onclick="alert('Edit this card in experimental.html')">Edit</a>
-          <a class="btn" href="#" onclick="alert('Run demo (replace with real link)')">Run</a>
+          <a class="btn" href="#" id="runRacerBtn">Run</a>
         </div>
       </section>
-
       <section class="card">
         <h3>Example: Keyboard Test</h3>
         <div class="meta">A small area to attach event listeners and debug input.</div>
@@ -314,8 +310,30 @@ document.body.appendChild(canvas);
       
     </div>
   </div>
-
-
+  <div id="racerModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Neon Racer</h2>
+        <span class="modal-close" id="racerModalCloseBtn">&times;</span>
+      </div>
+      
+      <canvas id="racer-canvas" width="300" height="500"></canvas>
+      
+      <div id="racer-hud" style="color:#eee; font-weight:700; margin: 10px 0; min-height: 45px; text-align: left; padding: 0 10px;">
+        <div id="racer-distance">Distance: 0m</div>
+        <div id="racer-speed">Speed: 0 mph</div>
+        <div id="racer-obstacles">Gaps cleared: 0</div>
+      </div>
+      <p id="racer-message" style="color:var(--primary); min-height: 1.2em; margin: 5px 0 10px 0;">Ready!</p>
+      
+      <div class="modal-controls">
+        <button id="startRacerBtn" class="btn">Start</button>
+        <button id="pauseRacerBtn" class="btn secondary">Pause</button>
+        <button id="resetRacerBtn" class="btn secondary">Reset</button>
+      </div>
+      
+    </div>
+  </div>
   <script src="login.js"></script>
   <script>
     // Access protection: only admins may enter
@@ -324,6 +342,15 @@ document.body.appendChild(canvas);
       // Make sure login.js defines this function
       if (typeof enforcePageAccess === 'function' && !enforcePageAccess('experimental.html')) {
           return;
+      }
+      
+      // Since both games are now on this page, we must initialize both.
+      // Their scripts are in experimental.js
+      if (typeof initTetrisGame === 'function') {
+        initTetrisGame();
+      }
+      if (typeof initRacerGame === 'function') {
+        initRacerGame();
       }
     });
   </script>
