@@ -29,6 +29,15 @@ const startRacerBtn = document.getElementById('startRacerBtn');
 const pauseRacerBtn = document.getElementById('pauseRacerBtn');
 const resetRacerBtn = document.getElementById('resetRacerBtn');
 
+// --- CORRUPTED INVADERS SCRIPT (ELEMENTS) ---
+const invadersModal = document.getElementById('invadersModal');
+const runInvadersBtn = document.getElementById('runInvadersBtn');
+const invadersModalCloseBtn = document.getElementById('invadersModalCloseBtn');
+const invadersCanvas = document.getElementById('invaders-canvas');
+const invadersCtx = invadersCanvas ? invadersCanvas.getContext('2d') : null;
+const invadersMessageEl = document.getElementById('invaders-message');
+const startInvadersBtn = document.getElementById('startInvadersBtn');
+
 
 // --- MODAL HANDLING (TETRIS) ---
 
@@ -103,6 +112,37 @@ if (racerModal) {
     });
 }
 
+// --- MODAL HANDLING (INVADERS) ---
+
+if (runInvadersBtn) {
+    runInvadersBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      invadersModal.style.display = 'flex';
+      if (invadersMessageEl) invadersMessageEl.textContent = "[SYSTEM UNSTABLE. RUNNING...]";
+      // Auto-start the game
+      if (typeof startInvaders === 'function') {
+        startInvaders();
+      }
+    });
+}
+
+function closeInvadersModal() {
+  invadersModal.style.display = 'none';
+  if (typeof stopInvaders === 'function') {
+    stopInvaders();
+  }
+}
+
+if (invadersModalCloseBtn) invadersModalCloseBtn.addEventListener('click', closeInvadersModal);
+
+if (invadersModal) {
+    invadersModal.addEventListener('click', function(e) {
+      if (e.target === invadersModal) {
+        closeInvadersModal();
+      }
+    });
+}
+
 
 // --- TETRIS GAME LOGIC ---
 
@@ -129,9 +169,8 @@ let block;
 let rows;
 let game; // This will hold the setInterval ID
 let count;
-let currentLevel = 0; // --- NEW --- Tracks game level based on score
+let currentLevel = 0;
 
-// --- NEW --- Color palettes for different levels
 const colorPalettes = [
   { fill: '#00FFFF', stroke: '#33FFFF', shadow: '#00FFFF' }, // Level 0 (Cyan)
   { fill: '#FF00FF', stroke: '#FF33FF', shadow: '#FF00FF' }, // Level 1 (Magenta)
@@ -152,7 +191,7 @@ const all_blocks = {
   7: [[0, 1, 0], [1, 1, 1], [0, 1, 0]],
   8: [[1, 0, 1], [1, 1, 1], [0, 0, 0]],
   9: [[1, 0, 0], [1, 1, 1], [0, 0, 1]],
-  10: [[1, 1, 1], [0, 1, 0], [0, 1, 0]]
+  10: [[1, 1, 1], [0, 1, 0], [0, 1, 0]] // New piece for Level 4
 };
 
 function start() {
@@ -234,7 +273,8 @@ function drawFrame() {
   
   if (!block) {
     let blockPoolSize = 7 + currentLevel; 
-    if (blockPoolSize > 11) blockPoolSize = 11;
+    if (blockPoolSize > 11) blockPoolSize = 11; // Cap is 11 (0-10)
+    
     let newBlockIndex = Math.floor(Math.random() * blockPoolSize);
     block = [all_blocks[newBlockIndex], 4, 0];
 
@@ -286,7 +326,7 @@ function drawFrame() {
           
           score += 10;
           
-          let newLevel = Math.floor(score / 50); // potentially 100 points per level
+          let newLevel = Math.floor(score / 100); // 100 points per level
           if (newLevel > currentLevel) {
               currentLevel = newLevel;
               console.log("Level up! Now on level " + currentLevel);
@@ -363,8 +403,7 @@ function initTetrisGame() {
 }
 
 // Call init function (will be run by DOMContentLoaded listener in HTML)
-initTetrisGame();
-
+// initTetrisGame(); // Moved to HTML
 
 
 // --- NEON RACER SCRIPT (LOGIC) ---
@@ -690,4 +729,187 @@ function initRacerGame() {
 }
 
 // Call init function (will be run by DOMContentLoaded listener in HTML)
-initRacerGame();
+// initRacerGame(); // Moved to HTML
+
+
+// --- CORRUPTED INVADERS SCRIPT (LOGIC) ---
+
+let invaderState = {
+  player: { x: 140, y: 370, size: 20 },
+  bullet: { x: 0, y: 0, active: false, size: 10 },
+  enemies: [],
+  enemyDirection: 1,
+  gameLoopId: null
+};
+
+function createEnemies() {
+  invaderState.enemies = [];
+  for (let r = 0; r < 3; r++) { // 3 rows
+    for (let c = 0; c < 8; c++) { // 8 columns
+      invaderState.enemies.push({
+        x: 30 + c * 30,
+        y: 30 + r * 30,
+        size: 20,
+        alive: true
+      });
+    }
+  }
+}
+
+function updateInvaders() {
+  if (!invadersCanvas) return;
+  const state = invaderState;
+
+  // Move bullet
+  if (state.bullet.active) {
+    state.bullet.y -= 7;
+    if (state.bullet.y < 0) {
+      state.bullet.active = false;
+    }
+  }
+
+  // --- Glitchy Enemy Movement ---
+  let moveDown = false;
+  // Jerky horizontal direction change
+  if (Math.random() > 0.98) { 
+    state.enemyDirection *= -1;
+  }
+  // Randomly decide to move down
+  if (Math.random() > 0.99) {
+    moveDown = true;
+  }
+
+  // Move enemies and check for "hits"
+  state.enemies.forEach(enemy => {
+    if (enemy.alive) {
+      enemy.x += state.enemyDirection * 0.3; // Very slow, jerky horizontal
+      if (moveDown) {
+        enemy.y += 10;
+      }
+
+      // Simple collision
+      if (state.bullet.active &&
+          state.bullet.x > enemy.x && 
+          state.bullet.x < enemy.x + enemy.size &&
+          state.bullet.y > enemy.y &&
+          state.bullet.y < enemy.y + enemy.size) 
+      {
+        state.bullet.active = false;
+        // --- Not Fully Functioning Part ---
+        // Instead of destroying, just "corrupt" it
+        enemy.alive = false; 
+      }
+    }
+  });
+}
+
+function drawInvaders() {
+  if (!invadersCtx) return;
+  const state = invaderState;
+
+  // --- Glitchy Render ---
+  // Don't clear the screen fully, leave a "ghost" trail
+  invadersCtx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
+  
+  invadersCtx.font = '20px "Courier New", monospace';
+  
+  // Draw player
+  invadersCtx.fillStyle = '#00FF00'; // Green player
+  invadersCtx.fillText('^', state.player.x, state.player.y);
+
+  // Draw bullet
+  if (state.bullet.active) {
+    invadersCtx.fillStyle = '#00FFFF'; // Cyan bullet
+    invadersCtx.fillText('|', state.bullet.x, state.bullet.y);
+  }
+
+  // Draw enemies
+  state.enemies.forEach(enemy => {
+    if (enemy.alive) {
+      invadersCtx.fillStyle = '#FF0000'; // Red enemies
+      invadersCtx.fillText('[o]', enemy.x, enemy.y);
+    } else {
+      // --- Glitchy Part ---
+      // Draw the "corrupted" enemy
+      invadersCtx.fillStyle = '#555555'; // Dead grey
+      invadersCtx.fillText('X', enemy.x, enemy.y);
+    }
+  });
+}
+
+function invadersGameLoop() {
+  updateInvaders();
+  drawInvaders();
+  invaderState.gameLoopId = requestAnimationFrame(invadersGameLoop);
+}
+
+function startInvaders() {
+  if (invaderState.gameLoopId) {
+    stopInvaders(); // Stop any previous loop
+  }
+  createEnemies();
+  if (startInvadersBtn) startInvadersBtn.textContent = 'Restart';
+  invaderState.gameLoopId = requestAnimationFrame(invadersGameLoop);
+}
+
+function stopInvaders() {
+  if (invaderState.gameLoopId) {
+    cancelAnimationFrame(invaderState.gameLoopId);
+    invaderState.gameLoopId = null;
+  }
+  if (startInvadersBtn) startInvadersBtn.textContent = 'Initialize';
+  // Clear canvas to black
+  if (invadersCtx) {
+    invadersCtx.fillStyle = '#000';
+    invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
+  }
+}
+
+function handleInvadersKey(event) {
+  // Only run if the invaders modal is open
+  if (invadersModal.style.display !== 'flex') return;
+
+  const state = invaderState;
+  
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    state.player.x = Math.max(0, state.player.x - 15);
+  }
+  if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    state.player.x = Math.min(invadersCanvas.width - 20, state.player.x + 15);
+  }
+  if (event.key === ' ' || event.key === 'Spacebar') {
+    event.preventDefault();
+    if (!state.bullet.active) {
+      state.bullet.x = state.player.x + 6; // Center bullet
+      state.bullet.y = state.player.y - 10;
+      state.bullet.active = true;
+    }
+  }
+}
+
+// --- INIT INVADERS ---
+function initInvadersGame() {
+    if (startInvadersBtn) {
+      startInvadersBtn.addEventListener('click', startInvaders);
+    }
+    
+    // Bind keyboard listener for invaders
+    if (!document.__invadersBound) {
+      document.addEventListener('keydown', handleInvadersKey);
+      document.__invadersBound = true;
+    }
+    
+    // Initial clear
+    if (invadersCtx) {
+        invadersCtx.fillStyle = '#000';
+        invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
+    }
+}
+
+// Call init functions (moved to HTML DOMContentLoaded)
+// initTetrisGame();
+// initRacerGame();
+// initInvadersGame();
