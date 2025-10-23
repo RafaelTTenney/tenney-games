@@ -805,7 +805,7 @@ function updateInvaders() {
   state.enemies.forEach(enemy => {
     if (enemy.alive) {
       if (moveDown) {
-        enemy.y += 10;
+        enemy.y += 25; // Dropping speed
       } else {
         enemy.x += state.enemyDirection * 0.5; // Slower horizontal move
       }
@@ -884,8 +884,9 @@ function drawInvaders() {
 
   // Draw player bullet
   if (state.bullet.active) {
-    invadersCtx.fillStyle = '#00FF00'; // Green bullet
-    invadersCtx.fillRect(state.bullet.x, state.bullet.y, 4, 10);
+    // --- MODIFICATION: Set player bullet to Cyan ---
+    invadersCtx.fillStyle = '#00FFFF'; // Cyan bullet
+    invadersCtx.fillText('|', state.bullet.x, state.bullet.y);
   }
 
   // Draw enemies
@@ -899,7 +900,7 @@ function drawInvaders() {
   // Draw enemy bullets
   invadersCtx.fillStyle = '#FF0000'; // Red enemy bullets
   state.enemyBullets.forEach(bullet => {
-      invadersCtx.fillText('v', bullet.x, bullet.y);
+      invadersCtx.fillText('|', bullet.x, bullet.y);
   });
 }
 
