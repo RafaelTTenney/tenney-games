@@ -29,7 +29,7 @@ const startRacerBtn = document.getElementById('startRacerBtn');
 const pauseRacerBtn = document.getElementById('pauseRacerBtn');
 const resetRacerBtn = document.getElementById('resetRacerBtn');
 
-// --- CORRUPTED INVADERS SCRIPT (ELEMENTS) ---
+// --- FULL INVADERS SCRIPT (ELEMENTS) ---
 const invadersModal = document.getElementById('invadersModal');
 const runInvadersBtn = document.getElementById('runInvadersBtn');
 const invadersModalCloseBtn = document.getElementById('invadersModalCloseBtn');
@@ -37,6 +37,7 @@ const invadersCanvas = document.getElementById('invaders-canvas');
 const invadersCtx = invadersCanvas ? invadersCanvas.getContext('2d') : null;
 const invadersMessageEl = document.getElementById('invaders-message');
 const startInvadersBtn = document.getElementById('startInvadersBtn');
+const invadersScoreEl = document.getElementById('invaders-score');
 
 
 // --- MODAL HANDLING (TETRIS) ---
@@ -118,11 +119,8 @@ if (runInvadersBtn) {
     runInvadersBtn.addEventListener('click', function(e) {
       e.preventDefault();
       invadersModal.style.display = 'flex';
-      if (invadersMessageEl) invadersMessageEl.textContent = "[SYSTEM UNSTABLE. RUNNING...]";
-      // Auto-start the game
-      if (typeof startInvaders === 'function') {
-        startInvaders();
-      }
+      if (invadersMessageEl) invadersMessageEl.textContent = "Press Start!";
+      // DO NOT auto-start, let the user press the button
     });
 }
 
@@ -289,7 +287,7 @@ function drawFrame() {
         highScore = score;
         saveHighScore();
       } else {
-         alert('Game Over! Score: ' + score);
+        alert('Game Over! Score: ' + score);
       }
       return; 
     }
@@ -310,7 +308,7 @@ function drawFrame() {
         for (let x = 0; x < block[0][y].length; x++) {
           if (block[0][y][x] === 1) {
             if (rows[block[2] + y]) {
-               rows[block[2] + y][block[1] + x] = 1;
+                rows[block[2] + y][block[1] + x] = 1;
             }
           }
         }
@@ -408,9 +406,6 @@ function initTetrisGame() {
     // Load high score on script start
     loadHighScore();
 }
-
-// Call init function (will be run by DOMContentLoaded listener in HTML)
-// initTetrisGame(); // Moved to HTML
 
 
 // --- NEON RACER SCRIPT (LOGIC) ---
@@ -735,46 +730,81 @@ function initRacerGame() {
     }
 }
 
-// Call init function (will be run by DOMContentLoaded listener in HTML)
-// initRacerGame(); // Moved to HTML
 
-
-// --- SIMPLE INVADERS SCRIPT (LOGIC) ---
-// Get new/updated elements
-const invadersScoreEl = document.getElementById('invaders-score');
+// --- FULL INVADERS SCRIPT (LOGIC) ---
 
 let invaderState = {
-  player: { x: 140, y: 370, size: 20 },
-  bullet: { x: 0, y: 0, active: false, size: 10 },
+  player: { x: 140, y: 350, width: 20, height: 15, lives: 3 },
+  bullet: { x: 0, y: 0, width: 4, height: 10, active: false },
   enemies: [],
   enemyBullets: [],
+  bunkers: [],
   enemyDirection: 1,
   score: 0,
   gameOver: false,
-  gameLoopId: null
+  gameLoopId: null,
+  dropSpeed: 10,  // Vertical drop speed
+  initialEnemies: 0,
+  enemyMoveTimer: 0, // Timer to control enemy movement speed
+  enemyMoveInterval: 30 // Initial timer value (lower is faster)
 };
 
 function createEnemies() {
   invaderState.enemies = [];
+  const enemyWidth = 20;
+  const enemyHeight = 15;
   for (let r = 0; r < 4; r++) { // 4 rows
     for (let c = 0; c < 8; c++) { // 8 columns
       invaderState.enemies.push({
-        x: 30 + c * 30,
-        y: 30 + r * 30,
-        size: 20,
+        x: 30 + c * (enemyWidth + 10), // 10px padding
+        y: 30 + r * (enemyHeight + 10),
+        width: enemyWidth,
+        height: enemyHeight,
         alive: true
       });
     }
   }
+  invaderState.initialEnemies = invaderState.enemies.length;
 }
 
-// Helper: Simple AABB collision check
-function checkCollision(objA, objB) {
-  return objA.x < objB.x + objB.size &&
-         objA.x + objA.size > objB.x &&
-         objA.y < objB.y + objB.size &&
-         objA.y + objA.size > objB.y;
+function createBunkers() {
+  invaderState.bunkers = [];
+  const bunkerWidth = 4; // 4 blocks wide
+  const bunkerHeight = 3; // 3 blocks high
+  const blockSize = 8;
+  const startX = 30;
+  const bunkerSpacing = (invadersCanvas.width - 60) / 4; // Distribute 4 bunkers
+
+  for (let b = 0; b < 4; b++) {
+    let bunkerX = startX + (b * bunkerSpacing) + (bunkerSpacing / 2) - ((bunkerWidth * blockSize) / 2);
+    for (let r = 0; r < bunkerHeight; r++) {
+      for (let c = 0; c < bunkerWidth; c++) {
+        // Leave a gap in the middle bottom
+        if (r === bunkerHeight - 1 && (c === 1 || c === 2)) continue;
+        
+        invaderState.bunkers.push({
+          x: bunkerX + c * blockSize,
+          y: 300 + r * blockSize,
+          width: blockSize,
+          height: blockSize,
+          alive: true
+        });
+      }
+    }
+  }
 }
+
+
+// Helper: AABB collision check (now with width/height)
+function checkCollision(objA, objB) {
+  if (!objA.alive || !objB.alive) return false; // Ensure both are "collidable"
+  
+  return objA.x < objB.x + objB.width &&
+         objA.x + objA.width > objB.x &&
+         objA.y < objB.y + objB.height &&
+         objA.y + objA.height > objB.y;
+}
+
 
 function updateInvaders() {
   if (invaderState.gameOver || !invadersCanvas) return;
@@ -786,82 +816,121 @@ function updateInvaders() {
     if (state.bullet.y < 0) {
       state.bullet.active = false;
     }
-  }
-
-  // --- Enemy Movement ---
-  let moveDown = false;
-  // Check if any enemy hit the wall
-  for (const enemy of state.enemies) {
-    if (enemy.alive && (enemy.x <= 0 || enemy.x >= invadersCanvas.width - enemy.size)) {
-      moveDown = true;
-      state.enemyDirection *= -1;
-      break;
+    
+    // Check collision with bunkers
+    for (let b = state.bunkers.length - 1; b >= 0; b--) {
+      let bunkerBlock = state.bunkers[b];
+      if (bunkerBlock.alive && checkCollision(state.bullet, bunkerBlock)) {
+        bunkerBlock.alive = false;
+        state.bullet.active = false;
+        break; 
+      }
+    }
+    
+    // Check collision with enemies (only if bullet is still active)
+    if (state.bullet.active) {
+        for (let i = state.enemies.length - 1; i >= 0; i--) {
+          let enemy = state.enemies[i];
+          if (enemy.alive && checkCollision(state.bullet, enemy)) {
+            enemy.alive = false; 
+            state.bullet.active = false;
+            state.score += 10;
+            if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
+            break;
+          }
+        }
     }
   }
-
-  // Update enemy positions
-  state.enemies.forEach(enemy => {
-    if (enemy.alive) {
-      if (moveDown) {
-        // --- MODIFICATION: Slowed down the enemy drop speed ---
-        enemy.y += 10; // Was 25
-      } else {
-        enemy.x += state.enemyDirection * 0.5; // Slower horizontal move
-      }
+  
+  // --- Enemy Movement (Timer-based) ---
+  state.enemyMoveTimer--;
+  if (state.enemyMoveTimer <= 0) {
+      let moveDown = false;
+      let moveStep = 5; // How many pixels to move horizontally
       
-      // Game Over: Enemies reached player
-      if (enemy.y > state.player.y - 10) {
-        if (invadersMessageEl) invadersMessageEl.textContent = "GAME OVER: They reached you!";
-        stopInvaders();
+      // Check if any enemy hit the wall
+      for (const enemy of state.enemies) {
+        if (enemy.alive && 
+           ((state.enemyDirection > 0 && enemy.x + enemy.width >= invadersCanvas.width - 5) ||
+            (state.enemyDirection < 0 && enemy.x <= 5))) {
+          moveDown = true;
+          state.enemyDirection *= -1;
+          moveStep = 0; // Don't move horizontally on the same frame as dropping
+          break;
+        }
       }
-    }
-  });
+
+      // Update enemy positions
+      state.enemies.forEach(enemy => {
+        if (enemy.alive) {
+          if (moveDown) {
+            enemy.y += state.dropSpeed;
+          } else {
+            enemy.x += state.enemyDirection * moveStep;
+          }
+          
+          // Game Over: Enemies reached player
+          if (enemy.y + enemy.height > state.player.y) {
+            if (invadersMessageEl) invadersMessageEl.textContent = "GAME OVER: They reached you!";
+            stopInvaders();
+          }
+        }
+      });
+      
+      // Reset timer based on number of enemies left
+      let aliveCount = state.enemies.filter(e => e.alive).length;
+      let progress = (state.initialEnemies - aliveCount) / state.initialEnemies;
+      // Speed up: starts at 30, goes down to a min of 3
+      state.enemyMoveInterval = Math.max(3, 30 * (1 - progress * 0.9));
+      state.enemyMoveTimer = state.enemyMoveInterval;
+  }
 
   // --- Enemy Shooting ---
-  if (Math.random() > 0.98 && state.enemies.length > 0) {
-    // Pick a random alive enemy to shoot
-    let aliveEnemies = state.enemies.filter(e => e.alive);
-    if (aliveEnemies.length > 0) {
-        let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
-        state.enemyBullets.push({ 
-            x: shooter.x + shooter.size / 2 - 2, // Center the bullet
-            y: shooter.y + shooter.size, 
-            size: 10 
-        });
-    }
+  let aliveEnemies = state.enemies.filter(e => e.alive);
+  if (Math.random() > 0.98 && aliveEnemies.length > 0) {
+    let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
+    state.enemyBullets.push({ 
+        x: shooter.x + shooter.width / 2 - 2, // Center the bullet
+        y: shooter.y + shooter.height, 
+        width: 4,
+        height: 10,
+        alive: true // for collision check
+    });
   }
 
   // Move enemy bullets
   state.enemyBullets = state.enemyBullets.filter(bullet => {
     bullet.y += 3;
-    // Check for collision with player
-    if (checkCollision(bullet, state.player)) {
-      if (invadersMessageEl) invadersMessageEl.textContent = "GAME OVER: You were hit!";
-      stopInvaders();
-      return false; // Remove bullet
-    }
-    return bullet.y < invadersCanvas.height; // Keep if on screen
-  });
-
-  // --- Check Collisions (Player Bullet vs Enemies) ---
-  if (state.bullet.active) {
-    for (let i = state.enemies.length - 1; i >= 0; i--) {
-      let enemy = state.enemies[i];
-      if (enemy.alive && checkCollision(state.bullet, enemy)) {
-        enemy.alive = false; // Mark as dead
-        state.bullet.active = false; // Deactivate bullet
-        state.score += 10;
-        if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
-        break; // Bullet can only hit one enemy
+    
+    // Check for collision with bunkers
+    for (let b = state.bunkers.length - 1; b >= 0; b--) {
+      let bunkerBlock = state.bunkers[b];
+      if (bunkerBlock.alive && checkCollision(bullet, bunkerBlock)) {
+        bunkerBlock.alive = false;
+        return false; // Remove bullet
       }
     }
-  }
+    
+    // Check for collision with player
+    if (checkCollision(bullet, state.player)) {
+      state.player.lives--;
+      if (state.player.lives <= 0) {
+          if (invadersMessageEl) invadersMessageEl.textContent = "GAME OVER: You were hit!";
+          stopInvaders();
+      } else {
+          if (invadersMessageEl) invadersMessageEl.textContent = `HIT! ${state.player.lives} ships remain.`;
+      }
+      return false; // Remove bullet
+    }
+    
+    return bullet.y < invadersCanvas.height; // Keep if on screen
+  });
   
-  // Clean up dead enemies
+  // Clean up dead enemies (do this less often? No, this is fine)
   state.enemies = state.enemies.filter(e => e.alive);
   
   // Win condition (no enemies left)
-  if (state.enemies.length === 0) {
+  if (state.enemies.length === 0 && !state.gameOver) {
       if (invadersMessageEl) invadersMessageEl.textContent = "YOU WIN!";
       stopInvaders();
   }
@@ -871,35 +940,47 @@ function drawInvaders() {
   if (!invadersCtx) return;
   const state = invaderState;
 
-  // --- MODIFICATION: Use a fading clear to create trails ---
-  invadersCtx.fillStyle = 'rgba(0, 0, 0, 0.25)'; // Leaves a 25% "ghost" trail
+  // Use a fading clear to create trails
+  invadersCtx.fillStyle = 'rgba(0, 0, 0, 0.25)';
   invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
-  
-  invadersCtx.font = '20px "Courier New", monospace';
   
   // Draw player
   invadersCtx.fillStyle = '#00FFFF'; // Cyan player
-  invadersCtx.fillText('A', state.player.x, state.player.y + state.player.size);
+  invadersCtx.fillRect(state.player.x, state.player.y, state.player.width, state.player.height);
 
   // Draw player bullet
   if (state.bullet.active) {
     invadersCtx.fillStyle = '#00FFFF'; // Cyan bullet
-    invadersCtx.fillText('|', state.bullet.x, state.bullet.y);
+    invadersCtx.fillRect(state.bullet.x, state.bullet.y, state.bullet.width, state.bullet.height);
   }
+  
+  // Draw Bunkers
+  invadersCtx.fillStyle = '#00FF00'; // Green bunkers
+  state.bunkers.forEach(block => {
+      if (block.alive) {
+          invadersCtx.fillRect(block.x, block.y, block.width, block.height);
+      }
+  });
 
   // Draw enemies
   invadersCtx.fillStyle = '#FF00FF'; // Magenta enemies
   state.enemies.forEach(enemy => {
     if (enemy.alive) {
-      invadersCtx.fillText('W', enemy.x, enemy.y);
+      invadersCtx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
     }
   });
   
   // Draw enemy bullets
   invadersCtx.fillStyle = '#FF0000'; // Red enemy bullets
   state.enemyBullets.forEach(bullet => {
-      invadersCtx.fillText('|', bullet.x, bullet.y);
+      invadersCtx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
   });
+  
+  // Draw Lives
+  invadersCtx.fillStyle = '#00FFFF';
+  for (let i = 0; i < state.player.lives; i++) {
+      invadersCtx.fillRect(10 + i * (state.player.width + 10), 380, state.player.width, state.player.height);
+  }
 }
 
 function invadersGameLoop() {
@@ -913,18 +994,24 @@ function startInvaders() {
   if (invaderState.gameLoopId) {
     stopInvaders(); // Stop any previous loop
   }
+  
   // Reset game state
   invaderState.gameOver = false;
   invaderState.score = 0;
   invaderState.enemyBullets = [];
   invaderState.bullet.active = false;
   invaderState.player.x = 140;
+  invaderState.player.lives = 3;
+  invaderState.enemyDirection = 1;
+  invaderState.enemyMoveTimer = 0;
+  invaderState.enemyMoveInterval = 30;
   
   if (invadersScoreEl) invadersScoreEl.textContent = "Score: 0";
   if (invadersMessageEl) invadersMessageEl.textContent = "Good luck!";
   if (startInvadersBtn) startInvadersBtn.textContent = 'Restart';
   
   createEnemies();
+  createBunkers();
   invaderState.gameLoopId = requestAnimationFrame(invadersGameLoop);
 }
 
@@ -947,18 +1034,19 @@ function handleInvadersKey(event) {
 
   if (event.key === 'ArrowLeft') {
     event.preventDefault();
-    state.player.x = Math.max(0, state.player.x - 15);
+    state.player.x = Math.max(0, state.player.x - 10);
   }
   if (event.key === 'ArrowRight') {
     event.preventDefault();
-    state.player.x = Math.min(invadersCanvas.width - state.player.size, state.player.x + 15);
+    state.player.x = Math.min(invadersCanvas.width - state.player.width, state.player.x + 10);
   }
   if (event.key === ' ' || event.key === 'Spacebar') {
     event.preventDefault();
     if (!state.bullet.active) {
-      state.bullet.x = state.player.x + (state.player.size / 2) - 2; // Center bullet
+      state.bullet.x = state.player.x + (state.player.width / 2) - (state.bullet.width / 2);
       state.bullet.y = state.player.y;
       state.bullet.active = true;
+      state.bullet.alive = true; // for collision check
     }
   }
 }
