@@ -11,7 +11,7 @@ async function sha256(message) {
 // Note: accountStatus values: 'standard', 'advance', 'admin'
 const users = [
   { username: 'admin', hash: '02079b31824a4d18a105f16b9d45e751a114ce5b4ff3d49c6f19633aed25abbc', accountStatus: 'admin', firstName: 'admin' },
-  { username: 'amagee', hash: 'e52a1359297822655226696b53192f9085c5f161d1bda5cbaed8e9ceb64c904b', accountStatus: 'standard', firstName: 'Andrew' },
+  { username: 'amagee', hash: 'e52a1359297822655226696b53192f9085c5f161d1bda5cbaed8e9ceb64c904b', accountStatus: 'admin', firstName: 'Andrew' },
   { username: 'ccarty', hash: 'e3bd890850be9d6ffc4568c23a497e84fc8ed079ed196ce6d978a24a731f1de8', accountStatus: 'standard', firstName: 'Colleen' },
   { username: 'smartinez', hash: 'cfadedad585d18910973603153c102a1ab83edd78886db527315b07d0630281e', accountStatus: 'admin', firstName: 'Santi' },
   { username: 'rtenney', hash: 'd2809be3fe85fcf081294d173edc0580b93d17b8c6df3ccabc8b56d5b4f62714', accountStatus: 'admin', firstName: 'Robert' }
