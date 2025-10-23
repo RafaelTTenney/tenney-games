@@ -268,11 +268,11 @@
       </section>
 
       <section class="card">
-        <h3>Space Invaders</h3>
-        <div class="meta">A "simple" space invaders demo. Warning: Unstable.</div>
-        <pre class="demo">// JS canvas demo, runs in modal
-// Render loop is broken
-// Collision detection... works?</pre>
+        <h3>Simple Invaders</h3>
+        <div class="meta">A "better" but still incomplete arcade shooter.</div>
+        <pre class="demo">// Enemies move, shoot back
+// Includes score and game over
+// No lives, no shields</pre>
         <div class="actions">
           <a class="btn" href="#" id="runInvadersBtn">Run</a>
         </div>
@@ -339,13 +339,18 @@
   <div id="invadersModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Space Invaders</h2>
+        <h2>Simple Invaders</h2>
         <span class="modal-close" id="invadersModalCloseBtn">&times;</span>
       </div>
-      <canvas id="invaders-canvas" width="300" height="400" style="background:#000; border: 2px solid #F0F; box-shadow: inset 0 0 10px #F0F;"></canvas>
-      <p id="invaders-message" style="color:#F0F; min-height: 1.2em; margin: 10px 0;">[SYSTEM UNSTABLE. RUNNING...]</p>
-      <div class="modal-controls">
-        <button id="startInvadersBtn" class="btn">Initialize</button>
+      <canvas id="invaders-canvas" width="300" height="400" style="background:#000; border: 2px solid var(--primary); box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.5);"></canvas>
+      
+      <div style="display: flex; justify-content: space-between; padding: 0 10px; margin-top: 10px;">
+        <p id="invaders-score" style="color:var(--primary); font-weight: 700; margin: 0;">Score: 0</p>
+        <p id="invaders-message" style="color:#eee; min-height: 1.2em; margin: 0;">Press Start!</p>
+      </div>
+
+      <div class="modal-controls" style="margin-top: 15px;">
+        <button id="startInvadersBtn" class="btn">Start</button>
       </div>
     </div>
   </div>
