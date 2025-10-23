@@ -739,19 +739,25 @@ function initRacerGame() {
 // initRacerGame(); // Moved to HTML
 
 
-// --- CORRUPTED INVADERS SCRIPT (LOGIC) ---
+// --- SIMPLE INVADERS SCRIPT (LOGIC) ---
+
+// Get new/updated elements
+const invadersScoreEl = document.getElementById('invaders-score');
 
 let invaderState = {
   player: { x: 140, y: 370, size: 20 },
   bullet: { x: 0, y: 0, active: false, size: 10 },
   enemies: [],
+  enemyBullets: [],
   enemyDirection: 1,
+  score: 0,
+  gameOver: false,
   gameLoopId: null
 };
 
 function createEnemies() {
   invaderState.enemies = [];
-  for (let r = 0; r < 3; r++) { // 3 rows
+  for (let r = 0; r < 4; r++) { // 4 rows
     for (let c = 0; c < 8; c++) { // 8 columns
       invaderState.enemies.push({
         x: 30 + c * 30,
@@ -763,11 +769,20 @@ function createEnemies() {
   }
 }
 
+// Helper: Simple AABB collision check
+function checkCollision(objA, objB) {
+  return objA.x < objB.x + objB.size &&
+         objA.x + objA.size > objB.x &&
+         objA.y < objB.y + objB.size &&
+         objA.y + objA.size > objB.y;
+}
+
+
 function updateInvaders() {
-  if (!invadersCanvas) return;
+  if (invaderState.gameOver || !invadersCanvas) return;
   const state = invaderState;
 
-  // Move bullet
+  // --- Player Bullet ---
   if (state.bullet.active) {
     state.bullet.y -= 7;
     if (state.bullet.y < 0) {
@@ -775,77 +790,121 @@ function updateInvaders() {
     }
   }
 
-  // --- Glitchy Enemy Movement ---
+  // --- Enemy Movement ---
   let moveDown = false;
-  // Jerky horizontal direction change
-  if (Math.random() > 0.98) { 
-    state.enemyDirection *= -1;
-  }
-  // Randomly decide to move down
-  if (Math.random() > 0.99) {
-    moveDown = true;
+  // Check if any enemy hit the wall
+  for (const enemy of state.enemies) {
+    if (enemy.alive && (enemy.x <= 0 || enemy.x >= invadersCanvas.width - enemy.size)) {
+      moveDown = true;
+      state.enemyDirection *= -1;
+      break;
+    }
   }
 
-  // Move enemies and check for "hits"
+  // Update enemy positions
   state.enemies.forEach(enemy => {
     if (enemy.alive) {
-      enemy.x += state.enemyDirection * 0.3; // Very slow, jerky horizontal
       if (moveDown) {
         enemy.y += 10;
+      } else {
+        enemy.x += state.enemyDirection * 0.5; // Slower horizontal move
       }
-
-      // Simple collision
-      if (state.bullet.active &&
-          state.bullet.x > enemy.x && 
-          state.bullet.x < enemy.x + enemy.size &&
-          state.bullet.y > enemy.y &&
-          state.bullet.y < enemy.y + enemy.size) 
-      {
-        state.bullet.active = false;
-        // --- Not Fully Functioning Part ---
-        // Instead of destroying, just "corrupt" it
-        enemy.alive = false; 
+      
+      // Game Over: Enemies reached player
+      if (enemy.y > state.player.y - 10) {
+        if (invadersMessageEl) invadersMessageEl.textContent = "GAME OVER: They reached you!";
+        stopInvaders();
       }
     }
   });
+
+  // --- Enemy Shooting ---
+  if (Math.random() > 0.98 && state.enemies.length > 0) {
+    // Pick a random alive enemy to shoot
+    let aliveEnemies = state.enemies.filter(e => e.alive);
+    if (aliveEnemies.length > 0) {
+        let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
+        state.enemyBullets.push({ 
+            x: shooter.x + shooter.size / 2 - 2, // Center the bullet
+            y: shooter.y + shooter.size, 
+            size: 10 
+        });
+    }
+  }
+
+  // Move enemy bullets
+  state.enemyBullets = state.enemyBullets.filter(bullet => {
+    bullet.y += 3;
+    // Check for collision with player
+    if (checkCollision(bullet, state.player)) {
+      if (invadersMessageEl) invadersMessageEl.textContent = "GAME OVER: You were hit!";
+      stopInvaders();
+      return false; // Remove bullet
+    }
+    return bullet.y < invadersCanvas.height; // Keep if on screen
+  });
+
+  // --- Check Collisions (Player Bullet vs Enemies) ---
+  if (state.bullet.active) {
+    for (let i = state.enemies.length - 1; i >= 0; i--) {
+      let enemy = state.enemies[i];
+      if (enemy.alive && checkCollision(state.bullet, enemy)) {
+        enemy.alive = false; // Mark as dead
+        state.bullet.active = false; // Deactivate bullet
+        state.score += 10;
+        if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
+        break; // Bullet can only hit one enemy
+      }
+    }
+  }
+  
+  // Clean up dead enemies
+  state.enemies = state.enemies.filter(e => e.alive);
+  
+  // Win condition (no enemies left)
+  if (state.enemies.length === 0) {
+      if (invadersMessageEl) invadersMessageEl.textContent = "YOU WIN!";
+      stopInvaders();
+  }
 }
 
 function drawInvaders() {
   if (!invadersCtx) return;
   const state = invaderState;
 
-  // --- Glitchy Render ---
-  // Don't clear the screen fully, leave a "ghost" trail
-  invadersCtx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  // Proper clear of the screen
+  invadersCtx.fillStyle = '#000';
   invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
   
   invadersCtx.font = '20px "Courier New", monospace';
   
   // Draw player
-  invadersCtx.fillStyle = '#00FF00'; // Green player
-  invadersCtx.fillText('^', state.player.x, state.player.y);
+  invadersCtx.fillStyle = '#00FFFF'; // Cyan player
+  invadersCtx.fillText('A', state.player.x, state.player.y + state.player.size);
 
-  // Draw bullet
+  // Draw player bullet
   if (state.bullet.active) {
-    invadersCtx.fillStyle = '#00FFFF'; // Cyan bullet
-    invadersCtx.fillText('|', state.bullet.x, state.bullet.y);
+    invadersCtx.fillStyle = '#00FF00'; // Green bullet
+    invadersCtx.fillRect(state.bullet.x, state.bullet.y, 4, 10);
   }
 
   // Draw enemies
+  invadersCtx.fillStyle = '#FF00FF'; // Magenta enemies
   state.enemies.forEach(enemy => {
     if (enemy.alive) {
-      invadersCtx.fillStyle = '#FF0000'; // Red enemies
-      invadersCtx.fillText('[o]', enemy.x, enemy.y);
-    } else {
-      // --- Glitchy Part ---
-      // Draw the "corrupted" enemy
-      invadersCtx.fillStyle = '#555555'; // Dead grey
-      invadersCtx.fillText('X', enemy.x, enemy.y);
+      invadersCtx.fillText('W', enemy.x, enemy.y);
     }
+  });
+  
+  // Draw enemy bullets
+  invadersCtx.fillStyle = '#FF0000'; // Red enemy bullets
+  state.enemyBullets.forEach(bullet => {
+      invadersCtx.fillText('v', bullet.x, bullet.y);
   });
 }
 
 function invadersGameLoop() {
+  if (invaderState.gameOver) return;
   updateInvaders();
   drawInvaders();
   invaderState.gameLoopId = requestAnimationFrame(invadersGameLoop);
@@ -855,22 +914,28 @@ function startInvaders() {
   if (invaderState.gameLoopId) {
     stopInvaders(); // Stop any previous loop
   }
-  createEnemies();
+  // Reset game state
+  invaderState.gameOver = false;
+  invaderState.score = 0;
+  invaderState.enemyBullets = [];
+  invaderState.bullet.active = false;
+  invaderState.player.x = 140;
+  
+  if (invadersScoreEl) invadersScoreEl.textContent = "Score: 0";
+  if (invadersMessageEl) invadersMessageEl.textContent = "Good luck!";
   if (startInvadersBtn) startInvadersBtn.textContent = 'Restart';
+  
+  createEnemies();
   invaderState.gameLoopId = requestAnimationFrame(invadersGameLoop);
 }
 
 function stopInvaders() {
+  invaderState.gameOver = true;
   if (invaderState.gameLoopId) {
     cancelAnimationFrame(invaderState.gameLoopId);
     invaderState.gameLoopId = null;
   }
-  if (startInvadersBtn) startInvadersBtn.textContent = 'Initialize';
-  // Clear canvas to black
-  if (invadersCtx) {
-    invadersCtx.fillStyle = '#000';
-    invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
-  }
+  if (startInvadersBtn) startInvadersBtn.textContent = 'Start';
 }
 
 function handleInvadersKey(event) {
@@ -879,19 +944,21 @@ function handleInvadersKey(event) {
 
   const state = invaderState;
   
+  if (state.gameOver) return; // Don't move if game is over
+
   if (event.key === 'ArrowLeft') {
     event.preventDefault();
     state.player.x = Math.max(0, state.player.x - 15);
   }
   if (event.key === 'ArrowRight') {
     event.preventDefault();
-    state.player.x = Math.min(invadersCanvas.width - 20, state.player.x + 15);
+    state.player.x = Math.min(invadersCanvas.width - state.player.size, state.player.x + 15);
   }
   if (event.key === ' ' || event.key === 'Spacebar') {
     event.preventDefault();
     if (!state.bullet.active) {
-      state.bullet.x = state.player.x + 6; // Center bullet
-      state.bullet.y = state.player.y - 10;
+      state.bullet.x = state.player.x + (state.player.size / 2) - 2; // Center bullet
+      state.bullet.y = state.player.y;
       state.bullet.active = true;
     }
   }
@@ -915,8 +982,3 @@ function initInvadersGame() {
         invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
     }
 }
-
-// Call init functions (moved to HTML DOMContentLoaded)
-// initTetrisGame();
-// initRacerGame();
-// initInvadersGame();
