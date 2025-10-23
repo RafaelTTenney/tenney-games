@@ -326,7 +326,7 @@ function drawFrame() {
           
           score += 10;
           
-          let newLevel = Math.floor(score / 100); // 100 points per level
+          let newLevel = Math.floor(score / 50); //potentially 100 points per level
           if (newLevel > currentLevel) {
               currentLevel = newLevel;
               console.log("Level up! Now on level " + currentLevel);
