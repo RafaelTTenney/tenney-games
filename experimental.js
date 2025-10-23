@@ -176,7 +176,8 @@ const colorPalettes = [
   { fill: '#FF00FF', stroke: '#FF33FF', shadow: '#FF00FF' }, // Level 1 (Magenta)
   { fill: '#00FF00', stroke: '#33FF33', shadow: '#00FF00' }, // Level 2 (Lime)
   { fill: '#FFA500', stroke: '#FFB733', shadow: '#FFA500' }, // Level 3 (Orange)
-  { fill: '#FFFF00', stroke: '#FFFF33', shadow: '#FFFF00' }  // Level 4 (Yellow)
+  { fill: '#FFFF00', stroke: '#FFFF33', shadow: '#FFFF00' }, // Level 4 (Yellow)
+  { fill: '#9D00FF', stroke: '#8C00E6', shadow: '#9D00FF' }  // Level 5 (Purple)
 ];
 
 // Block types
@@ -191,7 +192,8 @@ const all_blocks = {
   7: [[0, 1, 0], [1, 1, 1], [0, 1, 0]],
   8: [[1, 0, 1], [1, 1, 1], [0, 0, 0]],
   9: [[1, 0, 0], [1, 1, 1], [0, 0, 1]],
-  10: [[1, 1, 1], [0, 1, 0], [0, 1, 0]] // New piece for Level 4
+  10: [[0, 0, 1], [1, 1, 1], [1, 0, 0]] 
+  11: [[1, 1, 1], [0, 1, 0], [0, 1, 0]], 
 };
 
 function start() {
@@ -273,7 +275,7 @@ function drawFrame() {
   
   if (!block) {
     let blockPoolSize = 7 + currentLevel; 
-    if (blockPoolSize > 11) blockPoolSize = 11; // Cap is 11 (0-10)
+    if (blockPoolSize > 12) blockPoolSize = 12; // Cap is 12 (0-11)
     
     let newBlockIndex = Math.floor(Math.random() * blockPoolSize);
     block = [all_blocks[newBlockIndex], 4, 0];
