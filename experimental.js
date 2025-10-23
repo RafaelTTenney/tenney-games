@@ -740,7 +740,6 @@ function initRacerGame() {
 
 
 // --- SIMPLE INVADERS SCRIPT (LOGIC) ---
-
 // Get new/updated elements
 const invadersScoreEl = document.getElementById('invaders-score');
 
@@ -777,7 +776,6 @@ function checkCollision(objA, objB) {
          objA.y + objA.size > objB.y;
 }
 
-
 function updateInvaders() {
   if (invaderState.gameOver || !invadersCanvas) return;
   const state = invaderState;
@@ -805,7 +803,8 @@ function updateInvaders() {
   state.enemies.forEach(enemy => {
     if (enemy.alive) {
       if (moveDown) {
-        enemy.y += 25; // Dropping speed
+        // --- MODIFICATION: Slowed down the enemy drop speed ---
+        enemy.y += 10; // Was 25
       } else {
         enemy.x += state.enemyDirection * 0.5; // Slower horizontal move
       }
@@ -872,8 +871,8 @@ function drawInvaders() {
   if (!invadersCtx) return;
   const state = invaderState;
 
-  // Proper clear of the screen
-  invadersCtx.fillStyle = '#000';
+  // --- MODIFICATION: Use a fading clear to create trails ---
+  invadersCtx.fillStyle = 'rgba(0, 0, 0, 0.25)'; // Leaves a 25% "ghost" trail
   invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
   
   invadersCtx.font = '20px "Courier New", monospace';
@@ -884,7 +883,6 @@ function drawInvaders() {
 
   // Draw player bullet
   if (state.bullet.active) {
-    // --- MODIFICATION: Set player bullet to Cyan ---
     invadersCtx.fillStyle = '#00FFFF'; // Cyan bullet
     invadersCtx.fillText('|', state.bullet.x, state.bullet.y);
   }
