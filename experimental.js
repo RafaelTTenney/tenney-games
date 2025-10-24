@@ -821,7 +821,7 @@ function updateInvaders() {
 
   // --- Player Bullet ---
   if (state.bullet.active) {
-    state.bullet.y -= 7;
+    state.bullet.y -= 12;
     if (state.bullet.y < 0) {
       state.bullet.active = false;
       state.bullet.alive = false;
