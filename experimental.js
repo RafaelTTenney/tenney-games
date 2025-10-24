@@ -732,39 +732,48 @@ function initRacerGame() {
 
 
 // --- FULL INVADERS SCRIPT (LOGIC) ---
+// --- [MODIFIED FOR LEVELS, UFO, AND NEW LOSE CONDITION] ---
 
 let invaderState = {
-  player: { x: 140, y: 350, width: 20, height: 15, lives: 3 },
-  bullet: { x: 0, y: 0, width: 4, height: 10, active: false },
+  player: { x: 140, y: 350, width: 20, height: 15, lives: 3, alive: true },
+  bullet: { x: 0, y: 0, width: 4, height: 10, active: false, alive: false },
   enemies: [],
   enemyBullets: [],
   bunkers: [],
+  mysteryShip: { x: 0, y: 20, width: 25, height: 12, active: false, direction: 1, alive: false },
   enemyDirection: 1,
   score: 0,
+  level: 1,
   gameOver: false,
   gameLoopId: null,
-  dropSpeed: 10,  // Vertical drop speed
+  dropSpeed: 10,
   initialEnemies: 0,
-  enemyMoveTimer: 0, // Timer to control enemy movement speed
+  enemyMoveTimer: 0,
   enemyMoveInterval: 30 // Initial timer value (lower is faster)
 };
 
 function createEnemies() {
-  invaderState.enemies = [];
+  const state = invaderState;
+  state.enemies = [];
   const enemyWidth = 20;
   const enemyHeight = 15;
+  
+  // NEW: Enemies start lower based on level
+  let startY = 30 + (state.level - 1) * 10;
+  startY = Math.min(startY, 150); // Cap starting height so they don't spawn too low
+
   for (let r = 0; r < 4; r++) { // 4 rows
     for (let c = 0; c < 8; c++) { // 8 columns
-      invaderState.enemies.push({
+      state.enemies.push({
         x: 30 + c * (enemyWidth + 10), // 10px padding
-        y: 30 + r * (enemyHeight + 10),
+        y: startY + r * (enemyHeight + 10),
         width: enemyWidth,
         height: enemyHeight,
         alive: true
       });
     }
   }
-  invaderState.initialEnemies = invaderState.enemies.length;
+  state.initialEnemies = state.enemies.length;
 }
 
 function createBunkers() {
@@ -815,6 +824,7 @@ function updateInvaders() {
     state.bullet.y -= 7;
     if (state.bullet.y < 0) {
       state.bullet.active = false;
+      state.bullet.alive = false;
     }
     
     // Check collision with bunkers
@@ -823,6 +833,7 @@ function updateInvaders() {
       if (bunkerBlock.alive && checkCollision(state.bullet, bunkerBlock)) {
         bunkerBlock.alive = false;
         state.bullet.active = false;
+        state.bullet.alive = false;
         break; 
       }
     }
@@ -834,10 +845,24 @@ function updateInvaders() {
           if (enemy.alive && checkCollision(state.bullet, enemy)) {
             enemy.alive = false; 
             state.bullet.active = false;
+            state.bullet.alive = false;
             state.score += 10;
             if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
             break;
           }
+        }
+    }
+    
+    // NEW: Check collision with Mystery Ship
+    if (state.bullet.active && state.mysteryShip.active) {
+        if (checkCollision(state.bullet, state.mysteryShip)) {
+            state.mysteryShip.active = false;
+            state.mysteryShip.alive = false;
+            state.bullet.active = false;
+            state.bullet.alive = false;
+            let bonus = (Math.floor(Math.random() * 3) + 1) * 50; // 50, 100, or 150
+            state.score += bonus;
+            if (invadersMessageEl) invadersMessageEl.textContent = `+${bonus} POINTS!`;
         }
     }
   }
@@ -848,11 +873,12 @@ function updateInvaders() {
       let moveDown = false;
       let moveStep = 5; // How many pixels to move horizontally
       
+      let aliveEnemies = state.enemies.filter(e => e.alive);
+      
       // Check if any enemy hit the wall
-      for (const enemy of state.enemies) {
-        if (enemy.alive && 
-           ((state.enemyDirection > 0 && enemy.x + enemy.width >= invadersCanvas.width - 5) ||
-            (state.enemyDirection < 0 && enemy.x <= 5))) {
+      for (const enemy of aliveEnemies) {
+        if ((state.enemyDirection > 0 && enemy.x + enemy.width >= invadersCanvas.width - 5) ||
+            (state.enemyDirection < 0 && enemy.x <= 5)) {
           moveDown = true;
           state.enemyDirection *= -1;
           moveStep = 0; // Don't move horizontally on the same frame as dropping
@@ -861,8 +887,7 @@ function updateInvaders() {
       }
 
       // Update enemy positions
-      state.enemies.forEach(enemy => {
-        if (enemy.alive) {
+      aliveEnemies.forEach(enemy => {
           if (moveDown) {
             enemy.y += state.dropSpeed;
           } else {
@@ -871,23 +896,43 @@ function updateInvaders() {
           
           // Game Over: Enemies reached player
           if (enemy.y + enemy.height > state.player.y) {
-            if (invadersMessageEl) invadersMessageEl.textContent = "GAME OVER: They reached you!";
-            stopInvaders();
+            stopInvaders("GAME OVER: They reached you!");
           }
-        }
       });
       
       // Reset timer based on number of enemies left
-      let aliveCount = state.enemies.filter(e => e.alive).length;
-      let progress = (state.initialEnemies - aliveCount) / state.initialEnemies;
-      // Speed up: starts at 30, goes down to a min of 3
-      state.enemyMoveInterval = Math.max(3, 30 * (1 - progress * 0.9));
+      let progress = (state.initialEnemies - aliveEnemies.length) / state.initialEnemies;
+      // Speed up: starts at initial val, goes down to a min of 3
+      state.enemyMoveInterval = Math.max(3, (30 - (state.level - 1) * 2) * (1 - progress * 0.9));
       state.enemyMoveTimer = state.enemyMoveInterval;
+  }
+
+  // --- NEW: Mystery Ship (UFO) Logic ---
+  if (!state.mysteryShip.active && Math.random() > 0.998) {
+      state.mysteryShip.active = true;
+      state.mysteryShip.alive = true;
+      // Start from left or right
+      if (Math.random() > 0.5) {
+          state.mysteryShip.x = -state.mysteryShip.width;
+          state.mysteryShip.direction = 1;
+      } else {
+          state.mysteryShip.x = invadersCanvas.width;
+          state.mysteryShip.direction = -1;
+      }
+  }
+  
+  if (state.mysteryShip.active) {
+      state.mysteryShip.x += state.mysteryShip.direction * 1.5; // UFO speed
+      // Deactivate if off-screen
+      if (state.mysteryShip.x > invadersCanvas.width || state.mysteryShip.x < -state.mysteryShip.width) {
+          state.mysteryShip.active = false;
+          state.mysteryShip.alive = false;
+      }
   }
 
   // --- Enemy Shooting ---
   let aliveEnemies = state.enemies.filter(e => e.alive);
-  if (Math.random() > 0.98 && aliveEnemies.length > 0) {
+  if (Math.random() > (0.98 - (state.level * 0.01)) && aliveEnemies.length > 0) { // Shoot more often on higher levels
     let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
     state.enemyBullets.push({ 
         x: shooter.x + shooter.width / 2 - 2, // Center the bullet
@@ -914,9 +959,10 @@ function updateInvaders() {
     // Check for collision with player
     if (checkCollision(bullet, state.player)) {
       state.player.lives--;
+      if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`; // Update score to show lives
       if (state.player.lives <= 0) {
-          if (invadersMessageEl) invadersMessageEl.textContent = "GAME OVER: You were hit!";
-          stopInvaders();
+          state.player.alive = false; // Player is dead
+          stopInvaders("GAME OVER: You were hit!");
       } else {
           if (invadersMessageEl) invadersMessageEl.textContent = `HIT! ${state.player.lives} ships remain.`;
       }
@@ -926,13 +972,14 @@ function updateInvaders() {
     return bullet.y < invadersCanvas.height; // Keep if on screen
   });
   
-  // Clean up dead enemies (do this less often? No, this is fine)
-  state.enemies = state.enemies.filter(e => e.alive);
+  // NEW: Check for "Bases Destroyed" lose condition
+  if (state.bunkers.length > 0 && state.bunkers.filter(b => b.alive).length === 0) {
+      stopInvaders("GAME OVER: Bases destroyed!");
+  }
   
-  // Win condition (no enemies left)
-  if (state.enemies.length === 0 && !state.gameOver) {
-      if (invadersMessageEl) invadersMessageEl.textContent = "YOU WIN!";
-      stopInvaders();
+  // NEW: Check for Level Win
+  if (aliveEnemies.length === 0 && !state.gameOver) {
+      startNextLevel();
   }
 }
 
@@ -945,8 +992,10 @@ function drawInvaders() {
   invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
   
   // Draw player
-  invadersCtx.fillStyle = '#00FFFF'; // Cyan player
-  invadersCtx.fillRect(state.player.x, state.player.y, state.player.width, state.player.height);
+  if (state.player.alive) {
+    invadersCtx.fillStyle = '#00FFFF'; // Cyan player
+    invadersCtx.fillRect(state.player.x, state.player.y, state.player.width, state.player.height);
+  }
 
   // Draw player bullet
   if (state.bullet.active) {
@@ -970,6 +1019,12 @@ function drawInvaders() {
     }
   });
   
+  // Draw NEW Mystery Ship
+  if (state.mysteryShip.active) {
+      invadersCtx.fillStyle = '#FF0000'; // Red UFO
+      invadersCtx.fillRect(state.mysteryShip.x, state.mysteryShip.y, state.mysteryShip.width, state.mysteryShip.height);
+  }
+  
   // Draw enemy bullets
   invadersCtx.fillStyle = '#FF0000'; // Red enemy bullets
   state.enemyBullets.forEach(bullet => {
@@ -981,6 +1036,11 @@ function drawInvaders() {
   for (let i = 0; i < state.player.lives; i++) {
       invadersCtx.fillRect(10 + i * (state.player.width + 10), 380, state.player.width, state.player.height);
   }
+  
+  // Draw Level
+  invadersCtx.font = '14px "Courier New", monospace';
+  invadersCtx.fillStyle = '#888';
+  invadersCtx.fillText(`Level: ${state.level}`, invadersCanvas.width - 70, 390);
 }
 
 function invadersGameLoop() {
@@ -990,21 +1050,45 @@ function invadersGameLoop() {
   invaderState.gameLoopId = requestAnimationFrame(invadersGameLoop);
 }
 
+function startNextLevel() {
+    const state = invaderState;
+    state.level++;
+    if (invadersMessageEl) invadersMessageEl.textContent = `Level ${state.level}!`;
+    
+    // Reset bullets
+    state.enemyBullets = [];
+    state.bullet.active = false;
+    state.bullet.alive = false;
+    
+    // Set new speed based on level, capped at a minimum of 5
+    state.enemyMoveInterval = Math.max(5, 30 - (state.level - 1) * 2); 
+    state.enemyMoveTimer = state.enemyMoveInterval;
+    
+    createEnemies(); // Will spawn lower based on new level
+    createBunkers(); // Respawn bunkers
+}
+
 function startInvaders() {
   if (invaderState.gameLoopId) {
-    stopInvaders(); // Stop any previous loop
+    cancelAnimationFrame(invaderState.gameLoopId);
+    invaderState.gameLoopId = null;
   }
   
   // Reset game state
   invaderState.gameOver = false;
   invaderState.score = 0;
+  invaderState.level = 1;
   invaderState.enemyBullets = [];
   invaderState.bullet.active = false;
+  invaderState.bullet.alive = false;
   invaderState.player.x = 140;
   invaderState.player.lives = 3;
+  invaderState.player.alive = true;
   invaderState.enemyDirection = 1;
   invaderState.enemyMoveTimer = 0;
-  invaderState.enemyMoveInterval = 30;
+  invaderState.enemyMoveInterval = 30; // Reset to level 1 speed
+  invaderState.mysteryShip.active = false;
+  invaderState.mysteryShip.alive = false;
   
   if (invadersScoreEl) invadersScoreEl.textContent = "Score: 0";
   if (invadersMessageEl) invadersMessageEl.textContent = "Good luck!";
@@ -1015,12 +1099,13 @@ function startInvaders() {
   invaderState.gameLoopId = requestAnimationFrame(invadersGameLoop);
 }
 
-function stopInvaders() {
+function stopInvaders(message = "GAME OVER") {
   invaderState.gameOver = true;
   if (invaderState.gameLoopId) {
     cancelAnimationFrame(invaderState.gameLoopId);
     invaderState.gameLoopId = null;
   }
+  if (invadersMessageEl) invadersMessageEl.textContent = message;
   if (startInvadersBtn) startInvadersBtn.textContent = 'Start';
 }
 
@@ -1030,7 +1115,23 @@ function handleInvadersKey(event) {
 
   const state = invaderState;
   
-  if (state.gameOver) return; // Don't move if game is over
+  // Allow shooting even if game is over (to restart)
+  if (event.key === ' ' || event.key === 'Spacebar') {
+      event.preventDefault();
+      if (state.gameOver) {
+          startInvaders(); // Restart game on spacebar if game is over
+          return;
+      }
+      
+      if (!state.bullet.active && state.player.alive) {
+        state.bullet.x = state.player.x + (state.player.width / 2) - (state.bullet.width / 2);
+        state.bullet.y = state.player.y;
+        state.bullet.active = true;
+        state.bullet.alive = true; // for collision check
+      }
+  }
+
+  if (state.gameOver || !state.player.alive) return; // Don't move if game is over or player is dead
 
   if (event.key === 'ArrowLeft') {
     event.preventDefault();
@@ -1039,15 +1140,6 @@ function handleInvadersKey(event) {
   if (event.key === 'ArrowRight') {
     event.preventDefault();
     state.player.x = Math.min(invadersCanvas.width - state.player.width, state.player.x + 10);
-  }
-  if (event.key === ' ' || event.key === 'Spacebar') {
-    event.preventDefault();
-    if (!state.bullet.active) {
-      state.bullet.x = state.player.x + (state.player.width / 2) - (state.bullet.width / 2);
-      state.bullet.y = state.player.y;
-      state.bullet.active = true;
-      state.bullet.alive = true; // for collision check
-    }
   }
 }
 
