@@ -5,25 +5,35 @@
   <title>Admin Panel | Games & Programs</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    :root { --primary:#3366cc; --muted:#666; --bg:#f6f8fb; --card:#fff; }
+    :root { --primary:#3366cc; --muted:#666; --bg:#f6f8fb; --card:#fff; --border:#e6eefc; }
     body { background:var(--bg); font-family: Roboto, Arial, sans-serif; margin:0; padding:0; }
     header { background:var(--primary); color:#fff; padding:12px 16px; text-align:center; font-weight:700; }
-    .container { max-width:980px; margin:24px auto; background:var(--card); padding:12px; border-radius:8px; box-shadow:0 8px 24px rgba(51,102,204,0.08); }
+    .container { max-width:1100px; margin:24px auto; background:var(--card); padding:16px; border-radius:10px; box-shadow:0 8px 24px rgba(51,102,204,0.08); }
+    h2 { color:var(--primary); margin-bottom:8px; }
     table { width:100%; border-collapse: collapse; margin-top:12px; }
-    th, td { text-align:left; padding:8px; border-bottom:1px solid #e6eefc; color:#254a99; }
+    th, td { text-align:left; padding:8px; border-bottom:1px solid var(--border); color:#254a99; }
     select { padding:6px; border-radius:6px; border:1px solid #99ccff; background:#e6f0ff; }
-    .btn { background:var(--primary); color:#fff; padding:8px 10px; border-radius:6px; border:none; font-weight:700; }
+    .btn { background:var(--primary); color:#fff; padding:8px 10px; border-radius:6px; border:none; font-weight:700; cursor:pointer; }
     .help { color:var(--muted); font-size:0.95em; }
+    .panel { margin-top:24px; padding:12px; border-radius:10px; border:1px solid var(--border); background:#fdfdff; }
+    .message-card { border:1px solid var(--border); border-radius:8px; padding:10px; margin-top:10px; background:#fff; }
+    .message-card h4 { margin:0 0 6px 0; color:var(--primary); }
+    .message-meta { color:var(--muted); font-size:0.9em; margin-bottom:6px; }
+    .message-body { color:#254a99; white-space:pre-wrap; }
+    .status-pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:0.85em; margin-left:6px; }
+    .status-new { background:#ffeaa7; color:#8e5b00; }
+    .status-closed { background:#c8e6c9; color:#1b5e20; }
+    .actions { margin-top:8px; display:flex; gap:8px; }
   </style>
 </head>
 <body>
   <header>Admin Panel</header>
 
   <div class="container">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap; gap:12px;">
       <div>
-        <h2 style="margin:0;color:var(--primary);">Account Monitor</h2>
-        <div class="help">View and manage account statuses. Changes are saved to your browser (localStorage) for demo/testing. To persist server-side, implement a backend API.</div>
+        <h2 style="margin:0;">Account Monitor</h2>
+        <div class="help">Review all registered profiles and change their access level.</div>
       </div>
       <div>
         <a class="btn" href="loggedIn.html">Dashboard</a>
@@ -32,76 +42,147 @@
 
     <table id="usersTable" aria-live="polite">
       <thead>
-        <tr><th>Username</th><th>Current status</th><th>Change to</th><th>Action</th></tr>
+        <tr><th>Name</th><th>Username</th><th>Email</th><th>Current status</th><th>Change to</th><th>Action</th></tr>
       </thead>
       <tbody></tbody>
     </table>
 
-    <div style="margin-top:12px;color:var(--muted);">Note: This admin panel updates a client-side override map stored under <code>accountStatusOverrides</code> in localStorage. To make permanent across users, wire these changes to your server.</div>
+    <div class="panel">
+      <h2 style="margin-top:0;">Messages for Admins</h2>
+      <div class="help">Feedback from preview builds, upgrade requests, and other forms appears here. Mark items as handled when you're done.</div>
+      <div id="messagesList"></div>
+    </div>
   </div>
 
   <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a></footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="supabase-client.js"></script>
   <script src="login.js"></script>
   <script>
-    // Admin-only page to view and change account statuses
-    document.addEventListener('DOMContentLoaded', function() {
-      if (!enforcePageAccess('admin.html')) return;
-      // Load base user list from login.js 'users' variable accessible globally
-      // If not accessible, we'll show the currently-logged-in user as fallback
-      const tbody = document.querySelector('#usersTable tbody');
-
-      // build display list using 'users' array if present, otherwise fallback
-      const baseUsers = (typeof users !== 'undefined' && Array.isArray(users)) ? users : [{ username: localStorage.getItem('username') || 'unknown', accountStatus: getAccountStatus() }];
-
-      function render() {
-        tbody.innerHTML = '';
-        // Use copy to ensure stable iteration
-        baseUsers.forEach(u => {
-          const tr = document.createElement('tr');
-          const currentStatus = (function() {
-            // Show override if present
-            const overridesRaw = localStorage.getItem('accountStatusOverrides');
-            if (overridesRaw) {
-              try {
-                const overrides = JSON.parse(overridesRaw);
-                if (overrides && overrides[u.username]) return overrides[u.username];
-              } catch (e) {}
-            }
-            return u.accountStatus || 'standard';
-          })();
-          tr.innerHTML = `
-            <td>${u.username}</td>
-            <td>${currentStatus}</td>
-            <td>
-              <select data-user="${u.username}">
-                <option value="standard" ${currentStatus==='standard'?'selected':''}>Standard</option>
-                <option value="advance" ${currentStatus==='advance'?'selected':''}>Advance</option>
-                <option value="admin" ${currentStatus==='admin'?'selected':''}>Admin</option>
-              </select>
-            </td>
-            <td><button class="btn apply" data-user="${u.username}">Apply</button></td>
-          `;
-          tbody.appendChild(tr);
-        });
-        // Bind buttons
-        document.querySelectorAll('button.apply').forEach(btn => {
-          btn.onclick = () => {
-            const uname = btn.dataset.user;
-            const sel = document.querySelector(`select[data-user="${uname}"]`);
-            const newStatus = sel.value;
-            const ok = adminSetAccountStatusOverride(uname, newStatus);
-            if (ok) {
-              alert(`Status for ${uname} set to ${newStatus} (saved locally).`);
-              render();
-            } else {
-              alert('Error saving the status. Check console for details.');
-            }
-          };
-        });
+    function escapeHtml(str) {
+      return (str || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c] || c));
+    }
+    async function loadProfiles() {
+      const { data, error } = await window.supabaseClient
+        .from('profiles')
+        .select('id, username, first_name, last_name, email, account_status')
+        .order('username');
+      if (error) {
+        console.error('Error loading profiles', error);
+        alert('Could not load profiles. Check console for details.');
+        return [];
       }
+      return data || [];
+    }
 
-      render();
+    async function loadMessages() {
+      const { data, error } = await window.supabaseClient
+        .from('messages')
+        .select('id, type, title, body, username, status, created_at')
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error('Error loading messages', error);
+        return [];
+      }
+      return data || [];
+    }
+
+    async function markMessageClosed(id) {
+      const { error } = await window.supabaseClient
+        .from('messages')
+        .update({ status: 'closed' })
+        .eq('id', id);
+      if (error) {
+        console.error('Error updating message', error);
+        alert('Could not update message.');
+      }
+    }
+
+    function renderProfiles(rows) {
+      const tbody = document.querySelector('#usersTable tbody');
+      tbody.innerHTML = '';
+      rows.forEach(row => {
+        const tr = document.createElement('tr');
+        const fullName = `${row.first_name || ''} ${row.last_name || ''}`.trim() || '—';
+        tr.innerHTML = `
+          <td>${fullName}</td>
+          <td>${row.username || '—'}</td>
+          <td>${row.email || '—'}</td>
+          <td>${(row.account_status || 'standard').toUpperCase()}</td>
+          <td>
+            <select data-user="${row.id}">
+              <option value="standard" ${row.account_status === 'standard' ? 'selected' : ''}>Standard</option>
+              <option value="advance" ${row.account_status === 'advance' ? 'selected' : ''}>Advance</option>
+              <option value="admin" ${row.account_status === 'admin' ? 'selected' : ''}>Admin</option>
+            </select>
+          </td>
+          <td><button class="btn apply" data-user="${row.id}">Apply</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.querySelectorAll('button.apply').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const userId = btn.dataset.user;
+          const select = document.querySelector(`select[data-user="${userId}"]`);
+          const newStatus = select.value;
+          try {
+            await authHelpers.updateAccountStatusForUser(userId, newStatus);
+            alert(`Status updated to ${newStatus.toUpperCase()}`);
+            const profiles = await loadProfiles();
+            renderProfiles(profiles);
+          } catch (err) {
+            console.error('Update failed', err);
+            alert('Unable to update status. See console for details.');
+          }
+        });
+      });
+    }
+
+    function renderMessages(rows) {
+      const list = document.getElementById('messagesList');
+      list.innerHTML = '';
+      if (!rows.length) {
+        list.textContent = 'No messages yet. Everything is quiet!';
+        return;
+      }
+      rows.forEach(row => {
+        const card = document.createElement('div');
+        const statusClass = row.status === 'closed' ? 'status-closed' : 'status-new';
+        const created = new Date(row.created_at).toLocaleString();
+        card.className = 'message-card';
+        card.innerHTML = `
+          <h4>${escapeHtml(row.title || '(No title)')}<span class="status-pill ${statusClass}">${row.status || 'new'}</span></h4>
+          <div class="message-meta">${escapeHtml(row.type || 'message')} from ${escapeHtml(row.username || 'Unknown')} · ${created}</div>
+          <div class="message-body">${escapeHtml(row.body || '')}</div>
+        `;
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        if (row.status !== 'closed') {
+          const closeBtn = document.createElement('button');
+          closeBtn.textContent = 'Mark as done';
+          closeBtn.className = 'btn';
+          closeBtn.addEventListener('click', async () => {
+            await markMessageClosed(row.id);
+            const messages = await loadMessages();
+            renderMessages(messages);
+          });
+          actions.appendChild(closeBtn);
+        }
+        card.appendChild(actions);
+        list.appendChild(card);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      authHelpers.waitForAuthReady().then(async () => {
+        if (!enforcePageAccess('admin.html')) return;
+        const profiles = await loadProfiles();
+        renderProfiles(profiles);
+        const messages = await loadMessages();
+        renderMessages(messages);
+      });
     });
   </script>
 </body>
