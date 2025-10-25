@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>Login | Games & Programs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
+<style>
     body { font-family: "Roboto", "Arial", sans-serif; background: #f6f8fb; margin: 0; padding: 0; min-height: 100vh;}
     .login-container { max-width: 380px; margin: 5em auto 0 auto; background: #fff; box-shadow: 0 8px 24px rgba(51,102,204,0.08); border-radius: 12px; padding: 2em; display: flex; flex-direction: column; }
     .login-container h2 { margin-bottom: 1em; color: #3366cc; font-size: 1.4em; font-weight: 600; letter-spacing: 1px;}
@@ -29,12 +29,11 @@
   <div class="login-container">
     <h2>Login</h2>
     <div class="info">
-      Please enter your username and password to access the Games & Programs.<br>
-      <span style="color:#3366cc;font-weight:500;">No coding knowledge required!</span>
+      Sign in with the email address (or username) you used when you created your account.
     </div>
     <form class="login-form" id="loginForm">
       <div>
-        <label for="username">Username</label>
+        <label for="username">Email or Username</label>
         <input type="text" id="username" name="username" required autocomplete="username">
       </div>
       <div>
@@ -45,7 +44,7 @@
       <div id="loginError"></div>
     </form>
     <div class="links">
-      <a href="apply-account.html">Apply for an account</a>
+      <a href="apply-account.html">Create an account</a>
       <br>
       <a href="forgot-password.html">Forgot your password?</a>
       <br>
@@ -55,6 +54,8 @@
   <div class="footer">
     &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="supabase-client.js"></script>
   <script src="login.js"></script>
 </body>
 </html>
