@@ -112,7 +112,6 @@
       <a href="index.html">Home</a>
       <a href="menu-guesser.html">Menu Guessers</a>
       <a href="multi-game.html">Games</a>
-      <!-- experimental/admin links added by JS if allowed -->
     </div>
     <div style="color:#3366cc; font-weight:600;">
       <a id="profileLink" href="profile.html" style="color: #3366cc; text-decoration: none;">Profile</a>
@@ -138,7 +137,6 @@
         <div>Games</div>
         <small>Play Snake, Memory Match, Paper-io</small>
         <span class="btn">Play</span>
-      </a>
 
       <a class="card" id="experimentalCard" href="experimental.html" style="display:none;">
         <div>Experimental</div>
@@ -164,31 +162,29 @@
     &copy; Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="supabase-client.js"></script>
   <script src="login.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      if (!isLoggedIn()) {
-        window.location.replace('index.html');
-        return;
-      }
-      const username = localStorage.getItem('username');
-      const firstname = localStorage.getItem('firstName');
-      const title = document.getElementById('welcomeTitle');
-      if (username) {
-        title.textContent = `Welcome, ${firstname}!`;
-      } else {
-        title.textContent = 'Welcome!';
-      }
-      // Show experimental/admin links only if allowed
-      if (isAdmin()) {
-        document.getElementById('experimentalCard').style.display = '';
-        document.getElementById('adminCard').style.display = '';
-        document.getElementById('navLeft').insertAdjacentHTML('beforeend', '<a href="experimental.html">Experimental</a>');
-      }
-      // Show preview-games to advance users
-      if (isAdvance()) {
-        document.getElementById('previewCard').style.display = '';
-      }
+      authHelpers.waitForAuthReady().then(async () => {
+        if (!isLoggedIn()) {
+          window.location.replace('index.html');
+          return;
+        }
+        const profile = await authHelpers.currentUserProfile();
+        if (profile && profile.first_name) {
+          document.getElementById('welcomeTitle').textContent = `Welcome, ${profile.first_name}!`;
+        }
+        if (isAdmin()) {
+          document.getElementById('experimentalCard').style.display = '';
+          document.getElementById('adminCard').style.display = '';
+          document.getElementById('navLeft').insertAdjacentHTML('beforeend', '<a href="experimental.html">Experimental</a>');
+        }
+        if (isAdvance()) {
+          document.getElementById('previewCard').style.display = '';
+        }
+      });
     });
   </script>
 </body>
