@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+ <meta charset="UTF-8">
   <title>Home | Games & Programs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
@@ -26,6 +26,12 @@
     .snake-controls button { background: #1a8; color: #fff; border: none; border-radius: 6px; padding: 0.45em 1.1em; font-size: 1em; cursor: pointer; font-weight: bold; letter-spacing: 0.5px; }
     .snake-controls button:hover { background: #147; }
     #snake-canvas { border: 2px solid #555; background: #000; }
+    .scoreboard { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 0.8em 1em; width: 100%; max-width: 320px; text-align: left; }
+    .scoreboard h3 { margin: 0 0 0.4em 0; font-size: 1em; color: #9bdcff; }
+    .scoreboard ul { list-style: none; padding: 0; margin: 0; }
+    .scoreboard li { font-size: 0.95em; margin-bottom: 0.3em; color: #d0ecff; }
+    .scoreboard li span { float: right; color: #fff; }
+    .personal-best { font-size: 0.95em; color: #d0ecff; margin-top: 0.4em; }
     @media (max-width: 600px) { .home-container { padding: 1em; margin-top: 2em; } }
   </style>
 </head>
@@ -38,7 +44,7 @@
     </p>
     <div class="nav-links">
       <a href="login.html">Login</a>
-      <a href="apply-account.html">Apply for Account</a>
+      <a href="apply-account.html">Create Account</a>
       <a href="forgot-password.html">Forgot Password</a>
     </div>
     <div class="guessers">
@@ -61,11 +67,18 @@
       </div>
       <canvas id="snake-canvas" width="320" height="320"></canvas>
       <p>Use the arrow keys to move the snake.</p>
+      <div class="personal-best" id="snake-personal-best">Log in to save your best score.</div>
+      <div class="scoreboard" id="snake-leaderboard" aria-live="polite">
+        <h3>Top Snake Scores</h3>
+        <ul id="snake-leaderboard-list"></ul>
+      </div>
     </div>
   </div>
   <div class="footer">
     &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="supabase-client.js"></script>
   <script src="multi-game.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -73,7 +86,6 @@
         showGame('snake');
       }
       if (typeof resetSnake === 'function') {
-        // Start the game right away since the Snake section is always visible here.
         resetSnake();
       }
     });
