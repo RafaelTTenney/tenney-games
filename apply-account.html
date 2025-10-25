@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Apply for Account</title>
+  <title>Create an Account</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css">
   <style>
     :root {
       --primary-blue: #3366cc;
@@ -16,7 +15,7 @@
       --text-light: #fff;
     }
     body { background: var(--background); font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }
-    .container { max-width: 400px; margin: 60px auto 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 16px rgba(51,102,204,0.08); padding: 36px 28px 24px 28px; }
+    .container { max-width: 420px; margin: 60px auto 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 16px rgba(51,102,204,0.08); padding: 36px 28px 24px 28px; }
     h1 { color: var(--primary-blue); font-size: 2em; margin-bottom: 20px; text-align: center; }
     label { display: block; margin-bottom: 7px; color: var(--primary-blue); font-weight: 500; }
     input[type="text"], input[type="email"], input[type="password"], textarea { width: 100%; padding: 11px 9px; margin-bottom: 22px; border: 1px solid var(--accent-blue); border-radius: 4px; background: var(--light-blue); font-size: 1em; color: var(--text-main); box-sizing: border-box; transition: border-color 0.2s; }
@@ -25,64 +24,132 @@
     button { width: 100%; padding: 13px 0; font-size: 1em; background: var(--primary-blue); color: var(--text-light); border: none; border-radius: 4px; font-weight: 600; cursor: pointer; margin-top: 8px; transition: background 0.2s; }
     button:hover, button:focus { background: var(--dark-blue); }
     .note { color: #666; font-size: 0.97em; margin-top: 24px; text-align: center; }
-    .btn-home { display: inline-block; margin-top: 18px; padding: 0.6em 1.3em; background: #3366cc; color: #fff; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 1em; letter-spacing: 1px; text-align: center; }
+    .btn-home { display: inline-block; margin-top: 18px; padding: 0.6em 1.3em; background: #3366cc; color: #fff; border-radius:6px; text-decoration: none; font-weight: bold; font-size: 1em; letter-spacing: 1px; text-align: center; }
     .btn-home:hover { background: #254a99; }
     .reminder { color: #254a99; background: #e6f0ff; border-radius: 6px; padding: 10px; font-size: 1em; margin-bottom: 18px; text-align: center; }
     .username-notice { background: #e6f0ff; color: #3366cc; padding: 8px 12px; border-radius: 6px; margin-bottom: 18px; font-size: 1em; text-align: center; border: 1px solid #99ccff;}
+    .success-message { margin-top: 16px; color: #254a99; font-weight: 600; text-align: center; min-height: 1.4em; }
     @media (max-width: 500px) { .container { margin: 24px 8px; padding: 20px 8px; } }
   </style>
-  <script>
-    function formatMailto(e) {
-      e.preventDefault();
-      var name = document.getElementById('name').value.trim();
-      var lastname = document.getElementById('lastname').value.trim();
-      var email = document.getElementById('email').value.trim();
-      var desiredPassword = document.getElementById('password').value.trim();
-      var reason = document.getElementById('reason').value.trim();
-
-      var subject = encodeURIComponent('Account Application');
-      var body = encodeURIComponent(
-        `Hello,\n\nMy name is ${name} ${lastname}.\n\nI would like to apply for an account on Games & Programs.\n\nHere are my details:\n\nEmail: ${email}\nDesired password: ${desiredPassword}\nReason for account:\n${reason}\n\nThank you!\n\nPlease note: I understand it may take up to three days for my account to be ready.`
-      );
-      var mailto = `mailto:maintinence2025@outlook.com?subject=${subject}&body=${body}`;
-      window.location.href = mailto;
-      setTimeout(function() {
-        window.location.href = "account-application-sucess.html?name=" + encodeURIComponent(name) + "&lastname=" + encodeURIComponent(lastname) + "&email=" + encodeURIComponent(email);
-      }, 500);
-    }
-  </script>
 </head>
 <body>
   <div class="container">
-    <h1>Apply for an Account</h1>
+    <h1>Create an Account</h1>
     <div class="reminder">
-      Reminder: It may take up to three days for your account to be ready.
+      Complete the form to create your Games & Programs account.
     </div>
     <div class="username-notice">
       <strong>Your username will be:</strong><br>
       the first letter of your first name, followed by your last name.<br>
       <em>(No spaces, all lowercase)</em>
-      <br>
-      <br>
+      <br><br>
       <span style="font-size:0.95em;">Example: John Smith → <b>jsmith</b></span>
     </div>
-    <form onsubmit="formatMailto(event)">
+    <form id="signupForm">
       <label for="name">First Name</label>
       <input type="text" id="name" name="name" required>
       <label for="lastname">Last Name</label>
       <input type="text" id="lastname" name="lastname" required>
       <label for="email">Email</label>
       <input type="email" id="email" name="email" required>
-      <label for="password">Desired Password</label>
+      <label for="password">Password</label>
       <input type="password" id="password" name="password" required>
       <label for="reason">Why do you want the account?</label>
       <textarea id="reason" name="reason" required></textarea>
-      <button type="submit">Send Application</button>
+      <button type="submit">Create Account</button>
     </form>
+    <div class="success-message" id="signupMessage"></div>
     <a href="index.html" class="btn-home">Home</a>
     <div class="note">
-      <em>After pressing "Send Application", your email client will open with a nicely formatted message to send.</em>
+      <em>After creating your account you can log in right away (check your email if confirmation is required).</em>
     </div>
   </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="supabase-client.js"></script>
+  <script>
+    function buildUsername(first, last) {
+      if (!first || !last) return '';
+      return (first.trim()[0] + last.trim()).toLowerCase().replace(/\s+/g, '');
+    }
+
+    async function ensureProfile(user, username, firstName, lastName) {
+      try {
+        await window.supabaseClient
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            username,
+            first_name: firstName,
+            last_name: lastName,
+            email: user.email,
+            account_status: 'standard'
+          }, { onConflict: 'id' });
+      } catch (err) {
+        console.error('Error ensuring profile', err);
+      }
+    }
+
+    async function sendAdminNotification(username, reason, email) {
+      try {
+        await window.supabaseClient
+          .from('messages')
+          .insert([{ type: 'account_application', title: `New account: ${username}`, body: `Email: ${email}\nReason: ${reason}`, username, status: 'new' }]);
+      } catch (err) {
+        console.error('Could not record admin notification', err);
+      }
+    }
+
+    document.getElementById('signupForm').addEventListener('submit', async function(event) {
+      event.preventDefault();
+      const messageEl = document.getElementById('signupMessage');
+      messageEl.textContent = '';
+
+      const firstName = document.getElementById('name').value.trim();
+      const lastName = document.getElementById('lastname').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const reason = document.getElementById('reason').value.trim();
+      if (!firstName || !lastName || !email || !password || !reason) {
+        messageEl.textContent = 'Please fill in every field.';
+        return;
+      }
+
+      const username = buildUsername(firstName, lastName);
+      if (!window.supabaseClient) {
+        messageEl.textContent = 'Supabase is not available right now. Please try again later.';
+        return;
+      }
+      try {
+        const { data, error } = await window.supabaseClient.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { first_name: firstName, last_name: lastName, username }
+          }
+        });
+        if (error) {
+          console.error('Sign up error', error);
+          messageEl.textContent = error.message || 'We could not create your account.';
+          return;
+        }
+        const user = data.user;
+        if (user) {
+          await ensureProfile(user, username, firstName, lastName);
+          await sendAdminNotification(username, reason, email);
+        }
+        if (data.session) {
+          messageEl.textContent = 'Account created! You are logged in automatically. You can close this tab or visit the dashboard.';
+          window.setTimeout(() => { window.location.href = 'loggedIn.html'; }, 1200);
+        } else {
+          messageEl.textContent = 'Check your email to confirm the account, then log in from the home page.';
+        }
+        event.target.reset();
+      } catch (err) {
+        console.error('Unexpected error creating account', err);
+        messageEl.textContent = 'Something went wrong. Please try again.';
+      }
+    });
+  </script>
 </body>
 </html>
