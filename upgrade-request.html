@@ -13,6 +13,7 @@
     input[type="text"], textarea, select { width:100%; padding:10px; border-radius:6px; border:1px solid #99ccff; background:#e6f0ff; box-sizing:border-box; }
     textarea { min-height:120px; resize:vertical; }
     .btn { background:var(--primary); color:#fff; padding:10px 14px; border-radius:8px; border:none; font-weight:700; margin-top:12px; cursor:pointer; }
+    #msg { min-height: 1.4em; margin-top: 10px; font-weight: 600; color: var(--muted); }
   </style>
 </head>
 <body>
@@ -35,34 +36,48 @@
 
       <button class="btn" type="submit">Send Upgrade Request</button>
     </form>
-    <div id="msg" style="margin-top:12px;color:#666;"></div>
+    <div id="msg"></div>
   </div>
 
   <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a></footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="supabase-client.js"></script>
   <script src="login.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      if (!enforcePageAccess('upgrade-request.html')) return;
-      const form = document.getElementById('upgradeForm');
-      form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const status = document.getElementById('desiredStatus').value;
-        const why = document.getElementById('why').value.trim();
-        const intent = document.getElementById('intent').value.trim();
-        const username = localStorage.getItem('username') || '';
-        if (!status || !why || !intent) {
-          document.getElementById('msg').textContent = 'Please complete all fields.';
-          return;
-        }
-        // Use mailto so the site owner gets the request (client-side)
-        const subject = encodeURIComponent('Account Upgrade Request: ' + (username || 'Unknown'));
-        const body = encodeURIComponent(`User: ${username}\nRequested status: ${status}\n\nWhy:\n${why}\n\nIntent:\n${intent}`);
-        window.location.href = `mailto:maintinence2025@outlook.com?subject=${subject}&body=${body}`;
-        // redirect to the existing success page (account-application-sucess.html)
-        setTimeout(() => {
-          window.location.href = `account-application-sucess.html?name=${encodeURIComponent(username)}&lastname=&email=`;
-        }, 600);
+      authHelpers.waitForAuthReady().then(async () => {
+        if (!enforcePageAccess('upgrade-request.html')) return;
+        const profile = await authHelpers.currentUserProfile();
+        const username = profile?.username || localStorage.getItem('username') || 'Unknown';
+        const userId = profile?.id || localStorage.getItem('userId');
+
+        const form = document.getElementById('upgradeForm');
+        form.addEventListener('submit', async function(e) {
+          e.preventDefault();
+          const status = document.getElementById('desiredStatus').value;
+          const why = document.getElementById('why').value.trim();
+          const intent = document.getElementById('intent').value.trim();
+          if (!status || !why || !intent) {
+            document.getElementById('msg').textContent = 'Please complete all fields.';
+            return;
+          }
+
+          const body = `Why: ${why}\nIntent: ${intent}`;
+          if (!window.supabaseClient) {
+            document.getElementById('msg').textContent = 'Supabase is not available right now. Try again later.';
+            return;
+          }
+          const { error } = await window.supabaseClient.from('messages').insert([{ type: 'upgrade_request', title: `Upgrade to ${status}`, body, username, user_id: userId, status: 'new' }]);
+          if (error) {
+            console.error('Error sending upgrade request', error);
+            document.getElementById('msg').textContent = 'We could not send your request. Please try again.';
+            return;
+          }
+
+          document.getElementById('msg').textContent = 'Request sent! An admin will review it shortly.';
+          form.reset();
+        });
       });
     });
   </script>
