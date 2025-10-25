@@ -1,59 +1,157 @@
-// login.js (updated)
-// Adds accountStatus support and role-based access helpers.
+// login.js
+// Handles Supabase authentication, profile caching, and role-based page access.
 
-async function sha256(message) {
-  const msgBuffer = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+const DEFAULT_ACCOUNT_STATUS = 'standard';
+const AUTH_STORAGE_KEYS = ['loggedIn', 'username', 'accountStatus', 'firstName', 'userId', 'email', 'profileData'];
+
+const supabaseClientInstance = (() => {
+  if (typeof window !== 'undefined' && window.supabaseClient) {
+    return window.supabaseClient;
+  }
+  console.error('Supabase client not found. Make sure supabase-client.js is loaded before login.js.');
+  return null;
+})();
+
+const authState = {
+  ready: false,
+  promise: null
+};
+
+function clearLocalAuth() {
+  AUTH_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
 }
 
-// Note: accountStatus values: 'standard', 'advance', 'admin'
-const users = [
-  { username: 'admin', hash: '02079b31824a4d18a105f16b9d45e751a114ce5b4ff3d49c6f19633aed25abbc', accountStatus: 'admin', firstName: 'admin' },
-  { username: 'amagee', hash: 'e52a1359297822655226696b53192f9085c5f161d1bda5cbaed8e9ceb64c904b', accountStatus: 'admin', firstName: 'Andrew' },
-  { username: 'ccarty', hash: 'e3bd890850be9d6ffc4568c23a497e84fc8ed079ed196ce6d978a24a731f1de8', accountStatus: 'standard', firstName: 'Colleen' },
-  { username: 'smartinez', hash: 'cfadedad585d18910973603153c102a1ab83edd78886db527315b07d0630281e', accountStatus: 'admin', firstName: 'Santi' },
-  { username: 'rtenney', hash: 'd2809be3fe85fcf081294d173edc0580b93d17b8c6df3ccabc8b56d5b4f62714', accountStatus: 'admin', firstName: 'Robert' }
-];
+function cacheProfileLocally(session, profile) {
+  if (!session || !profile) return;
+  localStorage.setItem('loggedIn', 'true');
+  localStorage.setItem('userId', session.user.id);
+  localStorage.setItem('email', session.user.email || '');
+  localStorage.setItem('username', profile.username || '');
+  localStorage.setItem('firstName', profile.first_name || profile.username || 'Player');
+  localStorage.setItem('accountStatus', profile.account_status || DEFAULT_ACCOUNT_STATUS);
+  localStorage.setItem('profileData', JSON.stringify(profile));
+}
+
+function profileFromStorage() {
+  const raw = localStorage.getItem('profileData');
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn('Unable to parse cached profile data', err);
+    return null;
+  }
+}
+
+async function ensureProfileForSession(session) {
+  if (!supabaseClientInstance || !session) return null;
+  const user = session.user;
+  let { data: profile, error } = await supabaseClientInstance
+    .from('profiles')
+    .select('id, username, first_name, last_name, account_status, email')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error loading profile', error);
+    return null;
+  }
+
+  if (!profile) {
+    const metadata = user.user_metadata || {};
+    const username = (metadata.username || (user.email ? user.email.split('@')[0] : 'player')).toLowerCase();
+    const firstName = metadata.first_name || metadata.firstName || username;
+    const lastName = metadata.last_name || metadata.lastName || '';
+    const insertPayload = {
+      id: user.id,
+      username,
+      first_name: firstName,
+      last_name: lastName,
+      email: user.email,
+      account_status: DEFAULT_ACCOUNT_STATUS
+    };
+    const insertResult = await supabaseClientInstance
+      .from('profiles')
+      .insert(insertPayload)
+      .select()
+      .maybeSingle();
+    if (insertResult.error) {
+      console.error('Error creating profile row', insertResult.error);
+      return null;
+    }
+    profile = insertResult.data;
+  }
+
+  return profile;
+}
+
+async function refreshSessionCache(sessionOverride) {
+  if (!supabaseClientInstance) return null;
+  try {
+    const session = sessionOverride || (await supabaseClientInstance.auth.getSession()).data.session;
+    if (!session) {
+      clearLocalAuth();
+      return null;
+    }
+    const profile = await ensureProfileForSession(session);
+    if (!profile) {
+      clearLocalAuth();
+      return null;
+    }
+    cacheProfileLocally(session, profile);
+    return { session, profile };
+  } catch (err) {
+    console.error('Failed to refresh session cache', err);
+    clearLocalAuth();
+    return null;
+  }
+}
+
+authState.promise = (async () => {
+  await refreshSessionCache();
+  authState.ready = true;
+})();
+
+function waitForAuthReady() {
+  return authState.promise || Promise.resolve();
+}
+
+if (supabaseClientInstance) {
+  supabaseClientInstance.auth.onAuthStateChange(async (_event, session) => {
+    await refreshSessionCache(session);
+    authState.ready = true;
+  });
+}
 
 function isLoggedIn() {
   return localStorage.getItem('loggedIn') === 'true';
 }
-function logout() {
-  localStorage.removeItem('loggedIn');
-  localStorage.removeItem('username');
-  localStorage.removeItem('accountStatus');
-  localStorage.removeItem('firstName');
-  // Also remove any admin-managed overrides stored locally
-  // (keeps behavior predictable when testing)
-  // DO NOT clear other app data if used elsewhere.
+
+async function logout() {
+  if (supabaseClientInstance) {
+    await supabaseClientInstance.auth.signOut();
+  }
+  clearLocalAuth();
   window.location.replace('index.html');
 }
-function getAccountStatus() {
-  // First check override map (admin edits saved to localStorage)
-  // Stored structure: { username: status, ... } as JSON string under 'accountStatusOverrides'
-  try {
-    const username = localStorage.getItem('username');
-    if (!username) return null;
-    const overridesRaw = localStorage.getItem('accountStatusOverrides');
-    if (overridesRaw) {
-      const overrides = JSON.parse(overridesRaw);
-      if (overrides && overrides[username]) {
-        return overrides[username];
-      }
-    }
-  } catch (e) {
-    console.error('Error reading accountStatusOverrides', e);
-  }
-  // Otherwise use stored session accountStatus (set at login)
-  return localStorage.getItem('accountStatus') || null;
-}
-function isAdmin() { return getAccountStatus() === 'admin'; }
-function isAdvance() { return getAccountStatus() === 'advance' || isAdmin(); }
-function isStandard() { return getAccountStatus() === 'standard' || isAdvance() || isAdmin(); }
 
-// Page access map
+function getAccountStatus() {
+  return localStorage.getItem('accountStatus') || DEFAULT_ACCOUNT_STATUS;
+}
+
+function isAdmin() {
+  return getAccountStatus() === 'admin';
+}
+
+function isAdvance() {
+  const status = getAccountStatus();
+  return status === 'advance' || status === 'admin';
+}
+
+function isStandard() {
+  return isLoggedIn();
+}
+
 const PAGE_ACCESS = {
   'loggedin.html': ['standard', 'advance', 'admin'],
   'loggedIn.html': ['standard', 'advance', 'admin'],
@@ -66,15 +164,14 @@ const PAGE_ACCESS = {
   'upgrade-request.html': ['standard', 'advance', 'admin']
 };
 
-function pageNameFromPath(p) {
-  if (!p) return '';
+function pageNameFromPath(path) {
+  if (!path) return '';
   try {
-    const u = new URL(p, window.location.origin);
+    const u = new URL(path, window.location.origin);
     const parts = u.pathname.split('/');
-    return parts[parts.length - 1] || parts[parts.length - 2] || '';
-  } catch (e) {
-    // fallback: try split
-    const parts = p.split('/');
+    return parts.filter(Boolean).pop() || '';
+  } catch (err) {
+    const parts = path.split('/');
     return parts[parts.length - 1];
   }
 }
@@ -82,75 +179,111 @@ function pageNameFromPath(p) {
 function canAccessPage(pathOrName) {
   const page = pageNameFromPath(pathOrName).toLowerCase();
   if (!page) return false;
-  const allowed = PAGE_ACCESS[page];
-  if (!allowed) {
-    // If page not listed, default to require login only
+  const allowedStatuses = PAGE_ACCESS[page];
+  if (!allowedStatuses) {
     return isLoggedIn();
   }
   const status = getAccountStatus();
-  return isLoggedIn() && allowed.includes(status);
+  return isLoggedIn() && allowedStatuses.includes(status);
 }
 
-// Helper to use in pages: if canAccessPage(...) === false, redirect to loggedIn.html or index.
 function enforcePageAccess(pathOrName) {
-  if (!isLoggedIn()) {
-    window.location.replace('index.html');
-    return false;
-  }
-  if (!canAccessPage(pathOrName)) {
-    // Not allowed to view this page — send back to dashboard
-    window.location.replace('loggedIn.html');
-    return false;
-  }
-  return true;
+  waitForAuthReady().then(() => {
+    if (!isLoggedIn()) {
+      window.location.replace('index.html');
+      return;
+    }
+    if (!canAccessPage(pathOrName)) {
+      window.location.replace('loggedIn.html');
+    }
+  });
+
+  if (!isLoggedIn()) return false;
+  return canAccessPage(pathOrName);
 }
 
-// Admin utility: set override statuses (persisted to localStorage)
-function adminSetAccountStatusOverride(username, newStatus) {
-  try {
-    const raw = localStorage.getItem('accountStatusOverrides');
-    const overrides = raw ? JSON.parse(raw) : {};
-    overrides[username] = newStatus;
-    localStorage.setItem('accountStatusOverrides', JSON.stringify(overrides));
-    // If the currently logged-in user is the one changed, update session accountStatus
-    const current = localStorage.getItem('username');
-    if (current === username) {
-      localStorage.setItem('accountStatus', newStatus);
-    }
-    return true;
-  } catch (e) {
-    console.error('Error saving account status override', e);
-    return false;
+function setLoginError(message) {
+  const el = document.getElementById('loginError');
+  if (el) {
+    el.textContent = message || '';
   }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  // Login form behavior (if exists on page)
   const loginForm = document.getElementById('loginForm');
-  if (!loginForm) {
-    // Nothing to do here if there's no login form
-    return;
-  }
+  if (!loginForm) return;
+
   loginForm.addEventListener('submit', async function (e) {
     e.preventDefault();
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    const user = users.find(u => u.username === username);
-    if (!user) {
-      document.getElementById('loginError').textContent = 'Invalid username or password.';
+    if (!supabaseClientInstance) {
+      setLoginError('Supabase client not available.');
       return;
     }
-    const inputHash = await sha256(password);
-    if (inputHash === user.hash) {
-      localStorage.setItem('loggedIn', 'true');
-      localStorage.setItem('username', username);
-      localStorage.setItem('firstName', user.firstName);
-      // Save initial accountStatus from users array (session); admin may override later
-      localStorage.setItem('accountStatus', user.accountStatus || 'standard');
-      // Redirect to the new loggedIn landing page
-      window.location.replace('loggedIn.html');
-    } else {
-      document.getElementById('loginError').textContent = 'Invalid username or password.';
+
+    setLoginError('');
+    const identifierRaw = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    if (!identifierRaw || !password) {
+      setLoginError('Please enter both fields.');
+      return;
     }
+
+    let email = identifierRaw.toLowerCase();
+    if (!identifierRaw.includes('@')) {
+      const { data, error } = await supabaseClientInstance
+        .from('profiles')
+        .select('email')
+        .eq('username', identifierRaw.toLowerCase())
+        .maybeSingle();
+      if (error || !data) {
+        setLoginError('We could not find that username. Try again.');
+        return;
+      }
+      email = data.email;
+    }
+
+    const { error: signInError } = await supabaseClientInstance.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (signInError) {
+      console.error('Login error', signInError);
+      setLoginError('Invalid email/username or password.');
+      return;
+    }
+
+    await waitForAuthReady();
+    const cache = await refreshSessionCache();
+    if (!cache) {
+      setLoginError('Unable to load your profile. Please try again.');
+      return;
+    }
+
+    window.location.replace('loggedIn.html');
   });
 });
+
+async function currentUserProfile() {
+  await waitForAuthReady();
+  return profileFromStorage();
+}
+
+async function updateAccountStatusForUser(userId, newStatus) {
+  if (!supabaseClientInstance) throw new Error('Supabase client missing');
+  const { error } = await supabaseClientInstance
+    .from('profiles')
+    .update({ account_status: newStatus })
+    .eq('id', userId);
+  if (error) throw error;
+  const currentId = localStorage.getItem('userId');
+  if (currentId === userId) {
+    await refreshSessionCache();
+  }
+}
+
+window.authHelpers = {
+  waitForAuthReady,
+  currentUserProfile,
+  updateAccountStatusForUser
+};
