@@ -19,6 +19,7 @@
     label { display:block; color:var(--primary); font-weight:600; margin-bottom:6px; }
     input[type="text"], textarea { width:100%; padding:8px; border-radius:6px; border:1px solid #99ccff; background:#e6f0ff; box-sizing:border-box; }
     textarea { min-height:100px; resize:vertical; }
+    #reportMessage { min-height: 1.4em; margin-top: 10px; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -54,29 +55,46 @@
   </div>
   <footer style="text-align:center;padding:16px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a></footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="supabase-client.js"></script>
   <script src="login.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // Only advance or admin users allowed
-      if (!enforcePageAccess('preview-games.html')) return;
+      authHelpers.waitForAuthReady().then(async () => {
+        if (!enforcePageAccess('preview-games.html')) return;
+        const profile = await authHelpers.currentUserProfile();
+        const username = profile?.username || 'Unknown';
+        const userId = profile?.id || localStorage.getItem('userId');
 
-      document.getElementById('reportForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const gameName = document.getElementById('gameName').value.trim();
-        const reportText = document.getElementById('reportText').value.trim();
-        const user = localStorage.getItem('username') || 'Unknown';
-        if (!gameName || !reportText) {
-          document.getElementById('reportMessage').textContent = 'Please complete the form.';
-          return;
-        }
-        // For now use mailto to submit the report to maintainence email
-        const subject = encodeURIComponent('Preview Game Report: ' + gameName);
-        const body = encodeURIComponent(`User: ${user}\nGame: ${gameName}\n\nReport:\n${reportText}`);
-        window.location.href = `mailto:maintinence2025@outlook.com?subject=${subject}&body=${body}`;
-        // Optional: show a quick confirmation before mail client opens
-        setTimeout(() => {
-          document.getElementById('reportMessage').textContent = 'Opening your email client to send the report...';
-        }, 100);
+        document.getElementById('reportForm').addEventListener('submit', async function(e) {
+          e.preventDefault();
+          const gameName = document.getElementById('gameName').value.trim();
+          const reportText = document.getElementById('reportText').value.trim();
+          if (!gameName || !reportText) {
+            document.getElementById('reportMessage').textContent = 'Please complete the form.';
+            return;
+          }
+          if (!window.supabaseClient) {
+            document.getElementById('reportMessage').textContent = 'Supabase is not available right now. Try again later.';
+            return;
+          }
+          const message = {
+            type: 'preview_feedback',
+            title: gameName,
+            body: reportText,
+            username,
+            user_id: userId,
+            status: 'new'
+          };
+          const { error } = await window.supabaseClient.from('messages').insert([message]);
+          if (error) {
+            console.error('Error sending report', error);
+            document.getElementById('reportMessage').textContent = 'There was a problem saving your report. Please try again.';
+            return;
+          }
+          document.getElementById('reportMessage').textContent = 'Thanks! Your feedback was sent to the admin panel.';
+          document.getElementById('reportForm').reset();
+        });
       });
     });
   </script>
