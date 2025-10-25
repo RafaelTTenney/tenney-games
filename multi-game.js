@@ -6,6 +6,122 @@ const GAME_SECTIONS = {
   paperio: 'paperio-game',
   racer: 'racer-game'
 };
+const supabaseScoreClient = (typeof window !== 'undefined' ? window.supabaseClient : null);
+
+const snakeScoreState = {
+  leaderboardLoaded: false
+};
+
+function updateSnakePersonalBestDisplay(message) {
+  const el = typeof document !== 'undefined' ? document.getElementById('snake-personal-best') : null;
+  if (el) {
+    el.textContent = message;
+  }
+}
+
+async function refreshSnakePersonalBest() {
+  if (typeof document === 'undefined') return;
+  const el = document.getElementById('snake-personal-best');
+  if (!el) return;
+  const username = localStorage.getItem('username') || 'Player';
+  const userId = localStorage.getItem('userId');
+  if (!userId || !supabaseScoreClient) {
+    updateSnakePersonalBestDisplay('Log in to save your best score.');
+    return;
+  }
+  try {
+    const { data, error } = await supabaseScoreClient
+      .from('high_scores')
+      .select('score')
+      .eq('user_id', userId)
+      .eq('game', 'snake')
+      .maybeSingle();
+    if (error) {
+      throw error;
+    }
+    if (!data) {
+      updateSnakePersonalBestDisplay(`No saved score yet. Good luck, ${username}!`);
+      return;
+    }
+    updateSnakePersonalBestDisplay(`${username} • Personal best: ${data.score}`);
+  } catch (err) {
+    console.error('Could not load personal best', err);
+    updateSnakePersonalBestDisplay('Could not load your saved score.');
+  }
+}
+
+async function refreshSnakeLeaderboard() {
+  if (typeof document === 'undefined') return;
+  const list = document.getElementById('snake-leaderboard-list');
+  if (!list) return;
+  if (!supabaseScoreClient) {
+    list.innerHTML = '<li>Leaderboard unavailable offline.</li>';
+    return;
+  }
+  list.innerHTML = '<li>Loading…</li>';
+  try {
+    const { data, error } = await supabaseScoreClient
+      .from('high_scores')
+      .select('username, score')
+      .eq('game', 'snake')
+      .order('score', { ascending: false })
+      .limit(5);
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      list.innerHTML = '<li>No scores yet. Be the first!</li>';
+      return;
+    }
+    list.innerHTML = data.map((row, index) => {
+      const name = row.username || 'Player';
+      return `<li>#${index + 1} ${name} <span>${row.score}</span></li>`;
+    }).join('');
+    snakeScoreState.leaderboardLoaded = true;
+  } catch (err) {
+    console.error('Could not load leaderboard', err);
+    list.innerHTML = '<li>Could not load leaderboard.</li>';
+  }
+}
+
+async function submitSnakeHighScore(score) {
+  if (!supabaseScoreClient) return;
+  const userId = localStorage.getItem('userId');
+  if (!userId || !score || score <= 0) return;
+  const username = localStorage.getItem('username') || 'Player';
+  try {
+    const { data, error } = await supabaseScoreClient
+      .from('high_scores')
+      .select('id, score')
+      .eq('user_id', userId)
+      .eq('game', 'snake')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) {
+      const { error: insertError } = await supabaseScoreClient
+        .from('high_scores')
+        .insert([{ user_id: userId, username, game: 'snake', score }]);
+      if (insertError) throw insertError;
+    } else if (score > (data.score || 0)) {
+      const { error: updateError } = await supabaseScoreClient
+        .from('high_scores')
+        .update({ score })
+        .eq('id', data.id);
+      if (updateError) throw updateError;
+    } else {
+      return;
+    }
+    await refreshSnakePersonalBest();
+    await refreshSnakeLeaderboard();
+  } catch (err) {
+    console.error('Could not save high score', err);
+  }
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    refreshSnakeLeaderboard();
+    refreshSnakePersonalBest();
+  });
+}
 
 function toggleGameSections(game, doc = (typeof document !== 'undefined' ? document : null)) {
   if (!doc) return false;
@@ -151,6 +267,7 @@ function initSnakeGame() {
       gameOver = true;
       clearInterval(intervalId);
       drawSnake();
+      submitSnakeHighScore(score);
       return;
     }
 
@@ -180,6 +297,7 @@ function initSnakeGame() {
     score = 0;
     gameOver = false;
     updateScore();
+    refreshSnakePersonalBest();
     placeFood();
     drawSnake();
     clearInterval(intervalId);
