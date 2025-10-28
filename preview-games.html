@@ -30,7 +30,8 @@
     <div class="card">
         <h3>Game: Simple Tetris</h3>
         <p>Fixed-speed classic Tetris for beginners.</p>
-        <a class="btn" id="runSimpleTetrisBtn" href="#">Play Now</a>
+        <!-- href changed to javascript:void(0) so clicking doesn't navigate; JS also prevents default -->
+        <a class="btn" id="runSimpleTetrisBtn" href="javascript:void(0);">Play Now</a>
     </div>
 
     <div class="card">
@@ -98,7 +99,9 @@
   </div>
   <footer style="text-align:center;padding:16px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a></footer>
 
+  <!-- Keep login.js where it was -->
   <script src="login.js"></script>
+
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       // Only advance or admin users allowed
@@ -124,5 +127,8 @@
       });
     });
   </script>
+
+  <!-- Load preview-games.js so the Play Now button and Tetris modal work -->
+  <script src="preview-games.js"></script>
 </body>
 </html>
