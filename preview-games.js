@@ -1,6 +1,9 @@
-// --- SIMPLE TETRIS GAME LOGIC ---
+// --- PREVIEW GAMES: SIMPLE TETRIS + FULL INVADERS (no Racer) ---
 
-// Get DOM elements
+
+// ---------------------- SIMPLE TETRIS ----------------------
+
+// Get DOM elements (Tetris)
 const simpleTetrisModal = document.getElementById('simpleTetrisModal');
 const runSimpleTetrisBtn = document.getElementById('runSimpleTetrisBtn');
 const modalCloseBtn = document.getElementById('modalCloseBtn');
@@ -37,8 +40,6 @@ const all_blocks = {
   6: [[0, 0, 1], [1, 1, 1], [0, 0, 0]],                     // L
 };
 
-// --- Game Logic Functions ---
-
 function loadHighScore() {
   highScore = parseInt(localStorage.getItem('tetrisHighScore')) || 0;
   if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
@@ -59,7 +60,7 @@ function start() {
     rows.push(row);
   }
   score = 0;
-  loadHighScore();  
+  loadHighScore();
   count = 10;
   tetrisMessageTimer = 0;
   if (game) clearInterval(game);
@@ -108,9 +109,9 @@ function isColliding(B) {
     for (let x = 0; x < B[0][y].length; x++) {
       if (B[0][y][x] === 1) {
         if (
-          (B[1] + x) < 0 ||  
-          (B[1] + x) >= 10 || 
-          (B[2] + y) >= 20  
+          (B[1] + x) < 0 ||
+          (B[1] + x) >= 10 ||
+          (B[2] + y) >= 20
         ) {
           return true;
         }
@@ -128,7 +129,7 @@ function drawFrame() {
   
   // 1. Spawning
   if (!block) {
-    let newBlockIndex = Math.floor(Math.random() * 7); 
+    let newBlockIndex = Math.floor(Math.random() * 7);
     block = [all_blocks[newBlockIndex], 4, 0];
 
     if (isColliding(block)) {
@@ -142,23 +143,23 @@ function drawFrame() {
       } else {
         alert('Game Over! Score: ' + score);
       }
-      return;  
+      return;
     }
     return;
   }
-  
+
   // 2. Clear Canvas
   ctx.fillStyle = '#050505';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
+
   // 3. Gravity and Collision Check
   if (count === 0 || (fastFall && (count % 2 === 0))) {
-    count = 10; 
-    block[2] += 1;  
-    
+    count = 10;
+    block[2] += 1;
+
     if (isColliding(block)) {
-      block[2] -= 1;  
-      
+      block[2] -= 1;
+
       // Lock piece
       for (let y = 0; y < block[0].length; y++) {
         for (let x = 0; x < block[0][y].length; x++) {
@@ -169,9 +170,9 @@ function drawFrame() {
           }
         }
       }
-      
-      block = null;  
-      
+
+      block = null;
+
       // Line Clear and Score Logic
       let linesClearedThisTurn = 0;
       for (let i = 0; i < 20; i++) {
@@ -194,7 +195,7 @@ function drawFrame() {
         score += 30;
       } else if (linesClearedThisTurn === 4) {
         score += 50; // TETRIS Bonus
-        tetrisMessageTimer = 40; 
+        tetrisMessageTimer = 40;
       }
 
       if (linesClearedThisTurn > 0) {
@@ -225,7 +226,7 @@ function drawFrame() {
   ctx.shadowBlur = 5;
 
   const size = box - 3;
-  const offset = 1.5; 
+  const offset = 1.5;
 
   for (let y = 0; y < RaB.length; y++) {
     for (let x = 0; x < RaB[y].length; x++) {
@@ -235,7 +236,7 @@ function drawFrame() {
       }
     }
   }
-  
+
   // 6. Draw "TETRIS!" message
   if (tetrisMessageTimer > 0) {
     ctx.fillStyle = 'yellow';
@@ -245,15 +246,15 @@ function drawFrame() {
     ctx.shadowBlur = 5;
     ctx.fillText('TETRIS!', canvas.width / 2, canvas.height / 2);
     ctx.shadowBlur = 0;
-    tetrisMessageTimer--; 
+    tetrisMessageTimer--;
   }
-  
+
   ctx.shadowBlur = 0;
   count -= 1;
 }
 
 
-// --- Modal and Event Handlers ---
+// --- Modal and Event Handlers (Tetris) ---
 
 function openModal() {
     if(simpleTetrisModal) simpleTetrisModal.style.display = 'flex';
@@ -300,17 +301,426 @@ document.addEventListener('keyup', event => {
 });
 
 
-// --- Initialization ---
+// ---------------------- FULL INVADERS (ported) ----------------------
+
+// INVADERS DOM elements
+const invadersModal = document.getElementById('invadersModal');
+const runInvadersBtn = document.getElementById('runInvadersBtn');
+const invadersModalCloseBtn = document.getElementById('invadersModalCloseBtn');
+const invadersCanvas = document.getElementById('invaders-canvas');
+const invadersCtx = invadersCanvas ? invadersCanvas.getContext('2d') : null;
+const invadersMessageEl = document.getElementById('invaders-message');
+const startInvadersBtn = document.getElementById('startInvadersBtn');
+const invadersScoreEl = document.getElementById('invaders-score');
+
+// State for invaders
+let invaderState = {
+  player: { x: 140, y: 350, width: 20, height: 15, lives: 3, alive: true },
+  bullet: { x: 0, y: 0, width: 4, height: 10, active: false, alive: false },
+  enemies: [],
+  enemyBullets: [],
+  bunkers: [],
+  mysteryShip: { x: 0, y: 20, width: 25, height: 12, active: false, direction: 1, alive: false },
+  enemyDirection: 1,
+  score: 0,
+  level: 1,
+  gameOver: false,
+  gameLoopId: null,
+  dropSpeed: 10,
+  initialEnemies: 0,
+  enemyMoveTimer: 0,
+  enemyMoveInterval: 30 // Initial timer value (lower is faster)
+};
+
+function createEnemies() {
+  const state = invaderState;
+  state.enemies = [];
+  const enemyWidth = 20;
+  const enemyHeight = 15;
+  
+  let startY = 30 + (state.level - 1) * 10;
+  startY = Math.min(startY, 150);
+
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 8; c++) {
+      state.enemies.push({
+        x: 30 + c * (enemyWidth + 10),
+        y: startY + r * (enemyHeight + 10),
+        width: enemyWidth,
+        height: enemyHeight,
+        alive: true
+      });
+    }
+  }
+  state.initialEnemies = state.enemies.length;
+}
+
+function createBunkers() {
+  invaderState.bunkers = [];
+  const bunkerWidth = 4; // 4 blocks wide
+  const bunkerHeight = 3; // 3 blocks high
+  const blockSize = 8;
+  const startX = 30;
+  const bunkerSpacing = (invadersCanvas ? invadersCanvas.width : 420 - 60) / 4;
+
+  for (let b = 0; b < 4; b++) {
+    let bunkerX = startX + (b * bunkerSpacing) + (bunkerSpacing / 2) - ((bunkerWidth * blockSize) / 2);
+    for (let r = 0; r < bunkerHeight; r++) {
+      for (let c = 0; c < bunkerWidth; c++) {
+        if (r === bunkerHeight - 1 && (c === 1 || c === 2)) continue;
+        
+        invaderState.bunkers.push({
+          x: bunkerX + c * blockSize,
+          y: 300 + r * blockSize,
+          width: blockSize,
+          height: blockSize,
+          alive: true
+        });
+      }
+    }
+  }
+}
+
+function checkCollision(objA, objB) {
+  if (!objA.alive || !objB.alive) return false;
+  
+  return objA.x < objB.x + objB.width &&
+         objA.x + objA.width > objB.x &&
+         objA.y < objB.y + objB.height &&
+         objA.y + objA.height > objB.y;
+}
+
+function updateInvaders() {
+  if (invaderState.gameOver || !invadersCanvas) return;
+  const state = invaderState;
+
+  // Player bullet
+  if (state.bullet.active) {
+    state.bullet.y -= 15;
+    if (state.bullet.y < 0) {
+      state.bullet.active = false;
+      state.bullet.alive = false;
+    }
+    
+    for (let b = state.bunkers.length - 1; b >= 0; b--) {
+      let bunkerBlock = state.bunkers[b];
+      if (bunkerBlock.alive && checkCollision(state.bullet, bunkerBlock)) {
+        bunkerBlock.alive = false;
+        state.bullet.active = false;
+        state.bullet.alive = false;
+        break; 
+      }
+    }
+    
+    if (state.bullet.active) {
+        for (let i = state.enemies.length - 1; i >= 0; i--) {
+          let enemy = state.enemies[i];
+          if (enemy.alive && checkCollision(state.bullet, enemy)) {
+            enemy.alive = false; 
+            state.bullet.active = false;
+            state.bullet.alive = false;
+            state.score += 10;
+            if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
+            break;
+          }
+        }
+    }
+    
+    if (state.bullet.active && state.mysteryShip.active) {
+        if (checkCollision(state.bullet, state.mysteryShip)) {
+            state.mysteryShip.active = false;
+            state.mysteryShip.alive = false;
+            state.bullet.active = false;
+            state.bullet.alive = false;
+            let bonus = (Math.floor(Math.random() * 3) + 1) * 50;
+            state.score += bonus;
+            if (invadersMessageEl) invadersMessageEl.textContent = `+${bonus} POINTS!`;
+            if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
+        }
+    }
+  }
+  
+  // Enemy movement (timer)
+  state.enemyMoveTimer--;
+  if (state.enemyMoveTimer <= 0) {
+      let moveDown = false;
+      let moveStep = 5;
+      
+      let aliveEnemies = state.enemies.filter(e => e.alive);
+      
+      for (const enemy of aliveEnemies) {
+        if ((state.enemyDirection > 0 && enemy.x + enemy.width >= invadersCanvas.width - 5) ||
+            (state.enemyDirection < 0 && enemy.x <= 5)) {
+          moveDown = true;
+          state.enemyDirection *= -1;
+          moveStep = 0;
+          break;
+        }
+      }
+
+      aliveEnemies.forEach(enemy => {
+          if (moveDown) {
+            enemy.y += state.dropSpeed;
+          } else {
+            enemy.x += state.enemyDirection * moveStep;
+          }
+          
+          if (enemy.y + enemy.height > state.player.y) {
+            stopInvaders("GAME OVER: They reached you!");
+          }
+      });
+      
+      let progress = (state.initialEnemies - aliveEnemies.length) / state.initialEnemies;
+      state.enemyMoveInterval = Math.max(3, (30 - (state.level - 1) * 2) * (1 - progress * 0.9));
+      state.enemyMoveTimer = state.enemyMoveInterval;
+  }
+
+  // Mystery ship
+  if (!state.mysteryShip.active && Math.random() > 0.998) {
+      state.mysteryShip.active = true;
+      state.mysteryShip.alive = true;
+      if (Math.random() > 0.5) {
+          state.mysteryShip.x = -state.mysteryShip.width;
+          state.mysteryShip.direction = 1;
+      } else {
+          state.mysteryShip.x = invadersCanvas.width;
+          state.mysteryShip.direction = -1;
+      }
+  }
+  
+  if (state.mysteryShip.active) {
+      state.mysteryShip.x += state.mysteryShip.direction * 1.5;
+      if (state.mysteryShip.x > invadersCanvas.width || state.mysteryShip.x < -state.mysteryShip.width) {
+          state.mysteryShip.active = false;
+          state.mysteryShip.alive = false;
+      }
+  }
+
+  // Enemy shooting
+  let aliveEnemies = state.enemies.filter(e => e.alive);
+  if (Math.random() > (0.98 - (state.level * 0.01)) && aliveEnemies.length > 0) {
+    let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
+    state.enemyBullets.push({ 
+        x: shooter.x + shooter.width / 2 - 2,
+        y: shooter.y + shooter.height, 
+        width: 4,
+        height: 10,
+        alive: true
+    });
+  }
+
+  // Move enemy bullets
+  state.enemyBullets = state.enemyBullets.filter(bullet => {
+    bullet.y += 3;
+    
+    for (let b = state.bunkers.length - 1; b >= 0; b--) {
+      let bunkerBlock = state.bunkers[b];
+      if (bunkerBlock.alive && checkCollision(bullet, bunkerBlock)) {
+        bunkerBlock.alive = false;
+        return false;
+      }
+    }
+    
+    if (checkCollision(bullet, state.player)) {
+      state.player.lives--;
+      if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
+      if (state.player.lives <= 0) {
+          state.player.alive = false;
+          stopInvaders("GAME OVER: You were hit!");
+      } else {
+          if (invadersMessageEl) invadersMessageEl.textContent = `HIT! ${state.player.lives} ships remain.`;
+      }
+      return false;
+    }
+    
+    return bullet.y < invadersCanvas.height;
+  });
+  
+  // Bases destroyed lose condition
+  if (state.bunkers.length > 0 && state.bunkers.filter(b => b.alive).length === 0) {
+      stopInvaders("GAME OVER: Bases destroyed!");
+  }
+  
+  // Level win
+  if (aliveEnemies.length === 0 && !state.gameOver) {
+      startNextLevel();
+  }
+}
+
+function drawInvaders() {
+  if (!invadersCtx) return;
+  const state = invaderState;
+
+  invadersCtx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
+  
+  if (state.player.alive) {
+    invadersCtx.fillStyle = '#00FFFF';
+    invadersCtx.fillRect(state.player.x, state.player.y, state.player.width, state.player.height);
+  }
+
+  if (state.bullet.active) {
+    invadersCtx.fillStyle = '#00FFFF';
+    invadersCtx.fillRect(state.bullet.x, state.bullet.y, state.bullet.width, state.bullet.height);
+  }
+  
+  invadersCtx.fillStyle = '#00FF00';
+  state.bunkers.forEach(block => {
+      if (block.alive) {
+          invadersCtx.fillRect(block.x, block.y, block.width, block.height);
+      }
+  });
+
+  invadersCtx.fillStyle = '#FF00FF';
+  state.enemies.forEach(enemy => {
+    if (enemy.alive) {
+      invadersCtx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+    }
+  });
+  
+  if (state.mysteryShip.active) {
+      invadersCtx.fillStyle = '#FF0000';
+      invadersCtx.fillRect(state.mysteryShip.x, state.mysteryShip.y, state.mysteryShip.width, state.mysteryShip.height);
+  }
+  
+  invadersCtx.fillStyle = '#FF0000';
+  state.enemyBullets.forEach(bullet => {
+      invadersCtx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+  });
+  
+  invadersCtx.fillStyle = '#00FFFF';
+  for (let i = 0; i < state.player.lives; i++) {
+      invadersCtx.fillRect(10 + i * (state.player.width + 10), 380, state.player.width, state.player.height);
+  }
+  
+  invadersCtx.font = '14px "Courier New", monospace';
+  invadersCtx.fillStyle = '#888';
+  invadersCtx.fillText(`Level: ${state.level}`, invadersCanvas.width - 70, 390);
+}
+
+function invadersGameLoop() {
+  if (invaderState.gameOver) return;
+  updateInvaders();
+  drawInvaders();
+  invaderState.gameLoopId = requestAnimationFrame(invadersGameLoop);
+}
+
+function startNextLevel() {
+    const state = invaderState;
+    state.level++;
+    if (invadersMessageEl) invadersMessageEl.textContent = `Level ${state.level}!`;
+    
+    state.enemyBullets = [];
+    state.bullet.active = false;
+    state.bullet.alive = false;
+    
+    state.enemyMoveInterval = Math.max(5, 30 - (state.level - 1) * 2); 
+    state.enemyMoveTimer = state.enemyMoveInterval;
+    
+    createEnemies();
+    createBunkers();
+}
+
+function startInvaders() {
+  if (invaderState.gameLoopId) {
+    cancelAnimationFrame(invaderState.gameLoopId);
+    invaderState.gameLoopId = null;
+  }
+  
+  invaderState.gameOver = false;
+  invaderState.score = 0;
+  invaderState.level = 1;
+  invaderState.enemyBullets = [];
+  invaderState.bullet.active = false;
+  invaderState.bullet.alive = false;
+  invaderState.player.x = 140;
+  invaderState.player.lives = 3;
+  invaderState.player.alive = true;
+  invaderState.enemyDirection = 1;
+  invaderState.enemyMoveTimer = 0;
+  invaderState.enemyMoveInterval = 30;
+  invaderState.mysteryShip.active = false;
+  invaderState.mysteryShip.alive = false;
+  
+  if (invadersScoreEl) invadersScoreEl.textContent = "Score: 0";
+  if (invadersMessageEl) invadersMessageEl.textContent = "Good luck!";
+  if (startInvadersBtn) startInvadersBtn.textContent = 'Restart';
+  
+  createEnemies();
+  createBunkers();
+  invaderState.gameLoopId = requestAnimationFrame(invadersGameLoop);
+}
+
+function stopInvaders(message = "GAME OVER") {
+  invaderState.gameOver = true;
+  if (invaderState.gameLoopId) {
+    cancelAnimationFrame(invaderState.gameLoopId);
+    invaderState.gameLoopId = null;
+  }
+  if (invadersMessageEl) invadersMessageEl.textContent = message;
+  if (startInvadersBtn) startInvadersBtn.textContent = 'Start';
+}
+
+function handleInvadersKey(event) {
+  if (!invadersModal || invadersModal.style.display !== 'flex') return;
+
+  const state = invaderState;
+  
+  if (event.key === ' ' || event.key === 'Spacebar') {
+      event.preventDefault();
+      if (state.gameOver) {
+          startInvaders();
+          return;
+      }
+      
+      if (!state.bullet.active && state.player.alive) {
+        state.bullet.x = state.player.x + (state.player.width / 2) - (state.bullet.width / 2);
+        state.bullet.y = state.player.y;
+        state.bullet.active = true;
+        state.bullet.alive = true;
+      }
+  }
+
+  if (state.gameOver || !state.player.alive) return;
+
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    state.player.x = Math.max(0, state.player.x - 10);
+  }
+  if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    state.player.x = Math.min(invadersCanvas.width - state.player.width, state.player.x + 10);
+  }
+}
+
+function initInvadersGame() {
+    if (startInvadersBtn) {
+      startInvadersBtn.addEventListener('click', startInvaders);
+    }
+    
+    if (!document.__invadersBound) {
+      document.addEventListener('keydown', handleInvadersKey);
+      document.__invadersBound = true;
+    }
+    
+    if (invadersCtx) {
+        invadersCtx.fillStyle = '#000';
+        invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
+    }
+}
+
+
+// ---------------------- INITIALIZATION ----------------------
 
 document.addEventListener('DOMContentLoaded', function() {
-    if (runSimpleTetrisBtn) runSimpleTetrisBtn.addEventListener('click', openModal);
+    // TETRIS bindings
+    if (runSimpleTetrisBtn) runSimpleTetrisBtn.addEventListener('click', function(e){ e.preventDefault(); openModal(); });
     if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeModal);
     if (startBtn) startBtn.addEventListener('click', start);
     if (controlsBtn) controlsBtn.addEventListener('click', function() {
       alert('Controls:\nRight Arrow: Move Right\nLeft Arrow: Move Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
     });
     
-    // Close modal if user clicks outside the content box
     if (simpleTetrisModal) {
         simpleTetrisModal.addEventListener('click', function(e) {
             if (e.target === simpleTetrisModal) {
@@ -319,6 +729,33 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Load high score on script load
     loadHighScore();
+
+    // INVADERS bindings (no Racer)
+    if (runInvadersBtn) {
+      runInvadersBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (invadersModal) invadersModal.style.display = 'flex';
+        if (invadersMessageEl) invadersMessageEl.textContent = "Press Start!";
+      });
+    }
+
+    if (invadersModalCloseBtn) {
+      invadersModalCloseBtn.addEventListener('click', function() {
+        if (invadersModal) invadersModal.style.display = 'none';
+        stopInvaders();
+      });
+    }
+
+    if (invadersModal) {
+      invadersModal.addEventListener('click', function(e) {
+        if (e.target === invadersModal) {
+          if (invadersModal) invadersModal.style.display = 'none';
+          stopInvaders();
+        }
+      });
+    }
+
+    // Initialize invaders logic
+    initInvadersGame();
 });
