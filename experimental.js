@@ -7,7 +7,7 @@ const modalCloseBtn = document.getElementById('modalCloseBtn');
 
 // Get game elements (INSIDE the modal)
 const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
+const ctx = canvas ? canvas.getContext('2d') : null;
 const scoreP = document.getElementById('score');
 const startBtn = document.getElementById('startBtn');
 const controlsBtn = document.getElementById('controlsBtn');
@@ -381,7 +381,7 @@ function drawFrame() {
 
 // Checks keys (only when modal is open)
 document.addEventListener('keydown', event => {
-  if (tetrisModal.style.display !== 'flex' || !game) return;
+  if (!tetrisModal || tetrisModal.style.display !== 'flex' || !game) return;
 
   if (
     ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(event.key) ||
@@ -695,7 +695,7 @@ function shiftLane(offset) {
 
 function handleKey(event) {
   // IMPORTANT: Check if the RACER modal is open
-  if (racerModal.style.display !== 'flex') return;
+  if (!racerModal || racerModal.style.display !== 'flex') return;
   
   if (event.key === 'ArrowLeft') {
     shiftLane(-1);
@@ -734,7 +734,7 @@ function initRacerGame() {
 
 
 // --- FULL INVADERS SCRIPT (LOGIC) ---
-// --- [MODIFIED FOR LEVELS, UFO, AND NEW LOSE CONDITION] ---
+// --- [ENHANCED: progressive waves, color palettes, stronger bullets & UFO] ---
 
 let invaderState = {
   player: { x: 140, y: 350, width: 20, height: 15, lives: 3, alive: true },
@@ -754,20 +754,43 @@ let invaderState = {
   enemyMoveInterval: 30 // Initial timer value (lower is faster)
 };
 
+// Palette per level for enemies (cycles through; each level uses next color)
+const invaderPalettes = ['#FF00FF','#FFA500','#FFFF00','#00FF00','#00FFFF','#9D00FF','#FD1C03','#FF69B4'];
+
+// Utility: AABB collision check (works with objects that have x,y,width,height and an "alive" flag or treat as alive)
+function checkCollision(objA, objB) {
+  if (!objA || !objB) return false;
+  // If objects have alive flags, ensure they're considered collidable
+  if (('alive' in objA && !objA.alive) || ('alive' in objB && !objB.alive)) return false;
+
+  return objA.x < objB.x + objB.width &&
+         objA.x + objA.width > objB.x &&
+         objA.y < objB.y + objB.height &&
+         objA.y + objA.height > objB.y;
+}
+
 function createEnemies() {
   const state = invaderState;
   state.enemies = [];
   const enemyWidth = 20;
   const enemyHeight = 15;
   
-  // NEW: Enemies start lower based on level
-  let startY = 30 + (state.level - 1) * 10;
+  // Rows increase slightly every two levels up to 6
+  const rows = Math.min(6, 4 + Math.floor((state.level - 1) / 2));
+
+  // horizontal spacing adjusts with canvas width
+  const totalColumns = 8;
+  const startX = 30;
+  const spacingX = enemyWidth + 10;
+
+  // NEW: Enemies start lower based on level, but capped
+  let startY = 30 + (state.level - 1) * 8;
   startY = Math.min(startY, 150); // Cap starting height so they don't spawn too low
 
-  for (let r = 0; r < 4; r++) { // 4 rows
-    for (let c = 0; c < 8; c++) { // 8 columns
+  for (let r = 0; r < rows; r++) { // variable rows
+    for (let c = 0; c < totalColumns; c++) {
       state.enemies.push({
-        x: 30 + c * (enemyWidth + 10), // 10px padding
+        x: startX + c * spacingX,
         y: startY + r * (enemyHeight + 10),
         width: enemyWidth,
         height: enemyHeight,
@@ -805,25 +828,14 @@ function createBunkers() {
   }
 }
 
-
-// Helper: AABB collision check (now with width/height)
-function checkCollision(objA, objB) {
-  if (!objA.alive || !objB.alive) return false; // Ensure both are "collidable"
-  
-  return objA.x < objB.x + objB.width &&
-         objA.x + objA.width > objB.x &&
-         objA.y < objB.y + objB.height &&
-         objA.y + objA.height > objB.y;
-}
-
-
+// Core update loop for invaders
 function updateInvaders() {
   if (invaderState.gameOver || !invadersCanvas) return;
   const state = invaderState;
 
   // --- Player Bullet ---
   if (state.bullet.active) {
-    state.bullet.y -= 15;
+    state.bullet.y -= 15 + (state.level - 1) * 0.6; // player's bullet slightly scales with level
     if (state.bullet.y < 0) {
       state.bullet.active = false;
       state.bullet.alive = false;
@@ -848,7 +860,8 @@ function updateInvaders() {
             enemy.alive = false; 
             state.bullet.active = false;
             state.bullet.alive = false;
-            state.score += 10;
+            // Score scales with level to reward progress
+            state.score += 10 + (state.level - 1) * 2;
             if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
             break;
           }
@@ -862,7 +875,7 @@ function updateInvaders() {
             state.mysteryShip.alive = false;
             state.bullet.active = false;
             state.bullet.alive = false;
-            let bonus = (Math.floor(Math.random() * 3) + 1) * 50; // 50, 100, or 150
+            let bonus = ((Math.floor(Math.random() * 3) + 1) * 50) + (state.level - 1) * 10; // scale with level
             state.score += bonus;
             if (invadersMessageEl) invadersMessageEl.textContent = `+${bonus} POINTS!`;
         }
@@ -910,7 +923,7 @@ function updateInvaders() {
   }
 
   // --- NEW: Mystery Ship (UFO) Logic ---
-  if (!state.mysteryShip.active && Math.random() > 0.998) {
+  if (!state.mysteryShip.active && Math.random() > 0.998 - (state.level * 0.0005)) {
       state.mysteryShip.active = true;
       state.mysteryShip.alive = true;
       // Start from left or right
@@ -924,7 +937,7 @@ function updateInvaders() {
   }
   
   if (state.mysteryShip.active) {
-      state.mysteryShip.x += state.mysteryShip.direction * 1.5; // UFO speed
+      state.mysteryShip.x += state.mysteryShip.direction * (1.5 + state.level * 0.2); // UFO speed scales
       // Deactivate if off-screen
       if (state.mysteryShip.x > invadersCanvas.width || state.mysteryShip.x < -state.mysteryShip.width) {
           state.mysteryShip.active = false;
@@ -934,7 +947,9 @@ function updateInvaders() {
 
   // --- Enemy Shooting ---
   let aliveEnemies = state.enemies.filter(e => e.alive);
-  if (Math.random() > (0.98 - (state.level * 0.01)) && aliveEnemies.length > 0) { // Shoot more often on higher levels
+  // Shooting becomes more frequent and slightly more likely per level. Cap threshold so it doesn't become constant.
+  let shootThreshold = Math.max(0.6, 0.98 - (state.level * 0.02));
+  if (Math.random() > shootThreshold && aliveEnemies.length > 0) { // Shoot more often on higher levels
     let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
     state.enemyBullets.push({ 
         x: shooter.x + shooter.width / 2 - 2, // Center the bullet
@@ -947,7 +962,7 @@ function updateInvaders() {
 
   // Move enemy bullets
   state.enemyBullets = state.enemyBullets.filter(bullet => {
-    bullet.y += 3;
+    bullet.y += 3 + state.level * 0.25; // bullets get slightly faster by level
     
     // Check for collision with bunkers
     for (let b = state.bunkers.length - 1; b >= 0; b--) {
@@ -1013,8 +1028,9 @@ function drawInvaders() {
       }
   });
 
-  // Draw enemies
-  invadersCtx.fillStyle = '#FF00FF'; // Magenta enemies
+  // Draw enemies with palette by level
+  const enemyColor = invaderPalettes[(state.level - 1) % invaderPalettes.length];
+  invadersCtx.fillStyle = enemyColor;
   state.enemies.forEach(enemy => {
     if (enemy.alive) {
       invadersCtx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
@@ -1023,7 +1039,7 @@ function drawInvaders() {
   
   // Draw NEW Mystery Ship
   if (state.mysteryShip.active) {
-      invadersCtx.fillStyle = '#FF0000'; // Red UFO
+      invadersCtx.fillStyle = '#FFD700'; // Gold UFO for visibility
       invadersCtx.fillRect(state.mysteryShip.x, state.mysteryShip.y, state.mysteryShip.width, state.mysteryShip.height);
   }
   
@@ -1055,19 +1071,27 @@ function invadersGameLoop() {
 function startNextLevel() {
     const state = invaderState;
     state.level++;
-    if (invadersMessageEl) invadersMessageEl.textContent = `Level ${state.level}!`;
+    if (invadersMessageEl) invadersMessageEl.textContent = `Space Invaders++ — Level ${state.level}`;
     
     // Reset bullets
     state.enemyBullets = [];
     state.bullet.active = false;
     state.bullet.alive = false;
     
-    // Set new speed based on level, capped at a minimum of 5
+    // Increase difficulty: shorten interval and increase drop speed
     state.enemyMoveInterval = Math.max(5, 30 - (state.level - 1) * 2); 
     state.enemyMoveTimer = state.enemyMoveInterval;
+    state.dropSpeed = 10 + (state.level - 1) * 2;
     
     createEnemies(); // Will spawn lower based on new level
     createBunkers(); // Respawn bunkers
+    
+    // Flash a short message in the modal color for feedback
+    if (invadersMessageEl) {
+      const palette = invaderPalettes[(state.level - 1) % invaderPalettes.length];
+      invadersMessageEl.style.color = palette;
+      setTimeout(() => { if (invadersMessageEl) invadersMessageEl.style.color = '#eee'; }, 1200);
+    }
 }
 
 function startInvaders() {
@@ -1091,6 +1115,7 @@ function startInvaders() {
   invaderState.enemyMoveInterval = 30; // Reset to level 1 speed
   invaderState.mysteryShip.active = false;
   invaderState.mysteryShip.alive = false;
+  invaderState.dropSpeed = 10;
   
   if (invadersScoreEl) invadersScoreEl.textContent = "Score: 0";
   if (invadersMessageEl) invadersMessageEl.textContent = "Good luck!";
@@ -1113,7 +1138,7 @@ function stopInvaders(message = "GAME OVER") {
 
 function handleInvadersKey(event) {
   // Only run if the invaders modal is open
-  if (invadersModal.style.display !== 'flex') return;
+  if (!invadersModal || invadersModal.style.display !== 'flex') return;
 
   const state = invaderState;
   
