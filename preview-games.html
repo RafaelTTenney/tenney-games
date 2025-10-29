@@ -23,6 +23,12 @@
 </head>
 <body>
   <header>Preview Games (Advance Users)</header>
+
+  <!-- Dashboard button for quick access -->
+  <div style="max-width:900px;margin:12px auto;text-align:right;">
+    <a id="dashboardBtn" class="btn secondary" href="dashboard.html" title="Open Dashboard">Dashboard</a>
+  </div>
+
   <div class="container">
     <p style="color:#3366cc; font-weight:600;">Advance users can preview short, in-development games here and submit bug reports or suggestions.</p>
 
@@ -48,12 +54,12 @@
       <div class="card">
         <h3>Preview: Full Invaders</h3>
         <p>Classic Space Invaders preview with levels, UFO and bunkers.</p>
-        <a class="btn" id="runInvadersBtn" href="javascript:void(0);">Play Now</a>
+        <a class="btn" id="runPreviewInvadersBtn" href="javascript:void(0);">Play Now</a>
       </div>
     </div>
 
-    <!-- SIMPLE TETRIS MODAL -->
-    <div id="simpleTetrisModal" style="
+    <!-- SIMPLE TETRIS MODAL (namespaced for preview) -->
+    <div id="previewSimpleTetrisModal" style="
         display: none; 
         position: fixed; 
         z-index: 1000; 
@@ -75,18 +81,18 @@
       ">
           <h2 style="color: #00FFFF; margin-top: 0;">Simple Tetris</h2>
           
-          <canvas id="game" width="240" height="480" style="background: #050505; display: block; margin: 0 auto;"></canvas>
+          <canvas id="preview-game" width="240" height="480" style="background: #050505; display: block; margin: 0 auto;"></canvas>
 
-          <p id="score" style="color: white; font-weight: bold;">Score: 0 | High Score: 0</p>
+          <p id="preview-score" style="color: white; font-weight: bold;">Score: 0 | High Score: 0</p>
           
-          <button id="startBtn" class="btn" style="background:#00FF00; margin: 5px;">Start</button>
-          <button id="controlsBtn" class="btn" style="background:#FFA500; margin: 5px;">Controls</button>
-          <button id="modalCloseBtn" class="btn" style="background:red; margin: 5px;">Close Game</button>
+          <button id="preview-startBtn" class="btn" style="background:#00FF00; margin: 5px;">Start</button>
+          <button id="preview-controlsBtn" class="btn" style="background:#FFA500; margin: 5px;">Controls</button>
+          <button id="preview-modalCloseBtn" class="btn" style="background:red; margin: 5px;">Close Game</button>
       </div>
     </div>
 
-    <!-- INVADERS MODAL -->
-    <div id="invadersModal" style="
+    <!-- INVADERS MODAL (namespaced for preview) -->
+    <div id="preview-invadersModal" style="
         display: none; 
         position: fixed; 
         z-index: 1001; 
@@ -111,14 +117,14 @@
         <h2 style="color: #FF00FF; margin-top: 0;">Full Invaders (Preview)</h2>
 
         <div style="display:flex; gap:12px; align-items:flex-start; justify-content:center; flex-wrap:wrap;">
-          <canvas id="invaders-canvas" width="420" height="420" style="background:#000; border:1px solid #222;"></canvas>
+          <canvas id="preview-invaders-canvas" width="420" height="420" style="background:#000; border:1px solid #222;"></canvas>
 
           <div style="min-width:220px; color:#fff; text-align:left;">
-            <p id="invaders-message" style="color:#FFD700; font-weight:700; margin:0 0 8px 0;">Press Start!</p>
-            <p id="invaders-score" style="color:#fff; margin:0 0 10px 0;">Score: 0</p>
+            <p id="preview-invaders-message" style="color:#FFD700; font-weight:700; margin:0 0 8px 0;">Press Start!</p>
+            <p id="preview-invaders-score" style="color:#fff; margin:0 0 10px 0;">Score: 0</p>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button id="startInvadersBtn" class="btn" style="background:#00FF00;">Start</button>
-              <button id="invadersModalCloseBtn" class="btn" style="background:#FF5555;">Close</button>
+              <button id="preview-startInvadersBtn" class="btn" style="background:#00FF00;">Start</button>
+              <button id="preview-invadersModalCloseBtn" class="btn" style="background:#FF5555;">Close</button>
             </div>
             <p style="color:#ccc; margin-top:12px;">Controls: ← → to move, Space to fire. Destroy waves to advance levels.</p>
           </div>
@@ -144,33 +150,7 @@
 
   <script src="login.js"></script>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Only advance or admin users allowed
-      if (!enforcePageAccess('preview-games.html')) return;
-
-      document.getElementById('reportForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const gameName = document.getElementById('gameName').value.trim();
-        const reportText = document.getElementById('reportText').value.trim();
-        const user = localStorage.getItem('username') || 'Unknown';
-        if (!gameName || !reportText) {
-          document.getElementById('reportMessage').textContent = 'Please complete the form.';
-          return;
-        }
-        // For now use mailto to submit the report to maintainence email
-        const subject = encodeURIComponent('Preview Game Report: ' + gameName);
-        const body = encodeURIComponent(`User: ${user}\nGame: ${gameName}\n\nReport:\n${reportText}`);
-        window.location.href = `mailto:maintinence2025@outlook.com?subject=${subject}&body=${body}`;
-        // Optional: show a quick confirmation before mail client opens
-        setTimeout(() => {
-          document.getElementById('reportMessage').textContent = 'Opening your email client to send the report...';
-        }, 100);
-      });
-    });
-  </script>
-
-  <!-- only preview-games.js is required now; invaders code is included inside it -->
+  <!-- only preview-games.js is required now; it contains the preview simple tetris and preview invaders -->
   <script src="preview-games.js"></script>
 </body>
 </html>
