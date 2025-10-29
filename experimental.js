@@ -436,7 +436,8 @@ const racerState = {
   speedLines: [],
   spawnTimer: 0, // decreases with progress
   animationFrame: null,
-  gapWidthMultiplier: 2.2, // start with larger gaps (far apart), will tighten to 1.3
+  // START MUCH WIDER: begin with 500% of vehicle width, tighten toward 250% (2.5x)
+  gapWidthMultiplier: 5.0, // initial multiplier (500%)
   particles: [], // visual particles for bursts
   laneLerpSpeed: 0.18 // how fast car slides between lanes
 };
@@ -605,7 +606,8 @@ function spawnObstacle() {
     color: `hsl(${colorHue}, 90%, 60%)`
   });
   // spawnTimer depends on progress (less time as you dodge more)
-  racerState.spawnTimer = Math.max(80, 220 - racerState.dodged * 8 + Math.random() * 80);
+  // START FARTHER APART: higher baseline so initial obstacles are more spaced
+  racerState.spawnTimer = Math.max(100, 320 - racerState.dodged * 10 + Math.random() * 120);
 }
 
 function resetObstacles() {
@@ -633,8 +635,9 @@ function updateRacer(delta) {
   racerState.distance += traveled;
   racerState.spawnTimer -= traveled;
 
-  // tighten gap multiplier gradually toward 1.3 as you progress
-  racerState.gapWidthMultiplier = Math.max(1.3, 2.2 - racerState.dodged * 0.06);
+  // tighten gap multiplier gradually toward 2.5 (250% of vehicle width) as you progress
+  // START = 5.0, tighten by 0.12 per dodged to reach 2.5 after ~21 dodges
+  racerState.gapWidthMultiplier = Math.max(2.5, 5.0 - racerState.dodged * 0.12);
 
   if (racerState.spawnTimer <= 0) {
     spawnObstacle();
@@ -755,7 +758,8 @@ function resetRacer() {
   racerState.distance = 0;
   racerState.dodged = 0;
   racerState.speedLines = [];
-  racerState.gapWidthMultiplier = 2.2; 
+  // reset to the new wider initial gap multiplier
+  racerState.gapWidthMultiplier = 5.0; 
   racerState.particles = [];
   resetObstacles();
   ensureSpeedLines();
