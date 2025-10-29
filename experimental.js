@@ -381,7 +381,7 @@ function drawFrame() {
 
 // Checks keys (only when modal is open)
 document.addEventListener('keydown', event => {
-  if (!tetrisModal || tetrisModal.style.display !== 'flex' || !game) return;
+  if (tetrisModal && tetrisModal.style.display !== 'flex' || !game) return;
 
   if (
     ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(event.key) ||
@@ -416,14 +416,17 @@ function initTetrisGame() {
 const laneCount = 3;
 const laneWidth = racerCanvas ? racerCanvas.width / laneCount : 100;
 
+// playerCar now has baseWidth and smooth x for nicer movement
 const playerCar = {
   lane: 1,
+  baseWidth: laneWidth * 0.55,
   width: laneWidth * 0.55,
   height: 58,
-  y: racerCanvas ? racerCanvas.height - 90 : 410
+  y: racerCanvas ? racerCanvas.height - 90 : 410,
+  x: 0 // pixel x, will be set in reset
 };
 
-const state = {
+const racerState = {
   running: false,
   lastTimestamp: 0,
   speed: 180,
@@ -431,50 +434,87 @@ const state = {
   dodged: 0,
   obstacles: [],
   speedLines: [],
-  spawnTimer: 0,
+  spawnTimer: 0, // decreases with progress
   animationFrame: null,
-  gapWidthMultiplier: 1.7 
+  gapWidthMultiplier: 2.2, // start with larger gaps (far apart), will tighten to 1.3
+  particles: [], // visual particles for bursts
+  laneLerpSpeed: 0.18 // how fast car slides between lanes
 };
 
 const obstacleHeight = 60;
 const laneCenters = Array.from({ length: laneCount }, (_, i) => i * laneWidth + laneWidth / 2);
 
-function drawBackground() {
+// Particles for visual flair
+function spawnParticles(x, y, color, count = 12) {
+  for (let i = 0; i < count; i++) {
+    racerState.particles.push({
+      x: x + (Math.random() - 0.5) * 20,
+      y: y + (Math.random() - 0.5) * 12,
+      vx: (Math.random() - 0.5) * 2,
+      vy: -1 - Math.random() * 1.6,
+      life: 30 + Math.random() * 20,
+      color
+    });
+  }
+}
+
+function drawParticles() {
   if (!racerCtx) return;
+  for (let i = racerState.particles.length - 1; i >= 0; i--) {
+    const p = racerState.particles[i];
+    racerCtx.globalAlpha = Math.max(0, p.life / 50);
+    racerCtx.fillStyle = p.color;
+    racerCtx.beginPath();
+    racerCtx.arc(p.x, p.y, Math.max(1, p.life / 12), 0, Math.PI * 2);
+    racerCtx.fill();
+    racerCtx.globalAlpha = 1;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.04;
+    p.vx *= 0.99;
+    p.life--;
+    if (p.life <= 0) racerState.particles.splice(i, 1);
+  }
+}
+
+// BACKGROUND & HUD visuals
+function drawBackground() {
+  if (!racerCtx || !racerCanvas) return;
+  // gradient sky
   const gradient = racerCtx.createLinearGradient(0, 0, 0, racerCanvas.height);
-  gradient.addColorStop(0, '#050417');
+  gradient.addColorStop(0, '#03051a');
+  gradient.addColorStop(0.6, '#050417');
   gradient.addColorStop(1, '#0a0e24');
   racerCtx.fillStyle = gradient;
   racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
 
-  racerCtx.fillStyle = '#0b1329';
-  racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
-
-  racerCtx.fillStyle = '#02040c';
+  // neon edge bars
+  racerCtx.fillStyle = 'rgba(0,255,255,0.06)';
   racerCtx.fillRect(0, 0, 40, racerCanvas.height);
   racerCtx.fillRect(racerCanvas.width - 40, 0, 40, racerCanvas.height);
 
-  racerCtx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
-  racerCtx.lineWidth = 4;
+  // border
+  racerCtx.strokeStyle = 'rgba(0,255,255,0.14)';
+  racerCtx.lineWidth = 3;
   racerCtx.strokeRect(6, 6, racerCanvas.width - 12, racerCanvas.height - 12);
 
-  racerCtx.setLineDash([16, 24]);
-  racerCtx.lineWidth = 3;
-  racerCtx.strokeStyle = 'rgba(255,255,255,0.15)';
-  racerCtx.beginPath();
-  racerCtx.moveTo(laneWidth, 0);
-  racerCtx.lineTo(laneWidth, racerCanvas.height);
-  racerCtx.moveTo(laneWidth * 2, 0);
-  racerCtx.lineTo(laneWidth * 2, racerCanvas.height);
-  racerCtx.stroke();
-  racerCtx.setLineDash([]);
+  // moving horizon lines for speed effect
+  racerCtx.lineWidth = 2;
+  racerCtx.strokeStyle = 'rgba(28, 255, 255, 0.06)';
+  const base = Math.floor((performance.now() / 40) % 30);
+  for (let i = 0; i < 10; i++) {
+    racerCtx.beginPath();
+    racerCtx.moveTo(0, 120 + (i * 30) + base);
+    racerCtx.lineTo(racerCanvas.width, 120 + (i * 30) + base - ((i % 2) * 6));
+    racerCtx.stroke();
+  }
 }
 
 function drawSpeedLines() {
   if (!racerCtx) return;
-  racerCtx.strokeStyle = 'rgba(0, 255, 255, 0.35)';
+  racerCtx.strokeStyle = 'rgba(0, 255, 255, 0.28)';
   racerCtx.lineWidth = 2;
-  state.speedLines.forEach(line => {
+  racerState.speedLines.forEach(line => {
     racerCtx.beginPath();
     racerCtx.moveTo(line.x, line.y);
     racerCtx.lineTo(line.x, line.y + line.length);
@@ -484,24 +524,43 @@ function drawSpeedLines() {
 
 function drawPlayer() {
   if (!racerCtx) return;
-  const centerX = laneCenters[playerCar.lane];
-  const left = centerX - playerCar.width / 2;
+  // smooth x lerp towards target lane center
+  const targetX = laneCenters[playerCar.lane];
+  playerCar.x += (targetX - playerCar.x) * racerState.laneLerpSpeed;
+
+  const left = playerCar.x - playerCar.width / 2;
   racerCtx.save();
-  racerCtx.shadowColor = '#2cf5ff';
-  racerCtx.shadowBlur = 18;
+
+  // outer glow
+  racerCtx.shadowColor = '#19d7ff';
+  racerCtx.shadowBlur = 20;
   racerCtx.fillStyle = '#19d7ff';
-  racerCtx.fillRect(left, playerCar.y, playerCar.width, playerCar.height);
+  racerCtx.fillRect(left - 2, playerCar.y - 2, playerCar.width + 4, playerCar.height + 4);
   racerCtx.shadowBlur = 0;
+
+  // body
   racerCtx.fillStyle = '#0b1f3a';
   racerCtx.fillRect(left + 6, playerCar.y + 10, playerCar.width - 12, playerCar.height - 20);
+
+  // highlights
   racerCtx.fillStyle = '#19d7ff';
   racerCtx.fillRect(left + playerCar.width / 2 - 6, playerCar.y + 6, 12, playerCar.height - 12);
+
+  // top canopy
+  racerCtx.fillStyle = '#3be7ff';
+  racerCtx.fillRect(left + 6, playerCar.y + 2, playerCar.width - 12, 6);
+
+  // small exhaust trail based on speed
+  racerCtx.fillStyle = 'rgba(10, 200, 255, 0.08)';
+  const trailWidth = Math.min(40, Math.floor((racerState.speed - 160) / 6));
+  racerCtx.fillRect(left + playerCar.width / 2 - trailWidth / 2, playerCar.y + playerCar.height + 4, trailWidth, 8);
+
   racerCtx.restore();
 }
 
 function drawObstacles() {
   if (!racerCtx) return;
-  state.obstacles.forEach(ob => {
+  racerState.obstacles.forEach(ob => {
     const top = ob.y;
     const bottom = ob.y + obstacleHeight;
     const gapLeft = ob.gapCenter - ob.gapWidth / 2;
@@ -509,18 +568,27 @@ function drawObstacles() {
 
     racerCtx.save();
     racerCtx.shadowColor = ob.color;
-    racerCtx.shadowBlur = 14;
+    racerCtx.shadowBlur = 16;
     racerCtx.fillStyle = ob.color;
+    // left chunk
     if (gapLeft > 0) {
       racerCtx.fillRect(0, top, gapLeft, obstacleHeight);
+      // neon edge
+      racerCtx.strokeStyle = 'rgba(255,255,255,0.06)';
+      racerCtx.lineWidth = 1;
+      racerCtx.strokeRect(Math.max(0, gapLeft - 6), top, 6, obstacleHeight);
     }
+    // right chunk
     if (gapRight < racerCanvas.width) {
       racerCtx.fillRect(gapRight, top, racerCanvas.width - gapRight, obstacleHeight);
+      racerCtx.strokeStyle = 'rgba(255,255,255,0.06)';
+      racerCtx.lineWidth = 1;
+      racerCtx.strokeRect(gapRight, top, 6, obstacleHeight);
     }
     racerCtx.restore();
 
-    racerCtx.fillStyle = 'rgba(255,255,255,0.08)';
-    racerCtx.fillRect(gapLeft, top, ob.gapWidth, 4);
+    racerCtx.fillStyle = 'rgba(255,255,255,0.06)';
+    racerCtx.fillRect(gapLeft, top + 2, ob.gapWidth, 4);
   });
 }
 
@@ -528,86 +596,112 @@ function spawnObstacle() {
   const gapLane = Math.floor(Math.random() * laneCount);
   const colorHue = Math.floor(Math.random() * 360);
   const gapCenter = laneCenters[gapLane];
-  const gapWidth = playerCar.width * state.gapWidthMultiplier;
-  state.obstacles.push({
+  // gap scales with player's base width and dynamic multiplier
+  const gapWidth = playerCar.baseWidth * racerState.gapWidthMultiplier;
+  racerState.obstacles.push({
     y: -obstacleHeight,
     gapCenter,
     gapWidth,
     color: `hsl(${colorHue}, 90%, 60%)`
   });
-  state.spawnTimer = 180 + Math.random() * 140;
+  // spawnTimer depends on progress (less time as you dodge more)
+  racerState.spawnTimer = Math.max(80, 220 - racerState.dodged * 8 + Math.random() * 80);
 }
 
 function resetObstacles() {
-  state.obstacles = [];
-  state.spawnTimer = 0;
+  racerState.obstacles = [];
+  racerState.spawnTimer = 0;
 }
 
 function ensureSpeedLines() {
   if (!racerCanvas) return;
-  while (state.speedLines.length < 12) {
-    state.speedLines.push({
+  while (racerState.speedLines.length < 14) {
+    racerState.speedLines.push({
       x: 60 + Math.random() * (racerCanvas.width - 120),
       y: Math.random() * racerCanvas.height,
-      length: 18 + Math.random() * 26
+      length: 18 + Math.random() * 28
     });
   }
 }
 
 function updateRacer(delta) {
   if (!racerCanvas) return;
-  const pixelsPerMs = (state.speed / 1000) * 1.25;
+  // dynamic speed scaling: increase with dodged
+  racerState.speed = Math.min(520, 180 + racerState.dodged * 6 + Math.floor(racerState.distance / 800));
+  const pixelsPerMs = (racerState.speed / 1000) * 1.25;
   const traveled = pixelsPerMs * delta;
-  state.distance += traveled;
-  state.spawnTimer -= traveled;
+  racerState.distance += traveled;
+  racerState.spawnTimer -= traveled;
 
-  if (state.spawnTimer <= 0) {
+  // tighten gap multiplier gradually toward 1.3 as you progress
+  racerState.gapWidthMultiplier = Math.max(1.3, 2.2 - racerState.dodged * 0.06);
+
+  if (racerState.spawnTimer <= 0) {
     spawnObstacle();
   }
 
-  state.obstacles.forEach(ob => {
+  // Move obstacles
+  racerState.obstacles.forEach(ob => {
     ob.y += traveled;
   });
 
-  state.obstacles = state.obstacles.filter(ob => {
+  // Filter obstacles and handle dodges
+  racerState.obstacles = racerState.obstacles.filter(ob => {
     if (ob.y > racerCanvas.height) {
-      state.dodged += 1;
-      if (state.dodged > 0 && state.dodged % 10 === 0) {
-        state.speed = Math.min(340, state.speed + 15);
-        state.gapWidthMultiplier = Math.max(1.15, state.gapWidthMultiplier - 0.05);
+      racerState.dodged += 1;
+      // spawn a small particle burst to reward the player visually
+      spawnParticles(ob.gapCenter, racerCanvas.height - 40, 'rgba(30,240,255,0.9)', 16);
+
+      // As you dodge more, gaps tighten (already handled), and speed increases.
+      // Also we slightly increase player's visible width up to 130% for "coolness"
+      const scale = Math.min(1.3, 1 + racerState.dodged * 0.02);
+      playerCar.width = playerCar.baseWidth * scale;
+
+      // After certain milestones (every 10 dodges) give a message / small boost
+      if (racerState.dodged > 0 && racerState.dodged % 10 === 0) {
+        racerState.speed = Math.min(520, racerState.speed + 24);
+        if (racerMessageEl) racerMessageEl.textContent = `Boost! Speed increased.`;
       }
       return false;
     }
     return true;
   });
 
-  state.speedLines.forEach(line => {
-    line.y += traveled * 1.4;
+  // Move speed lines for parallax speed feel
+  racerState.speedLines.forEach(line => {
+    line.y += traveled * 1.6;
   });
-  state.speedLines = state.speedLines.filter(line => line.y < racerCanvas.height + 40);
+  racerState.speedLines = racerState.speedLines.filter(line => line.y < racerCanvas.height + 40);
   ensureSpeedLines();
 
-  const carCenter = laneCenters[playerCar.lane];
+  // Collision check against obstacles
+  const carCenter = playerCar.x;
   const carLeft = carCenter - playerCar.width / 2;
   const carRight = carCenter + playerCar.width / 2;
   const carTop = playerCar.y;
   const carBottom = playerCar.y + playerCar.height;
 
-  for (const ob of state.obstacles) {
+  for (const ob of racerState.obstacles) {
     const obTop = ob.y;
     const obBottom = ob.y + obstacleHeight;
     if (carBottom <= obTop || carTop >= obBottom) continue;
     const gapLeft = ob.gapCenter - ob.gapWidth / 2;
     const gapRight = ob.gapCenter + ob.gapWidth / 2;
+    // check overlap: if any part of car outside the gap => crash
     if (carLeft < gapLeft || carRight > gapRight) {
-      state.running = false;
-      if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
+      racerState.running = false;
+      if (racerState.animationFrame) cancelAnimationFrame(racerState.animationFrame);
       if (racerMessageEl) {
         racerMessageEl.textContent = 'Crash! Reset to roll out again.';
       }
+      // explosion particles
+      spawnParticles(playerCar.x, playerCar.y + playerCar.height / 2, '#ff5a3c', 28);
       return;
     }
   }
+
+  // Update particles
+  drawParticles();
 }
 
 function renderRacer() {
@@ -615,34 +709,36 @@ function renderRacer() {
   drawSpeedLines();
   drawObstacles();
   drawPlayer();
+  // Draw particles on top
+  drawParticles();
 }
 
 function gameLoop(timestamp) {
-  if (!state.running) return;
-  const delta = timestamp - state.lastTimestamp;
-  state.lastTimestamp = timestamp;
+  if (!racerState.running) return;
+  const delta = timestamp - racerState.lastTimestamp;
+  racerState.lastTimestamp = timestamp;
   updateRacer(delta);
   renderRacer();
   updateHud();
-  if (state.running) {
-    state.animationFrame = requestAnimationFrame(gameLoop);
+  if (racerState.running) {
+    racerState.animationFrame = requestAnimationFrame(gameLoop);
   }
 }
 
 function startRacer() {
-  if (state.running) return;
+  if (racerState.running) return;
   if (racerMessageEl) {
     racerMessageEl.textContent = 'Neon boost engaged!';
   }
-  state.running = true;
-  state.lastTimestamp = performance.now();
-  state.animationFrame = requestAnimationFrame(gameLoop);
+  racerState.running = true;
+  racerState.lastTimestamp = performance.now();
+  racerState.animationFrame = requestAnimationFrame(gameLoop);
 }
 
 function pauseRacer() {
-  if (!state.running) return;
-  state.running = false;
-  if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
+  if (!racerState.running) return;
+  racerState.running = false;
+  if (racerState.animationFrame) cancelAnimationFrame(racerState.animationFrame);
   if (racerMessageEl) {
     racerMessageEl.textContent = 'Paused. Hit start to keep racing.';
   }
@@ -651,11 +747,16 @@ function pauseRacer() {
 function resetRacer() {
   pauseRacer();
   playerCar.lane = 1;
-  state.speed = 180;
-  state.distance = 0;
-  state.dodged = 0;
-  state.speedLines = [];
-  state.gapWidthMultiplier = 1.7; 
+  playerCar.baseWidth = laneWidth * 0.55;
+  playerCar.width = playerCar.baseWidth;
+  playerCar.x = laneCenters[playerCar.lane];
+  playerCar.height = 58;
+  racerState.speed = 180;
+  racerState.distance = 0;
+  racerState.dodged = 0;
+  racerState.speedLines = [];
+  racerState.gapWidthMultiplier = 2.2; 
+  racerState.particles = [];
   resetObstacles();
   ensureSpeedLines();
   renderRacer();
@@ -669,25 +770,7 @@ function shiftLane(offset) {
   const nextLane = Math.min(laneCount - 1, Math.max(0, playerCar.lane + offset));
   if (nextLane === playerCar.lane) return;
 
-  if (state.running) {
-    const carCenter = laneCenters[nextLane]; 
-    const carLeft = carCenter - playerCar.width / 2;
-    const carRight = carCenter + playerCar.width / 2;
-    const carTop = playerCar.y;
-    const carBottom = playerCar.y + playerCar.height;
-
-    for (const ob of state.obstacles) {
-      const obTop = ob.y;
-      const obBottom = ob.y + obstacleHeight;
-      if (carBottom <= obTop || carTop >= obBottom) continue;
-      const gapLeft = ob.gapCenter - ob.gapWidth / 2;
-      const gapRight = ob.gapCenter + ob.gapWidth / 2;
-      if (carLeft < gapLeft || carRight > gapRight) {
-        return;
-      }
-    }
-  }
-
+  // if running, we still allow lane shift but we animate smoothly via playerCar.x lerp
   playerCar.lane = nextLane;
   renderRacer();
   updateHud();
@@ -708,9 +791,9 @@ function handleKey(event) {
 }
 
 function updateHud() {
-  if (racerDistanceEl) racerDistanceEl.textContent = `Distance: ${Math.floor(state.distance)}m`;
-  if (racerSpeedEl) racerSpeedEl.textContent = `Speed: ${Math.floor(state.speed)} mph`;
-  if (racerObstaclesEl) racerObstaclesEl.textContent = `Gaps cleared: ${state.dodged}`;
+  if (racerDistanceEl) racerDistanceEl.textContent = `Distance: ${Math.floor(racerState.distance)}m`;
+  if (racerSpeedEl) racerSpeedEl.textContent = `Speed: ${Math.floor(racerState.speed)} mph`;
+  if (racerObstaclesEl) racerObstaclesEl.textContent = `Gaps cleared: ${racerState.dodged}`;
 }
 
 // --- INIT RACER ---
@@ -734,7 +817,7 @@ function initRacerGame() {
 
 
 // --- FULL INVADERS SCRIPT (LOGIC) ---
-// --- [ENHANCED: progressive waves, color palettes, stronger bullets & UFO] ---
+// --- [MODIFIED FOR LEVELS, UFO, AND NEW LOSE CONDITION] ---
 
 let invaderState = {
   player: { x: 140, y: 350, width: 20, height: 15, lives: 3, alive: true },
@@ -754,20 +837,8 @@ let invaderState = {
   enemyMoveInterval: 30 // Initial timer value (lower is faster)
 };
 
-// Palette per level for enemies (cycles through; each level uses next color)
+// Palette per level for enemies
 const invaderPalettes = ['#FF00FF','#FFA500','#FFFF00','#00FF00','#00FFFF','#9D00FF','#FD1C03','#FF69B4'];
-
-// Utility: AABB collision check (works with objects that have x,y,width,height and an "alive" flag or treat as alive)
-function checkCollision(objA, objB) {
-  if (!objA || !objB) return false;
-  // If objects have alive flags, ensure they're considered collidable
-  if (('alive' in objA && !objA.alive) || ('alive' in objB && !objB.alive)) return false;
-
-  return objA.x < objB.x + objB.width &&
-         objA.x + objA.width > objB.x &&
-         objA.y < objB.y + objB.height &&
-         objA.y + objA.height > objB.y;
-}
 
 function createEnemies() {
   const state = invaderState;
@@ -775,22 +846,14 @@ function createEnemies() {
   const enemyWidth = 20;
   const enemyHeight = 15;
   
-  // Rows increase slightly every two levels up to 6
-  const rows = Math.min(6, 4 + Math.floor((state.level - 1) / 2));
-
-  // horizontal spacing adjusts with canvas width
-  const totalColumns = 8;
-  const startX = 30;
-  const spacingX = enemyWidth + 10;
-
-  // NEW: Enemies start lower based on level, but capped
-  let startY = 30 + (state.level - 1) * 8;
+  // NEW: Enemies start lower based on level
+  let startY = 30 + (state.level - 1) * 10;
   startY = Math.min(startY, 150); // Cap starting height so they don't spawn too low
 
-  for (let r = 0; r < rows; r++) { // variable rows
-    for (let c = 0; c < totalColumns; c++) {
+  for (let r = 0; r < 4; r++) { // 4 rows
+    for (let c = 0; c < 8; c++) { // 8 columns
       state.enemies.push({
-        x: startX + c * spacingX,
+        x: 30 + c * (enemyWidth + 10), // 10px padding
         y: startY + r * (enemyHeight + 10),
         width: enemyWidth,
         height: enemyHeight,
@@ -828,14 +891,25 @@ function createBunkers() {
   }
 }
 
-// Core update loop for invaders
+
+// Helper: AABB collision check (now with width/height)
+function checkCollision(objA, objB) {
+  if (!objA.alive || !objB.alive) return false; // Ensure both are "collidable"
+  
+  return objA.x < objB.x + objB.width &&
+         objA.x + objA.width > objB.x &&
+         objA.y < objB.y + objB.height &&
+         objA.y + objA.height > objB.y;
+}
+
+
 function updateInvaders() {
   if (invaderState.gameOver || !invadersCanvas) return;
   const state = invaderState;
 
   // --- Player Bullet ---
   if (state.bullet.active) {
-    state.bullet.y -= 15 + (state.level - 1) * 0.6; // player's bullet slightly scales with level
+    state.bullet.y -= 15;
     if (state.bullet.y < 0) {
       state.bullet.active = false;
       state.bullet.alive = false;
@@ -860,8 +934,7 @@ function updateInvaders() {
             enemy.alive = false; 
             state.bullet.active = false;
             state.bullet.alive = false;
-            // Score scales with level to reward progress
-            state.score += 10 + (state.level - 1) * 2;
+            state.score += 10;
             if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
             break;
           }
@@ -875,7 +948,7 @@ function updateInvaders() {
             state.mysteryShip.alive = false;
             state.bullet.active = false;
             state.bullet.alive = false;
-            let bonus = ((Math.floor(Math.random() * 3) + 1) * 50) + (state.level - 1) * 10; // scale with level
+            let bonus = (Math.floor(Math.random() * 3) + 1) * 50; // 50, 100, or 150
             state.score += bonus;
             if (invadersMessageEl) invadersMessageEl.textContent = `+${bonus} POINTS!`;
         }
@@ -923,7 +996,7 @@ function updateInvaders() {
   }
 
   // --- NEW: Mystery Ship (UFO) Logic ---
-  if (!state.mysteryShip.active && Math.random() > 0.998 - (state.level * 0.0005)) {
+  if (!state.mysteryShip.active && Math.random() > 0.998) {
       state.mysteryShip.active = true;
       state.mysteryShip.alive = true;
       // Start from left or right
@@ -937,7 +1010,7 @@ function updateInvaders() {
   }
   
   if (state.mysteryShip.active) {
-      state.mysteryShip.x += state.mysteryShip.direction * (1.5 + state.level * 0.2); // UFO speed scales
+      state.mysteryShip.x += state.mysteryShip.direction * 1.5; // UFO speed
       // Deactivate if off-screen
       if (state.mysteryShip.x > invadersCanvas.width || state.mysteryShip.x < -state.mysteryShip.width) {
           state.mysteryShip.active = false;
@@ -947,9 +1020,7 @@ function updateInvaders() {
 
   // --- Enemy Shooting ---
   let aliveEnemies = state.enemies.filter(e => e.alive);
-  // Shooting becomes more frequent and slightly more likely per level. Cap threshold so it doesn't become constant.
-  let shootThreshold = Math.max(0.6, 0.98 - (state.level * 0.02));
-  if (Math.random() > shootThreshold && aliveEnemies.length > 0) { // Shoot more often on higher levels
+  if (Math.random() > (0.98 - (state.level * 0.01)) && aliveEnemies.length > 0) { // Shoot more often on higher levels
     let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
     state.enemyBullets.push({ 
         x: shooter.x + shooter.width / 2 - 2, // Center the bullet
@@ -962,7 +1033,7 @@ function updateInvaders() {
 
   // Move enemy bullets
   state.enemyBullets = state.enemyBullets.filter(bullet => {
-    bullet.y += 3 + state.level * 0.25; // bullets get slightly faster by level
+    bullet.y += 3;
     
     // Check for collision with bunkers
     for (let b = state.bunkers.length - 1; b >= 0; b--) {
@@ -1028,9 +1099,8 @@ function drawInvaders() {
       }
   });
 
-  // Draw enemies with palette by level
-  const enemyColor = invaderPalettes[(state.level - 1) % invaderPalettes.length];
-  invadersCtx.fillStyle = enemyColor;
+  // Draw enemies
+  invadersCtx.fillStyle = '#FF00FF'; // Magenta enemies
   state.enemies.forEach(enemy => {
     if (enemy.alive) {
       invadersCtx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
@@ -1039,7 +1109,7 @@ function drawInvaders() {
   
   // Draw NEW Mystery Ship
   if (state.mysteryShip.active) {
-      invadersCtx.fillStyle = '#FFD700'; // Gold UFO for visibility
+      invadersCtx.fillStyle = '#FF0000'; // Red UFO
       invadersCtx.fillRect(state.mysteryShip.x, state.mysteryShip.y, state.mysteryShip.width, state.mysteryShip.height);
   }
   
@@ -1078,20 +1148,12 @@ function startNextLevel() {
     state.bullet.active = false;
     state.bullet.alive = false;
     
-    // Increase difficulty: shorten interval and increase drop speed
+    // Set new speed based on level, capped at a minimum of 5
     state.enemyMoveInterval = Math.max(5, 30 - (state.level - 1) * 2); 
     state.enemyMoveTimer = state.enemyMoveInterval;
-    state.dropSpeed = 10 + (state.level - 1) * 2;
     
     createEnemies(); // Will spawn lower based on new level
     createBunkers(); // Respawn bunkers
-    
-    // Flash a short message in the modal color for feedback
-    if (invadersMessageEl) {
-      const palette = invaderPalettes[(state.level - 1) % invaderPalettes.length];
-      invadersMessageEl.style.color = palette;
-      setTimeout(() => { if (invadersMessageEl) invadersMessageEl.style.color = '#eee'; }, 1200);
-    }
 }
 
 function startInvaders() {
@@ -1115,7 +1177,6 @@ function startInvaders() {
   invaderState.enemyMoveInterval = 30; // Reset to level 1 speed
   invaderState.mysteryShip.active = false;
   invaderState.mysteryShip.alive = false;
-  invaderState.dropSpeed = 10;
   
   if (invadersScoreEl) invadersScoreEl.textContent = "Score: 0";
   if (invadersMessageEl) invadersMessageEl.textContent = "Good luck!";
@@ -1138,7 +1199,7 @@ function stopInvaders(message = "GAME OVER") {
 
 function handleInvadersKey(event) {
   // Only run if the invaders modal is open
-  if (!invadersModal || invadersModal.style.display !== 'flex') return;
+  if (invadersModal.style.display !== 'flex') return;
 
   const state = invaderState;
   
