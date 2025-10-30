@@ -447,7 +447,8 @@ const racerState = {
   explosionParticles: [], // detailed crash particles (shards + smoke)
   laneLerpSpeed: 0.18, // how fast car slides between lanes
   shake: { time: 0, intensity: 0 }, // screen shake state
-  flash: { alpha: 0 } // crash flash
+  flash: { alpha: 0 }, // crash flash
+  crashAnimId: null // requestAnimationFrame id for crash animation loop
 };
 
 const obstacleHeight = 60;
@@ -512,7 +513,7 @@ function spawnCrash(x, y) {
   racerState.flash.alpha = 0.95;
 }
 
-// Draw explosion and normal particles
+// Draw explosion and normal particles and also advance their physics
 function drawParticles() {
   if (!racerCtx) return;
 
@@ -523,7 +524,8 @@ function drawParticles() {
     if (p.type === 'shard') {
       // draw rotated rectangle shard
       racerCtx.save();
-      racerCtx.globalAlpha = Math.max(0, p.life / 120);
+      const alpha = Math.max(0, p.life / 120);
+      racerCtx.globalAlpha = alpha;
       racerCtx.fillStyle = p.color;
       racerCtx.translate(p.x, p.y);
       racerCtx.rotate(p.angle);
@@ -746,6 +748,39 @@ function applyShakeTransform() {
   return {dx:0, dy:0};
 }
 
+// Crash animation loop runs after the main game stops, so flash/shake/smoke/shards can play out.
+// It repeatedly renders frames until explosion particles and flash/shake are finished.
+function startCrashAnimation() {
+  // Cancel any previous crash animation
+  if (racerState.crashAnimId) {
+    cancelAnimationFrame(racerState.crashAnimId);
+    racerState.crashAnimId = null;
+  }
+
+  const loop = (timestamp) => {
+    // We still want to update particle physics each frame (drawParticles advances them)
+    // and render the current state. renderRacer does both.
+    renderRacer();
+
+    // Keep the loop running while there are active crash visuals
+    const activeParticles = (racerState.explosionParticles && racerState.explosionParticles.length > 0)
+                           || (racerState.particles && racerState.particles.length > 0);
+    const activeShake = racerState.shake.time > 0;
+    const activeFlash = racerState.flash.alpha > 0.02;
+
+    if (activeParticles || activeShake || activeFlash) {
+      racerState.crashAnimId = requestAnimationFrame(loop);
+    } else {
+      // stop animating; clear any residual small alpha
+      racerState.flash.alpha = 0;
+      racerState.crashAnimId = null;
+      // Leave the screen showing the post-crash state; user can Reset to return to normal
+    }
+  };
+
+  racerState.crashAnimId = requestAnimationFrame(loop);
+}
+
 function updateRacer(delta) {
   if (!racerCanvas) return;
   // dynamic speed scaling: increase with dodged
@@ -811,9 +846,18 @@ function updateRacer(delta) {
     // check overlap: if any part of car outside the gap => crash
     if (carLeft < gapLeft || carRight > gapRight) {
       // enhanced crash sequence
+      // cancel the running game frame if any
+      if (racerState.animationFrame) {
+        cancelAnimationFrame(racerState.animationFrame);
+        racerState.animationFrame = null;
+      }
+
       spawnCrash(playerCar.x, playerCar.y + playerCar.height / 2);
+
+      // stop the main game loop but start crash animation loop so flash/shake/smoke play out
       racerState.running = false;
-      if (racerState.animationFrame) cancelAnimationFrame(racerState.animationFrame);
+      startCrashAnimation();
+
       if (racerMessageEl) {
         racerMessageEl.textContent = 'Crash! Reset to roll out again.';
       }
@@ -821,7 +865,8 @@ function updateRacer(delta) {
     }
   }
 
-  // Update explosion & particles
+  // Update explosion & particles (drawParticles advances them)
+  // But we don't render here; render happens in main loop
   drawParticles();
 }
 
@@ -846,6 +891,7 @@ function renderRacer() {
   if (racerState.flash.alpha > 0) {
     racerCtx.fillStyle = `rgba(255,255,255,${racerState.flash.alpha})`;
     racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
+    // decay flash even if game not running; this will be processed by the crash animation loop
     racerState.flash.alpha *= 0.92;
     if (racerState.flash.alpha < 0.02) racerState.flash.alpha = 0;
   }
@@ -885,6 +931,12 @@ function pauseRacer() {
 }
 
 function resetRacer() {
+  // Stop any running crash animation too
+  if (racerState.crashAnimId) {
+    cancelAnimationFrame(racerState.crashAnimId);
+    racerState.crashAnimId = null;
+  }
+
   pauseRacer();
   playerCar.lane = 1;
   playerCar.baseWidth = laneWidth * 0.55;
@@ -1359,7 +1411,7 @@ function stopInvaders(message = "GAME OVER") {
 
 function handleInvadersKey(event) {
   // Only run if the invaders modal is open
-  if (invadersModal.style.display !== 'flex') return;
+  if (!invadersModal || invadersModal.style.display !== 'flex') return;
 
   const state = invaderState;
   
