@@ -434,10 +434,15 @@ const racerState = {
   dodged: 0,
   obstacles: [],
   speedLines: [],
-  spawnTimer: 0, // decreases with progress
+  spawnTimer: 0, // decreases with progress (measured in "forward" pixels)
   animationFrame: null,
-  // START MUCH WIDER: begin with 500% of vehicle width, tighten toward 250% (2.5x)
-  gapWidthMultiplier: 5.0, // initial multiplier (500%)
+  // LATERAL (side-to-side) gap multiplier: keep constant at 1.2 (120% of vehicle base width)
+  gapWidthMultiplier: 1.2, // SIDE-TO-SIDE constant as requested
+  // FORWARD spacing tuning (start easier / larger distance, then tighten)
+  spawnStartDistance: 420, // starting forward distance between obstacle bars
+  spawnMinDistance: 120,   // minimum forward distance as difficulty increases
+  spawnVariance: 120,      // random variation added each spawn
+  spawnTightenRate: 10,    // how much forward distance reduces per cleared gap (in pixels)
   particles: [], // visual particles for bursts
   laneLerpSpeed: 0.18 // how fast car slides between lanes
 };
@@ -597,7 +602,7 @@ function spawnObstacle() {
   const gapLane = Math.floor(Math.random() * laneCount);
   const colorHue = Math.floor(Math.random() * 360);
   const gapCenter = laneCenters[gapLane];
-  // gap scales with player's base width and dynamic multiplier
+  // LATERAL gap is constant at 120% of vehicle base width (side-to-side spacing)
   const gapWidth = playerCar.baseWidth * racerState.gapWidthMultiplier;
   racerState.obstacles.push({
     y: -obstacleHeight,
@@ -605,9 +610,12 @@ function spawnObstacle() {
     gapWidth,
     color: `hsl(${colorHue}, 90%, 60%)`
   });
-  // spawnTimer depends on progress (less time as you dodge more)
-  // START FARTHER APART: higher baseline so initial obstacles are more spaced
-  racerState.spawnTimer = Math.max(100, 320 - racerState.dodged * 10 + Math.random() * 120);
+  // FORWARD spacing: start easier (long distance) then tighten as player clears gaps
+  const dynamicForward = Math.max(
+    racerState.spawnMinDistance,
+    racerState.spawnStartDistance - racerState.dodged * racerState.spawnTightenRate
+  );
+  racerState.spawnTimer = dynamicForward + Math.random() * racerState.spawnVariance;
 }
 
 function resetObstacles() {
@@ -635,9 +643,8 @@ function updateRacer(delta) {
   racerState.distance += traveled;
   racerState.spawnTimer -= traveled;
 
-  // tighten gap multiplier gradually toward 2.5 (250% of vehicle width) as you progress
-  // START = 5.0, tighten by 0.12 per dodged to reach 2.5 after ~21 dodges
-  racerState.gapWidthMultiplier = Math.max(2.5, 5.0 - racerState.dodged * 0.12);
+  // NOTE: SIDE-TO-SIDE gap is fixed at 1.2× vehicle base width (no change here)
+  // racerState.gapWidthMultiplier remains constant
 
   if (racerState.spawnTimer <= 0) {
     spawnObstacle();
@@ -655,12 +662,11 @@ function updateRacer(delta) {
       // spawn a small particle burst to reward the player visually
       spawnParticles(ob.gapCenter, racerCanvas.height - 40, 'rgba(30,240,255,0.9)', 16);
 
-      // As you dodge more, gaps tighten (already handled), and speed increases.
-      // Also we slightly increase player's visible width up to 130% for "coolness"
+      // player grows slightly up to 130% for visual effect
       const scale = Math.min(1.3, 1 + racerState.dodged * 0.02);
       playerCar.width = playerCar.baseWidth * scale;
 
-      // After certain milestones (every 10 dodges) give a message / small boost
+      // milestone boosts
       if (racerState.dodged > 0 && racerState.dodged % 10 === 0) {
         racerState.speed = Math.min(520, racerState.speed + 24);
         if (racerMessageEl) racerMessageEl.textContent = `Boost! Speed increased.`;
@@ -758,8 +764,12 @@ function resetRacer() {
   racerState.distance = 0;
   racerState.dodged = 0;
   racerState.speedLines = [];
-  // reset to the new wider initial gap multiplier
-  racerState.gapWidthMultiplier = 5.0; 
+  // reset lateral gap to constant 120% and forward spawn settings back to "easy start"
+  racerState.gapWidthMultiplier = 1.2;
+  racerState.spawnStartDistance = 420;
+  racerState.spawnMinDistance = 120;
+  racerState.spawnVariance = 120;
+  racerState.spawnTightenRate = 10;
   racerState.particles = [];
   resetObstacles();
   ensureSpeedLines();
@@ -1104,7 +1114,8 @@ function drawInvaders() {
   });
 
   // Draw enemies
-  invadersCtx.fillStyle = '#FF00FF'; // Magenta enemies
+  const enemyColor = invaderPalettes[(state.level - 1) % invaderPalettes.length];
+  invadersCtx.fillStyle = enemyColor;
   state.enemies.forEach(enemy => {
     if (enemy.alive) {
       invadersCtx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
@@ -1113,7 +1124,7 @@ function drawInvaders() {
   
   // Draw NEW Mystery Ship
   if (state.mysteryShip.active) {
-      invadersCtx.fillStyle = '#FF0000'; // Red UFO
+      invadersCtx.fillStyle = '#FFD700'; // Gold UFO
       invadersCtx.fillRect(state.mysteryShip.x, state.mysteryShip.y, state.mysteryShip.width, state.mysteryShip.height);
   }
   
@@ -1152,12 +1163,20 @@ function startNextLevel() {
     state.bullet.active = false;
     state.bullet.alive = false;
     
-    // Set new speed based on level, capped at a minimum of 5
+    // Increase difficulty: shorten interval and increase drop speed
     state.enemyMoveInterval = Math.max(5, 30 - (state.level - 1) * 2); 
     state.enemyMoveTimer = state.enemyMoveInterval;
+    state.dropSpeed = 10 + (state.level - 1) * 2;
     
     createEnemies(); // Will spawn lower based on new level
     createBunkers(); // Respawn bunkers
+    
+    // Flash a short message in the modal color for feedback
+    if (invadersMessageEl) {
+      const palette = invaderPalettes[(state.level - 1) % invaderPalettes.length];
+      invadersMessageEl.style.color = palette;
+      setTimeout(() => { if (invadersMessageEl) invadersMessageEl.style.color = '#eee'; }, 1200);
+    }
 }
 
 function startInvaders() {
@@ -1181,6 +1200,7 @@ function startInvaders() {
   invaderState.enemyMoveInterval = 30; // Reset to level 1 speed
   invaderState.mysteryShip.active = false;
   invaderState.mysteryShip.alive = false;
+  invaderState.dropSpeed = 10;
   
   if (invadersScoreEl) invadersScoreEl.textContent = "Score: 0";
   if (invadersMessageEl) invadersMessageEl.textContent = "Good luck!";
@@ -1203,7 +1223,7 @@ function stopInvaders(message = "GAME OVER") {
 
 function handleInvadersKey(event) {
   // Only run if the invaders modal is open
-  if (invadersModal.style.display !== 'flex') return;
+  if (!invadersModal || invadersModal.style.display !== 'flex') return;
 
   const state = invaderState;
   
