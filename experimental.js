@@ -444,42 +444,138 @@ const racerState = {
   spawnVariance: 120,      // random variation added each spawn
   spawnTightenRate: 10,    // how much forward distance reduces per cleared gap (in pixels)
   particles: [], // visual particles for bursts
-  laneLerpSpeed: 0.18 // how fast car slides between lanes
+  explosionParticles: [], // detailed crash particles (shards + smoke)
+  laneLerpSpeed: 0.18, // how fast car slides between lanes
+  shake: { time: 0, intensity: 0 }, // screen shake state
+  flash: { alpha: 0 } // crash flash
 };
 
 const obstacleHeight = 60;
 const laneCenters = Array.from({ length: laneCount }, (_, i) => i * laneWidth + laneWidth / 2);
 
-// Particles for visual flair
+// Particles for visual flair (light sparks)
 function spawnParticles(x, y, color, count = 12) {
   for (let i = 0; i < count; i++) {
     racerState.particles.push({
+      type: 'spark',
       x: x + (Math.random() - 0.5) * 20,
       y: y + (Math.random() - 0.5) * 12,
-      vx: (Math.random() - 0.5) * 2,
+      vx: (Math.random() - 0.5) * 2.5,
       vy: -1 - Math.random() * 1.6,
-      life: 30 + Math.random() * 20,
+      life: 30 + Math.random() * 30,
+      size: 1 + Math.random() * 2,
       color
     });
   }
 }
 
+// Crash: shards + smoke + sparks + shake + flash
+function spawnCrash(x, y) {
+  // shards: metal pieces
+  const shardCount = 18 + Math.floor(Math.random() * 8);
+  for (let i = 0; i < shardCount; i++) {
+    racerState.explosionParticles.push({
+      type: 'shard',
+      x: x + (Math.random() - 0.5) * 36,
+      y: y + (Math.random() - 0.5) * 18,
+      vx: (Math.random() - 0.5) * (4 + Math.random() * 6),
+      vy: -2 - Math.random() * 6,
+      life: 40 + Math.random() * 60,
+      size: 4 + Math.random() * 8,
+      angle: Math.random() * Math.PI * 2,
+      angularVel: (Math.random() - 0.5) * 0.4,
+      color: `hsl(${Math.floor(Math.random()*40)},80%,60%)` // orange-ish shards
+    });
+  }
+
+  // smoke: expanding soft puffs
+  const smokeCount = 8 + Math.floor(Math.random() * 6);
+  for (let i = 0; i < smokeCount; i++) {
+    racerState.explosionParticles.push({
+      type: 'smoke',
+      x: x + (Math.random() - 0.5) * 30,
+      y: y + (Math.random() - 0.5) * 10,
+      vx: (Math.random() - 0.5) * 1.2,
+      vy: -0.6 - Math.random() * 1.2,
+      life: 50 + Math.random() * 50,
+      size: 10 + Math.random() * 20,
+      alpha: 0.45 + Math.random() * 0.15
+    });
+  }
+
+  // small sparks
+  spawnParticles(x, y, 'rgba(255,200,120,0.95)', 12);
+
+  // screen shake and flash
+  racerState.shake.time = 28 + Math.floor(Math.random() * 18);
+  racerState.shake.intensity = 6 + Math.random() * 8;
+  racerState.flash.alpha = 0.95;
+}
+
+// Draw explosion and normal particles
 function drawParticles() {
   if (!racerCtx) return;
+
+  // Explosion particles (shards + smoke)
+  for (let i = racerState.explosionParticles.length - 1; i >= 0; i--) {
+    const p = racerState.explosionParticles[i];
+
+    if (p.type === 'shard') {
+      // draw rotated rectangle shard
+      racerCtx.save();
+      racerCtx.globalAlpha = Math.max(0, p.life / 120);
+      racerCtx.fillStyle = p.color;
+      racerCtx.translate(p.x, p.y);
+      racerCtx.rotate(p.angle);
+      racerCtx.fillRect(-p.size/2, -p.size/3, p.size, Math.max(1, p.size/2));
+      racerCtx.restore();
+
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.18; // gravity
+      p.vx *= 0.995;
+      p.angle += p.angularVel;
+      p.life -= 1;
+      if (p.life <= 0) racerState.explosionParticles.splice(i, 1);
+    } else if (p.type === 'smoke') {
+      racerCtx.save();
+      const lifeRatio = Math.max(0, p.life / 100);
+      racerCtx.globalAlpha = p.alpha * lifeRatio;
+      racerCtx.fillStyle = `rgba(30,30,30,${0.6 * lifeRatio})`;
+      racerCtx.beginPath();
+      racerCtx.ellipse(p.x, p.y, p.size * (1 - lifeRatio*0.2), p.size * (0.6 + (1 - lifeRatio)*0.4), 0, 0, Math.PI*2);
+      racerCtx.fill();
+      racerCtx.restore();
+
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.995;
+      p.vy -= 0.01; // slight buoyancy
+      p.size += 0.2;
+      p.life -= 1;
+      if (p.life <= 0) racerState.explosionParticles.splice(i, 1);
+    }
+  }
+
+  // Standard spark particles
   for (let i = racerState.particles.length - 1; i >= 0; i--) {
     const p = racerState.particles[i];
-    racerCtx.globalAlpha = Math.max(0, p.life / 50);
-    racerCtx.fillStyle = p.color;
-    racerCtx.beginPath();
-    racerCtx.arc(p.x, p.y, Math.max(1, p.life / 12), 0, Math.PI * 2);
-    racerCtx.fill();
-    racerCtx.globalAlpha = 1;
-    p.x += p.vx;
-    p.y += p.vy;
-    p.vy += 0.04;
-    p.vx *= 0.99;
-    p.life--;
-    if (p.life <= 0) racerState.particles.splice(i, 1);
+    if (p.type === 'spark') {
+      racerCtx.save();
+      racerCtx.globalAlpha = Math.max(0, p.life / 60);
+      racerCtx.fillStyle = p.color;
+      racerCtx.beginPath();
+      racerCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+      racerCtx.fill();
+      racerCtx.restore();
+
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.08;
+      p.vx *= 0.995;
+      p.life -= 1;
+      if (p.life <= 0) racerState.particles.splice(i, 1);
+    }
   }
 }
 
@@ -634,6 +730,22 @@ function ensureSpeedLines() {
   }
 }
 
+function applyShakeTransform() {
+  // Returns {dx, dy} and applies translation to racerCtx. Call between save()/restore().
+  if (!racerCtx) return {dx:0, dy:0};
+  if (racerState.shake.time > 0) {
+    const intensity = racerState.shake.intensity;
+    const dx = (Math.random() - 0.5) * intensity;
+    const dy = (Math.random() - 0.5) * intensity;
+    racerCtx.translate(dx, dy);
+    racerState.shake.time -= 1;
+    // decay intensity slightly
+    racerState.shake.intensity *= 0.985;
+    return {dx, dy};
+  }
+  return {dx:0, dy:0};
+}
+
 function updateRacer(delta) {
   if (!racerCanvas) return;
   // dynamic speed scaling: increase with dodged
@@ -698,28 +810,47 @@ function updateRacer(delta) {
     const gapRight = ob.gapCenter + ob.gapWidth / 2;
     // check overlap: if any part of car outside the gap => crash
     if (carLeft < gapLeft || carRight > gapRight) {
+      // enhanced crash sequence
+      spawnCrash(playerCar.x, playerCar.y + playerCar.height / 2);
       racerState.running = false;
       if (racerState.animationFrame) cancelAnimationFrame(racerState.animationFrame);
       if (racerMessageEl) {
         racerMessageEl.textContent = 'Crash! Reset to roll out again.';
       }
-      // explosion particles
-      spawnParticles(playerCar.x, playerCar.y + playerCar.height / 2, '#ff5a3c', 28);
       return;
     }
   }
 
-  // Update particles
+  // Update explosion & particles
   drawParticles();
 }
 
 function renderRacer() {
+  if (!racerCtx) return;
+
+  racerCtx.save();
+
+  // apply screen shake transform if active
+  applyShakeTransform();
+
+  // background and world
   drawBackground();
   drawSpeedLines();
   drawObstacles();
   drawPlayer();
-  // Draw particles on top
+
+  // draw explosion and particles on top
   drawParticles();
+
+  // crash flash overlay (when flash.alpha > 0)
+  if (racerState.flash.alpha > 0) {
+    racerCtx.fillStyle = `rgba(255,255,255,${racerState.flash.alpha})`;
+    racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
+    racerState.flash.alpha *= 0.92;
+    if (racerState.flash.alpha < 0.02) racerState.flash.alpha = 0;
+  }
+
+  racerCtx.restore();
 }
 
 function gameLoop(timestamp) {
@@ -771,6 +902,9 @@ function resetRacer() {
   racerState.spawnVariance = 120;
   racerState.spawnTightenRate = 10;
   racerState.particles = [];
+  racerState.explosionParticles = [];
+  racerState.shake = { time: 0, intensity: 0 };
+  racerState.flash = { alpha: 0 };
   resetObstacles();
   ensureSpeedLines();
   renderRacer();
@@ -908,7 +1042,7 @@ function createBunkers() {
 
 // Helper: AABB collision check (now with width/height)
 function checkCollision(objA, objB) {
-  if (!objA.alive || !objB.alive) return false; // Ensure both are "collidable"
+  if (('alive' in objA && !objA.alive) || ('alive' in objB && !objB.alive)) return false; // Ensure both are "collidable"
   
   return objA.x < objB.x + objB.width &&
          objA.x + objA.width > objB.x &&
@@ -1010,7 +1144,7 @@ function updateInvaders() {
   }
 
   // --- NEW: Mystery Ship (UFO) Logic ---
-  if (!state.mysteryShip.active && Math.random() > 0.998) {
+  if (!state.mysteryShip.active && Math.random() > 0.998 - (state.level * 0.0005)) {
       state.mysteryShip.active = true;
       state.mysteryShip.alive = true;
       // Start from left or right
@@ -1024,7 +1158,7 @@ function updateInvaders() {
   }
   
   if (state.mysteryShip.active) {
-      state.mysteryShip.x += state.mysteryShip.direction * 1.5; // UFO speed
+      state.mysteryShip.x += state.mysteryShip.direction * (1.5 + state.level * 0.2); // UFO speed scales
       // Deactivate if off-screen
       if (state.mysteryShip.x > invadersCanvas.width || state.mysteryShip.x < -state.mysteryShip.width) {
           state.mysteryShip.active = false;
@@ -1034,7 +1168,9 @@ function updateInvaders() {
 
   // --- Enemy Shooting ---
   let aliveEnemies = state.enemies.filter(e => e.alive);
-  if (Math.random() > (0.98 - (state.level * 0.01)) && aliveEnemies.length > 0) { // Shoot more often on higher levels
+  // Shooting becomes more frequent and slightly more likely per level. Cap threshold so it doesn't become constant.
+  let shootThreshold = Math.max(0.6, 0.98 - (state.level * 0.02));
+  if (Math.random() > shootThreshold && aliveEnemies.length > 0) { // Shoot more often on higher levels
     let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
     state.enemyBullets.push({ 
         x: shooter.x + shooter.width / 2 - 2, // Center the bullet
@@ -1047,7 +1183,7 @@ function updateInvaders() {
 
   // Move enemy bullets
   state.enemyBullets = state.enemyBullets.filter(bullet => {
-    bullet.y += 3;
+    bullet.y += 3 + state.level * 0.25; // bullets get slightly faster by level
     
     // Check for collision with bunkers
     for (let b = state.bunkers.length - 1; b >= 0; b--) {
@@ -1089,8 +1225,8 @@ function drawInvaders() {
   if (!invadersCtx) return;
   const state = invaderState;
 
-  // Use a fading clear to create trails
-  invadersCtx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  // CLEAR FULL FRAME to remove "merging" / trail effect — solid clear so sprites don't leave trails
+  invadersCtx.fillStyle = '#000';
   invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
   
   // Draw player
@@ -1113,7 +1249,7 @@ function drawInvaders() {
       }
   });
 
-  // Draw enemies
+  // Draw enemies with palette by level
   const enemyColor = invaderPalettes[(state.level - 1) % invaderPalettes.length];
   invadersCtx.fillStyle = enemyColor;
   state.enemies.forEach(enemy => {
@@ -1124,7 +1260,7 @@ function drawInvaders() {
   
   // Draw NEW Mystery Ship
   if (state.mysteryShip.active) {
-      invadersCtx.fillStyle = '#FFD700'; // Gold UFO
+      invadersCtx.fillStyle = '#FFD700'; // Gold UFO for visibility
       invadersCtx.fillRect(state.mysteryShip.x, state.mysteryShip.y, state.mysteryShip.width, state.mysteryShip.height);
   }
   
@@ -1223,7 +1359,7 @@ function stopInvaders(message = "GAME OVER") {
 
 function handleInvadersKey(event) {
   // Only run if the invaders modal is open
-  if (!invadersModal || invadersModal.style.display !== 'flex') return;
+  if (invadersModal.style.display !== 'flex') return;
 
   const state = invaderState;
   
