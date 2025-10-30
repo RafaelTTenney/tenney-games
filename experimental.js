@@ -699,15 +699,32 @@ function drawObstacles() {
 function spawnObstacle() {
   const gapLane = Math.floor(Math.random() * laneCount);
   const colorHue = Math.floor(Math.random() * 360);
-  const gapCenter = laneCenters[gapLane];
-  // LATERAL gap is constant at 120% of vehicle base width (side-to-side spacing)
-  const gapWidth = playerCar.baseWidth * racerState.gapWidthMultiplier;
+
+  // Use the current player width so the lateral gap truly fits the vehicle.
+  // LATERAL gap is constant at 120% of the vehicle current width (side-to-side spacing).
+  // This fixes occasions where the vehicle was scaled larger than the gap computed from baseWidth.
+  let gapWidth = playerCar.width * racerState.gapWidthMultiplier;
+
+  // Ensure an explicit safety margin so the car can always fit (in case of rounding or timing)
+  const safetyMargin = 6; // pixels of free space on both sides combined
+  gapWidth = Math.max(gapWidth, playerCar.width + safetyMargin);
+
+  // Clamp gap width so it never exceeds the canvas (leave small edges)
+  gapWidth = Math.min(gapWidth, Math.max(60, racerCanvas.width - 24));
+
+  let gapCenter = laneCenters[gapLane];
+
+  // Clamp center so the gap remains fully on-screen
+  const half = gapWidth / 2;
+  gapCenter = Math.max(half + 8, Math.min(racerCanvas.width - half - 8, gapCenter));
+
   racerState.obstacles.push({
     y: -obstacleHeight,
     gapCenter,
     gapWidth,
     color: `hsl(${colorHue}, 90%, 60%)`
   });
+
   // FORWARD spacing: start easier (long distance) then tighten as player clears gaps
   const dynamicForward = Math.max(
     racerState.spawnMinDistance,
@@ -790,7 +807,7 @@ function updateRacer(delta) {
   racerState.distance += traveled;
   racerState.spawnTimer -= traveled;
 
-  // NOTE: SIDE-TO-SIDE gap is fixed at 1.2× vehicle base width (no change here)
+  // NOTE: SIDE-TO-SIDE gap is fixed at 1.2× vehicle current width (no change here)
   // racerState.gapWidthMultiplier remains constant
 
   if (racerState.spawnTimer <= 0) {
