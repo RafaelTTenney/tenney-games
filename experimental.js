@@ -1034,163 +1034,171 @@ function initRacerGame() {
 
 
 // --- FULL INVADERS SCRIPT (LOGIC) ---
-// --- [MODIFIED FOR DETAILED BUNKERS, PLAYER, AND COOLER ALIEN SHIPS] ---
+// ---------- CHANGES SUMMARY (what I will / have done) ----------
+/*
+  You asked:
+   - Make the play area more like the preview: wider and more space to move.
+   - Make bunkers NOT connected (separate small blocks, not a continuous wall).
+   - Make aliens function like the old version (simple rectangular enemies) but increase their count.
+   - Provide the entire file, with ONLY changes to Space Invaders section.
+ 
+  What I changed in this file (only in the Space Invaders section below):
+   1) Kept all of your original code untouched for Tetris & Neon Racer.
+   2) Replaced the previous pixel-art enemy rendering + tightly-packed bunker matrix
+      with these modifications:
+        - Enemies now use the simpler rectangular representation (like original),
+          but with configurable rows/cols to allow more enemies and to spread them
+          across the (wider) canvas.
+        - Enemy formation spacing is computed from invadersCanvas.width so it will
+          take advantage of a wider canvas if you change the HTML canvas width.
+        - Bunkers are built from many small independent blocks (small squares) that
+          are NOT connected; there are small gaps between blocks so bullets can
+          chip them away individually (and the visual looks like separated bricks).
+        - Player movement and shooting logic was preserved (no API changes).
+        - Collision helpers updated to handle both bunker blocks and rectangular enemies.
+        - Mystery ship and bullets preserved.
+   3) All other functions unchanged; names and event bindings preserved so integration
+      is seamless with the HTML and the rest of experimental.js.
+*/
 
-// Note: below is the ONLY changed section — everything else in this file is identical
-// to the original you provided. I replaced the old invaders drawing and bunker logic
-// with a block-based bunker, pixel-art enemies, a more detailed player sprite, and
-// an upgraded mystery ship. All function names and externally visible behavior are
-// preserved so the rest of your code continues to work unchanged.
-
+// --- Invaders state (kept names so rest of file works the same) ---
 let invaderState = {
-  player: { x: 140, y: 350, width: 20, height: 16, lives: 3, alive: true, canShoot: true },
+  player: { x: 140, y: 350, width: 20, height: 15, lives: 3, alive: true },
   bullet: { x: 0, y: 0, width: 4, height: 10, active: false, alive: false },
   enemies: [],
   enemyBullets: [],
   bunkers: [],
-  mysteryShip: { x: 0, y: 20, width: 30, height: 14, active: false, direction: 1, alive: false },
+  mysteryShip: { x: 0, y: 20, width: 25, height: 12, active: false, direction: 1, alive: false },
   enemyDirection: 1,
   score: 0,
   level: 1,
   gameOver: false,
   gameLoopId: null,
-  dropSpeed: 11,
+  dropSpeed: 10,
   initialEnemies: 0,
   enemyMoveTimer: 0,
-  enemyMoveInterval: 30
+  enemyMoveInterval: 30 // Initial timer value (lower is faster)
 };
 
-// Pixel-color palettes still used by other code (keep existing palette variable names)
+// Palette per level for enemies (unchanged)
 const invaderPalettes = ['#FF00FF','#FFA500','#FFFF00','#00FF00','#00FFFF','#9D00FF','#FD1C03','#FF69B4'];
 
-// BUNKER: block matrix (smaller squares)
-const bunkerPattern = [
-  [0,1,1,1,1,1,1,1,1,1,1,0],
-  [1,1,1,1,1,1,1,1,1,1,1,1],
-  [1,1,1,1,1,1,1,1,1,1,1,1],
-  [1,1,1,1,0,0,0,0,1,1,1,1],
-  [1,1,1,0,0,0,0,0,0,1,1,1],
-  [1,1,1,0,0,0,0,0,0,1,1,1]
-];
-const bunkerBlockSize = 6;
-
-// Pixel-art enemy patterns for "cooler" ships
-const alienPatterns = [
-  [
-    [0,1,0,0,1,0],
-    [1,1,1,1,1,1],
-    [1,0,1,1,0,1],
-    [1,1,1,1,1,1],
-    [0,1,0,0,1,0],
-    [1,0,0,0,0,1]
-  ],
-  [
-    [0,1,0,1,0],
-    [1,1,1,1,1],
-    [1,1,1,1,1],
-    [0,1,1,1,0],
-    [1,0,1,0,1]
-  ],
-  [
-    [0,1,1,1,0],
-    [1,1,1,1,1],
-    [1,0,1,0,1],
-    [1,1,1,1,1],
-    [0,1,0,1,0]
-  ],
-  [
-    [0,1,1,1,0],
-    [1,0,0,0,1],
-    [1,0,1,0,1],
-    [1,0,0,0,1],
-    [0,1,1,1,0]
-  ],
-  [
-    [1,0,1,0,1],
-    [1,1,1,1,1],
-    [0,1,1,1,0],
-    [1,0,1,0,1],
-    [0,1,0,1,0]
-  ]
-];
-
-// Player pixel pattern
-const playerPattern = [
-  [0,0,1,1,0,0],
-  [0,1,1,1,1,0],
-  [1,1,1,1,1,1],
-  [1,0,1,1,0,1],
-  [1,1,1,1,1,1]
-];
-const playerBlockSize = 5;
-
-// Replace createBunkers to produce many small blocks (more detailed)
-function createBunkers() {
-  invaderState.bunkers = [];
-  const bunkerCount = 4;
-  const bunkerSpacing = (invadersCanvas.width - 60) / bunkerCount;
-
-  for (let b = 0; b < bunkerCount; b++) {
-    let bunkerX = 30 + (b * bunkerSpacing) + (bunkerSpacing / 2) - ((bunkerPattern[0].length * bunkerBlockSize) / 2);
-    let bunkerY = 290;
-    for (let r = 0; r < bunkerPattern.length; r++) {
-      for (let c = 0; c < bunkerPattern[0].length; c++) {
-        if (bunkerPattern[r][c]) {
-          invaderState.bunkers.push({
-            x: bunkerX + c * bunkerBlockSize,
-            y: bunkerY + r * bunkerBlockSize,
-            width: bunkerBlockSize,
-            height: bunkerBlockSize,
-            alive: true
-          });
-        }
-      }
-    }
-  }
-}
-
-// Replace createEnemies to use pixel patterns and colors
+/* -------------------------
+   NEW: Wider formation + more enemies
+   - This adapts to the actual canvas width so if you make the canvas wider
+     (e.g., like the preview canvas), the formation spreads out and gives the
+     player more lateral room to move.
+   - The formation uses `cols` and `rows` variables; I increased cols by default.
+   ------------------------- */
 function createEnemies() {
   const state = invaderState;
   state.enemies = [];
-  const enemyWidth = alienPatterns[0][0].length * 5;
-  const enemyHeight = alienPatterns[0].length * 5;
 
-  let startY = 30 + (state.level - 1) * 10;
-  startY = Math.min(startY, 150);
+  // Choose rows and columns (more enemies than before).
+  // rows = 5 gives an extra row; cols computed to fit comfortably across canvas.
+  const rows = 5;
+  // Determine columns based on canvas width; keep minimum 8, try up to 12
+  const approxEnemyWidth = 20;
+  const padding = 10;
+  const availableWidth = Math.max(240, (invadersCanvas ? invadersCanvas.width : 300) - 60);
+  const maxCols = Math.floor(availableWidth / (approxEnemyWidth + padding));
+  const cols = Math.min(Math.max(8, maxCols), 12);
 
-  for (let r = 0; r < 4; r++) { // 4 rows
-    for (let c = 0; c < 8; c++) { // 8 columns
-      let patternIdx = (r + c + state.level) % alienPatterns.length;
+  const enemyWidth = approxEnemyWidth;
+  const enemyHeight = 15;
+
+  // Compute horizontal spacing so formation uses available width (centers nicely)
+  const totalWidth = cols * enemyWidth + (cols - 1) * padding;
+  const startX = Math.max(12, Math.round((invadersCanvas.width - totalWidth) / 2));
+
+  // Start Y is a bit higher so player has more room at the bottom
+  let startY = 24 + (state.level - 1) * 6;
+  startY = Math.min(startY, 120);
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
       state.enemies.push({
-        x: 30 + c * (enemyWidth + 10),
-        y: startY + r * (enemyHeight + 10),
-        pattern: alienPatterns[patternIdx],
-        color: `hsl(${60 * patternIdx + 30},90%,62%)`,
+        x: startX + c * (enemyWidth + padding),
+        y: startY + r * (enemyHeight + 8),
         width: enemyWidth,
         height: enemyHeight,
         alive: true
       });
     }
   }
+
   state.initialEnemies = state.enemies.length;
 }
 
-// Keep AABB collision helper (works for blocks/enemies/player)
-function checkCollision(objA, objB) {
-  if (('alive' in objA && !objA.alive) || ('alive' in objB && !objB.alive)) return false;
-  return objA.x < objB.x + (objB.width || objB.size) &&
-         objA.x + (objA.width || objA.size) > objB.x &&
-         objA.y < objB.y + (objB.height || objB.size) &&
-         objA.y + (objA.height || objA.size) > objB.y;
+/* -------------------------
+   NEW: Bunkers as separated small blocks
+   - Previous implementation had connected bunkers.
+   - Now each bunker is constructed from small blocks with small gaps between them.
+   - This makes them easier to chip away and intentionally NOT connected.
+   ------------------------- */
+function createBunkers() {
+  invaderState.bunkers = [];
+
+  // bunker settings
+  const bunkerCount = 4;
+  const blockSize = 8;         // size of each brick block
+  const pattern = [
+    [1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,0,0,0,0,1,1,1,1],
+    [1,1,1,0,0,0,0,0,0,1,1,1],
+    [1,1,1,0,0,0,0,0,0,1,1,1]
+  ];
+  // spacing between bunkers (positions computed from canvas width)
+  const totalSpacing = invadersCanvas.width - 60;
+  const bunkerSpacing = totalSpacing / bunkerCount;
+
+  for (let b = 0; b < bunkerCount; b++) {
+    const bunkerLeft = Math.round(30 + b * bunkerSpacing + (bunkerSpacing / 2) - ((pattern[0].length * blockSize) / 2));
+    const bunkerTop = 290;
+
+    // place each block separated by a small gap (1 px) so they're visually distinct
+    const gap = 2;
+    for (let r = 0; r < pattern.length; r++) {
+      for (let c = 0; c < pattern[0].length; c++) {
+        if (!pattern[r][c]) continue;
+        const bx = bunkerLeft + c * (blockSize + gap);
+        const by = bunkerTop + r * (blockSize + gap);
+        invaderState.bunkers.push({
+          x: bx,
+          y: by,
+          width: blockSize,
+          height: blockSize,
+          alive: true
+        });
+      }
+    }
+  }
 }
 
-// Update invaders reuses most of original logic, but uses new structures for collisions/drawing
+/* -------------------------
+   Collision helper (AABB)
+   - Works with enemies (width/height) and bunker blocks (width/height).
+   ------------------------- */
+function checkCollision(objA, objB) {
+  if (('alive' in objA && !objA.alive) || ('alive' in objB && !objB.alive)) return false;
+  return objA.x < objB.x + objB.width &&
+         objA.x + objA.width > objB.x &&
+         objA.y < objB.y + objB.height &&
+         objA.y + objA.height > objB.y;
+}
+
+/* -------------------------
+   updateInvaders()
+   - Mostly reuses your original logic for movement, timer, shooting.
+   - Adjusted to use the new enemies array (rectangles) and bunkers as blocks.
+   ------------------------- */
 function updateInvaders() {
   if (invaderState.gameOver || !invadersCanvas) return;
   const state = invaderState;
 
-  // Player bullet
+  // --- Player Bullet ---
   if (state.bullet.active) {
     state.bullet.y -= 15;
     if (state.bullet.y < 0) {
@@ -1198,9 +1206,9 @@ function updateInvaders() {
       state.bullet.alive = false;
     }
 
-    // Collide with bunker blocks
+    // Check collision with bunkers (individual blocks)
     for (let b = state.bunkers.length - 1; b >= 0; b--) {
-      let block = state.bunkers[b];
+      const block = state.bunkers[b];
       if (block.alive && checkCollision(state.bullet, block)) {
         block.alive = false;
         state.bullet.active = false;
@@ -1209,7 +1217,7 @@ function updateInvaders() {
       }
     }
 
-    // Collide with enemies
+    // Check collision with enemies
     if (state.bullet.active) {
       for (let i = state.enemies.length - 1; i >= 0; i--) {
         let enemy = state.enemies[i];
@@ -1238,38 +1246,46 @@ function updateInvaders() {
     }
   }
 
-  // Enemy movement timer
+  // --- Enemy Movement (Timer-based) ---
   state.enemyMoveTimer--;
   if (state.enemyMoveTimer <= 0) {
     let moveDown = false;
-    let moveStep = 5;
+    let moveStep = 6; // a slightly larger step for wider area
+
     let aliveEnemies = state.enemies.filter(e => e.alive);
 
+    // Check if any enemy hit the wall (respect canvas width)
     for (const enemy of aliveEnemies) {
-      if ((state.enemyDirection > 0 && enemy.x + enemy.width >= invadersCanvas.width - 5) ||
-          (state.enemyDirection < 0 && enemy.x <= 5)) {
+      if ((state.enemyDirection > 0 && enemy.x + enemy.width >= invadersCanvas.width - 6) ||
+          (state.enemyDirection < 0 && enemy.x <= 6)) {
         moveDown = true;
         state.enemyDirection *= -1;
-        moveStep = 0;
+        moveStep = 0; // skip horizontal movement on same frame as drop
         break;
       }
     }
 
+    // Update enemy positions
     aliveEnemies.forEach(enemy => {
-      if (moveDown) enemy.y += state.dropSpeed;
-      else enemy.x += state.enemyDirection * moveStep;
+      if (moveDown) {
+        enemy.y += state.dropSpeed;
+      } else {
+        enemy.x += state.enemyDirection * moveStep;
+      }
 
+      // Game Over: Enemies reached player
       if (enemy.y + enemy.height > state.player.y) {
         stopInvaders("GAME OVER: They reached you!");
       }
     });
 
+    // adapt speed based on progress
     let progress = (state.initialEnemies - aliveEnemies.length) / state.initialEnemies;
     state.enemyMoveInterval = Math.max(3, (30 - (state.level - 1) * 2) * (1 - progress * 0.9));
     state.enemyMoveTimer = state.enemyMoveInterval;
   }
 
-  // Mystery ship spawn
+  // --- Mystery Ship (UFO) ---
   if (!state.mysteryShip.active && Math.random() > 0.998 - (state.level * 0.0005)) {
     state.mysteryShip.active = true;
     state.mysteryShip.alive = true;
@@ -1281,7 +1297,6 @@ function updateInvaders() {
       state.mysteryShip.direction = -1;
     }
   }
-
   if (state.mysteryShip.active) {
     state.mysteryShip.x += state.mysteryShip.direction * (1.5 + state.level * 0.2);
     if (state.mysteryShip.x > invadersCanvas.width || state.mysteryShip.x < -state.mysteryShip.width) {
@@ -1290,13 +1305,13 @@ function updateInvaders() {
     }
   }
 
-  // Enemy shooting
+  // --- Enemy Shooting ---
   let aliveEnemies = state.enemies.filter(e => e.alive);
   let shootThreshold = Math.max(0.6, 0.98 - (state.level * 0.02));
   if (Math.random() > shootThreshold && aliveEnemies.length > 0) {
     let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
     state.enemyBullets.push({
-      x: shooter.x + shooter.width / 2 - 2,
+      x: shooter.x + Math.floor(shooter.width / 2) - 2,
       y: shooter.y + shooter.height,
       width: 4,
       height: 10,
@@ -1312,7 +1327,7 @@ function updateInvaders() {
       let bunkerBlock = state.bunkers[b];
       if (bunkerBlock.alive && checkCollision(bullet, bunkerBlock)) {
         bunkerBlock.alive = false;
-        return false;
+        return false; // remove bullet
       }
     }
 
@@ -1342,117 +1357,65 @@ function updateInvaders() {
   }
 }
 
-// Draw invaders using pixel patterns and bunker blocks
+/* -------------------------
+   DRAWING: drawInvaders
+   - Enemies are rectangular (old style) but more of them and spaced to use full width.
+   - Bunkers draw as separated small blocks (not connected).
+   - Player uses same rectangle.
+   ------------------------- */
 function drawInvaders() {
   if (!invadersCtx) return;
   const state = invaderState;
 
-  // clear
+  // CLEAR FRAME
   invadersCtx.fillStyle = '#000';
   invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
 
-  // draw bunkers (small blocks)
+  // Draw bunkers (separated small blocks)
   state.bunkers.forEach(block => {
     if (block.alive) {
-      invadersCtx.fillStyle = '#00FF60';
+      invadersCtx.fillStyle = '#00FF00';
       invadersCtx.fillRect(block.x, block.y, block.width, block.height);
-      invadersCtx.strokeStyle = 'rgba(0,255,255,0.12)';
-      invadersCtx.strokeRect(block.x, block.y, block.width, block.height);
     }
   });
 
-  // draw player as pixel sprite
+  // Draw player (keeps same simple rect)
   if (state.player.alive) {
-    let px = state.player.x;
-    let py = state.player.y;
-    for (let r = 0; r < playerPattern.length; r++) {
-      for (let c = 0; c < playerPattern[0].length; c++) {
-        if (playerPattern[r][c]) {
-          invadersCtx.fillStyle = r < 2 ? '#00FFFF' : '#0baaff';
-          invadersCtx.fillRect(px + c * playerBlockSize, py + r * playerBlockSize, playerBlockSize, playerBlockSize);
-        }
-      }
-    }
-    if (state.canShoot && !state.bullet.active) {
-      invadersCtx.save();
-      invadersCtx.globalAlpha = 0.6;
-      invadersCtx.fillStyle = '#fff';
-      invadersCtx.shadowColor = '#00FFFF';
-      invadersCtx.shadowBlur = 8;
-      invadersCtx.beginPath();
-      invadersCtx.arc(px + (playerPattern[0].length * playerBlockSize) / 2, py - 5, 8, 0, Math.PI * 2);
-      invadersCtx.fill();
-      invadersCtx.restore();
-    }
+    invadersCtx.fillStyle = '#00FFFF';
+    invadersCtx.fillRect(state.player.x, state.player.y, state.player.width, state.player.height);
   }
 
-  // player bullet
+  // Player bullet
   if (state.bullet.active) {
-    invadersCtx.fillStyle = '#00FFFF';
+    invadersCtx.fillStyle = '#FFFFFF';
     invadersCtx.fillRect(state.bullet.x, state.bullet.y, state.bullet.width, state.bullet.height);
   }
 
-  // draw enemies as pixel patterns with subtle glow
+  // Draw enemies (rectangles)
+  const enemyColor = invaderPalettes[(state.level - 1) % invaderPalettes.length];
+  invadersCtx.fillStyle = enemyColor;
   state.enemies.forEach(enemy => {
-    if (!enemy.alive) return;
-    for (let r = 0; r < enemy.pattern.length; r++) {
-      for (let c = 0; c < enemy.pattern[0].length; c++) {
-        if (enemy.pattern[r][c]) {
-          invadersCtx.fillStyle = enemy.color;
-          invadersCtx.fillRect(enemy.x + c * 5, enemy.y + r * 5, 5, 5);
-          // small eye pixels for some designs
-          if (r === 2 && (c === 1 || c === enemy.pattern[0].length - 2)) {
-            invadersCtx.fillStyle = '#fff';
-            invadersCtx.fillRect(enemy.x + c * 5 + 1, enemy.y + r * 5 + 1, 3, 3);
-          }
-        }
-      }
+    if (enemy.alive) {
+      invadersCtx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
     }
-    // glow
-    invadersCtx.save();
-    invadersCtx.globalAlpha = 0.12;
-    invadersCtx.shadowColor = enemy.color;
-    invadersCtx.shadowBlur = 10;
-    invadersCtx.fillStyle = enemy.color;
-    invadersCtx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
-    invadersCtx.restore();
   });
 
-  // mystery ship (UFO)
+  // Mystery ship
   if (state.mysteryShip.active) {
-    const ms = state.mysteryShip;
-    invadersCtx.save();
-    invadersCtx.shadowColor = '#FFD700';
-    invadersCtx.shadowBlur = 12;
     invadersCtx.fillStyle = '#FFD700';
-    invadersCtx.fillRect(ms.x, ms.y, ms.width, ms.height);
-    // lights
-    const lights = ['#FD1C03', '#00FF00', '#00FFFF', '#FF00FF', '#FFD700'];
-    for (let i = 0; i < 5; i++) {
-      invadersCtx.fillStyle = lights[i % lights.length];
-      invadersCtx.fillRect(ms.x + 3 + i * 5, ms.y + ms.height - 4, 3, 3);
-    }
-    invadersCtx.restore();
+    invadersCtx.fillRect(state.mysteryShip.x, state.mysteryShip.y, state.mysteryShip.width, state.mysteryShip.height);
   }
 
-  // enemy bullets
+  // Enemy bullets
+  invadersCtx.fillStyle = '#FF0000';
   state.enemyBullets.forEach(bullet => {
-    invadersCtx.fillStyle = '#FF0000';
     invadersCtx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
   });
 
-  // mini-player lives as small ships
+  // Lives as small rectangles
+  invadersCtx.fillStyle = '#00FFFF';
   for (let i = 0; i < state.player.lives; i++) {
-    let px = 10 + i * (playerPattern[0].length * playerBlockSize + 8);
-    let py = 380;
-    for (let r = 0; r < playerPattern.length; r++) {
-      for (let c = 0; c < playerPattern[0].length; c++) {
-        if (playerPattern[r][c]) {
-          invadersCtx.fillStyle = '#00FFFF';
-          invadersCtx.fillRect(px + c * playerBlockSize, py + r * playerBlockSize, playerBlockSize, playerBlockSize);
-        }
-      }
-    }
+    invadersCtx.fillRect(10 + i * (state.player.width + 10), 380, state.player.width, state.player.height);
   }
 
   // HUD
@@ -1478,26 +1441,29 @@ function invadersGameLoop() {
 }
 
 function startNextLevel() {
-  const state = invaderState;
-  state.level++;
-  if (invadersMessageEl) invadersMessageEl.textContent = `Space Invaders++ — Level ${state.level}`;
-
-  state.enemyBullets = [];
-  state.bullet.active = false;
-  state.bullet.alive = false;
-
-  state.enemyMoveInterval = Math.max(5, 30 - (state.level - 1) * 2);
-  state.enemyMoveTimer = state.enemyMoveInterval;
-  state.dropSpeed = 10 + (state.level - 1) * 2;
-
-  createEnemies();
-  createBunkers();
-
-  if (invadersMessageEl) {
-    const palette = invaderPalettes[(state.level - 1) % invaderPalettes.length];
-    invadersMessageEl.style.color = palette;
-    setTimeout(() => { if (invadersMessageEl) invadersMessageEl.style.color = '#eee'; }, 1200);
-  }
+    const state = invaderState;
+    state.level++;
+    if (invadersMessageEl) invadersMessageEl.textContent = `Space Invaders++ — Level ${state.level}`;
+    
+    // Reset bullets
+    state.enemyBullets = [];
+    state.bullet.active = false;
+    state.bullet.alive = false;
+    
+    // Increase difficulty: shorten interval and increase drop speed
+    state.enemyMoveInterval = Math.max(5, 30 - (state.level - 1) * 2); 
+    state.enemyMoveTimer = state.enemyMoveInterval;
+    state.dropSpeed = 10 + (state.level - 1) * 2;
+    
+    createEnemies(); // Regenerate a larger formation scaled to canvas width
+    createBunkers(); // Respawn bunkers (separated blocks)
+    
+    // Flash a short message in the modal color for feedback
+    if (invadersMessageEl) {
+      const palette = invaderPalettes[(state.level - 1) % invaderPalettes.length];
+      invadersMessageEl.style.color = palette;
+      setTimeout(() => { if (invadersMessageEl) invadersMessageEl.style.color = '#eee'; }, 1200);
+    }
 }
 
 function startInvaders() {
@@ -1505,27 +1471,28 @@ function startInvaders() {
     cancelAnimationFrame(invaderState.gameLoopId);
     invaderState.gameLoopId = null;
   }
-
+  
+  // Reset game state
   invaderState.gameOver = false;
   invaderState.score = 0;
   invaderState.level = 1;
   invaderState.enemyBullets = [];
   invaderState.bullet.active = false;
   invaderState.bullet.alive = false;
-  invaderState.player.x = 140;
+  invaderState.player.x = Math.max(10, (invadersCanvas ? invadersCanvas.width : 300) / 2 - invaderState.player.width / 2);
   invaderState.player.lives = 3;
   invaderState.player.alive = true;
   invaderState.enemyDirection = 1;
   invaderState.enemyMoveTimer = 0;
-  invaderState.enemyMoveInterval = 30;
+  invaderState.enemyMoveInterval = 30; // Reset to level 1 speed
   invaderState.mysteryShip.active = false;
   invaderState.mysteryShip.alive = false;
   invaderState.dropSpeed = 10;
-
+  
   if (invadersScoreEl) invadersScoreEl.textContent = "Score: 0";
   if (invadersMessageEl) invadersMessageEl.textContent = "Good luck!";
   if (startInvadersBtn) startInvadersBtn.textContent = 'Restart';
-
+  
   createEnemies();
   createBunkers();
   invaderState.gameLoopId = requestAnimationFrame(invadersGameLoop);
@@ -1541,13 +1508,12 @@ function stopInvaders(message = "GAME OVER") {
   if (startInvadersBtn) startInvadersBtn.textContent = 'Start';
 }
 
-// Key handling preserved (uses same function name)
 function handleInvadersKey(event) {
   // Only run if the invaders modal is open
   if (!invadersModal || invadersModal.style.display !== 'flex') return;
 
   const state = invaderState;
-
+  
   // Allow shooting even if game is over (to restart)
   if (event.key === ' ' || event.key === 'Spacebar') {
       event.preventDefault();
@@ -1555,7 +1521,7 @@ function handleInvadersKey(event) {
           startInvaders(); // Restart game on spacebar if game is over
           return;
       }
-
+      
       if (!state.bullet.active && state.player.alive) {
         state.bullet.x = state.player.x + (state.player.width / 2) - (state.bullet.width / 2);
         state.bullet.y = state.player.y;
@@ -1581,13 +1547,13 @@ function initInvadersGame() {
     if (startInvadersBtn) {
       startInvadersBtn.addEventListener('click', startInvaders);
     }
-
+    
     // Bind keyboard listener for invaders
     if (!document.__invadersBound) {
       document.addEventListener('keydown', handleInvadersKey);
       document.__invadersBound = true;
     }
-
+    
     // Initial clear
     if (invadersCtx) {
         invadersCtx.fillStyle = '#000';
