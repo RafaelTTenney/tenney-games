@@ -93,7 +93,7 @@
     async function sendAdminNotification(username, reason, email) {
       try {
         await window.supabaseClient
-          .from('messages')
+          .from('tenney-games')
           .insert([{ type: 'account_application', title: `New account: ${username}`, body: `Email: ${email}\nReason: ${reason}`, username, status: 'new' }]);
       } catch (err) {
         console.error('Could not record admin notification', err);
