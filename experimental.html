@@ -337,13 +337,15 @@
       
     </div>
   </div>
+  <!-- INVADERS MODAL: widened to match preview-games' wider play area -->
   <div id="invadersModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
         <h2>Space Invaders++</h2>
         <span class="modal-close" id="invadersModalCloseBtn">&times;</span>
       </div>
-      <canvas id="invaders-canvas" width="300" height="400" style="background:#000; border: 2px solid var(--primary); box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.5);"></canvas>
+      <!-- widened canvas to 420x420 to match preview and allow more enemies -->
+      <canvas id="invaders-canvas" width="420" height="420" style="background:#000; border: 2px solid var(--primary); box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.5);"></canvas>
       
       <div style="display: flex; justify-content: space-between; padding: 0 10px; margin-top: 10px;">
         <p id="invaders-score" style="color:var(--primary); font-weight: 700; margin: 0;">Score: 0</p>
