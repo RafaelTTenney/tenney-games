@@ -1049,8 +1049,8 @@ function initRacerGame() {
    ============================ */
 let invaderState = {
   player: { x: 140, y: 350, width: 20, height: 16, lives: 3, alive: true },
-  // bullet represented as small rect for collisions, but drawn as text '|' per request
-  bullet: { x: 0, y: 0, width: 4, height: 10, active: false, alive: false },
+  // bullet represented as small rect for collisions; will be drawn as a laser stroke
+  bullet: { x: 0, y: 0, width: 4, height: 14, active: false, alive: false, speed: 14 },
   enemies: [],
   enemyBullets: [],
   bunkers: [], // will be created via connected defense matrices (like spaceInvaders.js)
@@ -1071,9 +1071,8 @@ const invaderPalettes = ['#FF00FF','#FFA500','#FFFF00','#00FF00','#00FFFF','#9D0
 
 /* ============================
    BUNKERS: Connected defense matrices (like spaceInvaders.js)
-   We'll build 4 bunkers; each bunker uses the same pattern used in spaceInvaders.js
-   Pattern size: 6 rows x 12 cols, drawn scaled by box (4) or blockSize. We'll place them
-   so they appear connected per-bunker, matching the user's request to be like spaceInvaders.js.
+   We'll build 4 bunkers; each bunker uses a connected pattern (6x12).
+   We'll store bunker blocks in pixel coords for direct drawing and collision.
    ============================ */
 
 const bunkerPatternConnected = [
@@ -1087,29 +1086,30 @@ const bunkerPatternConnected = [
 
 function createBunkers() {
   invaderState.bunkers = [];
-  // follow same approach as spaceInvaders.js: four bunkers placed across width
-  const blockSize = 4; // small block size (grid units)
-  // We'll compute positions based on invadersCanvas width, but drawing uses canvas pixels,
-  // so we need to multiply by box (we'll draw using fillRect with scaled values).
-  // To be consistent with existing code we will store bunker blocks in pixel coordinates directly.
-
+  if (!invadersCanvas) return;
+  const blockSize = 6; // pixel size for each pattern cell
   const bunkerCount = 4;
-  const bunkerSpacing = (invadersCanvas.width - 60) / bunkerCount;
+  // center bunkers evenly across playable width, leave 30px margin left/right
+  const usableWidth = invadersCanvas.width - 60;
+  const bunkerTotalWidth = bunkerPatternConnected[0].length * blockSize;
+  const spacing = usableWidth / bunkerCount;
+  const baseX = 30; // left margin
+
+  const bunkerY = Math.max( invadersCanvas.height - 140, 260 ); // place above player area
 
   for (let b = 0; b < bunkerCount; b++) {
-    const bunkerX = 30 + (b * bunkerSpacing) + (bunkerSpacing / 2) - ((bunkerPatternConnected[0].length * blockSize) / 2) * 4;
-    const bunkerY = 290;
+    const center = baseX + spacing * b + spacing / 2;
+    const left = Math.round(center - bunkerTotalWidth / 2);
     for (let r = 0; r < bunkerPatternConnected.length; r++) {
       for (let c = 0; c < bunkerPatternConnected[0].length; c++) {
         if (bunkerPatternConnected[r][c]) {
-          // store blocks as pixel rectangle positions (blockSize * 4 to get reasonable pixel size)
-          const px = bunkerX + c * (blockSize * 4);
-          const py = bunkerY + r * (blockSize * 4);
+          const px = left + c * blockSize;
+          const py = bunkerY + r * blockSize;
           invaderState.bunkers.push({
             x: px,
             y: py,
-            width: blockSize * 4,
-            height: blockSize * 4,
+            width: blockSize,
+            height: blockSize,
             alive: true
           });
         }
@@ -1132,7 +1132,7 @@ function createEnemies() {
   const padding = 12;
   const minCols = 8;
   const maxCols = 12;
-  const availableWidth = Math.max(240, (invadersCanvas ? invadersCanvas.width : 300) - 60);
+  const availableWidth = Math.max(300, (invadersCanvas ? invadersCanvas.width : 300) - 60);
   const colsEstimate = Math.floor(availableWidth / (approxEnemyWidth + padding));
   const cols = Math.min(Math.max(minCols, colsEstimate), maxCols);
 
@@ -1178,10 +1178,10 @@ function updateInvaders() {
   if (invaderState.gameOver || !invadersCanvas) return;
   const state = invaderState;
 
-  // Player bullet movement
+  // Player bullet movement (laser)
   if (state.bullet.active) {
-    state.bullet.y -= 12;
-    if (state.bullet.y < 0) {
+    state.bullet.y -= state.bullet.speed;
+    if (state.bullet.y + state.bullet.height < 0) {
       state.bullet.active = false;
       state.bullet.alive = false;
     }
@@ -1286,17 +1286,18 @@ function updateInvaders() {
   if (Math.random() > shootThreshold && aliveEnemies.length > 0) {
     let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
     state.enemyBullets.push({
-      x: shooter.x + Math.floor(shooter.width / 2) - 2,
+      x: shooter.x + Math.floor(shooter.width / 2) - 1,
       y: shooter.y + shooter.height,
-      width: 4,
-      height: 10,
-      alive: true
+      width: 2,
+      height: 14,
+      alive: true,
+      speed: 4 + state.level * 0.2
     });
   }
 
   // Move enemy bullets, collide with bunkers/player
   state.enemyBullets = state.enemyBullets.filter(bullet => {
-    bullet.y += 3 + state.level * 0.25;
+    bullet.y += bullet.speed;
 
     for (let b = state.bunkers.length - 1; b >= 0; b--) {
       const bunkerBlock = state.bunkers[b];
@@ -1333,9 +1334,7 @@ function updateInvaders() {
 }
 
 /* ============================
-   DRAWING: bullets as text '|' (like tetris-neon-invaders)
-   and bunkers drawn as connected blocks (the defense matrices)
-   Note: collision geometry still uses rectangles for accuracy.
+   DRAWING: bullets as neon lasers (stroked lines) and bunkers as connected blocks
    ============================ */
 function drawInvaders() {
   if (!invadersCtx) return;
@@ -1361,13 +1360,20 @@ function drawInvaders() {
     invadersCtx.fillRect(state.player.x, state.player.y, state.player.width, state.player.height);
   }
 
-  // Player bullet: DRAW AS TEXT '|' like tetris-neon-invaders preview,
-  // but collision uses bullet.width/height.
+  // Player bullet: DRAW AS NEON LASER LINE
   if (state.bullet.active) {
-    invadersCtx.fillStyle = '#FFFFFF';
-    invadersCtx.font = '16px monospace';
-    invadersCtx.textBaseline = 'top';
-    invadersCtx.fillText('|', Math.round(state.bullet.x), Math.round(state.bullet.y));
+    invadersCtx.save();
+    invadersCtx.strokeStyle = '#88FFFF';
+    invadersCtx.lineWidth = 3;
+    invadersCtx.shadowColor = '#88FFFF';
+    invadersCtx.shadowBlur = 12;
+    // draw vertical laser centered at bullet.x
+    const bx = Math.round(state.bullet.x + state.bullet.width / 2);
+    invadersCtx.beginPath();
+    invadersCtx.moveTo(bx, Math.round(state.bullet.y + state.bullet.height));
+    invadersCtx.lineTo(bx, Math.round(state.bullet.y));
+    invadersCtx.stroke();
+    invadersCtx.restore();
   }
 
   // Draw enemies (rectangles - old style)
@@ -1395,18 +1401,25 @@ function drawInvaders() {
     invadersCtx.restore();
   }
 
-  // Enemy bullets: also draw as text '|' for stylistic consistency with request
-  invadersCtx.fillStyle = '#FF0000';
-  invadersCtx.font = '14px monospace';
-  invadersCtx.textBaseline = 'top';
+  // Enemy bullets: draw as thin red lasers
   state.enemyBullets.forEach(bullet => {
-    invadersCtx.fillText('|', Math.round(bullet.x), Math.round(bullet.y));
+    invadersCtx.save();
+    invadersCtx.strokeStyle = '#FF5555';
+    invadersCtx.lineWidth = 2;
+    invadersCtx.shadowColor = '#FF5555';
+    invadersCtx.shadowBlur = 8;
+    const ex = Math.round(bullet.x + bullet.width / 2);
+    invadersCtx.beginPath();
+    invadersCtx.moveTo(ex, Math.round(bullet.y));
+    invadersCtx.lineTo(ex, Math.round(bullet.y + bullet.height));
+    invadersCtx.stroke();
+    invadersCtx.restore();
   });
 
   // Lives as small ships (pixel blocks)
   invadersCtx.fillStyle = '#00FFFF';
   for (let i = 0; i < state.player.lives; i++) {
-    invadersCtx.fillRect(10 + i * (state.player.width + 10), 380, state.player.width, state.player.height);
+    invadersCtx.fillRect(10 + i * (state.player.width + 10), invadersCanvas.height - 30, state.player.width, state.player.height);
   }
 
   // HUD
@@ -1500,7 +1513,7 @@ function stopInvaders(message = "GAME OVER") {
 
 /* ============================
    Input handling for invaders
-   - Shooting sets bullet rect (collision) but visually it's rendered as '|'
+   - Shooting sets bullet rect (collision) but visually it's rendered as a neon laser line
    ============================ */
 function handleInvadersKey(event) {
   // Only run if the invaders modal is open
@@ -1519,7 +1532,7 @@ function handleInvadersKey(event) {
       if (!state.bullet.active && state.player.alive) {
         // create bullet rectangle for collisions
         state.bullet.x = state.player.x + (state.player.width / 2) - (state.bullet.width / 2);
-        state.bullet.y = state.player.y;
+        state.bullet.y = state.player.y - state.bullet.height;
         state.bullet.active = true;
         state.bullet.alive = true; // for collision check
       }
