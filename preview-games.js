@@ -120,9 +120,16 @@ function t_isColliding(B) {
 function t_drawFrame() {
   if (!tetrisCtx) return;
 
-  // PLAYFIELD AREA: Fill background with dark gray
+  // PLAYFIELD AREA: Only fill the background if necessary (different from previous frame)
+  // Removing the canvas clear prevents flashing.
+  // For classic Tetris, you want to redraw background, but do NOT use shadowBlur on canvas background.
+
+  tetrisCtx.save();
+  tetrisCtx.globalAlpha = 1;
   tetrisCtx.fillStyle = T_PLAYFIELD_BG;
+  tetrisCtx.shadowBlur = 0;
   tetrisCtx.fillRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+  tetrisCtx.restore();
 
   // spawn
   if (!t_block) {
@@ -204,6 +211,7 @@ function t_drawFrame() {
     }
   }
 
+  tetrisCtx.save();
   tetrisCtx.fillStyle = T_PALETTE.fill;
   tetrisCtx.strokeStyle = T_PALETTE.stroke;
   tetrisCtx.lineWidth = 1;
@@ -230,11 +238,11 @@ function t_drawFrame() {
     tetrisCtx.shadowColor = 'black';
     tetrisCtx.shadowBlur = 5;
     tetrisCtx.fillText('TETRIS!', tetrisCanvas.width / 2, tetrisCanvas.height / 2);
-    tetrisCtx.shadowBlur = 0;
     t_messageTimer--;
   }
 
-  tetrisCtx.shadowBlur = 0;
+  tetrisCtx.restore();
+
   t_count -= 1;
 }
 
