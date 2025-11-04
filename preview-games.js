@@ -14,7 +14,7 @@ const tetrisStartBtn = document.getElementById('preview-startBtn');
 const tetrisControlsBtn = document.getElementById('preview-controlsBtn');
 
 const T_BOX = 24;
-const T_SPEED = 50;
+const T_SPEED = 50; // gravity step in ms
 
 let t_fastFall = false;
 let t_score = 0;
@@ -23,8 +23,13 @@ let t_messageTimer = 0;
 
 let t_block;
 let t_rows;
-let t_gameInterval;
-let t_count;
+let t_tetrisLoopId = null;
+let t_lastTime = 0;
+let t_accumulator = 0;
+
+// offscreen buffer to avoid visual flashing
+let t_offscreenCanvas = null;
+let t_offscreenCtx = null;
 
 const T_PALETTE = { fill: '#00FFFF', stroke: '#33FFFF', shadow: '#00FFFF' };
 const T_PLAYFIELD_BG = '#23262b'; // DARK GRAY for playfield
@@ -49,6 +54,22 @@ function t_saveHighScore() {
   if (tetrisScoreP) tetrisScoreP.textContent = 'Score: ' + t_score + ' | High Score: ' + t_highScore;
 }
 
+function t_initOffscreen() {
+  if (!tetrisCanvas) return;
+  t_offscreenCanvas = document.createElement('canvas');
+  t_offscreenCanvas.width = tetrisCanvas.width;
+  t_offscreenCanvas.height = tetrisCanvas.height;
+  t_offscreenCtx = t_offscreenCanvas.getContext('2d');
+  // initialize offscreen background so first blit is solid
+  t_offscreenCtx.fillStyle = T_PLAYFIELD_BG;
+  t_offscreenCtx.fillRect(0, 0, t_offscreenCanvas.width, t_offscreenCanvas.height);
+  if (tetrisCtx) {
+    // draw initial stable background once
+    tetrisCtx.fillStyle = T_PLAYFIELD_BG;
+    tetrisCtx.fillRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+  }
+}
+
 function t_start() {
   t_rows = [];
   for (let i = 0; i < 20; i++) {
@@ -58,10 +79,14 @@ function t_start() {
   }
   t_score = 0;
   t_loadHighScore();
-  t_count = 10;
   t_messageTimer = 0;
-  if (t_gameInterval) clearInterval(t_gameInterval);
-  t_gameInterval = setInterval(t_drawFrame, T_SPEED);
+  t_block = null;
+  t_accumulator = 0;
+  t_lastTime = performance.now();
+  if (!t_offscreenCanvas) t_initOffscreen();
+  // stop any existing loop
+  if (t_tetrisLoopId) cancelAnimationFrame(t_tetrisLoopId);
+  t_tetrisLoopId = requestAnimationFrame(tetrisLoop);
   if (tetrisStartBtn) tetrisStartBtn.textContent = 'Restart';
 }
 
@@ -117,29 +142,15 @@ function t_isColliding(B) {
   return false;
 }
 
-function t_drawFrame() {
-  if (!tetrisCtx) return;
-
-  // PLAYFIELD AREA: Only fill the background if necessary (different from previous frame)
-  // Removing the canvas clear prevents flashing.
-  // For classic Tetris, you want to redraw background, but do NOT use shadowBlur on canvas background.
-
-  tetrisCtx.save();
-  tetrisCtx.globalAlpha = 1;
-  tetrisCtx.fillStyle = T_PLAYFIELD_BG;
-  tetrisCtx.shadowBlur = 0;
-  tetrisCtx.fillRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
-  tetrisCtx.restore();
-
-  // spawn
+// The gravity step - moves the block down once and handles locking and clearing
+function t_gravityStep() {
+  // spawn if none
   if (!t_block) {
     let newBlockIndex = Math.floor(Math.random() * 7);
     t_block = [T_ALL_BLOCKS[newBlockIndex], 4, 0];
-
     if (t_isColliding(t_block)) {
-      clearInterval(t_gameInterval);
-      t_gameInterval = null;
-      if (tetrisStartBtn) tetrisStartBtn.textContent = 'Start';
+      // game over
+      t_stopGame();
       if (t_score > t_highScore) {
         alert('Game Over! New high score: ' + t_score);
         t_highScore = t_score;
@@ -152,50 +163,59 @@ function t_drawFrame() {
     return;
   }
 
-  // gravity
-  if (t_count === 0 || (t_fastFall && (t_count % 2 === 0))) {
-    t_count = 10;
-    t_block[2] += 1;
+  // move down
+  t_block[2] += 1;
+  if (t_isColliding(t_block)) {
+    t_block[2] -= 1;
 
-    if (t_isColliding(t_block)) {
-      t_block[2] -= 1;
-
-      // lock piece
-      for (let y = 0; y < t_block[0].length; y++) {
-        for (let x = 0; x < t_block[0][y].length; x++) {
-          if (t_block[0][y][x] === 1) {
-            if (t_rows[t_block[2] + y]) {
-              t_rows[t_block[2] + y][t_block[1] + x] = 1;
-            }
+    // lock piece into playfield
+    for (let y = 0; y < t_block[0].length; y++) {
+      for (let x = 0; x < t_block[0][y].length; x++) {
+        if (t_block[0][y][x] === 1) {
+          if (t_rows[t_block[2] + y]) {
+            t_rows[t_block[2] + y][t_block[1] + x] = 1;
           }
         }
       }
+    }
 
-      t_block = null;
+    t_block = null;
 
-      // clear lines
-      let linesCleared = 0;
-      for (let i = 0; i < 20; i++) {
-        if (t_rows[i] && !t_rows[i].some(b => b === 0)) {
-          t_rows.splice(i, 1);
-          let row = [];
-          for (let x = 0; x < 10; x++) row.push(0);
-          t_rows.unshift(row);
-          linesCleared++;
-          i--;
-        }
-      }
-
-      if (linesCleared === 1) t_score += 10;
-      else if (linesCleared === 2) t_score += 20;
-      else if (linesCleared === 3) t_score += 30;
-      else if (linesCleared === 4) { t_score += 50; t_messageTimer = 40; }
-
-      if (linesCleared > 0) {
-        if (tetrisScoreP) tetrisScoreP.textContent = 'Score: ' + t_score + ' | High Score: ' + t_highScore;
+    // clear lines
+    let linesCleared = 0;
+    for (let i = 0; i < 20; i++) {
+      if (t_rows[i] && !t_rows[i].some(b => b === 0)) {
+        t_rows.splice(i, 1);
+        let row = [];
+        for (let x = 0; x < 10; x++) row.push(0);
+        t_rows.unshift(row);
+        linesCleared++;
+        i--;
       }
     }
+
+    if (linesCleared === 1) t_score += 10;
+    else if (linesCleared === 2) t_score += 20;
+    else if (linesCleared === 3) t_score += 30;
+    else if (linesCleared === 4) { t_score += 50; t_messageTimer = 40; }
+
+    if (linesCleared > 0) {
+      if (tetrisScoreP) tetrisScoreP.textContent = 'Score: ' + t_score + ' | High Score: ' + t_highScore;
+    }
   }
+}
+
+// Draws entire frame to offscreen canvas, then blits to visible canvas.
+// Offscreen buffering avoids partial-frame visible clearing and reduces flashing.
+function t_drawToOffscreen() {
+  if (!t_offscreenCtx || !t_offscreenCanvas) return;
+
+  // Fill background (offscreen) — no shadow blur for background paint
+  t_offscreenCtx.save();
+  t_offscreenCtx.shadowBlur = 0;
+  t_offscreenCtx.fillStyle = T_PLAYFIELD_BG;
+  t_offscreenCtx.fillRect(0, 0, t_offscreenCanvas.width, t_offscreenCanvas.height);
+  t_offscreenCtx.restore();
 
   // prepare grid + draw
   let RaB = t_rows.map(row => [...row]);
@@ -211,12 +231,13 @@ function t_drawFrame() {
     }
   }
 
-  tetrisCtx.save();
-  tetrisCtx.fillStyle = T_PALETTE.fill;
-  tetrisCtx.strokeStyle = T_PALETTE.stroke;
-  tetrisCtx.lineWidth = 1;
-  tetrisCtx.shadowColor = T_PALETTE.shadow;
-  tetrisCtx.shadowBlur = 5;
+  // draw blocks
+  t_offscreenCtx.save();
+  t_offscreenCtx.fillStyle = T_PALETTE.fill;
+  t_offscreenCtx.strokeStyle = T_PALETTE.stroke;
+  t_offscreenCtx.lineWidth = 1;
+  t_offscreenCtx.shadowColor = T_PALETTE.shadow;
+  t_offscreenCtx.shadowBlur = 5;
 
   const t_size = T_BOX - 3;
   const t_offset = 1.5;
@@ -224,26 +245,69 @@ function t_drawFrame() {
   for (let y = 0; y < RaB.length; y++) {
     for (let x = 0; x < RaB[y].length; x++) {
       if (RaB[y][x] === 1) {
-        tetrisCtx.fillRect(x * T_BOX + t_offset, y * T_BOX + t_offset, t_size, t_size);
-        tetrisCtx.strokeRect(x * T_BOX + t_offset, y * T_BOX + t_offset, t_size, t_size);
+        t_offscreenCtx.fillRect(x * T_BOX + t_offset, y * T_BOX + t_offset, t_size, t_size);
+        t_offscreenCtx.strokeRect(x * T_BOX + t_offset, y * T_BOX + t_offset, t_size, t_size);
       }
     }
   }
 
   // TETRIS message
   if (t_messageTimer > 0) {
-    tetrisCtx.fillStyle = 'yellow';
-    tetrisCtx.font = 'bold 48px Arial';
-    tetrisCtx.textAlign = 'center';
-    tetrisCtx.shadowColor = 'black';
-    tetrisCtx.shadowBlur = 5;
-    tetrisCtx.fillText('TETRIS!', tetrisCanvas.width / 2, tetrisCanvas.height / 2);
+    t_offscreenCtx.fillStyle = 'yellow';
+    t_offscreenCtx.font = 'bold 48px Arial';
+    t_offscreenCtx.textAlign = 'center';
+    t_offscreenCtx.shadowColor = 'black';
+    t_offscreenCtx.shadowBlur = 5;
+    t_offscreenCtx.fillText('TETRIS!', t_offscreenCanvas.width / 2, t_offscreenCanvas.height / 2);
     t_messageTimer--;
   }
+  t_offscreenCtx.restore();
 
-  tetrisCtx.restore();
+  // Blit offscreen to onscreen in one operation
+  if (tetrisCtx && t_offscreenCanvas) {
+    tetrisCtx.drawImage(t_offscreenCanvas, 0, 0);
+  }
+}
 
-  t_count -= 1;
+// The animation loop uses requestAnimationFrame and an accumulator so gravity is time-based.
+// This removes the use of setInterval and prevents visible clearing artifacts during frames.
+function tetrisLoop(ts) {
+  if (!tetrisCtx || !t_offscreenCtx) {
+    t_tetrisLoopId = null;
+    return;
+  }
+  t_tetrisLoopId = requestAnimationFrame(tetrisLoop);
+
+  let now = ts || performance.now();
+  let delta = now - t_lastTime;
+  t_lastTime = now;
+  t_accumulator += delta;
+
+  // gravity step interval changes when fast-falling
+  const gravityInterval = t_fastFall ? Math.max(10, T_SPEED / 2) : T_SPEED;
+
+  // run as many gravity steps as accumulated time allows (keeps physics stable when tab focus changes)
+  while (t_accumulator >= gravityInterval) {
+    t_accumulator -= gravityInterval;
+    t_gravityStep();
+  }
+
+  // draw current frame after updating physics
+  t_drawToOffscreen();
+}
+
+// Stops the tetris game loop and clears state
+function t_stopGame() {
+  if (t_tetrisLoopId) {
+    cancelAnimationFrame(t_tetrisLoopId);
+    t_tetrisLoopId = null;
+  }
+  t_block = null;
+  if (tetrisCtx) {
+    tetrisCtx.fillStyle = T_PLAYFIELD_BG;
+    tetrisCtx.fillRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+  }
+  if (tetrisStartBtn) tetrisStartBtn.textContent = 'Start';
 }
 
 // Modal controls for Tetris
@@ -251,34 +315,35 @@ function t_openModal() {
   if (tetrisModal) tetrisModal.style.display = 'flex';
   t_loadHighScore();
   if (tetrisStartBtn) tetrisStartBtn.textContent = 'Start';
+  if (!t_offscreenCanvas) t_initOffscreen();
 }
 
 function t_closeModal() {
   if (tetrisModal) tetrisModal.style.display = 'none';
-  if (t_gameInterval) { clearInterval(t_gameInterval); t_gameInterval = null; }
-  t_block = null;
-  if (tetrisCtx) {
-    tetrisCtx.fillStyle = T_PLAYFIELD_BG;
-    tetrisCtx.fillRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
-  }
+  t_stopGame();
 }
 
 // Tetris keyboard handlers
 document.addEventListener('keydown', event => {
-  if (!tetrisModal || tetrisModal.style.display !== 'flex' || !t_gameInterval) return;
-  if (['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(event.key) || event.code === 'Space') {
+  if (!tetrisModal || tetrisModal.style.display !== 'flex') return;
+
+  // prevent page scroll when using arrows/space and when modal is open
+  if (['ArrowRight','ArrowLeft','ArrowUp','ArrowDown',' '].includes(event.key) || event.code === 'Space') {
     event.preventDefault();
   }
+
+  // only accept movement if game is running or block present (so controls are responsive)
+  if (!t_block && !t_tetrisLoopId) return;
+
   if (event.key === 'ArrowLeft') t_moveLeft();
   if (event.key === 'ArrowRight') t_moveRight();
-  if (event.code === 'Space') t_rotate();
+  if (event.code === 'Space' || event.key === ' ') t_rotate();
   if (event.key === 'ArrowDown') t_fastFall = true;
 });
 
 document.addEventListener('keyup', event => {
   if (event.key === 'ArrowDown') t_fastFall = false;
 });
-
 
 // ---------------------- NAMESPACED SPACE INVADERS++ (PREVIEW) ----------------------
 
