@@ -1048,7 +1048,7 @@ function initRacerGame() {
    State and configuration
    ============================ */
 let invaderState = {
-  player: { x: 140, y: 350, width: 20, height: 16, lives: 3, alive: true },
+  player: { x: 140, y: 350, width: 20, height: 16, lives: 3, alive: true }, // keep starting lives at 3 as requested
   // bullet represented as small rect for collisions; will be drawn as a laser stroke
   bullet: { x: 0, y: 0, width: 4, height: 14, active: false, alive: false, speed: 14 },
   enemies: [],
@@ -1060,10 +1060,10 @@ let invaderState = {
   level: 1,
   gameOver: false,
   gameLoopId: null,
-  dropSpeed: 10,
+  dropSpeed: 6, // reduced default drop speed to make levels gentler
   initialEnemies: 0,
   enemyMoveTimer: 0,
-  enemyMoveInterval: 30
+  enemyMoveInterval: 40 // slower base interval to reduce early-level speed
 };
 
 // color palettes retained
@@ -1127,7 +1127,7 @@ function createEnemies() {
   const state = invaderState;
   state.enemies = [];
 
-  const rows = 5; // more rows than original
+  const rows = 4; // reduced rows to make levels easier
   const approxEnemyWidth = 20;
   const padding = 12;
   const minCols = 8;
@@ -1230,7 +1230,7 @@ function updateInvaders() {
   state.enemyMoveTimer--;
   if (state.enemyMoveTimer <= 0) {
     let moveDown = false;
-    let moveStep = 6;
+    let moveStep = 4; // smaller horizontal step to slow lateral movement
 
     let aliveEnemies = state.enemies.filter(e => e.alive);
 
@@ -1256,12 +1256,13 @@ function updateInvaders() {
     });
 
     let progress = (state.initialEnemies - aliveEnemies.length) / state.initialEnemies;
-    state.enemyMoveInterval = Math.max(3, (30 - (state.level - 1) * 2) * (1 - progress * 0.9));
+    // gentler acceleration: slower base and less aggressive speed-up based on progress
+    state.enemyMoveInterval = Math.max(6, (36 - (state.level - 1) * 1.2) * (1 - progress * 0.7));
     state.enemyMoveTimer = state.enemyMoveInterval;
   }
 
-  // Mystery ship spawn
-  if (!state.mysteryShip.active && Math.random() > 0.998 - (state.level * 0.0005)) {
+  // Mystery ship spawn (rarer now)
+  if (!state.mysteryShip.active && Math.random() > 0.995 - (state.level * 0.0003)) {
     state.mysteryShip.active = true;
     state.mysteryShip.alive = true;
     if (Math.random() > 0.5) {
@@ -1282,7 +1283,8 @@ function updateInvaders() {
 
   // Enemy shooting
   let aliveEnemies = state.enemies.filter(e => e.alive);
-  let shootThreshold = Math.max(0.6, 0.98 - (state.level * 0.02));
+  // make shooting less frequent: higher threshold and slower increase per level
+  let shootThreshold = Math.max(0.75, 0.98 - (state.level * 0.015));
   if (Math.random() > shootThreshold && aliveEnemies.length > 0) {
     let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
     state.enemyBullets.push({
@@ -1291,7 +1293,7 @@ function updateInvaders() {
       width: 2,
       height: 14,
       alive: true,
-      speed: 4 + state.level * 0.2
+      speed: 3 + state.level * 0.15 // slightly slower bullets
     });
   }
 
@@ -1416,11 +1418,17 @@ function drawInvaders() {
     invadersCtx.restore();
   });
 
-  // Lives as small ships (pixel blocks)
+  // Lives display: show a single tiny ship icon with numeric count (ships left)
+  // (User requested numeric indicator rather than drawing multiple ships)
   invadersCtx.fillStyle = '#00FFFF';
-  for (let i = 0; i < state.player.lives; i++) {
-    invadersCtx.fillRect(10 + i * (state.player.width + 10), invadersCanvas.height - 30, state.player.width, state.player.height);
-  }
+  // small ship icon (same width/height as a player miniature)
+  const shipIconX = 10;
+  const shipIconY = invadersCanvas.height - 30;
+  invadersCtx.fillRect(shipIconX, shipIconY, state.player.width, state.player.height);
+  // numeric label next to it
+  invadersCtx.font = '16px "Courier New", monospace';
+  invadersCtx.fillStyle = '#FFFFFF';
+  invadersCtx.fillText(`x${state.player.lives}`, shipIconX + state.player.width + 8, shipIconY + state.player.height - 2);
 
   // HUD
   invadersCtx.font = '15px "Courier New", monospace';
@@ -1455,9 +1463,10 @@ function startNextLevel() {
   state.bullet.active = false;
   state.bullet.alive = false;
 
-  state.enemyMoveInterval = Math.max(5, 30 - (state.level - 1) * 2);
+  // gentler progression: slower interval decrease and smaller drop speed growth
+  state.enemyMoveInterval = Math.max(8, 36 - (state.level - 1) * 1.2);
   state.enemyMoveTimer = state.enemyMoveInterval;
-  state.dropSpeed = 10 + (state.level - 1) * 2;
+  state.dropSpeed = 6 + (state.level - 1) * 1.2;
 
   createEnemies();
   createBunkers();
@@ -1483,14 +1492,14 @@ function startInvaders() {
   invaderState.bullet.active = false;
   invaderState.bullet.alive = false;
   invaderState.player.x = Math.max(10, (invadersCanvas ? invadersCanvas.width : 300) / 2 - invaderState.player.width / 2);
-  invaderState.player.lives = 3;
+  invaderState.player.lives = 3; // keep player lives at 3 per request
   invaderState.player.alive = true;
   invaderState.enemyDirection = 1;
   invaderState.enemyMoveTimer = 0;
-  invaderState.enemyMoveInterval = 30;
+  invaderState.enemyMoveInterval = 36; // slower starting interval
   invaderState.mysteryShip.active = false;
   invaderState.mysteryShip.alive = false;
-  invaderState.dropSpeed = 10;
+  invaderState.dropSpeed = 6; // reduced base drop speed
 
   if (invadersScoreEl) invadersScoreEl.textContent = "Score: 0";
   if (invadersMessageEl) invadersMessageEl.textContent = "Good luck!";
