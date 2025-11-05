@@ -178,7 +178,7 @@ const colorPalettes = [
   { fill: '#9D00FF', stroke: '#8C00E6', shadow: '#9D00FF' }, // Level 5 (Purple)
   { fill: '#FD1C03', stroke: '#E41903', shadow: '#FD1C03' }, // Level 6 (Red)
   { fill: '#FF69B4', stroke: '#E6529E', shadow: '#FF69B4' }, // Level 7 (Pink)
-  { fill: '#F0F0F0', stroke: '#D9D9D9', shadow: '#F0F0F0' }, // Level 8 (White)
+  { fill: '#F0F0F0', stroke: '#D9D9D9', shadow: '#F0F0F0' }  // Level 8 (White)
 ];
 
 // Block types
