@@ -1418,17 +1418,33 @@ function drawInvaders() {
     invadersCtx.restore();
   });
 
-  // Lives display: show a single tiny ship icon with numeric count (ships left)
-  // (User requested numeric indicator rather than drawing multiple ships)
+  // Lives UI: show two boxes at start; when hit, show one at left and one on the side near the player.
+  // This still represents 3 total lives (active ship + two reserve boxes).
+  const lifeBoxW = 14;
+  const lifeBoxH = 10;
+  const lifeLeftX = 10;
+  const lifeY = invadersCanvas.height - 28;
+
   invadersCtx.fillStyle = '#00FFFF';
-  // small ship icon (same width/height as a player miniature)
-  const shipIconX = 10;
-  const shipIconY = invadersCanvas.height - 30;
-  invadersCtx.fillRect(shipIconX, shipIconY, state.player.width, state.player.height);
-  // numeric label next to it
-  invadersCtx.font = '16px "Courier New", monospace';
-  invadersCtx.fillStyle = '#FFFFFF';
-  invadersCtx.fillText(`x${state.player.lives}`, shipIconX + state.player.width + 8, shipIconY + state.player.height - 2);
+  // lives mapping:
+  // lives === 3 -> two boxes at left
+  // lives === 2 -> one box at left, one box on the side (near player)
+  // lives === 1 -> one box on the side (near player)
+  if (state.player.lives >= 3) {
+    // two reserve boxes shown on the left
+    invadersCtx.fillRect(lifeLeftX, lifeY, lifeBoxW, lifeBoxH);
+    invadersCtx.fillRect(lifeLeftX + lifeBoxW + 8, lifeY, lifeBoxW, lifeBoxH);
+  } else if (state.player.lives === 2) {
+    // one reserve left, and one "on the side" near player's current x
+    invadersCtx.fillRect(lifeLeftX, lifeY, lifeBoxW, lifeBoxH);
+    const sideX = Math.min(invadersCanvas.width - lifeBoxW - 8, Math.max( lifeLeftX + 60, state.player.x + state.player.width + 8 ));
+    invadersCtx.fillRect(sideX, lifeY, lifeBoxW, lifeBoxH);
+  } else if (state.player.lives === 1) {
+    // only the side box remains to indicate the last life
+    const sideX = Math.min(invadersCanvas.width - lifeBoxW - 8, Math.max( lifeLeftX + 60, state.player.x + state.player.width + 8 ));
+    invadersCtx.fillRect(sideX, lifeY, lifeBoxW, lifeBoxH);
+  }
+  // Note: the active ship itself is still drawn at state.player.x, so the player always sees the active ship + these "reserve" boxes.
 
   // HUD
   invadersCtx.font = '15px "Courier New", monospace';
