@@ -1418,7 +1418,7 @@ function drawInvaders() {
     invadersCtx.restore();
   });
 
-  // Lives UI: show two boxes at start; when hit, show one at left and one on the side near the player.
+  // Lives UI: show two boxes at start; when hit, show one at left and one on the side.
   // This still represents 3 total lives (active ship + two reserve boxes).
   const lifeBoxW = 14;
   const lifeBoxH = 10;
@@ -1428,20 +1428,20 @@ function drawInvaders() {
   invadersCtx.fillStyle = '#00FFFF';
   // lives mapping:
   // lives === 3 -> two boxes at left
-  // lives === 2 -> one box at left, one box on the side (near player)
-  // lives === 1 -> one box on the side (near player)
+  // lives === 2 -> one box at left, and one "on the side" (STATIC)
+  // lives === 1 -> one "on the side" (STATIC)
   if (state.player.lives >= 3) {
     // two reserve boxes shown on the left
     invadersCtx.fillRect(lifeLeftX, lifeY, lifeBoxW, lifeBoxH);
     invadersCtx.fillRect(lifeLeftX + lifeBoxW + 8, lifeY, lifeBoxW, lifeBoxH);
   } else if (state.player.lives === 2) {
-    // one reserve left, and one "on the side" near player's current x
+    // one reserve left, and one "on the side" placed at a fixed side position (no longer tied to player.x)
     invadersCtx.fillRect(lifeLeftX, lifeY, lifeBoxW, lifeBoxH);
-    const sideX = Math.min(invadersCanvas.width - lifeBoxW - 8, Math.max( lifeLeftX + 60, state.player.x + state.player.width + 8 ));
+    const sideX = Math.min(invadersCanvas.width - lifeBoxW - 8, lifeLeftX + 60);
     invadersCtx.fillRect(sideX, lifeY, lifeBoxW, lifeBoxH);
   } else if (state.player.lives === 1) {
-    // only the side box remains to indicate the last life
-    const sideX = Math.min(invadersCanvas.width - lifeBoxW - 8, Math.max( lifeLeftX + 60, state.player.x + state.player.width + 8 ));
+    // only the side box remains to indicate the last life (STATIC)
+    const sideX = Math.min(invadersCanvas.width - lifeBoxW - 8, lifeLeftX + 60);
     invadersCtx.fillRect(sideX, lifeY, lifeBoxW, lifeBoxH);
   }
   // Note: the active ship itself is still drawn at state.player.x, so the player always sees the active ship + these "reserve" boxes.
