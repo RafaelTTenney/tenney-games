@@ -335,8 +335,7 @@ rows.unshift(row);
 console.log("Level up! Now on level " + currentLevel);
           }
           
-          if(scoreP) scoreP.textContent = 'Score: ' + score + ' |
-High Score: ' + highScore;
+          if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
           i--;
         }
       }
