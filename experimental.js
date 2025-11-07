@@ -1066,8 +1066,7 @@ racerState.carSway = 0;
     renderRacer(); 
     updateHud();
 if (racerMessageEl) {
-        racerMessageEl.textContent = 'Ready!
-Use ← and → to slide through the gaps.';
+        racerMessageEl.textContent = 'Ready! Use ← and → to slide through the gaps.';
     }
 }
 
