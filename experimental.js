@@ -1166,8 +1166,7 @@ let invaderState = {
   dropSpeed: 6, // reduced default drop speed to make levels gentler
   initialEnemies: 0,
   enemyMoveTimer: 0,
-  enemyMoveInterval: 40 // slower 
-base interval to reduce early-level speed
+  enemyMoveInterval: 40 // slower base interval to reduce early-level speed
 };
 
 // color palettes retained
@@ -1195,7 +1194,7 @@ function createBunkers() {
   const bunkerCount = 4;
 // center bunkers evenly across playable width, leave 30px margin left/right
   const usableWidth = invadersCanvas.width - 60;
-const bunkerTotalWidth = bunkerPatternConnected[0].length * blockSize;
+  const bunkerTotalWidth = bunkerPatternConnected[0].length * blockSize;
   const spacing = usableWidth / bunkerCount;
   const baseX = 30;
 // left margin
@@ -1205,12 +1204,12 @@ const bunkerTotalWidth = bunkerPatternConnected[0].length * blockSize;
 
   for (let b = 0; b < bunkerCount; b++) {
     const center = baseX + spacing * b + spacing / 2;
-const left = Math.round(center - bunkerTotalWidth / 2);
+    const left = Math.round(center - bunkerTotalWidth / 2);
     for (let r = 0; r < bunkerPatternConnected.length; r++) {
       for (let c = 0; c < bunkerPatternConnected[0].length; c++) {
         if (bunkerPatternConnected[r][c]) {
           const px = left + c * blockSize;
-const py = bunkerY + r * blockSize;
+          const py = bunkerY + r * blockSize;
           invaderState.bunkers.push({
             x: px,
             y: py,
