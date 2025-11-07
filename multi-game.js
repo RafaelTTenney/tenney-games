@@ -379,10 +379,6 @@ function initPaperioGame() {
       for (let x = 0; x < boardSize; x++) {
         if (territory[y][x] === player.id) {
           territory[y][x] = -1;
-
-
-
-
         }
       }
     }
@@ -398,13 +394,6 @@ function initPaperioGame() {
         }
       }
     }
-
-
-
-
-
-
-
   }
 
   function spawnPlayer(player, spawn) {
@@ -447,7 +436,6 @@ function initPaperioGame() {
       { x: 4, y: boardSize - 5, dir: { x: 0, y: -1 } },
       { x: boardSize - 5, y: boardSize - 5, dir: { x: 0, y: -1 } }
     ];
-
   }
 
   function resetPlayers() {
@@ -460,7 +448,6 @@ function initPaperioGame() {
     const spawns = startingPositions();
     players.forEach((player, index) => {
       spawnPlayer(player, spawns[index]);
-
     });
   }
 
@@ -469,8 +456,6 @@ function initPaperioGame() {
     for (let y = 0; y < boardSize; y++) {
       for (let x = 0; x < boardSize; x++) {
         if (territory[y][x] === playerId) count += 1;
-
-
       }
     }
     return count;
@@ -651,28 +636,186 @@ function initPaperioGame() {
     });
   }
 
-  function chooseTurn(player) {
+  // --- AI helpers: safety, neighbors, BFS pathfinding, frontier search ---
+  function inBounds(x, y) {
+    return x >= 0 && x < boardSize && y >= 0 && y < boardSize;
+  }
+
+  function neighborsOf(x, y) {
+    return [
+      { x: x + 1, y },
+      { x: x - 1, y },
+      { x, y: y + 1 },
+      { x, y: y - 1 }
+    ].filter(n => inBounds(n.x, n.y));
+  }
+
+  function isSafe(player, nx, ny) {
+    if (!inBounds(nx, ny)) return false;
+    // running into a tail is dangerous
+    if (trails[ny][nx] >= 0 && trails[ny][nx] !== player.id) return false;
+    // avoid hugging the absolute edges unless we have territory
+    if (nx <= 0 || ny <= 0 || nx >= boardSize - 1 || ny >= boardSize - 1) {
+      const owned = territoryCount(player.id);
+      if (owned < totalCells * 0.02) return false;
+    }
+    return true;
+  }
+
+  function bfsFindPath(startX, startY, goalTest, maxSteps = 200) {
+    const visited = Array.from({ length: boardSize }, () => Array(boardSize).fill(false));
+    const queue = [];
+    const parent = Array.from({ length: boardSize }, () => Array(boardSize).fill(null));
+    queue.push({ x: startX, y: startY });
+    visited[startY][startX] = true;
+    let steps = 0;
+    while (queue.length && steps < maxSteps) {
+      steps++;
+      const cur = queue.shift();
+      if (goalTest(cur.x, cur.y)) {
+        const path = [];
+        let p = cur;
+        while (p && !(p.x === startX && p.y === startY)) {
+          path.unshift({ x: p.x, y: p.y });
+          p = parent[p.y][p.x];
+        }
+        return path;
+      }
+      for (const n of neighborsOf(cur.x, cur.y)) {
+        if (visited[n.y][n.x]) continue;
+        // allow planning through neutral and own territory; avoid obvious tail cells for planning
+        if (trails[n.y][n.x] >= 0 && trails[n.y][n.x] !== -1 && trails[n.y][n.x] !== undefined) {
+          // still allow but deprioritize via parent marking (we don't implement weights here to stay cheap)
+        }
+        visited[n.y][n.x] = true;
+        parent[n.y][n.x] = cur;
+        queue.push(n);
+      }
+    }
+    return null;
+  }
+
+  function findNearestFrontier(player) {
+    const startX = player.x;
+    const startY = player.y;
+    const path = bfsFindPath(startX, startY, (x, y) => {
+      if (territory[y][x] === player.id) return false;
+      if (territory[y][x] === -1) {
+        for (const n of neighborsOf(x, y)) {
+          if (territory[n.y][n.x] === -1) return true;
+        }
+      }
+      if (territory[y][x] >= 0 && territory[y][x] !== player.id) {
+        for (const n of neighborsOf(x, y)) {
+          if (territory[n.y][n.x] === -1) return true;
+        }
+      }
+      return false;
+    }, 400);
+    return path;
+  }
+
+  function findSafeReturnToTerritory(player) {
+    const path = bfsFindPath(player.x, player.y, (x, y) => territory[y][x] === player.id, 400);
+    return path;
+  }
+
+  function chooseAiDirection(player) {
+    const TAIL_RETURN_THRESHOLD = 3;
+    if (player.tail.length >= TAIL_RETURN_THRESHOLD) {
+      const backPath = findSafeReturnToTerritory(player);
+      if (backPath && backPath.length > 0) {
+        const next = backPath[0];
+        return { x: Math.sign(next.x - player.x), y: Math.sign(next.y - player.y) };
+      }
+    }
+
+    const localOptions = neighborsOf(player.x, player.y).map(n => ({ n, score: 0 }));
+    localOptions.forEach(o => {
+      const distEdge = Math.min(o.n.x, boardSize - 1 - o.n.x, o.n.y, boardSize - 1 - o.n.y);
+      o.score += distEdge;
+      if (territory[o.n.y][o.n.x] === -1) o.score += 2;
+      if (trails[o.n.y][o.n.x] >= 0 && trails[o.n.y][o.n.x] !== player.id) o.score -= 20;
+      if (territory[o.n.y][o.n.x] >= 0 && territory[o.n.y][o.n.x] !== player.id) o.score -= 1;
+    });
+
+    localOptions.sort((a, b) => b.score - a.score);
+    for (const o of localOptions) {
+      const dx = o.n.x - player.x;
+      const dy = o.n.y - player.y;
+      if (Math.abs(dx) + Math.abs(dy) !== 1) continue;
+      if (isSafe(player, o.n.x, o.n.y)) {
+        return { x: dx, y: dy };
+      }
+    }
+
+    const frontierPath = findNearestFrontier(player);
+    if (frontierPath && frontierPath.length > 0) {
+      const next = frontierPath[0];
+      const dx = Math.sign(next.x - player.x);
+      const dy = Math.sign(next.y - player.y);
+      if (Math.abs(dx) + Math.abs(dy) === 1 && isSafe(player, player.x + dx, player.y + dy)) {
+        return { x: dx, y: dy };
+      }
+    }
+
+    const neutralPath = bfsFindPath(player.x, player.y, (x, y) => territory[y][x] === -1, 200);
+    if (neutralPath && neutralPath.length > 0) {
+      const next = neutralPath[0];
+      const dx = Math.sign(next.x - player.x);
+      const dy = Math.sign(next.y - player.y);
+      if (isSafe(player, player.x + dx, player.y + dy)) {
+        return { x: dx, y: dy };
+      }
+    }
+
     const options = [
       { x: 0, y: -1 },
       { x: 0, y: 1 },
       { x: -1, y: 0 },
       { x: 1, y: 0 }
-    ];
-    const valid = options.filter(opt => opt.x !== -player.dir.x || opt.y !== -player.dir.y);
-    return valid[Math.floor(Math.random() * valid.length)];
+    ].filter(opt => opt.x !== -player.dir.x || opt.y !== -player.dir.y);
+    const prefer = player.dir;
+    if (isSafe(player, player.x + prefer.x, player.y + prefer.y)) return prefer;
+    const safeOptions = options.filter(opt => isSafe(player, player.x + opt.x, player.y + opt.y));
+    if (safeOptions.length) return safeOptions[Math.floor(Math.random() * safeOptions.length)];
+    return options[Math.floor(Math.random() * options.length)];
   }
 
+  // --- Replace chooseTurn with improved function used by AI players ---
+  function chooseTurn(player) {
+    if (player.ai && Math.random() < 0.06) {
+      const opts = neighborsOf(player.x, player.y);
+      for (let i = 0; i < opts.length; i++) {
+        const pick = opts[Math.floor(Math.random() * opts.length)];
+        if (territory[pick.y][pick.x] === -1 && isSafe(player, pick.x, pick.y)) {
+          return { x: pick.x - player.x, y: pick.y - player.y };
+        }
+      }
+    }
+    return chooseAiDirection(player);
+  }
+
+  // --- Update advanceGame AI application: queue a direction rather than direct immediate dir change ---
   function advanceGame() {
     const moves = [];
     players.forEach(player => {
       if (!player.alive) return;
+
       if (player.queued && (player.queued.x !== -player.dir.x || player.queued.y !== -player.dir.y)) {
         player.dir = player.queued;
       }
       player.queued = null;
-      if (player.ai && Math.random() < 0.12) {
-        player.dir = chooseTurn(player);
+
+      if (player.ai) {
+        const desired = chooseTurn(player);
+        if (desired) {
+          if (desired.x !== -player.dir.x || desired.y !== -player.dir.y) {
+            player.dir = desired;
+          }
+        }
       }
+
       const nextX = player.x + player.dir.x;
       const nextY = player.y + player.dir.y;
       if (nextX < 0 || nextX >= boardSize || nextY < 0 || nextY >= boardSize) {
@@ -680,7 +823,6 @@ function initPaperioGame() {
         return;
       }
       moves.push({ player, nextX, nextY });
-
     });
 
     const targetMap = new Map();
@@ -723,9 +865,6 @@ function initPaperioGame() {
       } else if (player.tail.length > 0) {
         captureLoop(player);
       }
-
-
-
     });
   }
 
@@ -917,7 +1056,6 @@ function initRacerGame() {
   }
 
   function drawObstacles() {
-
     state.obstacles.forEach(ob => {
       const top = ob.y;
       const bottom = ob.y + obstacleHeight;
@@ -1021,10 +1159,6 @@ function initRacerGame() {
         return;
       }
     }
-
-
-
-
   }
 
   function renderRacer() {
@@ -1096,14 +1230,10 @@ function initRacerGame() {
     if (document.getElementById('racer-game').style.display !== 'flex') return;
     if (event.key === 'ArrowLeft') {
       shiftLane(-1);
-
-
       event.preventDefault();
     }
     if (event.key === 'ArrowRight') {
       shiftLane(1);
-
-
       event.preventDefault();
     }
   }
