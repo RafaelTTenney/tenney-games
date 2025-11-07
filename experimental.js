@@ -904,8 +904,7 @@ if (racerState.spawnTimer <= 0) {
             spawnWhooshLines(ob.gapCenter, racerCanvas.height - 40);
             // --- playSound removed ---
             
-            // --- NEW 
---- Add small dodge-shake
+            // --- NEW --- Add small dodge-shake
             racerState.shake.time = 8;
             racerState.shake.intensity = 2;
             
