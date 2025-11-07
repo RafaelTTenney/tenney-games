@@ -77,7 +77,7 @@
       margin: 28px auto;
       padding: 18px;
       background: var(--card);
-      border-radius: 12px;
+_      border-radius: 12px;
       border: 1px solid #222;
     }
 
@@ -111,7 +111,7 @@
 
     .card h3 {
       margin: 0;
-      color: var(--primary);
+  _    color: var(--primary);
     }
 
     .card .meta {
@@ -224,7 +224,20 @@
       gap: 10px;
       justify-content: center;
       margin-top: 15px;
+  _  }
+    
+    /* --- NEW STYLES FOR MUTE BUTTON STATE --- */
+    .modal-controls button#toggleSoundBtn {
+        color: #999; /* Muted color by default */
+        border-color: #999;
     }
+
+    .modal-controls button#toggleSoundBtn.active {
+        color: var(--primary); /* Active color */
+        border-color: var(--primary);
+        box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.4);
+    }
+    /* ----------------------------------------- */
 
   </style>
 </head>
@@ -284,12 +297,9 @@
 
     <section style="margin-top:12px;">
       <h3 style="color:var(--primary);margin-top:0;">How to add a new experiment</h3>
-    _ <ol style="color:var(--muted);line-height:1.6;">
+      <ol style="color:var(--muted);line-height:1.6;">
         <li>Duplicate one of the &lt;section class="card"&gt; blocks above.</li>
-        <li>Replace the title, description and the &lt;pre class="demo"&gt; content with your snippet or instructions.</li>
-        <li>Link a separate HTML/JS file in the "Run" action if the demo is larger than a snippet.</li>
-      </ol>
-    </section>
+section>
   </main>
 
   <div class="footer">
@@ -318,21 +328,27 @@
       <div class="modal-header">
         <h2>Neon Racer++</h2>
         <span class="modal-close" id="racerModalCloseBtn">&times;</span>
-      </div>
+i>
+        <li>Replace the title, description and the &lt;pre class="demo"&gt; content with your snippet or instructions.</li>
+        <li>Link a separate HTML/JS file in the "Run" action if the demo is larger than a snippet.</li>
+      </ol>
+    </     </div>
       
-      <canvas id="racer-canvas" width="340" height="520"></canvas>
+            <canvas id="racer-canvas" width="450" height="600"></canvas>
       
       <div id="racer-hud" style="color:#eee; font-weight:700; margin: 10px 0; min-height: 45px; text-align: left; padding: 0 10px;">
         <div id="racer-distance">Distance: 0m</div>
         <div id="racer-speed">Speed: 0 mph</div>
         <div id="racer-obstacles">Gaps cleared: 0</div>
-      </div>
+  H_   </div>
       <p id="racer-message" style="color:var(--primary); min-height: 1.2em; margin: 5px 0 10px 0;">Ready!</p>
       
       <div class="modal-controls">
         <button id="startRacerBtn" class="btn">Start</button>
         <button id="pauseRacerBtn" class="btn secondary">Pause</button>
         <button id="resetRacerBtn" class="btn secondary">Reset</button>
+        
+                <button id="toggleSoundBtn" class="btn secondary">Mute</button> 
       </div>
       
     </div>
@@ -366,7 +382,7 @@
       }
       
       // Since all games are now on this page, we must initialize all.
-      // Their scripts are in experimental.js
+D     // Their scripts are in experimental.js
       if (typeof initTetrisGame === 'function') {
         initTetrisGame();
       }
@@ -374,11 +390,16 @@
         initRacerGame();
       }
       if (typeof initInvadersGame === 'function') {
-        initInvadersGame();
+nbsp;       initInvadersGame();
       }
     });
   </script>
   
+      <audio id="racerMusic" src="path/to/your/music.mp3" loop></audio>
+  <audio id="racerEngine" src="path/to/your/engine-hum.mp3" loop></audio>
+  <audio id="racerDodgeSfx" src="path/to/your/dodge-sfx.wav"></audio>
+Modular-Lab-Link   <audio id="racerCrashSfx" src="path/to/your/crash-sfx.wav"></audio>
+
   <script src="experimental.js"></script>
   
 </body>
