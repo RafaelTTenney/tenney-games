@@ -47,20 +47,6 @@ const invadersScoreEl = document.getElementById('invaders-score');
 
 
 // --- MODAL HANDLING (TETRIS) ---
-
-// Modal Open/Close Logic
-if (runTetrisBtn) {
-    runTetrisBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      tetrisModal.style.display = 'flex';
-      // Reset score text when opening
-      if (typeof loadHighScore === 'function') {
-        loadHighScore();
-      }
-      if(startBtn) startBtn.textContent = 'Start';
-    });
-}
-
 function closeModal() {
   tetrisModal.style.display = 'none';
   // Stop the game when closing
@@ -75,72 +61,19 @@ function closeModal() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 }
-
-if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeModal);
-
-// Also close if user clicks outside the modal content
-if (tetrisModal) {
-    tetrisModal.addEventListener('click', function(e) {
-      if (e.target === tetrisModal) {
-        closeModal();
-      }
-    });
-}
-
 // --- MODAL HANDLING (RACER) ---
-if (runRacerBtn) {
-    runRacerBtn.addEventListener('click', function(e) {
-        e.preventDefault();
-        racerModal.style.display = 'flex';
-        if (typeof resetRacer === 'function') {
-            resetRacer();
-        }
-    });
-}
-
 function closeRacerModal() {
     racerModal.style.display = 'none';
     if (typeof pauseRacer === 'function') {
         pauseRacer();
     }
 }
-
-if (racerModalCloseBtn) racerModalCloseBtn.addEventListener('click', closeRacerModal);
-
-if (racerModal) {
-    racerModal.addEventListener('click', function(e) {
-        if (e.target === racerModal) {
-            closeRacerModal();
-        }
-    });
-}
-
 // --- MODAL HANDLING (INVADERS) ---
-
-if (runInvadersBtn) {
-    runInvadersBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      invadersModal.style.display = 'flex';
-      if (invadersMessageEl) invadersMessageEl.textContent = "Press Start!";
-      // DO NOT auto-start, let the user press the button
-    });
-}
-
 function closeInvadersModal() {
   invadersModal.style.display = 'none';
   if (typeof stopInvaders === 'function') {
     stopInvaders();
   }
-}
-
-if (invadersModalCloseBtn) invadersModalCloseBtn.addEventListener('click', closeInvadersModal);
-
-if (invadersModal) {
-    invadersModal.addEventListener('click', function(e) {
-      if (e.target === invadersModal) {
-        closeInvadersModal();
-      }
-    });
 }
 
 
@@ -417,11 +350,32 @@ document.addEventListener('keyup', event => {
 });
 // --- INIT TETRIS ---
 function initTetrisGame() {
+    // MODAL OPENING LOGIC (MOVED HERE)
+    if (runTetrisBtn) {
+        runTetrisBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          tetrisModal.style.display = 'flex';
+          if (typeof loadHighScore === 'function') {
+            loadHighScore();
+          }
+          if(startBtn) startBtn.textContent = 'Start';
+        });
+    }
+    // MODAL CLOSING LOGIC (MOVED HERE)
+    if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeModal);
+    if (tetrisModal) {
+        tetrisModal.addEventListener('click', function(e) {
+          if (e.target === tetrisModal) {
+            closeModal();
+          }
+        });
+    }
+
     if (startBtn) startBtn.addEventListener('click', start);
-if (controlsBtn) controlsBtn.addEventListener('click', function() {
+    if (controlsBtn) controlsBtn.addEventListener('click', function() {
       alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
     });
-// Load high score on script start
+    // Load high score on script start
     loadHighScore();
 }
 
@@ -490,6 +444,7 @@ const obstacleHeight = 60;
 const laneCenters = Array.from({ length: laneCount }, (_, i) => i * laneWidth + laneWidth / 2);
 // --- NEW --- Sound Control
 function toggleSound() {
+    if (!racerMusic || !racerEngine) return;
     racerState.sound = !racerState.sound;
 if (racerState.sound) {
         toggleSoundBtn.textContent = 'Mute';
@@ -794,7 +749,34 @@ const tiltLerp = 1 - Math.pow(1 - racerState.carTiltSpeed, effectiveDelta / 16.6
     racerState.carTilt += (targetTilt - racerState.carTilt) * tiltLerp;
 racerState.carTilt = Math.max(-racerState.carTiltMax, Math.min(racerState.carTiltMax, racerState.carTilt));
 
-    racerState.carSway = Math...
+    racerState.carSway = Math.sin(performance.now() * racerState.carSwaySpeed) * racerState.carSwayMax;
+    
+    // Car body drawing logic (remains the same)
+    racerCtx.save();
+    racerCtx.translate(playerCar.x, playerCar.y + playerCar.height * 0.75);
+    racerCtx.rotate(racerState.carSway + racerState.carTilt);
+
+    const w = playerCar.width;
+    const h = playerCar.height;
+    const carY = -h * 0.75; 
+    
+    racerCtx.fillStyle = '#00FFFF';
+    racerCtx.strokeStyle = '#00FFFF';
+    racerCtx.lineWidth = 2;
+
+    racerCtx.beginPath();
+racerCtx.moveTo(-w * 0.3, carY + h);
+    racerCtx.lineTo(w * 0.3, carY + h);
+racerCtx.quadraticCurveTo(w * 0.45, carY + h * 0.4, w * 0.35, carY + h * 0.1);
+    racerCtx.lineTo(0, carY);
+racerCtx.lineTo(-w * 0.35, carY + h * 0.1);
+racerCtx.quadraticCurveTo(-w * 0.45, carY + h * 0.4, -w * 0.3, carY + h);
+racerCtx.closePath();
+    racerCtx.fill();
+    racerCtx.stroke();
+    
+    racerCtx.restore();
+}
 
 function drawObstacles() {
     if (!racerCtx || !racerCanvas) return;
@@ -1128,6 +1110,26 @@ function handleKey(event) {
 
 // --- INIT RACER ---
 function initRacerGame() {
+    // MODAL OPENING LOGIC (MOVED HERE)
+    if (runRacerBtn) {
+        runRacerBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            racerModal.style.display = 'flex';
+            if (typeof resetRacer === 'function') {
+                resetRacer();
+            }
+        });
+    }
+    // MODAL CLOSING LOGIC (MOVED HERE)
+    if (racerModalCloseBtn) racerModalCloseBtn.addEventListener('click', closeRacerModal);
+    if (racerModal) {
+        racerModal.addEventListener('click', function(e) {
+            if (e.target === racerModal) {
+                closeRacerModal();
+            }
+        });
+    }
+    
     if (startRacerBtn) startRacerBtn.addEventListener('click', startRacer);
     if (pauseRacerBtn) pauseRacerBtn.addEventListener('click', pauseRacer);
     if (resetRacerBtn) resetRacerBtn.addEventListener('click', resetRacer);
@@ -1173,7 +1175,11 @@ bullet: { x: 0, y: 0, width: 4, height: 14, active: false, alive: false, speed: 
     gameOver: false,
     gameLoopId: null,
     dropSpeed: 6, // reduced default drop speed to make levels gentler
-    initialEnemies: 0...
+    enemyMoveInterval: 36, // Timer ticks between moves
+    enemyMoveTimer: 36, // Current timer
+    enemyMoveAmount: 4, // Pixels to move horizontally
+    initialEnemies: 0,
+};
 
 /* ============================ Bunker Helper Data and Logic ============================ */
 const bunkerPatternConnected = [
@@ -1250,7 +1256,7 @@ function createEnemies() {
 
 function checkCollision(rect1, rect2) {
     return rect1.x < rect2.x + rect2.width &&
-           rect1.x + rect1.width > rect2.x &&
+           rect1.x + rect2.width > rect2.x &&
            rect1.y < rect2.y + rect2.height &&
            rect1.y + rect1.height > rect2.y;
 }
@@ -1637,8 +1643,26 @@ function handleInvadersKey(event) {
     }
 }
 
-// --- INIT INVADERS ---
+// --- INIT INVADERS ---\
 function initInvadersGame() {
+    // MODAL OPENING LOGIC (MOVED HERE)
+    if (runInvadersBtn) {
+        runInvadersBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          invadersModal.style.display = 'flex';
+          if (invadersMessageEl) invadersMessageEl.textContent = "Press Start!";
+        });
+    }
+    // MODAL CLOSING LOGIC (MOVED HERE)
+    if (invadersModalCloseBtn) invadersModalCloseBtn.addEventListener('click', closeInvadersModal);
+    if (invadersModal) {
+        invadersModal.addEventListener('click', function(e) {
+          if (e.target === invadersModal) {
+            closeInvadersModal();
+          }
+        });
+    }
+
     if (startInvadersBtn) {
       startInvadersBtn.addEventListener('click', startInvaders);
     }
