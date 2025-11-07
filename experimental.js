@@ -962,8 +962,7 @@ racerState.animationFrame = null;
 racerState.running = false;
             startCrashAnimation();
             if (racerMessageEl) {
-                racerMessageEl.textContent = 'Crash!
-Reset to roll out again.';
+                racerMessageEl.textContent = 'Crash! Reset to roll out again.';
             }
             return;
 }
