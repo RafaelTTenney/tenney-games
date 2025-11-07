@@ -14,7 +14,7 @@ const tetrisStartBtn = document.getElementById('preview-startBtn');
 const tetrisControlsBtn = document.getElementById('preview-controlsBtn');
 
 const T_BOX = 24;
-const T_SPEED = 25; // gravity step in ms
+const T_SPEED = 100; // gravity step in ms
 
 let t_fastFall = false;
 let t_score = 0;
