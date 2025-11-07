@@ -77,7 +77,7 @@
       margin: 28px auto;
       padding: 18px;
       background: var(--card);
-_      border-radius: 12px;
+      border-radius: 12px;
       border: 1px solid #222;
     }
 
@@ -111,10 +111,10 @@ _      border-radius: 12px;
 
     .card h3 {
       margin: 0;
-  _    color: var(--primary);
+      color: var(--primary);
     }
 
-    .card .meta {
+  _ .card .meta {
       color: var(--muted);
       font-size: 0.95em;
     }
@@ -218,13 +218,14 @@ _      border-radius: 12px;
       font-size: 1.1em;
       font-weight: 700;
     }
+s
     
     .modal-controls {
       display: flex;
       gap: 10px;
       justify-content: center;
       margin-top: 15px;
-  _  }
+    }
     
     /* --- NEW STYLES FOR MUTE BUTTON STATE --- */
     .modal-controls button#toggleSoundBtn {
@@ -299,7 +300,10 @@ _      border-radius: 12px;
       <h3 style="color:var(--primary);margin-top:0;">How to add a new experiment</h3>
       <ol style="color:var(--muted);line-height:1.6;">
         <li>Duplicate one of the &lt;section class="card"&gt; blocks above.</li>
-section>
+        <li>Replace the title, description and the &lt;pre class="demo"&gt; content with your snippet or instructions.</li>
+        <li>Link a separate HTML/JS file in the "Run" action if the demo is larger than a snippet.</li>
+      </ol>
+    </section>
   </main>
 
   <div class="footer">
@@ -328,27 +332,22 @@ section>
       <div class="modal-header">
         <h2>Neon Racer++</h2>
         <span class="modal-close" id="racerModalCloseBtn">&times;</span>
-i>
-        <li>Replace the title, description and the &lt;pre class="demo"&gt; content with your snippet or instructions.</li>
-        <li>Link a separate HTML/JS file in the "Run" action if the demo is larger than a snippet.</li>
-      </ol>
-    </     </div>
+s    </div>
       
-            <canvas id="racer-canvas" width="450" height="600"></canvas>
+      <canvas id="racer-canvas" width="340" height="520"></canvas>
       
       <div id="racer-hud" style="color:#eee; font-weight:700; margin: 10px 0; min-height: 45px; text-align: left; padding: 0 10px;">
         <div id="racer-distance">Distance: 0m</div>
         <div id="racer-speed">Speed: 0 mph</div>
         <div id="racer-obstacles">Gaps cleared: 0</div>
-  H_   </div>
+      </div>
       <p id="racer-message" style="color:var(--primary); min-height: 1.2em; margin: 5px 0 10px 0;">Ready!</p>
       
       <div class="modal-controls">
         <button id="startRacerBtn" class="btn">Start</button>
         <button id="pauseRacerBtn" class="btn secondary">Pause</button>
         <button id="resetRacerBtn" class="btn secondary">Reset</button>
-        
-                <button id="toggleSoundBtn" class="btn secondary">Mute</button> 
+        <button id="toggleSoundBtn" class="btn secondary">Mute</button> 
       </div>
       
     </div>
@@ -363,12 +362,12 @@ i>
       
       <div style="display: flex; justify-content: space-between; padding: 0 10px; margin-top: 10px;">
         <p id="invaders-score" style="color:var(--primary); font-weight: 700; margin: 0;">Score: 0</p>
-        <p id="invaders-message" style="color:#eee; min-height: 1.2em; margin: 0;">Press Start!</p>
+    Query   <p id="invaders-message" style="color:#eee; min-height: 1.2em; margin: 0;">Press Start!</p>
       </div>
 
       <div class="modal-controls" style="margin-top: 15px;">
         <button id="startInvadersBtn" class="btn">Start</button>
-      </div>
+A     </div>
     </div>
   </div>
   <script src="login.js"></script>
@@ -382,7 +381,7 @@ i>
       }
       
       // Since all games are now on this page, we must initialize all.
-D     // Their scripts are in experimental.js
+      // Their scripts are in experimental.js
       if (typeof initTetrisGame === 'function') {
         initTetrisGame();
       }
@@ -390,17 +389,17 @@ D     // Their scripts are in experimental.js
         initRacerGame();
       }
       if (typeof initInvadersGame === 'function') {
-nbsp;       initInvadersGame();
+s       initInvadersGame();
       }
     });
   </script>
   
-      <audio id="racerMusic" src="path/to/your/music.mp3" loop></audio>
+  <audio id="racerMusic" src="path/to/your/music.mp3" loop></audio>
   <audio id="racerEngine" src="path/to/your/engine-hum.mp3" loop></audio>
   <audio id="racerDodgeSfx" src="path/to/your/dodge-sfx.wav"></audio>
-Modular-Lab-Link   <audio id="racerCrashSfx" src="path/to/your/crash-sfx.wav"></audio>
+  <audio id="racerCrashSfx" src="path/to/your/crash-sfx.wav"></audio>
 
   <script src="experimental.js"></script>
-  
+ all
 </body>
 </html>
