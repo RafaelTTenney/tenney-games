@@ -225,19 +225,6 @@
       justify-content: center;
       margin-top: 15px;
     }
-    
-    /* --- NEW STYLES FOR MUTE BUTTON STATE --- */
-    .modal-controls button#toggleSoundBtn {
-        color: #999; /* Muted color by default */
-        border-color: #999;
-    }
-
-    .modal-controls button#toggleSoundBtn.active {
-        color: var(--primary); /* Active color */
-        border-color: var(--primary);
-        box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.4);
-    }
-    /* ----------------------------------------- */
 
   </style>
 </head>
@@ -297,7 +284,7 @@
 
     <section style="margin-top:12px;">
       <h3 style="color:var(--primary);margin-top:0;">How to add a new experiment</h3>
-      <ol style="color:var(--muted);line-height:1.6;">
+    _ <ol style="color:var(--muted);line-height:1.6;">
         <li>Duplicate one of the &lt;section class="card"&gt; blocks above.</li>
         <li>Replace the title, description and the &lt;pre class="demo"&gt; content with your snippet or instructions.</li>
         <li>Link a separate HTML/JS file in the "Run" action if the demo is larger than a snippet.</li>
@@ -333,7 +320,7 @@
         <span class="modal-close" id="racerModalCloseBtn">&times;</span>
       </div>
       
-            <canvas id="racer-canvas" width="450" height="600"></canvas>
+      <canvas id="racer-canvas" width="340" height="520"></canvas>
       
       <div id="racer-hud" style="color:#eee; font-weight:700; margin: 10px 0; min-height: 45px; text-align: left; padding: 0 10px;">
         <div id="racer-distance">Distance: 0m</div>
@@ -346,8 +333,6 @@
         <button id="startRacerBtn" class="btn">Start</button>
         <button id="pauseRacerBtn" class="btn secondary">Pause</button>
         <button id="resetRacerBtn" class="btn secondary">Reset</button>
-        
-                <button id="toggleSoundBtn" class="btn secondary">Mute</button> 
       </div>
       
     </div>
@@ -394,11 +379,6 @@
     });
   </script>
   
-      <audio id="racerMusic" src="path/to/your/music.mp3" loop></audio>
-  <audio id="racerEngine" src="path/to/your/engine-hum.mp3" loop></audio>
-  <audio id="racerDodgeSfx" src="path/to/your/dodge-sfx.wav"></audio>
-  <audio id="racerCrashSfx" src="path/to/your/crash-sfx.wav"></audio>
-
   <script src="experimental.js"></script>
   
 </body>
