@@ -1006,7 +1006,7 @@ function gameLoop(timestamp) {
     racerState.lastTimestamp = timestamp;
     updateRacer(delta);
     renderRacer(delta);
-updateHud();
+    updateHud();
     if (racerState.running) {
         racerState.animationFrame = requestAnimationFrame(gameLoop);
 }
