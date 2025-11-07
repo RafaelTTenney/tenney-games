@@ -1612,6 +1612,7 @@ document.addEventListener('DOMContentLoaded', () => {
     pauseRacerBtn = document.getElementById('pauseRacerBtn');
     resetRacerBtn = document.getElementById('resetRacerBtn');
     toggleSoundBtn = document.getElementById('toggleSoundBtn');
+    // Audio elements assignment
     racerMusic = document.getElementById('racerMusic');
     racerEngine = document.getElementById('racerEngine');
     racerDodgeSfx = document.getElementById('racerDodgeSfx');
@@ -1627,12 +1628,13 @@ document.addEventListener('DOMContentLoaded', () => {
     startInvadersBtn = document.getElementById('startInvadersBtn');
     invadersScoreEl = document.getElementById('invaders-score');
     
+    // Check if external function exists and run it first
     if (typeof enforcePageAccess === 'function') {
         enforcePageAccess();
     }
   
-    // Initialize games only if the primary entry buttons are found
-    if (runTetrisBtn) initTetrisGame();
-    if (runRacerBtn) initRacerGame();
-    if (runInvadersBtn) initInvadersGame();
+    // Initialize games only if the primary entry buttons and canvas contexts are found
+    if (runTetrisBtn && ctx) initTetrisGame();
+    if (runRacerBtn && racerCtx) initRacerGame();
+    if (runInvadersBtn && invadersCtx) initInvadersGame();
 });
