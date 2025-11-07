@@ -82,34 +82,30 @@ if (tetrisModal) {
 }
 
 // --- MODAL HANDLING (RACER) ---
-
 if (runRacerBtn) {
     runRacerBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      racerModal.style.display = 'flex';
-      // Call reset to ensure the game is ready (defined below)
-      if (typeof resetRacer === 'function') {
-        resetRacer();
-      }
+        e.preventDefault();
+        racerModal.style.display = 'flex';
+        if (typeof resetRacer === 'function') {
+            resetRacer();
+        }
     });
 }
 
 function closeRacerModal() {
-  racerModal.style.display = 'none';
-  // Stop the game when closing
-  if (typeof pauseRacer === 'function') {
-    pauseRacer();
-  }
+    racerModal.style.display = 'none';
+    if (typeof pauseRacer === 'function') {
+        pauseRacer();
+    }
 }
 
 if (racerModalCloseBtn) racerModalCloseBtn.addEventListener('click', closeRacerModal);
 
-// Also close if user clicks outside the modal content
 if (racerModal) {
     racerModal.addEventListener('click', function(e) {
-      if (e.target === racerModal) {
-        closeRacerModal();
-      }
+        if (e.target === racerModal) {
+            closeRacerModal();
+        }
     });
 }
 
@@ -417,39 +413,52 @@ function initTetrisGame() {
 const laneCount = 3;
 const laneWidth = racerCanvas ? racerCanvas.width / laneCount : 100;
 
-// playerCar now has baseWidth and smooth x for nicer movement
 const playerCar = {
-  lane: 1,
-  baseWidth: laneWidth * 0.55,
-  width: laneWidth * 0.55,
-  height: 58,
-  y: racerCanvas ? racerCanvas.height - 90 : 410,
-  x: 0 // pixel x, will be set in reset
+    lane: 1,
+    baseWidth: laneWidth * 0.55,
+    width: laneWidth * 0.55,
+    height: 58,
+    y: racerCanvas ? racerCanvas.height - 90 : 410,
+    x: 0 // pixel x, will be set in reset
 };
 
 const racerState = {
-  running: false,
-  lastTimestamp: 0,
-  speed: 180,
-  distance: 0,
-  dodged: 0,
-  obstacles: [],
-  speedLines: [],
-  spawnTimer: 0, // decreases with progress (measured in "forward" pixels)
-  animationFrame: null,
-  // LATERAL (side-to-side) gap multiplier: keep constant at 1.2 (120% of vehicle base width)
-  gapWidthMultiplier: 1.2, // SIDE-TO-SIDE constant as requested
-  // FORWARD spacing tuning (start easier / larger distance, then tighten)
-  spawnStartDistance: 420, // starting forward distance between obstacle bars
-  spawnMinDistance: 120,   // minimum forward distance as difficulty increases
-  spawnVariance: 120,      // random variation added each spawn
-  spawnTightenRate: 10,    // how much forward distance reduces per cleared gap (in pixels)
-  particles: [], // visual particles for bursts
-  explosionParticles: [], // detailed crash particles (shards + smoke)
-  laneLerpSpeed: 0.18, // how fast car slides between lanes
-  shake: { time: 0, intensity: 0 }, // screen shake state
-  flash: { alpha: 0 }, // crash flash
-  crashAnimId: null // requestAnimationFrame id for crash animation loop
+    running: false,
+    lastTimestamp: 0,
+    speed: 180,
+    distance: 0,
+    dodged: 0,
+    obstacles: [],
+    speedLines: [],
+    spawnTimer: 0,
+    animationFrame: null,
+
+    // --- UPDATED --- Difficulty Tuning
+    // FORWARD spacing (time between gaps)
+    spawnStartDistance: 420, // starting forward distance
+    spawnMinDistance: 120,   // minimum forward distance
+    spawnVariance: 120,      // random variation
+    spawnTightenRate: 10,    // how much forward distance reduces per cleared gap
+
+    // --- NEW --- LATERAL spacing (side-to-side gap width)
+    gapWidthStartMultiplier: 1.6, // Start at 160% of car width (easy)
+    gapWidthMinMultiplier: 1.2,   // Tighten to 120% (hard)
+    gapWidthTightenRate: 0.02,  // How much to tighten per cleared gap (0.02 = 2%)
+
+    particles: [],
+    explosionParticles: [],
+    laneLerpSpeed: 0.18, // how fast car slides between lanes
+    shake: { time: 0, intensity: 0 },
+    flash: { alpha: 0 },
+    crashAnimId: null,
+
+    // --- NEW --- Car physics/feel
+    carSway: 0,         // Current sway angle (radians)
+    carSwaySpeed: 0.008, // How fast to sway
+    carSwayMax: 0.035,    // Max sway angle
+    carTilt: 0,         // Current tilt angle (for lane changes)
+    carTiltMax: 0.1,    // Max tilt
+    carTiltSpeed: 0.1     // How fast to tilt
 };
 
 const obstacleHeight = 60;
@@ -457,582 +466,662 @@ const laneCenters = Array.from({ length: laneCount }, (_, i) => i * laneWidth + 
 
 // Particles for visual flair (light sparks)
 function spawnParticles(x, y, color, count = 12) {
-  for (let i = 0; i < count; i++) {
-    racerState.particles.push({
-      type: 'spark',
-      x: x + (Math.random() - 0.5) * 20,
-      y: y + (Math.random() - 0.5) * 12,
-      vx: (Math.random() - 0.5) * 2.5,
-      vy: -1 - Math.random() * 1.6,
-      life: 30 + Math.random() * 30,
-      size: 1 + Math.random() * 2,
-      color
-    });
-  }
+    for (let i = 0; i < count; i++) {
+        racerState.particles.push({
+            type: 'spark',
+            x: x + (Math.random() - 0.5) * 20,
+            y: y + (Math.random() - 0.5) * 12,
+            vx: (Math.random() - 0.5) * 2.5,
+            vy: -1 - Math.random() * 1.6,
+            life: 30 + Math.random() * 30,
+            size: 1 + Math.random() * 2,
+            color
+        });
+    }
 }
 
 // Crash: shards + smoke + sparks + shake + flash
 function spawnCrash(x, y) {
-  // shards: metal pieces
-  const shardCount = 18 + Math.floor(Math.random() * 8);
-  for (let i = 0; i < shardCount; i++) {
-    racerState.explosionParticles.push({
-      type: 'shard',
-      x: x + (Math.random() - 0.5) * 36,
-      y: y + (Math.random() - 0.5) * 18,
-      vx: (Math.random() - 0.5) * (4 + Math.random() * 6),
-      vy: -2 - Math.random() * 6,
-      life: 40 + Math.random() * 60,
-      size: 4 + Math.random() * 8,
-      angle: Math.random() * Math.PI * 2,
-      angularVel: (Math.random() - 0.5) * 0.4,
-      color: `hsl(${Math.floor(Math.random()*40)},80%,60%)` // orange-ish shards
-    });
-  }
+    // shards
+    const shardCount = 18 + Math.floor(Math.random() * 8);
+    for (let i = 0; i < shardCount; i++) {
+        racerState.explosionParticles.push({
+            type: 'shard',
+            x: x + (Math.random() - 0.5) * 36,
+            y: y + (Math.random() - 0.5) * 18,
+            vx: (Math.random() - 0.5) * (4 + Math.random() * 6),
+            vy: -2 - Math.random() * 6,
+            life: 40 + Math.random() * 60,
+            size: 4 + Math.random() * 8,
+            angle: Math.random() * Math.PI * 2,
+            angularVel: (Math.random() - 0.5) * 0.4,
+            color: `hsl(${Math.floor(Math.random()*40)},80%,60%)`
+        });
+    }
 
-  // smoke: expanding soft puffs
-  const smokeCount = 8 + Math.floor(Math.random() * 6);
-  for (let i = 0; i < smokeCount; i++) {
-    racerState.explosionParticles.push({
-      type: 'smoke',
-      x: x + (Math.random() - 0.5) * 30,
-      y: y + (Math.random() - 0.5) * 10,
-      vx: (Math.random() - 0.5) * 1.2,
-      vy: -0.6 - Math.random() * 1.2,
-      life: 50 + Math.random() * 50,
-      size: 10 + Math.random() * 20,
-      alpha: 0.45 + Math.random() * 0.15
-    });
-  }
+    // smoke
+    const smokeCount = 8 + Math.floor(Math.random() * 6);
+    for (let i = 0; i < smokeCount; i++) {
+        racerState.explosionParticles.push({
+            type: 'smoke',
+            x: x + (Math.random() - 0.5) * 30,
+            y: y + (Math.random() - 0.5) * 10,
+            vx: (Math.random() - 0.5) * 1.2,
+            vy: -0.6 - Math.random() * 1.2,
+            life: 50 + Math.random() * 50,
+            size: 10 + Math.random() * 20,
+            alpha: 0.45 + Math.random() * 0.15
+        });
+    }
 
-  // small sparks
-  spawnParticles(x, y, 'rgba(255,200,120,0.95)', 12);
+    // small sparks
+    spawnParticles(x, y, 'rgba(255,200,120,0.95)', 12);
 
-  // screen shake and flash
-  racerState.shake.time = 28 + Math.floor(Math.random() * 18);
-  racerState.shake.intensity = 6 + Math.random() * 8;
-  racerState.flash.alpha = 0.95;
+    // screen shake and flash
+    racerState.shake.time = 28 + Math.floor(Math.random() * 18);
+    racerState.shake.intensity = 6 + Math.random() * 8;
+    racerState.flash.alpha = 0.95;
 }
 
 // Draw explosion and normal particles and also advance their physics
 function drawParticles() {
-  if (!racerCtx) return;
+    if (!racerCtx) return;
 
-  // Explosion particles (shards + smoke)
-  for (let i = racerState.explosionParticles.length - 1; i >= 0; i--) {
-    const p = racerState.explosionParticles[i];
+    // Explosion particles (shards + smoke)
+    for (let i = racerState.explosionParticles.length - 1; i >= 0; i--) {
+        const p = racerState.explosionParticles[i];
+        if (p.type === 'shard') {
+            racerCtx.save();
+            const alpha = Math.max(0, p.life / 120);
+            racerCtx.globalAlpha = alpha;
+            racerCtx.fillStyle = p.color;
+            racerCtx.translate(p.x, p.y);
+            racerCtx.rotate(p.angle);
+            racerCtx.fillRect(-p.size/2, -p.size/3, p.size, Math.max(1, p.size/2));
+            racerCtx.restore();
 
-    if (p.type === 'shard') {
-      // draw rotated rectangle shard
-      racerCtx.save();
-      const alpha = Math.max(0, p.life / 120);
-      racerCtx.globalAlpha = alpha;
-      racerCtx.fillStyle = p.color;
-      racerCtx.translate(p.x, p.y);
-      racerCtx.rotate(p.angle);
-      racerCtx.fillRect(-p.size/2, -p.size/3, p.size, Math.max(1, p.size/2));
-      racerCtx.restore();
+            p.x += p.vx; p.y += p.vy; p.vy += 0.18; p.vx *= 0.995;
+            p.angle += p.angularVel; p.life -= 1;
+            if (p.life <= 0) racerState.explosionParticles.splice(i, 1);
+        } else if (p.type === 'smoke') {
+            racerCtx.save();
+            const lifeRatio = Math.max(0, p.life / 100);
+            racerCtx.globalAlpha = p.alpha * lifeRatio;
+            racerCtx.fillStyle = `rgba(30,30,30,${0.6 * lifeRatio})`;
+            racerCtx.beginPath();
+            racerCtx.ellipse(p.x, p.y, p.size * (1 - lifeRatio*0.2), p.size * (0.6 + (1 - lifeRatio)*0.4), 0, 0, Math.PI*2);
+            racerCtx.fill();
+            racerCtx.restore();
 
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.18; // gravity
-      p.vx *= 0.995;
-      p.angle += p.angularVel;
-      p.life -= 1;
-      if (p.life <= 0) racerState.explosionParticles.splice(i, 1);
-    } else if (p.type === 'smoke') {
-      racerCtx.save();
-      const lifeRatio = Math.max(0, p.life / 100);
-      racerCtx.globalAlpha = p.alpha * lifeRatio;
-      racerCtx.fillStyle = `rgba(30,30,30,${0.6 * lifeRatio})`;
-      racerCtx.beginPath();
-      racerCtx.ellipse(p.x, p.y, p.size * (1 - lifeRatio*0.2), p.size * (0.6 + (1 - lifeRatio)*0.4), 0, 0, Math.PI*2);
-      racerCtx.fill();
-      racerCtx.restore();
-
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vx *= 0.995;
-      p.vy -= 0.01; // slight buoyancy
-      p.size += 0.2;
-      p.life -= 1;
-      if (p.life <= 0) racerState.explosionParticles.splice(i, 1);
+            p.x += p.vx; p.y += p.vy; p.vx *= 0.995; p.vy -= 0.01;
+            p.size += 0.2; p.life -= 1;
+            if (p.life <= 0) racerState.explosionParticles.splice(i, 1);
+        }
     }
-  }
 
-  // Standard spark particles
-  for (let i = racerState.particles.length - 1; i >= 0; i--) {
-    const p = racerState.particles[i];
-    if (p.type === 'spark') {
-      racerCtx.save();
-      racerCtx.globalAlpha = Math.max(0, p.life / 60);
-      racerCtx.fillStyle = p.color;
-      racerCtx.beginPath();
-      racerCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-      racerCtx.fill();
-      racerCtx.restore();
+    // Standard spark particles
+    for (let i = racerState.particles.length - 1; i >= 0; i--) {
+        const p = racerState.particles[i];
+        if (p.type === 'spark') {
+            racerCtx.save();
+            racerCtx.globalAlpha = Math.max(0, p.life / 60);
+            racerCtx.fillStyle = p.color;
+            racerCtx.beginPath();
+            racerCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+            racerCtx.fill();
+            racerCtx.restore();
 
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.08;
-      p.vx *= 0.995;
-      p.life -= 1;
-      if (p.life <= 0) racerState.particles.splice(i, 1);
+            p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.vx *= 0.995;
+            p.life -= 1;
+            if (p.life <= 0) racerState.particles.splice(i, 1);
+        }
     }
-  }
 }
 
 // BACKGROUND & HUD visuals
 function drawBackground() {
-  if (!racerCtx || !racerCanvas) return;
-  // gradient sky
-  const gradient = racerCtx.createLinearGradient(0, 0, 0, racerCanvas.height);
-  gradient.addColorStop(0, '#03051a');
-  gradient.addColorStop(0.6, '#050417');
-  gradient.addColorStop(1, '#0a0e24');
-  racerCtx.fillStyle = gradient;
-  racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
+    if (!racerCtx || !racerCanvas) return;
+    // gradient sky
+    const gradient = racerCtx.createLinearGradient(0, 0, 0, racerCanvas.height);
+    gradient.addColorStop(0, '#03051a');
+    gradient.addColorStop(0.6, '#050417');
+    gradient.addColorStop(1, '#0a0e24');
+    racerCtx.fillStyle = gradient;
+    racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
 
-  // neon edge bars
-  racerCtx.fillStyle = 'rgba(0,255,255,0.06)';
-  racerCtx.fillRect(0, 0, 40, racerCanvas.height);
-  racerCtx.fillRect(racerCanvas.width - 40, 0, 40, racerCanvas.height);
+    // --- NEW --- Call the perspective grid function
+    drawPerspectiveGrid();
 
-  // border
-  racerCtx.strokeStyle = 'rgba(0,255,255,0.14)';
-  racerCtx.lineWidth = 3;
-  racerCtx.strokeRect(6, 6, racerCanvas.width - 12, racerCanvas.height - 12);
+    // neon edge bars
+    racerCtx.fillStyle = 'rgba(0,255,255,0.06)';
+    racerCtx.fillRect(0, 0, 40, racerCanvas.height);
+    racerCtx.fillRect(racerCanvas.width - 40, 0, 40, racerCanvas.height);
 
-  // moving horizon lines for speed effect
-  racerCtx.lineWidth = 2;
-  racerCtx.strokeStyle = 'rgba(28, 255, 255, 0.06)';
-  const base = Math.floor((performance.now() / 40) % 30);
-  for (let i = 0; i < 10; i++) {
-    racerCtx.beginPath();
-    racerCtx.moveTo(0, 120 + (i * 30) + base);
-    racerCtx.lineTo(racerCanvas.width, 120 + (i * 30) + base - ((i % 2) * 6));
-    racerCtx.stroke();
-  }
+    // border
+    racerCtx.strokeStyle = 'rgba(0,255,255,0.14)';
+    racerCtx.lineWidth = 3;
+    racerCtx.strokeRect(6, 6, racerCanvas.width - 12, racerCanvas.height - 12);
+
+    // moving horizon lines for speed effect
+    racerCtx.lineWidth = 2;
+    racerCtx.strokeStyle = 'rgba(28, 255, 255, 0.06)';
+    const base = Math.floor((performance.now() / 40) % 30);
+    for (let i = 0; i < 10; i++) {
+        racerCtx.beginPath();
+        racerCtx.moveTo(0, 120 + (i * 30) + base);
+        racerCtx.lineTo(racerCanvas.width, 120 + (i * 30) + base - ((i % 2) * 6));
+        racerCtx.stroke();
+    }
+}
+
+// --- NEW --- Function to draw the perspective grid on the "road"
+function drawPerspectiveGrid() {
+    if (!racerCtx || !racerCanvas) return;
+    
+    const vpX = racerCanvas.width / 2;
+    const vpY = 120; // Horizon line Y
+    const bottomY = racerCanvas.height;
+
+    racerCtx.strokeStyle = 'rgba(28, 255, 255, 0.08)';
+    racerCtx.lineWidth = 2;
+
+    const roadWidthTop = racerCanvas.width * 0.1;
+    const roadWidthBottom = racerCanvas.width * 1.2;
+
+    // Draw vertical (perspective) lines
+    const numLines = 10; // Number of lines per side
+    for (let i = 0; i <= numLines; i++) {
+        const ratio = i / numLines;
+        
+        // Left side
+        const xTopL = vpX - roadWidthTop * (1 - ratio);
+        const xBottomL = vpX - roadWidthBottom * (1 - ratio);
+        racerCtx.beginPath();
+        racerCtx.moveTo(xTopL, vpY);
+        racerCtx.lineTo(xBottomL, bottomY);
+        racerCtx.stroke();
+        
+        // Right side
+        const xTopR = vpX + roadWidthTop * (1 - ratio);
+        const xBottomR = vpX + roadWidthBottom * (1 - ratio);
+        racerCtx.beginPath();
+        racerCtx.moveTo(xTopR, vpY);
+        racerCtx.lineTo(xBottomR, bottomY);
+        racerCtx.stroke();
+    }
 }
 
 function drawSpeedLines() {
-  if (!racerCtx) return;
-  racerCtx.strokeStyle = 'rgba(0, 255, 255, 0.28)';
-  racerCtx.lineWidth = 2;
-  racerState.speedLines.forEach(line => {
+    if (!racerCtx) return;
+    racerCtx.strokeStyle = 'rgba(0, 255, 255, 0.28)';
+    racerCtx.lineWidth = 2;
+    racerState.speedLines.forEach(line => {
+        racerCtx.beginPath();
+        racerCtx.moveTo(line.x, line.y);
+        racerCtx.lineTo(line.x, line.y + line.length);
+        racerCtx.stroke();
+    });
+}
+
+// --- UPDATED --- drawPlayer now takes 'delta' for smooth lerping and has new visuals
+function drawPlayer(delta) {
+    if (!racerCtx) return;
+
+    // --- UPDATED --- Frame-rate independent lerp for smooth movement
+    const targetX = laneCenters[playerCar.lane];
+    // Use a default delta (16.67ms = 60fps) if it's not provided (e.g., on reset)
+    const effectiveDelta = delta || 16.67; 
+    const lerpAmount = 1 - Math.pow(1 - racerState.laneLerpSpeed, effectiveDelta / 16.67);
+    playerCar.x += (targetX - playerCar.x) * lerpAmount;
+
+    // --- NEW --- Calculate tilt based on distance from target lane center
+    const targetTilt = (playerCar.x - targetX) * -0.005; // Tilt *into* the turn
+    // Lerp the tilt for a smoother transition
+    racerState.carTilt += (targetTilt - racerState.carTilt) * racerState.carTiltSpeed;
+    racerState.carTilt = Math.max(-racerState.carTiltMax, Math.min(racerState.carTiltMax, racerState.carTilt));
+
+    // --- NEW --- Calculate idle sway
+    racerState.carSway = Math.sin(racerState.distance * racerState.carSwaySpeed) * racerState.carSwayMax;
+    
+    racerCtx.save();
+    
+    // --- NEW --- Apply transforms from the car's center
+    // We translate to the car's position *and* add its height for rotation pivot
+    racerCtx.translate(playerCar.x, playerCar.y + playerCar.height * 0.75);
+    racerCtx.rotate(racerState.carSway + racerState.carTilt);
+    
+    const w = playerCar.width;
+    const h = playerCar.height;
+
+    // --- NEW --- Sleek car body (drawing centered around (0,0) due to translate)
+    // All coordinates are relative to the car's pivot point
+    const carY = -h * 0.75; // Adjust Y to draw "up" from the pivot
+    
+    // Outer glow
+    racerCtx.shadowColor = '#19d7ff';
+    racerCtx.shadowBlur = 20;
+    
+    // Main body (tapered shape)
+    racerCtx.fillStyle = '#19d7ff'; // Main bright color
     racerCtx.beginPath();
-    racerCtx.moveTo(line.x, line.y);
-    racerCtx.lineTo(line.x, line.y + line.length);
-    racerCtx.stroke();
-  });
+    racerCtx.moveTo(-w * 0.3, carY + h); // Back-left
+    racerCtx.lineTo(w * 0.3, carY + h);  // Back-right
+    racerCtx.quadraticCurveTo(w * 0.45, carY + h * 0.4, w * 0.35, carY + h * 0.1); // Right-side curve
+    racerCtx.lineTo(0, carY); // Nose
+    racerCtx.lineTo(-w * 0.35, carY + h * 0.1); // Left-side
+    racerCtx.quadraticCurveTo(-w * 0.45, carY + h * 0.4, -w * 0.3, carY + h); // Left-side curve
+    racerCtx.closePath();
+    racerCtx.fill();
+
+    racerCtx.shadowBlur = 0; // Turn off glow for inner details
+
+    // "Cockpit" (darker)
+    racerCtx.fillStyle = '#0b1f3a';
+    racerCtx.beginPath();
+    racerCtx.moveTo(-w * 0.15, carY + h * 0.8);
+    racerCtx.lineTo(w * 0.15, carY + h * 0.8);
+    racerCtx.quadraticCurveTo(w * 0.25, carY + h * 0.5, 0, carY + h * 0.2);
+    racerCtx.quadraticCurveTo(-w * 0.25, carY + h * 0.5, -w * 0.15, carY + h * 0.8);
+    racerCtx.closePath();
+    racerCtx.fill();
+
+    // Center highlight
+    racerCtx.fillStyle = '#3be7ff';
+    racerCtx.fillRect(-w * 0.05, carY + h * 0.2, w * 0.1, h * 0.6);
+
+    racerCtx.restore();
+    
+    // --- NEW --- Spawn engine trail particles (moved to updateRacer)
 }
 
-function drawPlayer() {
-  if (!racerCtx) return;
-  // smooth x lerp towards target lane center
-  const targetX = laneCenters[playerCar.lane];
-  playerCar.x += (targetX - playerCar.x) * racerState.laneLerpSpeed;
-
-  const left = playerCar.x - playerCar.width / 2;
-  racerCtx.save();
-
-  // outer glow
-  racerCtx.shadowColor = '#19d7ff';
-  racerCtx.shadowBlur = 20;
-  racerCtx.fillStyle = '#19d7ff';
-  racerCtx.fillRect(left - 2, playerCar.y - 2, playerCar.width + 4, playerCar.height + 4);
-  racerCtx.shadowBlur = 0;
-
-  // body
-  racerCtx.fillStyle = '#0b1f3a';
-  racerCtx.fillRect(left + 6, playerCar.y + 10, playerCar.width - 12, playerCar.height - 20);
-
-  // highlights
-  racerCtx.fillStyle = '#19d7ff';
-  racerCtx.fillRect(left + playerCar.width / 2 - 6, playerCar.y + 6, 12, playerCar.height - 12);
-
-  // top canopy
-  racerCtx.fillStyle = '#3be7ff';
-  racerCtx.fillRect(left + 6, playerCar.y + 2, playerCar.width - 12, 6);
-
-  // small exhaust trail based on speed
-  racerCtx.fillStyle = 'rgba(10, 200, 255, 0.08)';
-  const trailWidth = Math.min(40, Math.floor((racerState.speed - 160) / 6));
-  racerCtx.fillRect(left + playerCar.width / 2 - trailWidth / 2, playerCar.y + playerCar.height + 4, trailWidth, 8);
-
-  racerCtx.restore();
-}
 
 function drawObstacles() {
-  if (!racerCtx) return;
-  racerState.obstacles.forEach(ob => {
-    const top = ob.y;
-    const bottom = ob.y + obstacleHeight;
-    const gapLeft = ob.gapCenter - ob.gapWidth / 2;
-    const gapRight = ob.gapCenter + ob.gapWidth / 2;
+    if (!racerCtx) return;
+    racerState.obstacles.forEach(ob => {
+        const top = ob.y;
+        const bottom = ob.y + obstacleHeight;
+        const gapLeft = ob.gapCenter - ob.gapWidth / 2;
+        const gapRight = ob.gapCenter + ob.gapWidth / 2;
 
-    racerCtx.save();
-    racerCtx.shadowColor = ob.color;
-    racerCtx.shadowBlur = 16;
-    racerCtx.fillStyle = ob.color;
-    // left chunk
-    if (gapLeft > 0) {
-      racerCtx.fillRect(0, top, gapLeft, obstacleHeight);
-      // neon edge
-      racerCtx.strokeStyle = 'rgba(255,255,255,0.06)';
-      racerCtx.lineWidth = 1;
-      racerCtx.strokeRect(Math.max(0, gapLeft - 6), top, 6, obstacleHeight);
-    }
-    // right chunk
-    if (gapRight < racerCanvas.width) {
-      racerCtx.fillRect(gapRight, top, racerCanvas.width - gapRight, obstacleHeight);
-      racerCtx.strokeStyle = 'rgba(255,255,255,0.06)';
-      racerCtx.lineWidth = 1;
-      racerCtx.strokeRect(gapRight, top, 6, obstacleHeight);
-    }
-    racerCtx.restore();
+        racerCtx.save();
+        racerCtx.shadowColor = ob.color;
+        racerCtx.shadowBlur = 16;
+        racerCtx.fillStyle = ob.color;
+        
+        // --- UPDATED --- Draw obstacles with a slight 3D edge
+        const edgeHeight = 4;
+        
+        // left chunk
+        if (gapLeft > 0) {
+            racerCtx.fillRect(0, top + edgeHeight, gapLeft, obstacleHeight - edgeHeight);
+            // Top edge
+            racerCtx.fillStyle = `hsl(${ob.hue}, 90%, 75%)`; // Lighter color
+            racerCtx.fillRect(0, top, gapLeft, edgeHeight);
+        }
+        // right chunk
+        if (gapRight < racerCanvas.width) {
+            racerCtx.fillStyle = ob.color; // Reset color
+            racerCtx.fillRect(gapRight, top + edgeHeight, racerCanvas.width - gapRight, obstacleHeight - edgeHeight);
+            // Top edge
+            racerCtx.fillStyle = `hsl(${ob.hue}, 90%, 75%)`; // Lighter color
+            racerCtx.fillRect(gapRight, top, racerCanvas.width - gapRight, edgeHeight);
+        }
+        racerCtx.restore();
 
-    racerCtx.fillStyle = 'rgba(255,255,255,0.06)';
-    racerCtx.fillRect(gapLeft, top + 2, ob.gapWidth, 4);
-  });
+        // Gap "floor" line
+        racerCtx.fillStyle = 'rgba(255,255,255,0.06)';
+        racerCtx.fillRect(gapLeft, top + 2, ob.gapWidth, 4);
+    });
 }
 
 function spawnObstacle() {
-  const gapLane = Math.floor(Math.random() * laneCount);
-  const colorHue = Math.floor(Math.random() * 360);
+    const gapLane = Math.floor(Math.random() * laneCount);
+    const colorHue = Math.floor(Math.random() * 360);
 
-  // Use the current player width so the lateral gap truly fits the vehicle.
-  // LATERAL gap is constant at 120% of the vehicle current width (side-to-side spacing).
-  // This fixes occasions where the vehicle was scaled larger than the gap computed from baseWidth.
-  let gapWidth = playerCar.width * racerState.gapWidthMultiplier;
+    // --- UPDATED --- Dynamic LATERAL gap width
+    // Starts wide, then tightens with each dodged gap
+    const currentGapMultiplier = Math.max(
+        racerState.gapWidthMinMultiplier,
+        racerState.gapWidthStartMultiplier - (racerState.dodged * racerState.gapWidthTightenRate)
+    );
+    let gapWidth = playerCar.width * currentGapMultiplier;
 
-  // Ensure an explicit safety margin so the car can always fit (in case of rounding or timing)
-  const safetyMargin = 6; // pixels of free space on both sides combined
-  gapWidth = Math.max(gapWidth, playerCar.width + safetyMargin);
+    const safetyMargin = 6;
+    gapWidth = Math.max(gapWidth, playerCar.width + safetyMargin);
+    gapWidth = Math.min(gapWidth, Math.max(60, racerCanvas.width - 24));
 
-  // Clamp gap width so it never exceeds the canvas (leave small edges)
-  gapWidth = Math.min(gapWidth, Math.max(60, racerCanvas.width - 24));
+    let gapCenter = laneCenters[gapLane];
+    const half = gapWidth / 2;
+    gapCenter = Math.max(half + 8, Math.min(racerCanvas.width - half - 8, gapCenter));
 
-  let gapCenter = laneCenters[gapLane];
+    racerState.obstacles.push({
+        y: -obstacleHeight,
+        gapCenter,
+        gapWidth,
+        color: `hsl(${colorHue}, 90%, 60%)`,
+        hue: colorHue // --- NEW --- Store hue for 3D effect
+    });
 
-  // Clamp center so the gap remains fully on-screen
-  const half = gapWidth / 2;
-  gapCenter = Math.max(half + 8, Math.min(racerCanvas.width - half - 8, gapCenter));
-
-  racerState.obstacles.push({
-    y: -obstacleHeight,
-    gapCenter,
-    gapWidth,
-    color: `hsl(${colorHue}, 90%, 60%)`
-  });
-
-  // FORWARD spacing: start easier (long distance) then tighten as player clears gaps
-  const dynamicForward = Math.max(
-    racerState.spawnMinDistance,
-    racerState.spawnStartDistance - racerState.dodged * racerState.spawnTightenRate
-  );
-  racerState.spawnTimer = dynamicForward + Math.random() * racerState.spawnVariance;
+    // FORWARD spacing:
+    const dynamicForward = Math.max(
+        racerState.spawnMinDistance,
+        racerState.spawnStartDistance - racerState.dodged * racerState.spawnTightenRate
+    );
+    racerState.spawnTimer = dynamicForward + Math.random() * racerState.spawnVariance;
 }
 
 function resetObstacles() {
-  racerState.obstacles = [];
-  racerState.spawnTimer = 0;
+    racerState.obstacles = [];
+    racerState.spawnTimer = 0;
 }
 
 function ensureSpeedLines() {
-  if (!racerCanvas) return;
-  while (racerState.speedLines.length < 14) {
-    racerState.speedLines.push({
-      x: 60 + Math.random() * (racerCanvas.width - 120),
-      y: Math.random() * racerCanvas.height,
-      length: 18 + Math.random() * 28
-    });
-  }
+    if (!racerCanvas) return;
+    while (racerState.speedLines.length < 14) {
+        racerState.speedLines.push({
+            x: 60 + Math.random() * (racerCanvas.width - 120),
+            y: Math.random() * racerCanvas.height,
+            length: 18 + Math.random() * 28
+        });
+    }
 }
 
 function applyShakeTransform() {
-  // Returns {dx, dy} and applies translation to racerCtx. Call between save()/restore().
-  if (!racerCtx) return {dx:0, dy:0};
-  if (racerState.shake.time > 0) {
-    const intensity = racerState.shake.intensity;
-    const dx = (Math.random() - 0.5) * intensity;
-    const dy = (Math.random() - 0.5) * intensity;
-    racerCtx.translate(dx, dy);
-    racerState.shake.time -= 1;
-    // decay intensity slightly
-    racerState.shake.intensity *= 0.985;
-    return {dx, dy};
-  }
-  return {dx:0, dy:0};
+    if (!racerCtx) return {dx:0, dy:0};
+    if (racerState.shake.time > 0) {
+        const intensity = racerState.shake.intensity;
+        const dx = (Math.random() - 0.5) * intensity;
+        const dy = (Math.random() - 0.5) * intensity;
+        racerCtx.translate(dx, dy);
+        racerState.shake.time -= 1;
+        racerState.shake.intensity *= 0.985;
+        return {dx, dy};
+    }
+    return {dx:0, dy:0};
 }
 
-// Crash animation loop runs after the main game stops, so flash/shake/smoke/shards can play out.
-// It repeatedly renders frames until explosion particles and flash/shake are finished.
 function startCrashAnimation() {
-  // Cancel any previous crash animation
-  if (racerState.crashAnimId) {
-    cancelAnimationFrame(racerState.crashAnimId);
-    racerState.crashAnimId = null;
-  }
-
-  const loop = (timestamp) => {
-    // We still want to update particle physics each frame (drawParticles advances them)
-    // and render the current state. renderRacer does both.
-    renderRacer();
-
-    // Keep the loop running while there are active crash visuals
-    const activeParticles = (racerState.explosionParticles && racerState.explosionParticles.length > 0)
-                           || (racerState.particles && racerState.particles.length > 0);
-    const activeShake = racerState.shake.time > 0;
-    const activeFlash = racerState.flash.alpha > 0.02;
-
-    if (activeParticles || activeShake || activeFlash) {
-      racerState.crashAnimId = requestAnimationFrame(loop);
-    } else {
-      // stop animating; clear any residual small alpha
-      racerState.flash.alpha = 0;
-      racerState.crashAnimId = null;
-      // Leave the screen showing the post-crash state; user can Reset to return to normal
+    if (racerState.crashAnimId) {
+        cancelAnimationFrame(racerState.crashAnimId);
+        racerState.crashAnimId = null;
     }
-  };
 
-  racerState.crashAnimId = requestAnimationFrame(loop);
+    const loop = (timestamp) => {
+        // --- UPDATED --- Pass delta (or fallback) to render
+        const delta = timestamp - (racerState.lastCrashTimestamp || timestamp);
+        racerState.lastCrashTimestamp = timestamp;
+        
+        renderRacer(delta); // Pass delta to keep lerps/particles consistent
+
+        const activeParticles = (racerState.explosionParticles && racerState.explosionParticles.length > 0)
+                                || (racerState.particles && racerState.particles.length > 0);
+        const activeShake = racerState.shake.time > 0;
+        const activeFlash = racerState.flash.alpha > 0.02;
+
+        if (activeParticles || activeShake || activeFlash) {
+            racerState.crashAnimId = requestAnimationFrame(loop);
+        } else {
+            racerState.flash.alpha = 0;
+            racerState.crashAnimId = null;
+        }
+    };
+
+    racerState.lastCrashTimestamp = performance.now(); // Init crash timestamp
+    racerState.crashAnimId = requestAnimationFrame(loop);
 }
 
 function updateRacer(delta) {
-  if (!racerCanvas) return;
-  // dynamic speed scaling: increase with dodged
-  racerState.speed = Math.min(520, 180 + racerState.dodged * 6 + Math.floor(racerState.distance / 800));
-  const pixelsPerMs = (racerState.speed / 1000) * 1.25;
-  const traveled = pixelsPerMs * delta;
-  racerState.distance += traveled;
-  racerState.spawnTimer -= traveled;
+    if (!racerCanvas) return;
+    
+    racerState.speed = Math.min(520, 180 + racerState.dodged * 6 + Math.floor(racerState.distance / 800));
+    const pixelsPerMs = (racerState.speed / 1000) * 1.25;
+    const traveled = pixelsPerMs * delta;
+    racerState.distance += traveled;
+    racerState.spawnTimer -= traveled;
 
-  // NOTE: SIDE-TO-SIDE gap is fixed at 1.2× vehicle current width (no change here)
-  // racerState.gapWidthMultiplier remains constant
-
-  if (racerState.spawnTimer <= 0) {
-    spawnObstacle();
-  }
-
-  // Move obstacles
-  racerState.obstacles.forEach(ob => {
-    ob.y += traveled;
-  });
-
-  // Filter obstacles and handle dodges
-  racerState.obstacles = racerState.obstacles.filter(ob => {
-    if (ob.y > racerCanvas.height) {
-      racerState.dodged += 1;
-      // spawn a small particle burst to reward the player visually
-      spawnParticles(ob.gapCenter, racerCanvas.height - 40, 'rgba(30,240,255,0.9)', 16);
-
-      // player grows slightly up to 130% for visual effect
-      const scale = Math.min(1.3, 1 + racerState.dodged * 0.02);
-      playerCar.width = playerCar.baseWidth * scale;
-
-      // milestone boosts
-      if (racerState.dodged > 0 && racerState.dodged % 10 === 0) {
-        racerState.speed = Math.min(520, racerState.speed + 24);
-        if (racerMessageEl) racerMessageEl.textContent = `Boost! Speed increased.`;
-      }
-      return false;
+    if (racerState.spawnTimer <= 0) {
+        spawnObstacle();
     }
-    return true;
-  });
 
-  // Move speed lines for parallax speed feel
-  racerState.speedLines.forEach(line => {
-    line.y += traveled * 1.6;
-  });
-  racerState.speedLines = racerState.speedLines.filter(line => line.y < racerCanvas.height + 40);
-  ensureSpeedLines();
+    // Move obstacles
+    racerState.obstacles.forEach(ob => {
+        ob.y += traveled;
+    });
 
-  // Collision check against obstacles
-  const carCenter = playerCar.x;
-  const carLeft = carCenter - playerCar.width / 2;
-  const carRight = carCenter + playerCar.width / 2;
-  const carTop = playerCar.y;
-  const carBottom = playerCar.y + playerCar.height;
+    // Filter obstacles and handle dodges
+    racerState.obstacles = racerState.obstacles.filter(ob => {
+        if (ob.y > racerCanvas.height) {
+            racerState.dodged += 1;
+            spawnParticles(ob.gapCenter, racerCanvas.height - 40, 'rgba(30,240,255,0.9)', 16);
+            
+            const scale = Math.min(1.3, 1 + racerState.dodged * 0.02);
+            playerCar.width = playerCar.baseWidth * scale;
 
-  for (const ob of racerState.obstacles) {
-    const obTop = ob.y;
-    const obBottom = ob.y + obstacleHeight;
-    if (carBottom <= obTop || carTop >= obBottom) continue;
-    const gapLeft = ob.gapCenter - ob.gapWidth / 2;
-    const gapRight = ob.gapCenter + ob.gapWidth / 2;
-    // check overlap: if any part of car outside the gap => crash
-    if (carLeft < gapLeft || carRight > gapRight) {
-      // enhanced crash sequence
-      // cancel the running game frame if any
-      if (racerState.animationFrame) {
-        cancelAnimationFrame(racerState.animationFrame);
-        racerState.animationFrame = null;
-      }
+            if (racerState.dodged > 0 && racerState.dodged % 10 === 0) {
+                racerState.speed = Math.min(520, racerState.speed + 24);
+                if (racerMessageEl) racerMessageEl.textContent = `Boost! Speed increased.`;
+            }
+            return false;
+        }
+        return true;
+    });
 
-      spawnCrash(playerCar.x, playerCar.y + playerCar.height / 2);
+    // Move speed lines
+    racerState.speedLines.forEach(line => {
+        line.y += traveled * 1.6;
+    });
+    racerState.speedLines = racerState.speedLines.filter(line => line.y < racerCanvas.height + 40);
+    ensureSpeedLines();
 
-      // stop the main game loop but start crash animation loop so flash/shake/smoke play out
-      racerState.running = false;
-      startCrashAnimation();
-
-      if (racerMessageEl) {
-        racerMessageEl.textContent = 'Crash! Reset to roll out again.';
-      }
-      return;
+    // --- NEW --- Spawn engine trail particles
+    if (racerState.running) {
+        const trailX = playerCar.x + (Math.random() - 0.5) * (playerCar.width * 0.2);
+        const trailY = playerCar.y + playerCar.height - 5; // Back of car
+        racerState.particles.push({
+             type: 'spark',
+             x: trailX, y: trailY,
+             vx: (Math.random() - 0.5) * 0.5, // very little side motion
+             vy: 1.5 + Math.random() * 1.5, // move *down* screen
+             life: 15 + Math.random() * 20, // shorter life
+             size: 1 + Math.random() * 2.5,
+             color: `rgba(30, 200, 255, ${0.3 + Math.random() * 0.3})`
+        });
     }
-  }
 
-  // Update explosion & particles (drawParticles advances them)
-  // But we don't render here; render happens in main loop
-  drawParticles();
+    // Collision check
+    const carCenter = playerCar.x;
+    const carLeft = carCenter - playerCar.width / 2;
+    const carRight = carCenter + playerCar.width / 2;
+    const carTop = playerCar.y;
+    const carBottom = playerCar.y + playerCar.height;
+
+    for (const ob of racerState.obstacles) {
+        const obTop = ob.y;
+        const obBottom = ob.y + obstacleHeight;
+        if (carBottom <= obTop || carTop >= obBottom) continue;
+        
+        const gapLeft = ob.gapCenter - ob.gapWidth / 2;
+        const gapRight = ob.gapCenter + ob.gapWidth / 2;
+        
+        if (carLeft < gapLeft || carRight > gapRight) {
+            if (racerState.animationFrame) {
+                cancelAnimationFrame(racerState.animationFrame);
+                racerState.animationFrame = null;
+            }
+
+            spawnCrash(playerCar.x, playerCar.y + playerCar.height / 2);
+            racerState.running = false;
+            startCrashAnimation();
+
+            if (racerMessageEl) {
+                racerMessageEl.textContent = 'Crash! Reset to roll out again.';
+            }
+            return;
+        }
+    }
+
+    // Update *non-explosion* particles (engine trail)
+    // drawParticles() is called in renderRacer, but we only call
+    // updateRacer *while running*. We need to move non-explosion
+    // particle updates here.
+    // ... Actually, drawParticles *also* updates physics.
+    // It's fine to call it in renderRacer.
 }
 
-function renderRacer() {
-  if (!racerCtx) return;
+// --- UPDATED --- renderRacer now takes 'delta' to pass to drawPlayer
+function renderRacer(delta) {
+    if (!racerCtx) return;
 
-  racerCtx.save();
+    racerCtx.save();
+    applyShakeTransform();
 
-  // apply screen shake transform if active
-  applyShakeTransform();
+    // background and world
+    drawBackground();
+    drawSpeedLines();
+    drawObstacles();
+    
+    // --- UPDATED --- Pass delta to drawPlayer
+    drawPlayer(delta);
 
-  // background and world
-  drawBackground();
-  drawSpeedLines();
-  drawObstacles();
-  drawPlayer();
+    // draw explosion and particles on top
+    drawParticles();
 
-  // draw explosion and particles on top
-  drawParticles();
+    // crash flash overlay
+    if (racerState.flash.alpha > 0) {
+        racerCtx.fillStyle = `rgba(255,255,255,${racerState.flash.alpha})`;
+        racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
+        racerState.flash.alpha *= 0.92;
+        if (racerState.flash.alpha < 0.02) racerState.flash.alpha = 0;
+    }
 
-  // crash flash overlay (when flash.alpha > 0)
-  if (racerState.flash.alpha > 0) {
-    racerCtx.fillStyle = `rgba(255,255,255,${racerState.flash.alpha})`;
-    racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
-    // decay flash even if game not running; this will be processed by the crash animation loop
-    racerState.flash.alpha *= 0.92;
-    if (racerState.flash.alpha < 0.02) racerState.flash.alpha = 0;
-  }
-
-  racerCtx.restore();
+    racerCtx.restore();
 }
 
 function gameLoop(timestamp) {
-  if (!racerState.running) return;
-  const delta = timestamp - racerState.lastTimestamp;
-  racerState.lastTimestamp = timestamp;
-  updateRacer(delta);
-  renderRacer();
-  updateHud();
-  if (racerState.running) {
-    racerState.animationFrame = requestAnimationFrame(gameLoop);
-  }
+    if (!racerState.running) return;
+    
+    const delta = timestamp - racerState.lastTimestamp;
+    racerState.lastTimestamp = timestamp;
+    
+    updateRacer(delta);
+    
+    // --- UPDATED --- Pass delta to renderRacer
+    renderRacer(delta);
+    
+    updateHud();
+    
+    if (racerState.running) {
+        racerState.animationFrame = requestAnimationFrame(gameLoop);
+    }
 }
 
 function startRacer() {
-  if (racerState.running) return;
-  if (racerMessageEl) {
-    racerMessageEl.textContent = 'Neon boost engaged!';
-  }
-  racerState.running = true;
-  racerState.lastTimestamp = performance.now();
-  racerState.animationFrame = requestAnimationFrame(gameLoop);
+    if (racerState.running) return;
+    if (racerMessageEl) {
+        racerMessageEl.textContent = 'Neon boost engaged!';
+    }
+    racerState.running = true;
+    racerState.lastTimestamp = performance.now();
+    racerState.animationFrame = requestAnimationFrame(gameLoop);
 }
 
 function pauseRacer() {
-  if (!racerState.running) return;
-  racerState.running = false;
-  if (racerState.animationFrame) cancelAnimationFrame(racerState.animationFrame);
-  if (racerMessageEl) {
-    racerMessageEl.textContent = 'Paused. Hit start to keep racing.';
-  }
+    if (!racerState.running) return;
+    racerState.running = false;
+    if (racerState.animationFrame) cancelAnimationFrame(racerState.animationFrame);
+    if (racerMessageEl) {
+        racerMessageEl.textContent = 'Paused. Hit start to keep racing.';
+    }
 }
 
 function resetRacer() {
-  // Stop any running crash animation too
-  if (racerState.crashAnimId) {
-    cancelAnimationFrame(racerState.crashAnimId);
-    racerState.crashAnimId = null;
-  }
+    if (racerState.crashAnimId) {
+        cancelAnimationFrame(racerState.crashAnimId);
+        racerState.crashAnimId = null;
+    }
 
-  pauseRacer();
-  playerCar.lane = 1;
-  playerCar.baseWidth = laneWidth * 0.55;
-  playerCar.width = playerCar.baseWidth;
-  playerCar.x = laneCenters[playerCar.lane];
-  playerCar.height = 58;
-  racerState.speed = 180;
-  racerState.distance = 0;
-  racerState.dodged = 0;
-  racerState.speedLines = [];
-  // reset lateral gap to constant 120% and forward spawn settings back to "easy start"
-  racerState.gapWidthMultiplier = 1.2;
-  racerState.spawnStartDistance = 420;
-  racerState.spawnMinDistance = 120;
-  racerState.spawnVariance = 120;
-  racerState.spawnTightenRate = 10;
-  racerState.particles = [];
-  racerState.explosionParticles = [];
-  racerState.shake = { time: 0, intensity: 0 };
-  racerState.flash = { alpha: 0 };
-  resetObstacles();
-  ensureSpeedLines();
-  renderRacer();
-  updateHud();
-  if (racerMessageEl) {
-    racerMessageEl.textContent = 'Ready! Use ← and → to slide through the gaps.';
-  }
+    pauseRacer();
+    playerCar.lane = 1;
+    playerCar.baseWidth = laneWidth * 0.55;
+    playerCar.width = playerCar.baseWidth;
+    playerCar.x = laneCenters[playerCar.lane];
+    playerCar.height = 58;
+    
+    racerState.speed = 180;
+    racerState.distance = 0;
+    racerState.dodged = 0;
+    racerState.speedLines = [];
+    
+    // --- NEW --- Reset lateral gap multiplier
+    // racerState.gapWidthMultiplier = racerState.gapWidthStartMultiplier; 
+    // ^ This is now calculated dynamically in spawnObstacle based on 'dodged'
+    
+    racerState.particles = [];
+    racerState.explosionParticles = [];
+    racerState.shake = { time: 0, intensity: 0 };
+    racerState.flash = { alpha: 0 };
+    racerState.carSway = 0;
+    racerState.carTilt = 0;
+    
+    resetObstacles();
+    ensureSpeedLines();
+    
+    // --- UPDATED --- Call renderRacer without delta (it will use a default)
+    renderRacer(); 
+    
+    updateHud();
+    if (racerMessageEl) {
+        racerMessageEl.textContent = 'Ready! Use ← and → to slide through the gaps.';
+    }
 }
 
 function shiftLane(offset) {
-  const nextLane = Math.min(laneCount - 1, Math.max(0, playerCar.lane + offset));
-  if (nextLane === playerCar.lane) return;
-
-  // if running, we still allow lane shift but we animate smoothly via playerCar.x lerp
-  playerCar.lane = nextLane;
-  renderRacer();
-  updateHud();
+    const nextLane = Math.min(laneCount - 1, Math.max(0, playerCar.lane + offset));
+    if (nextLane === playerCar.lane) return;
+    
+    playerCar.lane = nextLane;
+    
+    // --- UPDATED --- No need to call render/update here, the game loop handles it
+    if (!racerState.running) {
+        renderRacer(); // Only render if paused to show the new position
+        updateHud();
+    }
 }
 
 function handleKey(event) {
-  // IMPORTANT: Check if the RACER modal is open
-  if (!racerModal || racerModal.style.display !== 'flex') return;
-  
-  if (event.key === 'ArrowLeft') {
-    shiftLane(-1);
-    event.preventDefault();
-  }
-  if (event.key === 'ArrowRight') {
-    shiftLane(1);
-    event.preventDefault();
-  }
+    if (!racerModal || racerModal.style.display !== 'flex') return;
+    
+    if (event.key === 'ArrowLeft') {
+        shiftLane(-1);
+        event.preventDefault();
+    }
+    if (event.key === 'ArrowRight') {
+        shiftLane(1);
+        event.preventDefault();
+    }
 }
 
 function updateHud() {
-  if (racerDistanceEl) racerDistanceEl.textContent = `Distance: ${Math.floor(racerState.distance)}m`;
-  if (racerSpeedEl) racerSpeedEl.textContent = `Speed: ${Math.floor(racerState.speed)} mph`;
-  if (racerObstaclesEl) racerObstaclesEl.textContent = `Gaps cleared: ${racerState.dodged}`;
+    if (racerDistanceEl) racerDistanceEl.textContent = `Distance: ${Math.floor(racerState.distance)}m`;
+    if (racerSpeedEl) racerSpeedEl.textContent = `Speed: ${Math.floor(racerState.speed)} mph`;
+    if (racerObstaclesEl) racerObstaclesEl.textContent = `Gaps cleared: ${racerState.dodged}`;
 }
 
 // --- INIT RACER ---
 function initRacerGame() {
-    // Bind controls
     if (startRacerBtn) startRacerBtn.addEventListener('click', startRacer);
     if (pauseRacerBtn) pauseRacerBtn.addEventListener('click', pauseRacer);
     if (resetRacerBtn) resetRacerBtn.addEventListener('click', resetRacer);
 
-    // Bind keyboard
     if (!document.__racerBound) {
-      document.addEventListener('keydown', handleKey);
-      document.__racerBound = true;
+        document.addEventListener('keydown', handleKey);
+        document.__racerBound = true;
     }
 
-    // Initial setup call
     if (racerCanvas) {
-      resetRacer();
+        resetRacer();
     }
 }
-
 
 // --- FULL INVADERS SCRIPT (LOGIC) ---
 // --- [MODIFIED FOR WIDER PLAY AREA, CONNECTED BUNKERS, OLD-STYLE ENEMIES + MORE] ---
