@@ -1151,10 +1151,8 @@ if (pauseRacerBtn) pauseRacerBtn.addEventListener('click', pauseRacer);
    State and configuration
    ============================ */
 let invaderState = {
-  player: { x: 140, y: 350, width: 20, height: 16, 
-lives: 3, alive: true }, // keep starting lives at 3 as requested
-  // bullet represented as small rect for collisions;
-will be drawn as a laser stroke
+  player: { x: 140, y: 350, width: 20, height: 16, lives: 3, alive: true }, // keep starting lives at 3 as requested
+  // bullet represented as small rect for collisions; will be drawn as a laser stroke
   bullet: { x: 0, y: 0, width: 4, height: 14, active: false, alive: false, speed: 24 },//14
   enemies: [],
   enemyBullets: [],
