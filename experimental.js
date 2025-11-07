@@ -27,13 +27,8 @@ const racerMessageEl = document.getElementById('racer-message');
 const startRacerBtn = document.getElementById('startRacerBtn');
 const pauseRacerBtn = document.getElementById('pauseRacerBtn');
 const resetRacerBtn = document.getElementById('resetRacerBtn');
-// --- NEW --- Audio Elements
-const toggleSoundBtn = document.getElementById('toggleSoundBtn');
-const racerMusic = document.getElementById('racerMusic');
-const racerEngine = document.getElementById('racerEngine');
-const racerDodgeSfx = document.getElementById('racerDodgeSfx');
-const racerCrashSfx = document.getElementById('racerCrashSfx');
-const allAudio = [racerMusic, racerEngine, racerDodgeSfx, racerCrashSfx];
+// --- Audio Elements Removed ---
+// --- Audio Elements Removed ---
 // --- FULL INVADERS SCRIPT (ELEMENTS) ---
 const invadersModal = document.getElementById('invadersModal');
 const runInvadersBtn = document.getElementById('runInvadersBtn');
@@ -160,7 +155,8 @@ if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScor
 
 function saveHighScore() {
   localStorage.setItem('tetris+HighScore', highScore); // <-- ### FIX: Changed key to 'tetris+HighScore'
-  if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
+  if(scoreP) scoreP.textContent = 'Score: ' + score + ' |
+High Score: ' + highScore;
 }
 
 // In-game variables
@@ -335,7 +331,8 @@ rows.unshift(row);
 console.log("Level up! Now on level " + currentLevel);
           }
           
-          if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
+          if(scoreP) scoreP.textContent = 'Score: ' + score + ' |
+High Score: ' + highScore;
           i--;
         }
       }
@@ -466,34 +463,17 @@ explosionParticles: [],
     // Visuals
     edgeFlash: 0,
 
-    // --- NEW --- Sound State
-    sound: false // Start muted until user enables
+    // --- Sound State Removed ---
 };
 const obstacleHeight = 60;
 const laneCenters = Array.from({ length: laneCount }, (_, i) => i * laneWidth + laneWidth / 2);
-// --- NEW --- Sound Control
-function toggleSound() {
-    racerState.sound = !racerState.sound;
-if (racerState.sound) {
-        toggleSoundBtn.textContent = 'Mute';
-        toggleSoundBtn.classList.add('active');
-// If game isn't running, just play music. If it is, play engine too.
-if (racerMusic) racerMusic.play().catch(e => console.log("Audio play failed"));
-        if (racerState.running && racerEngine) {
-            racerEngine.play().catch(e => console.log("Audio play failed"));
-}
-    } else {
-        toggleSoundBtn.textContent = 'Unmute';
-        toggleSoundBtn.classList.remove('active');
-allAudio.forEach(audio => audio ? audio.pause() : null);
-    }
-}
-
-function playSound(sound) {
-    if (!sound || !racerState.sound) return;
-sound.currentTime = 0;
-    sound.play().catch(e => console.log("SFX play failed"));
-}
+// --- Sound Control Removed ---
+// ...
+// ...
+// ...
+// ...
+// ...
+// ...
 
 function spawnWhooshLines(x, y) {
     const count = 10 + Math.floor(Math.random() * 6);
@@ -531,10 +511,8 @@ function spawnParticles(x, y, color, count = 12) {
 }
 
 function spawnCrash(x, y) {
-    // --- NEW --- Stop music, play crash SFX
-    playSound(racerCrashSfx);
-if (racerMusic) racerMusic.pause();
-    if (racerEngine) racerEngine.pause();
+    // --- Sound calls removed ---
+// ...
 
     // shards
     const shardCount = 18 + Math.floor(Math.random() * 8);
@@ -908,12 +886,9 @@ const speedInPxPerSecond = racerState.speed * 1.5;
     const traveled = (speedInPxPerSecond * (delta / 1000));
 racerState.speed = Math.min(520, 180 + racerState.dodged * 6 + Math.floor(racerState.distance / 800));
     racerState.distance += traveled;
-// --- NEW --- Update engine pitch
-    if (racerEngine) {
-        // Adjust the playbackRate based on speed.
-// Starts at 1.0 (at 180mph) and goes up.
-        racerEngine.playbackRate = 1.0 + (racerState.speed - 180) / 400;
-}
+// --- Engine pitch update removed ---
+// ...
+// ...
     
     racerState.spawnTimer -= delta;
 if (racerState.spawnTimer <= 0) {
@@ -929,9 +904,10 @@ if (racerState.spawnTimer <= 0) {
         if (ob.y > racerCanvas.height) {
             racerState.dodged += 1;
             spawnWhooshLines(ob.gapCenter, racerCanvas.height - 40);
-            playSound(racerDodgeSfx); // --- NEW --- Play dodge sound
+            // --- playSound removed ---
             
-            // --- NEW --- Add small dodge-shake
+            // --- NEW 
+--- Add small dodge-shake
             racerState.shake.time = 8;
             racerState.shake.intensity = 2;
             
@@ -1044,11 +1020,8 @@ function startRacer() {
     racerState.running = true;
     racerState.lastTimestamp = performance.now();
     racerState.spawnTimer = racerState.spawnStartTime;
-// --- NEW --- Start audio
-    if (racerState.sound) {
-        if (racerMusic) racerMusic.play().catch(e => console.log("Audio play failed"));
-if (racerEngine) racerEngine.play().catch(e => console.log("Audio play failed"));
-    }
+// --- Audio start removed ---
+// ...
     
     racerState.animationFrame = requestAnimationFrame(gameLoop);
 }
@@ -1060,8 +1033,7 @@ function pauseRacer() {
 if (racerMessageEl) {
         racerMessageEl.textContent = 'Paused. Hit start to keep racing.';
 }
-    // --- NEW --- Pause engine sound
-    if (racerEngine) racerEngine.pause();
+    // --- Audio pause removed ---
 }
 
 function resetRacer() {
@@ -1071,13 +1043,9 @@ function resetRacer() {
 }
     pauseRacer();
 
-    // --- NEW --- Reset audio
-    if (racerEngine) racerEngine.pause();
-if (racerMusic && racerState.sound) {
-         // Restart music on reset if sound is on
-        racerMusic.currentTime = 0;
-racerMusic.play().catch(e => console.log("Audio play failed"));
-    }
+    // --- Audio reset removed ---
+// ...
+// ...
 
     playerCar.lane = 1;
     playerCar.baseWidth = laneWidth * 0.55;
@@ -1155,23 +1123,14 @@ function initRacerGame() {
 if (pauseRacerBtn) pauseRacerBtn.addEventListener('click', pauseRacer);
     if (resetRacerBtn) resetRacerBtn.addEventListener('click', resetRacer);
     
-    // --- NEW --- Wire up sound button
-    if (toggleSoundBtn) {
-        toggleSoundBtn.addEventListener('click', toggleSound);
-// Set initial state
-        toggleSoundBtn.textContent = 'Unmute';
-        toggleSoundBtn.classList.remove('active');
-}
+    // --- Sound button logic removed ---
+// ...
+// ...
     
-    // Set audio properties
-    allAudio.forEach(audio => {
-        if (audio) {
-            audio.volume = 0.5; // Start all sounds at 50% volume
-        }
-    });
-if (racerMusic) racerMusic.volume = 0.3; // Music quieter
-    if (racerEngine) racerEngine.volume = 0.4;
-if (!document.__racerBound) {
+    // --- Audio properties removed ---
+// ...
+// ...
+    if (!document.__racerBound) {
         document.addEventListener('keydown', handleKey);
         document.__racerBound = true;
 }
