@@ -153,7 +153,7 @@ let highScore;
 
 // High score (localStorage version)
 function loadHighScore() {
-  highScore = parseInt(localStorage.getItem('tetrisHighScore')) || 0;
+  highScore = parseInt(localStorage.getItem('tetris+HighScore')) || 0;
   if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
 }
 
