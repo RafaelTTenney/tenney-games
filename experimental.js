@@ -420,13 +420,13 @@ const laneWidth = racerCanvas ? racerCanvas.width / laneCount : 100;
 const horizonY = 120; // Y pixel of horizon
 const canvasWidth = racerCanvas ? racerCanvas.width : 340;
 const canvasHeight = racerCanvas ? racerCanvas.height : 520;
-// --- ### NEW: Define the "width" of the road at the bottom of the screen
-const roadWidthAtBottom = racerCanvas.width * 1.6; // <-- ### MOD: Was 1.2 (Wider lanes)
-const roadWidthTop = racerCanvas.width * 0.08; // <-- ### MOD: Was 0.1 (Narrower top)
+// --- ### FIX: Use wider road constants for fanned-out effect ### ---
+const roadWidthAtBottom = racerCanvas.width * 1.6; // <-- ### FIX: Was 1.2
+const roadWidthTop = racerCanvas.width * 0.08; // <-- ### FIX: Was 0.1
 
 
 const playerCar = {
-    lane: 0, // <-- ### MOD: Use -1, 0, 1 for lanes. Start at 0 (center).
+    lane: 0, // Using -1, 0, 1 for lanes
     baseWidth: laneWidth * 0.55,
     width: laneWidth * 0.55,
     height: 58,
@@ -436,31 +436,32 @@ const playerCar = {
 
 const racerState = {
     running: false,
-    crashed: false, // <-- ### NEW: To stop game loop on crash
+    crashed: false,
     lastTimestamp: 0,
     speed: 180,
     distance: 0,
     dodged: 0,
     mostGapsCleared: 0,
     obstacles: [],
-    speedLines: [], // <-- ### MOD: Will be radial lines
-    stars: [], // <-- ### NEW: Starfield
+    speedLines: [],
+    stars: [], // <-- ### NEW: 3D Starfield ###
     spawnTimer: 0,
     animationFrame: null,
 
     // Difficulty Tuning (Time-based)
-    spawnStartTime: 2200, // <-- ### MOD: Was 1800 (More time)
-    spawnMinTime: 800, // <-- ### MOD: Was 650 (More time)
+    spawnStartTime: 2200,
+    spawnMinTime: 800,
     spawnTimeVariance: 200,
     spawnTimeTightenRate: 20,
-    gapWidthStartMultiplier: 1.8, // <-- ### MOD: Was 1.7 (Wider gaps)
-    gapWidthMinMultiplier: 1.4, // <-- ### MOD: Was 1.2 (Wider gaps)
+    // --- ### MOD: Keep original gap multipliers, safety net will fix it ### ---
+    gapWidthStartMultiplier: 1.7,
+    gapWidthMinMultiplier: 1.2,
     gapWidthTightenRate: 0.02,
 
     particles: [],
     explosionParticles: [],
-    laneLerpSpeed: 0.12, // <-- ### MOD: Was 0.18 (slower merge)
-    shake: { time: 0, intensity: 0 },
+    laneLerpSpeed: 0.12,
+    shake: { x: 0, y: 0, intensity: 0 }, // <-- ### NEW: Camera Shake ###
     flash: { alpha: 0 },
     crashAnimId: null,
 
@@ -477,10 +478,9 @@ const racerState = {
 };
 
 const obstacleHeight = 60; // This will now be the *base* height at full scale
-// --- ### REMOVED: Old laneCenters
 // --- Sound Control Removed ---
 
-// --- ### NEW: Pseudo-3D Scaling Function ### ---
+// --- ### MOD: Pseudo-3D Scaling Function (Non-Linear) ### ---
 /**
  * Calculates a scale (0.0 to 1.0) based on Y position.
  * @param {number} y - The current Y coordinate.
@@ -489,15 +489,12 @@ const obstacleHeight = 60; // This will now be the *base* height at full scale
 function getPerspectiveScale(y) {
     if (y < horizonY) return 0; // Above horizon, scale is 0
 
-    // --- ### NEW: Non-linear scaling ### ---
-    // Use a power curve (e.g., pow(2.2)) to make scaling non-linear
-    // Things will stay smaller for longer, then grow rapidly
+    // --- ### FIX: Use non-linear scaling for "tiny dot" spawn effect ### ---
     let normalizedY = (y - horizonY) / (canvasHeight - horizonY);
-    let scale = Math.pow(normalizedY, 2.2); // Was linear
-    // --- ### END NEW ### ---
+    let scale = Math.pow(normalizedY, 2.2); // <-- ### FIX: Was linear
+    // --- ### END FIX ### ---
 
-    // Add a minimum scale so it's visible, and clip at 1.0
-    return Math.max(0.01, Math.min(scale, 1.0)); // <-- MOD: min scale from 0.05 to 0.01
+    return Math.max(0.01, Math.min(scale, 1.0));
 }
 
 
@@ -536,7 +533,7 @@ function spawnParticles(x, y, color, count = 12) {
 
 function spawnCrash(x, y) {
     // --- Sound calls removed ---
-    racerState.crashed = true; // <-- ### NEW: Set crashed state
+    racerState.crashed = true;
 
     // shards
     const shardCount = 18 + Math.floor(Math.random() * 8);
@@ -559,8 +556,7 @@ function spawnCrash(x, y) {
         });
     }
     spawnParticles(x, y, 'rgba(255,200,120,0.95)', 12);
-    racerState.shake.time = 28 + Math.floor(Math.random() * 18);
-    racerState.shake.intensity = 6 + Math.random() * 8;
+    racerState.shake.intensity = 1.2; // <-- ### NEW: Crash Shake ###
     racerState.flash.alpha = 0.95;
 }
 
@@ -622,65 +618,93 @@ function drawParticles() {
             p.x += p.vx; p.y += p.vy; p.vy += 0.03;
             p.life -= 1;
             if (p.life <= 0) racerState.particles.splice(i, 1);
-        // --- ### NEW: Render logic for engine trail ### ---
+        // --- ### NEW: Sleek Trail Particle ### ---
         } else if (p.type === 'trail') {
             racerCtx.save();
-            racerCtx.globalAlpha = Math.max(0, p.life / p.maxLife);
-            racerCtx.strokeStyle = p.color;
-            racerCtx.lineWidth = p.size;
+            const lifeRatio = Math.max(0, p.life / p.maxLife);
+            racerCtx.strokeStyle = `rgba(130, 220, 255, ${lifeRatio * 0.7})`;
+            racerCtx.lineWidth = p.size * lifeRatio;
             racerCtx.beginPath();
             racerCtx.moveTo(p.x, p.y);
-            racerCtx.lineTo(p.x - p.vx * 2.5, p.y - p.vy * 2.5); // Draw line
+            racerCtx.lineTo(p.x - p.vx * 3, p.y - p.vy * 3); // Draw line backwards
             racerCtx.stroke();
             racerCtx.restore();
-            p.x += p.vx; p.y += p.vy; p.vy += 0.02; // Faint gravity
+            
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.02; // Slight upward drift
+            // Gently follow player horizontally
+            p.vx += (playerCar.x - p.x) * 0.01; 
+            p.vx *= 0.98; // Dampen horizontal speed
             p.life -= 1;
             if (p.life <= 0) racerState.particles.splice(i, 1);
+        // --- ### END NEW ### ---
         }
     }
 }
 
-// --- ### NEW: Draw stars ### ---
+// --- ### NEW: Starfield functions ### ---
+function ensureStars() {
+    if (!racerCanvas) return;
+    // Create a pool of 150 stars
+    while (racerState.stars.length < 150) { 
+        racerState.stars.push({
+            x: (Math.random() - 0.5) * canvasWidth * 2, // Start stars in a wide 3D space
+            y: (Math.random() - 0.5) * canvasHeight, // Start stars all over, including above/below horizon
+            z: Math.random() * canvasWidth // Z-depth, canvasWidth is a good max depth
+        });
+    }
+}
+
 function drawStars() {
     if (!racerCtx) return;
-    const vpX = racerCanvas.width / 2;
+    const vpX = canvasWidth / 2;
     const vpY = horizonY;
 
     racerCtx.fillStyle = '#FFFFFF';
-    racerState.stars.forEach(star => {
-        // Calculate position based on 3D perspective
-        const scale = getPerspectiveScale(star.y);
-        if (scale <= 0) return; // Don't draw if behind horizon
+    racerCtx.save();
+    // Move the canvas origin (0,0) to the vanishing point.
+    // This makes the 3D projection math much simpler.
+    racerCtx.translate(vpX, vpY); 
 
-        // Project star from VP
-        const projX = vpX + (star.x - vpX) / (1 - scale * 0.8);
-        const projY = vpY + (star.y - vpY) / (1 - scale * 0.8);
+    racerState.stars.forEach(star => {
+        // Project the 3D star position (star.x, star.y, star.z) onto the 2D plane
+        const sx = star.x * (vpX / star.z); // Projected X
+        const sy = star.y * (vpY / star.z); // Projected Y (using vpY as focal length for Y)
         
-        const size = star.size * scale;
-        
-        // Only draw if on screen
-        if (projX > 0 && projX < canvasWidth && projY > horizonY && projY < canvasHeight) {
-             racerCtx.globalAlpha = Math.min(1, scale * 5); // Fade in
-             racerCtx.fillRect(projX - size / 2, projY - size / 2, size, size);
+        // Size is inversely proportional to depth (z)
+        const size = (1 - star.z / canvasWidth) * 3; 
+
+        // Simple culling if star is way off-screen (after projection)
+        if (sx < -vpX || sx > vpX || sy < -vpY || sy > (canvasHeight - vpY)) {
+            // Star is off-screen, the update loop will reset it when z <= 0
+            return;
         }
+        
+        // Alpha is also inversely proportional to depth
+        const alpha = (1 - star.z / canvasWidth) * 0.8;
+        racerCtx.globalAlpha = Math.max(0.1, alpha);
+        
+        // Draw the star at its projected 2D coordinate
+        racerCtx.fillRect(sx - size / 2, sy - size / 2, size, size);
     });
+    
+    racerCtx.restore(); // Restore origin to top-left
     racerCtx.globalAlpha = 1.0;
 }
+// --- ### END NEW ### ---
 
 function drawBackground() {
     if (!racerCtx || !racerCanvas) return;
-    // gradient sky
-    const gradient = racerCtx.createLinearGradient(0, 0, 0, racerCanvas.height);
-    gradient.addColorStop(0, '#000000'); // <-- ### MOD: Pure black at top
-    gradient.addColorStop(0.5, '#03010d'); // <-- ### MOD: Dark purple/blue
-    gradient.addColorStop(1, '#0a0e24'); // <-- Keep bottom
-    racerCtx.fillStyle = gradient;
+    
+    // --- ### MOD: 3D Starfield Background ### ---
+    racerCtx.fillStyle = '#0a0e24'; // Dark blue/black
     racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
+    
+    drawStars(); // <-- ### NEW: Draw starfield ###
+    // --- ### END MOD ### ---
 
-    // --- ### NEW: Draw stars ### ---
-    drawStars();
-
-    drawPerspectiveGrid(); // Back to drawing the static grid
+    drawPerspectiveGrid(); // Draw grid on top of stars
 
     // edge flash
     let edgeAlpha = 0.06;
@@ -696,42 +720,42 @@ function drawBackground() {
     racerCtx.strokeStyle = 'rgba(0,255,255,0.14)';
     racerCtx.lineWidth = 3;
     racerCtx.strokeRect(6, 6, racerCanvas.width - 12, racerCanvas.height - 12);
-
-    // --- Horizontal lines removed as requested ---
 }
 
 function drawPerspectiveGrid() {
     if (!racerCtx || !racerCanvas) return;
     const vpX = racerCanvas.width / 2;
-    const vpY = 120;
+    const vpY = horizonY; // Use the constant
     const bottomY = racerCanvas.height;
-    // --- ### MOD: Brighter lines ### ---
-    racerCtx.strokeStyle = 'rgba(28, 255, 255, 0.25)'; // Was 0.08
+    
+    racerCtx.strokeStyle = 'rgba(28, 255, 255, 0.25)';
     racerCtx.lineWidth = 2;
-    // --- ### MOD: Use new road width constants ### ---
+    // --- ### MOD: Use wider road width constants ### ---
     const numLines = 10;
     for (let i = 0; i <= numLines; i++) {
         const ratio = i / numLines;
+        // Left side lines
         const xTopL = vpX - roadWidthTop * (1 - ratio);
-        const xBottomL = vpX - roadWidthAtBottom * (1 - ratio); // <-- MOD
+        const xBottomL = vpX - roadWidthAtBottom * (1 - ratio); // <-- Uses new 1.6
         racerCtx.beginPath(); racerCtx.moveTo(xTopL, vpY); racerCtx.lineTo(xBottomL, bottomY); racerCtx.stroke();
+        // Right side lines
         const xTopR = vpX + roadWidthTop * (1 - ratio);
-        const xBottomR = vpX + roadWidthAtBottom * (1 - ratio); // <-- MOD
+        const xBottomR = vpX + roadWidthAtBottom * (1 - ratio); // <-- Uses new 1.6
         racerCtx.beginPath(); racerCtx.moveTo(xTopR, vpY); racerCtx.lineTo(xBottomR, bottomY); racerCtx.stroke();
     }
 }
 
-// --- ### MOD: New "streaking" speed lines logic ### ---
+// --- ### MOD: "Streaking" speed lines logic ### ---
 function drawSpeedLines() {
     if (!racerCtx) return;
     const vpX = racerCanvas.width / 2;
     const vpY = horizonY;
 
-    racerCtx.strokeStyle = 'rgba(100, 220, 255, 0.4)'; // Brighter
+    racerCtx.strokeStyle = 'rgba(100, 220, 255, 0.4)';
     racerCtx.lineWidth = 1.5;
 
     racerState.speedLines.forEach(line => {
-        // Calculate start and end points based on angle and dist
+        // Radial lines logic
         const startX = vpX + Math.cos(line.angle) * line.dist;
         const startY = vpY + Math.sin(line.angle) * line.dist;
         const endX = vpX + Math.cos(line.angle) * (line.dist + line.length);
@@ -745,37 +769,32 @@ function drawSpeedLines() {
 }
 // --- ### END MOD ### ---
 
-// --- ### MOD: Glow logic updated to use scaling ### ---
 function drawGlow() {
     if (!racerCtx) return;
 
     racerCtx.save();
-    racerCtx.shadowBlur = 36; // <-- ### MOD: Was 28 (softer glow)
+    racerCtx.shadowBlur = 36;
 
     // 1. Obstacle Glow
     racerState.obstacles.forEach(ob => {
-        // --- Calculate scaled properties ---
         const scale = getPerspectiveScale(ob.y);
-        if (scale === 0) return; // Don't draw if above horizon
+        if (scale <= 0.01) return; // Don't draw if basically invisible
 
         const scaledHeight = obstacleHeight * scale;
-        const top = ob.y - scaledHeight; // Top edge of the obstacle
+        const top = ob.y - scaledHeight;
 
-        // --- ### MOD: Calculate gap X based on perspective ### ---
-        // --- ### MOD: Use new road width constants ### ---
+        // --- ### MOD: Use wider road width constants ### ---
         const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
         const scaledLaneWidth = roadWidthAtPlayer / 3;
         const scaledGapCenter = (canvasWidth / 2) + (scaledLaneWidth * ob.gapLane);
         const scaledGapWidth = ob.gapWidth * scale;
         // --- End gap calculation ---
 
-
         const gapLeft = scaledGapCenter - scaledGapWidth / 2;
         const gapRight = scaledGapCenter + scaledGapWidth / 2;
-        // --- End scaling calculations ---
 
         racerCtx.shadowColor = ob.color;
-        racerCtx.fillStyle = 'rgba(0,0,0,0)';
+        racerCtx.fillStyle = 'rgba(0,0,0,0)'; // Use shadow only
         if (gapLeft > 0) {
             racerCtx.fillRect(0, top, gapLeft, scaledHeight);
         }
@@ -784,14 +803,14 @@ function drawGlow() {
         }
     });
 
-    // --- ### MOD: Reverted Player Glow to match original shape ### ---
+    // Player Glow
     racerCtx.shadowColor = '#19d7ff';
     racerCtx.translate(playerCar.x, playerCar.y + playerCar.height * 0.75);
     racerCtx.rotate(racerState.carSway + racerState.carTilt);
     const w = playerCar.width;
     const h = playerCar.height;
     const carY = -h * 0.75;
-    racerCtx.fillStyle = 'rgba(0,0,0,0)';
+    racerCtx.fillStyle = 'rgba(0,0,0,0)'; // Use shadow only
     racerCtx.beginPath();
     racerCtx.moveTo(-w * 0.3, carY + h);
     racerCtx.lineTo(w * 0.3, carY + h);
@@ -801,18 +820,15 @@ function drawGlow() {
     racerCtx.quadraticCurveTo(-w * 0.45, carY + h * 0.4, -w * 0.3, carY + h);
     racerCtx.closePath();
     racerCtx.fill();
-    // --- ### END MOD ### ---
 
     racerCtx.restore();
 }
 
-// --- ### MOD: Reverted Player draw logic ### ---
 function drawPlayer(delta) {
     if (!racerCtx) return;
 
-    // --- ### MOD: Calculate targetX based on perspective ### ---
+    // --- ### MOD: Use wider road width constants ### ---
     const playerScale = getPerspectiveScale(playerCar.y); // Scale at player's Y
-    // --- ### MOD: Use new road width constants ### ---
     const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * playerScale + roadWidthTop;
     const scaledLaneWidth = roadWidthAtPlayer / 3;
     const targetX = (canvasWidth / 2) + (scaledLaneWidth * playerCar.lane);
@@ -865,26 +881,21 @@ function drawPlayer(delta) {
 
     racerCtx.restore();
 }
-// --- ### END MOD ### ---
 
-// --- ### MOD: Obstacle draw logic updated to use scaling ### ---
 function drawObstacles() {
     if (!racerCtx) return;
 
-    // Sort obstacles so nearest are drawn last (on top)
+    // Sort obstacles by Y-position (depth) so closer ones draw on top
     racerState.obstacles.sort((a, b) => a.y - b.y);
 
     racerState.obstacles.forEach(ob => {
-        // --- Calculate scaled properties ---
         const scale = getPerspectiveScale(ob.y);
-        if (scale <= 0.01) return; // Don't draw if at/behind horizon
+        if (scale <= 0.01) return; // Don't draw if invisible
 
         const scaledHeight = obstacleHeight * scale;
-        // Adjust top so the *bottom* of the obstacle moves with `ob.y`
         const top = ob.y - scaledHeight;
 
-        // --- ### MOD: Calculate gap X based on perspective ### ---
-        // --- ### MOD: Use new road width constants ### ---
+        // --- ### MOD: Use wider road width constants ### ---
         const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
         const scaledLaneWidth = roadWidthAtPlayer / 3;
         const scaledGapCenter = (canvasWidth / 2) + (scaledLaneWidth * ob.gapLane);
@@ -893,63 +904,67 @@ function drawObstacles() {
 
         const gapLeft = scaledGapCenter - scaledGapWidth / 2;
         const gapRight = scaledGapCenter + scaledGapWidth / 2;
-
-        const edgeHeight = 6 * scale; // <-- ### MOD: Was 4 * scale (thicker edge)
-        // --- End scaling calculations ---
+        const edgeHeight = 6 * scale; // Top edge highlight height
 
         // left chunk
         if (gapLeft > 0) {
             racerCtx.fillStyle = ob.color;
             racerCtx.fillRect(0, top + edgeHeight, gapLeft, scaledHeight - edgeHeight);
-            racerCtx.fillStyle = `hsl(${ob.hue}, 100%, 85%)`; // <-- ### MOD: Was 90%, 75% (brighter)
+            racerCtx.fillStyle = `hsl(${ob.hue}, 100%, 85%)`;
             racerCtx.fillRect(0, top, gapLeft, edgeHeight);
         }
         // right chunk
         if (gapRight < racerCanvas.width) {
             racerCtx.fillStyle = ob.color;
             racerCtx.fillRect(gapRight, top + edgeHeight, canvasWidth - gapRight, scaledHeight - edgeHeight);
-            racerCtx.fillStyle = `hsl(${ob.hue}, 100%, 85%)`; // <-- ### MOD: Was 90%, 75% (brighter)
+            racerCtx.fillStyle = `hsl(${ob.hue}, 100%, 85%)`;
             racerCtx.fillRect(gapRight, top, canvasWidth - gapRight, edgeHeight);
         }
     });
 }
 
 function spawnObstacle() {
-    // --- ### MOD: Store lane (-1, 0, 1) instead of center ### ---
     const lanes = [-1, 0, 1];
     const gapLane = lanes[Math.floor(Math.random() * lanes.length)];
     const colorHue = Math.floor(Math.random() * 360);
 
+    // Calculate the gap multiplier based on progress
     const currentGapMultiplier = Math.max(
         racerState.gapWidthMinMultiplier,
         racerState.gapWidthStartMultiplier - (racerState.dodged * racerState.gapWidthTightenRate)
     );
-    // Base width is now based on car's base width, not lane width
+    
+    // Calculate the base gap width
     let gapWidth = playerCar.baseWidth * currentGapMultiplier;
 
-    // --- ### MOD: Fix for gap size vs player size ### ---
-    // Ensure the gap is ALWAYS wider than the MAXIMUM possible player width
-    const maxPlayerWidth = playerCar.baseWidth * 1.3; // From updateRacer
-    gapWidth = Math.max(gapWidth, maxPlayerWidth + 20); // Safety net
-    // --- ### END MOD ### ---
+    // --- ### FIX: Gap Size Safety Net ### ---
+    // Ensure the gap is always wider than the player's *current* width, plus a buffer.
+    // playerCar.width grows as the player dodges, so this check becomes stricter.
+    const minSafeGap = playerCar.width * 1.1; // 10% buffer
+    if (gapWidth < minSafeGap) {
+        gapWidth = minSafeGap;
+    }
+    // --- ### END FIX ### ---
 
-    gapWidth = Math.min(gapWidth, 250); // Max gap width in "world" units
+    // Apply a maximum gap width
+    gapWidth = Math.min(gapWidth, 250);
 
     racerState.obstacles.push({
-        y: horizonY, // <-- ### MOD: Spawn at horizon
-        gapLane: gapLane, // <-- ### MOD: Store lane
-        gapWidth: gapWidth, // <-- ### MOD: Store base gap width
+        y: horizonY, // Spawn at horizon
+        gapLane: gapLane,
+        gapWidth: gapWidth, // Use the safe-checked gap width
         color: `hsl(${colorHue}, 90%, 60%)`,
         hue: colorHue
     });
 
+    // Calculate time until next spawn
     const dynamicForwardTime = Math.max(
         racerState.spawnMinTime,
         racerState.spawnStartTime - racerState.dodged * racerState.spawnTimeTightenRate
     );
     racerState.spawnTimer = dynamicForwardTime + Math.random() * racerState.spawnTimeVariance;
 
-    racerState.edgeFlash = 20;
+    racerState.edgeFlash = 20; // Visual cue for new obstacle
 }
 
 function resetObstacles() {
@@ -957,47 +972,30 @@ function resetObstacles() {
     racerState.spawnTimer = 0;
 }
 
-// --- ### MOD: New logic for radial speed lines ### ---
 function ensureSpeedLines() {
     if (!racerCanvas) return;
-    while (racerState.speedLines.length < 40) { // Was 14
+    // Ensure there are enough speed lines in the pool
+    while (racerState.speedLines.length < 40) {
         racerState.speedLines.push({
-            angle: Math.random() * Math.PI * 2, // Angle from VP
-            dist: 5 + Math.random() * 50,      // Distance from VP
+            angle: Math.random() * Math.PI * 2,
+            dist: 5 + Math.random() * 50,
             length: 18 + Math.random() * 28,
-            speed: 0.5 + Math.random() * 0.5 // Speed multiplier
+            speed: 0.5 + Math.random() * 0.5
         });
     }
 }
-// --- ### END MOD ### ---
 
-// --- ### NEW: Starfield generation ### ---
-function ensureStars() {
-    if (!racerCanvas) return;
-    while (racerState.stars.length < 100) {
-        racerState.stars.push({
-            x: Math.random() * canvasWidth * 2 - canvasWidth, // Spread around VP
-            y: horizonY + Math.random() * (canvasHeight - horizonY),
-            size: 0.5 + Math.random() * 1.5,
-            speed: 0.1 + Math.random() * 0.1 // Slower parallax speed
-        });
-    }
+// --- ### NEW: Camera Shake function ### ---
+/** Applies the current camera shake translation to the canvas context. */
+function applyShakeTransform() {
+    if (!racerCtx || (racerState.shake.x === 0 && racerState.shake.y === 0)) return;
+    // Use Math.floor to keep pixels aligned, preventing sub-pixel blur
+    racerCtx.translate(
+        Math.floor(racerState.shake.x), 
+        Math.floor(racerState.shake.y)
+    );
 }
 // --- ### END NEW ### ---
-
-function applyShakeTransform() {
-    if (!racerCtx) return {dx:0, dy:0};
-    if (racerState.shake.time > 0) {
-        const intensity = racerState.shake.intensity;
-        const dx = (Math.random() - 0.5) * intensity;
-        const dy = (Math.random() - 0.5) * intensity;
-        racerCtx.translate(dx, dy);
-        racerState.shake.time -= 1;
-        racerState.shake.intensity *= 0.985;
-        return {dx, dy};
-    }
-    return {dx:0, dy:0};
-}
 
 function startCrashAnimation() {
     if (racerState.crashAnimId) {
@@ -1007,14 +1005,20 @@ function startCrashAnimation() {
     const loop = (timestamp) => {
         const delta = timestamp - (racerState.lastCrashTimestamp || timestamp);
         racerState.lastCrashTimestamp = timestamp;
-        renderRacer(delta); // Will re-render the static car + particles
+        
+        renderRacer(delta); // Continue rendering for particle/shake effects
+        
         const activeParticles = (racerState.explosionParticles.length > 0) || (racerState.particles.length > 0);
-        const activeShake = racerState.shake.time > 0;
+        const activeShake = racerState.shake.intensity > 0.02; // <-- ### NEW: Check shake ###
         const activeFlash = racerState.flash.alpha > 0.02;
-        if (activeParticles || activeShake || activeFlash) {
+        
+        // Keep looping if any effect is still active
+        if (activeParticles || activeFlash || activeShake) { // <-- ### NEW: Check shake ###
             racerState.crashAnimId = requestAnimationFrame(loop);
         } else {
+            // All effects are done
             racerState.flash.alpha = 0;
+            racerState.shake.intensity = 0; // <-- ### NEW: Reset shake ###
             racerState.crashAnimId = null;
         }
     };
@@ -1023,20 +1027,19 @@ function startCrashAnimation() {
 }
 
 function updateRacer(delta) {
-    if (!racerCanvas || racerState.crashed) return; // <-- ### MOD: Stop update if crashed
+    if (!racerCanvas || racerState.crashed) return;
 
+    // Calculate distance traveled based on speed and delta time
     const speedInPxPerSecond = racerState.speed * 1.5;
     const traveled = (speedInPxPerSecond * (delta / 1000));
     
-    // Base speed increase
+    // Increase speed based on progress (dodged count and total distance)
     const baseSpeed = 180 + racerState.dodged * 6 + Math.floor(racerState.distance / 800);
-    racerState.speed = Math.min(520, baseSpeed);
+    racerState.speed = Math.min(520, baseSpeed); // Cap speed
     racerState.distance += traveled;
 
-    // --- Engine pitch update removed ---
-
+    // Handle obstacle spawning
     racerState.spawnTimer -= delta;
-
     if (racerState.spawnTimer <= 0) {
         spawnObstacle();
     }
@@ -1046,73 +1049,99 @@ function updateRacer(delta) {
         ob.y += traveled;
     });
 
-    // Filter obstacles and handle dodges
+    // Filter obstacles and handle successful dodges
     racerState.obstacles = racerState.obstacles.filter(ob => {
-        if (ob.y > racerCanvas.height + obstacleHeight) { // Wait until it's fully off-screen
+        if (ob.y > racerCanvas.height + obstacleHeight) {
+            // Obstacle has passed the bottom of the screen
             racerState.dodged += 1;
-            // Spawn whoosh near center
-            spawnWhooshLines(canvasWidth / 2, racerCanvas.height - 40);
-            // --- playSound removed ---
+            spawnWhooshLines(canvasWidth / 2, racerCanvas.height - 40); // Dodge effect
 
-            // --- NEW --- Add small dodge-shake
-            racerState.shake.time = 8;
-            racerState.shake.intensity = 2;
-
-            // Player width scaling (keep this, it looks cool)
+            // Increase player ship size slightly
             const scale = Math.min(1.3, 1 + racerState.dodged * 0.02);
             playerCar.width = playerCar.baseWidth * scale;
 
             if (racerState.dodged > 0 && racerState.dodged % 10 === 0) {
-                //racerState.speed = Math.min(520, racerState.speed + 24); // Handled by baseSpeed
                 if (racerMessageEl) racerMessageEl.textContent = `Boost! Speed increased.`;
             }
-            return false;
+            return false; // Remove obstacle
         }
-        return true;
+        return true; // Keep obstacle
     });
 
-    // --- ### MOD: Update radial speed lines ### ---
-    const speedMod = (racerState.speed / 180); // Speed multiplier
+    // Update radial speed lines
+    const speedMod = (racerState.speed / 180); // Speed modifier
     racerState.speedLines.forEach(line => {
-        line.dist += traveled * 0.08 * line.speed * speedMod; // Move outward
-        line.length = 18 + Math.random() * 28 + line.dist * 0.1; // Get longer as they move out
+        line.dist += traveled * 0.08 * line.speed * speedMod;
+        line.length = 18 + Math.random() * 28 + line.dist * 0.1;
 
-        if (line.dist > canvasWidth) { // Reset if too far
+        if (line.dist > canvasWidth) {
+            // Reset line
             line.dist = 5 + Math.random() * 10;
             line.angle = Math.random() * Math.PI * 2;
             line.speed = 0.5 + Math.random() * 0.5;
         }
     });
-    ensureSpeedLines(); // Call this
-    // --- ### END MOD ### ---
+    ensureSpeedLines();
     
-    // --- ### NEW: Update stars ### ---
+    // --- ### NEW: Update starfield ### ---
     racerState.stars.forEach(star => {
-        star.y += traveled * star.speed; // Move stars
-        if (star.y > canvasHeight) {
-            star.y = horizonY;
-            star.x = Math.random() * canvasWidth * 2 - canvasWidth;
+        star.z -= traveled * 0.1; // Move star towards player
+        if (star.z <= 0.1) { // If star is at or behind camera
+            // Reset star to the back
+            star.x = (Math.random() - 0.5) * canvasWidth * 2;
+            star.y = (Math.random() - 0.5) * canvasHeight;
+            star.z = canvasWidth; // Reset to max depth
         }
     });
-    ensureStars();
+    ensureStars(); // Ensure pool is full
     // --- ### END NEW ### ---
 
-    // --- ### MOD: Spawn new engine trail particles ### ---
-    if (racerState.running) {
-        const trailX = playerCar.x + (Math.random() - 0.5) * (playerCar.width * 0.2);
-        const trailY = playerCar.y + playerCar.height - 10; // Start higher
-        const life = 15 + Math.random() * 20;
+    // --- ### NEW: Update Camera Shake ### ---
+    // Target intensity based on speed (0 to 1 ratio)
+    const speedRatio = (racerState.speed - 180) / (520 - 180); 
+    const targetIntensity = speedRatio * 0.2; // Max intensity from speed (very subtle)
+    
+    // If we have a big shake (from crash), let it decay.
+    // Otherwise, just use the target speed intensity.
+    if (racerState.shake.intensity > targetIntensity) {
+        racerState.shake.intensity = Math.max(targetIntensity, racerState.shake.intensity * 0.92); // Decay
+    } else {
+        racerState.shake.intensity = targetIntensity; // Follow speed
+    }
+
+    if (racerState.shake.intensity > 0.01) {
+        // Generate random shake offsets
+        racerState.shake.x = (Math.random() - 0.5) * racerState.shake.intensity * 10;
+        racerState.shake.y = (Math.random() - 0.5) * racerState.shake.intensity * 10;
+    } else {
+        racerState.shake.x = 0;
+        racerState.shake.y = 0;
+    }
+    // --- ### END NEW ### ---
+
+
+    // --- ### MOD: Spawn sleek trail particles ### ---
+    if (racerState.running && Math.random() > 0.3) { // Spawn frequently
+        const carAngle = racerState.carSway + racerState.carTilt;
+        // Calculate spawn position at the "back" of the tilted car
+        const spawnX = playerCar.x + Math.sin(carAngle) * (playerCar.height * 0.5);
+        const spawnY = playerCar.y + playerCar.height - 10;
+        
         racerState.particles.push({
-             type: 'trail', x: trailX, y: trailY,
-             vx: (Math.random() - 0.5) * 0.4, vy: 2.0 + Math.random() * 1.5,
-             life: life, maxLife: life, size: 1 + Math.random() * 2,
-             color: `rgba(50, 220, 255, ${0.4 + Math.random() * 0.3})`
+            type: 'trail',
+            x: spawnX + (Math.random() - 0.5) * 10,
+            y: spawnY + (Math.random() - 0.5) * 5,
+            vx: (Math.random() - 0.5) * 0.5, // Initial horizontal drift
+            vy: 2.0 + Math.random() * 1.0, // Move "down" the screen (visually up)
+            life: 25 + Math.random() * 15,
+            maxLife: 40, // Store max life for alpha calculation
+            size: 2 + Math.random() * 2,
         });
     }
     // --- ### END MOD ### ---
 
 
-    // --- ### MOD: Collision Check with Scaling ### ---
+    // Collision Check
     const carCenter = playerCar.x;
     const carLeft = carCenter - playerCar.width / 2;
     const carRight = carCenter + playerCar.width / 2;
@@ -1120,14 +1149,12 @@ function updateRacer(delta) {
     const carBottom = playerCar.y + playerCar.height;
 
     for (const ob of racerState.obstacles) {
-        // --- Calculate scaled properties ---
         const scale = getPerspectiveScale(ob.y);
         const scaledHeight = obstacleHeight * scale;
         const obTop = ob.y - scaledHeight;
         const obBottom = ob.y;
 
-        // --- ### MOD: Calculate gap X based on perspective ### ---
-        // --- ### MOD: Use new road width constants ### ---
+        // --- ### MOD: Use wider road width constants ### ---
         const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
         const scaledLaneWidth = roadWidthAtPlayer / 3;
         const scaledGapCenter = (canvasWidth / 2) + (scaledLaneWidth * ob.gapLane);
@@ -1136,23 +1163,25 @@ function updateRacer(delta) {
 
         const gapLeft = scaledGapCenter - scaledGapWidth / 2;
         const gapRight = scaledGapCenter + scaledGapWidth / 2;
-        // --- End scaling calculations ---
 
-        if (carBottom <= obTop || carTop >= obBottom) continue;
+        // Simple AABB collision check
+        if (carBottom <= obTop || carTop >= obBottom) continue; // No Y-overlap
 
+        // Check for X-overlap (collision)
         if (carLeft < gapLeft || carRight > gapRight) {
+            // CRASH!
             if (racerState.animationFrame) {
                 cancelAnimationFrame(racerState.animationFrame);
                 racerState.animationFrame = null;
             }
             saveRacerHighScore();
-            spawnCrash(playerCar.x, playerCar.y + playerCar.height / 2);
+            spawnCrash(playerCar.x, playerCar.y + playerCar.height / 2); // This will trigger shake
             racerState.running = false;
-            startCrashAnimation();
+            startCrashAnimation(); // This will animate the crash effects
             if (racerMessageEl) {
                 racerMessageEl.textContent = 'Crash! Reset to roll out again.';
             }
-            return;
+            return; // Stop update loop
         }
     }
 }
@@ -1160,23 +1189,16 @@ function updateRacer(delta) {
 function renderRacer(delta) {
     if (!racerCtx) return;
 
-    racerCtx.save();
+    racerCtx.save(); // Save context state
     
-    // --- ### NEW: Subtle speed shake ### ---
-    if(racerState.running) {
-        const speedShake = (racerState.speed / 520) * 0.75; // Max 0.75px shake
-        racerCtx.translate((Math.random() - 0.5) * speedShake, (Math.random() - 0.5) * speedShake);
-    }
-    // --- ### END NEW ### ---
+    applyShakeTransform(); // <-- ### NEW: Apply camera shake translation ###
     
-    applyShakeTransform(); // Crash shake
-
     // Draw world
-    drawBackground();
-    drawSpeedLines(); // <-- ### MOD: Draws new radial lines
+    drawBackground(); // Starfield and grid
+    drawSpeedLines(); // Radial lines
 
-    // --- ### MOD: REMOVED CLIPPING ### ---
-    // This allows obstacles to be drawn from the VP
+    // --- ### FIX: Removed clipping region ### ---
+    // This allows obstacles to smoothly scale up from the horizon
     
     // --- Draw glow layer *under* main objects
     drawGlow();
@@ -1184,7 +1206,7 @@ function renderRacer(delta) {
     // Draw main objects
     drawObstacles();
 
-    // --- ### END MOD ### ---
+    // --- ### END FIX ### ---
 
     drawPlayer(delta); // Draw player on top of road
 
@@ -1195,29 +1217,28 @@ function renderRacer(delta) {
     if (racerState.flash.alpha > 0) {
         racerCtx.fillStyle = `rgba(255,255,255,${racerState.flash.alpha})`;
         racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
-        racerState.flash.alpha *= 0.92;
+        racerState.flash.alpha *= 0.92; // Decay flash
         if (racerState.flash.alpha < 0.02) racerState.flash.alpha = 0;
     }
-    racerCtx.restore();
+    
+    racerCtx.restore(); // Restore context, removing shake transform
 }
 
 function gameLoop(timestamp) {
-    // <-- ### MOD: Stop game loop if crashed ### ---
     if (!racerState.running && !racerState.crashed) return;
 
     const delta = timestamp - (racerState.lastTimestamp || timestamp);
     racerState.lastTimestamp = timestamp;
 
-    if (racerState.running) { // Only update if not crashed
-        updateRacer(delta);
+    if (racerState.running) {
+        updateRacer(delta); // Update game logic
     }
 
-    renderRacer(delta); // Always render (for crash animation)
+    renderRacer(delta); // Render the game state
+    updateHud(); // Update UI text
 
-    updateHud();
-
-    // <-- ### MOD: Stop requesting frames if crashed ### ---
     if (racerState.running) {
+        // Continue loop if running
         racerState.animationFrame = requestAnimationFrame(gameLoop);
     }
 }
@@ -1225,20 +1246,17 @@ function gameLoop(timestamp) {
 function startRacer() {
     if (racerState.running) return;
 
-    // If just reset from a crash, just start
     if (racerState.crashed) {
-        resetRacer();
+        resetRacer(); // Reset if starting from a crashed state
     }
 
     if (racerMessageEl) {
         racerMessageEl.textContent = 'Neon boost engaged!';
     }
     racerState.running = true;
-    racerState.crashed = false; // Ensure not crashed
+    racerState.crashed = false;
     racerState.lastTimestamp = performance.now();
     racerState.spawnTimer = racerState.spawnStartTime;
-
-    // --- Audio start removed ---
 
     if (racerState.animationFrame) {
         cancelAnimationFrame(racerState.animationFrame);
@@ -1247,7 +1265,7 @@ function startRacer() {
 }
 
 function pauseRacer() {
-    if (!racerState.running) return; // Can't pause if not running
+    if (!racerState.running) return;
     racerState.running = false;
     if (racerState.animationFrame) {
         cancelAnimationFrame(racerState.animationFrame);
@@ -1256,7 +1274,6 @@ function pauseRacer() {
     if (racerMessageEl) {
         racerMessageEl.textContent = 'Paused. Hit start to keep racing.';
     }
-    // --- Audio pause removed ---
 }
 
 function resetRacer() {
@@ -1266,54 +1283,60 @@ function resetRacer() {
     }
     pauseRacer();
 
-    // --- Audio reset removed ---
-
-    playerCar.lane = 0; // <-- ### MOD: Reset to center lane
+    // Reset player
+    playerCar.lane = 0;
     playerCar.baseWidth = laneWidth * 0.55;
     playerCar.width = playerCar.baseWidth;
-    playerCar.x = canvasWidth / 2; // <-- ### MOD: Reset to center X
+    playerCar.x = canvasWidth / 2;
     playerCar.height = 58;
 
+    // Reset game state
     racerState.speed = 180;
     racerState.distance = 0;
     racerState.dodged = 0;
-    racerState.speedLines = []; // <-- ### MOD: Reset new speed lines
-    racerState.stars = []; // <-- ### NEW: Reset stars
+    racerState.speedLines = [];
+    racerState.stars = []; // <-- ### NEW: Reset starfield ###
     racerState.particles = [];
     racerState.explosionParticles = [];
-    racerState.shake = { time: 0, intensity: 0 };
+    racerState.shake = { x: 0, y: 0, intensity: 0 }; // <-- ### NEW: Reset shake ###
     racerState.flash = { alpha: 0 };
     racerState.carSway = 0;
     racerState.carTilt = 0;
     racerState.edgeFlash = 0;
-    racerState.crashed = false; // <-- ### MOD: Reset crashed state
+    racerState.crashed = false;
 
+    // Reset spawners and pools
     resetObstacles();
-    ensureSpeedLines(); // <-- ### MOD: Init new speed lines
-    ensureStars(); // <-- ### NEW: Init stars
-    renderRacer(0); // Render a single frame
+    ensureSpeedLines();
+    ensureStars(); // <-- ### NEW: Init starfield ###
+    
+    // Initial render and UI update
+    renderRacer(0);
     updateHud();
     if (racerMessageEl) {
         racerMessageEl.textContent = 'Ready! Use ← and → to slide through the gaps.';
     }
 }
 
-// --- ### MOD: Lane shifting logic updated ### ---
 function shiftLane(offset) {
-    if (racerState.crashed) return; // <-- ### MOD: Don't allow steering if crashed
+    if (racerState.crashed) return;
 
+    // Move player lane, clamping between -1 and 1
     const nextLane = Math.min(1, Math.max(-1, playerCar.lane + offset));
-    if (nextLane === playerCar.lane) return;
+    if (nextLane === playerCar.lane) return; // No change
     playerCar.lane = nextLane;
+    
+    // If paused, re-render to show the new position
     if (!racerState.running) {
-        renderRacer(0); // Re-render to new position
+        renderRacer(0);
         updateHud();
     }
 }
 
 function handleKey(event) {
+    // Only respond if the racer modal is active
     if (!racerModal || racerModal.style.display !== 'flex') return;
-    if (racerState.crashed) return; // <-- ### MOD: Don't allow steering if crashed
+    if (racerState.crashed) return; // Don't allow movement when crashed
 
     if (event.key === 'ArrowLeft') {
         shiftLane(-1);
@@ -1325,7 +1348,6 @@ function handleKey(event) {
     }
 }
 
-// --- Functions to manage Racer high score ---
 function loadRacerHighScore() {
     racerState.mostGapsCleared = parseInt(localStorage.getItem('racer+mostGapsCleared')) || 0;
 }
@@ -1336,7 +1358,6 @@ function saveRacerHighScore() {
         localStorage.setItem('racer+mostGapsCleared', racerState.mostGapsCleared);
     }
 }
-// --- End of new functions ---
 
 function updateHud() {
     if (racerDistanceEl) racerDistanceEl.textContent = `Distance: ${Math.floor(racerState.distance)}m`;
@@ -1350,18 +1371,15 @@ function initRacerGame() {
     if (pauseRacerBtn) pauseRacerBtn.addEventListener('click', pauseRacer);
     if (resetRacerBtn) resetRacerBtn.addEventListener('click', resetRacer);
 
-    // --- Sound button logic removed ---
-
-    // --- Audio properties removed ---
-
+    // Ensure key listener is bound only once
     if (!document.__racerBound) {
         document.addEventListener('keydown', handleKey);
         document.__racerBound = true;
     }
 
     if (racerCanvas) {
-        loadRacerHighScore(); // Load high score on init
-        resetRacer();
+        loadRacerHighScore();
+        resetRacer(); // Perform initial setup
     }
 }
 
@@ -1785,11 +1803,6 @@ function drawInvaders() {
   invadersCtx.fillStyle = '#88FFFF';
   invadersCtx.fillText(`Level: ${state.level}`, invadersCanvas.width - 90, 18);
 
-  if (invadersMessageEl) {
-    invadersCtx.font = '14px Arial';
-    invadersCtx.fillStyle = '#FFD700';
-    invadersCtx.fillText(invadersMessageEl.textContent, 16, 35);
-  }
 }
 
 /* ============================
