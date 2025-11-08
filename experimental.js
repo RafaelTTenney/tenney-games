@@ -417,23 +417,26 @@ const laneWidth = racerCanvas ? racerCanvas.width / laneCount : 100;
 const horizonY = 120; // Y pixel of horizon
 const canvasWidth = racerCanvas ? racerCanvas.width : 340;
 const canvasHeight = racerCanvas ? racerCanvas.height : 520;
+// --- ### NEW: Define the "width" of the road at the bottom of the screen
+const roadWidthAtBottom = racerCanvas.width * 1.2;
 
 const playerCar = {
-    lane: 1,
+    lane: 0, // <-- ### MOD: Use -1, 0, 1 for lanes. Start at 0 (center).
     baseWidth: laneWidth * 0.55,
     width: laneWidth * 0.55,
     height: 58,
     y: racerCanvas ? racerCanvas.height - 90 : 410,
-    x: 0
+    x: racerCanvas ? racerCanvas.width / 2 : 170 // Start at center
 };
 
 const racerState = {
     running: false,
+    crashed: false, // <-- ### NEW: To stop game loop on crash
     lastTimestamp: 0,
     speed: 180,
     distance: 0,
     dodged: 0,
-    mostGapsCleared: 0, // <-- ### NEW: High score variable
+    mostGapsCleared: 0, 
     obstacles: [],
     speedLines: [],
     spawnTimer: 0, 
@@ -449,7 +452,6 @@ const racerState = {
     gapWidthTightenRate: 0.02,
 
     particles: [],
-    
     explosionParticles: [],
     laneLerpSpeed: 0.18,
     shake: { time: 0, intensity: 0 },
@@ -469,14 +471,8 @@ const racerState = {
 };
 
 const obstacleHeight = 60; // This will now be the *base* height at full scale
-const laneCenters = Array.from({ length: laneCount }, (_, i) => i * laneWidth + laneWidth / 2);
+// --- ### REMOVED: Old laneCenters
 // --- Sound Control Removed ---
-// ...
-// ...
-// ...
-// ...
-// ...
-// ...
 
 // --- ### NEW: Pseudo-3D Scaling Function ### ---
 /**
@@ -528,7 +524,7 @@ function spawnParticles(x, y, color, count = 12) {
 
 function spawnCrash(x, y) {
     // --- Sound calls removed ---
-    // --- `crashed` state removed ---
+    racerState.crashed = true; // <-- ### NEW: Set crashed state
 
     // shards
     const shardCount = 18 + Math.floor(Math.random() * 8);
@@ -653,7 +649,8 @@ function drawPerspectiveGrid() {
     const vpX = racerCanvas.width / 2;
     const vpY = 120;
     const bottomY = racerCanvas.height;
-    racerCtx.strokeStyle = 'rgba(28, 255, 255, 0.08)';
+    // --- ### MOD: Brighter lines ### ---
+    racerCtx.strokeStyle = 'rgba(28, 255, 255, 0.25)'; // Was 0.08
     racerCtx.lineWidth = 2;
     const roadWidthTop = racerCanvas.width * 0.1;
     const roadWidthBottom = racerCanvas.width * 1.2;
@@ -692,12 +689,18 @@ function drawGlow() {
     racerState.obstacles.forEach(ob => {
         // --- Calculate scaled properties ---
         const scale = getPerspectiveScale(ob.y);
-        const scaledHeight = obstacleHeight * scale;
-        const top = ob.y - (scaledHeight - obstacleHeight); // Adjust top based on new height
+        if (scale === 0) return; // Don't draw if above horizon
         
-        // Scale the center position relative to the vanishing point
-        const scaledGapCenter = (ob.gapCenter - (canvasWidth / 2)) * scale + (canvasWidth / 2);
+        const scaledHeight = obstacleHeight * scale;
+        const top = ob.y - scaledHeight; // Top edge of the obstacle
+        
+        // --- ### MOD: Calculate gap X based on perspective ### ---
+        const scaledRoadWidth = (roadWidthAtBottom - (canvasWidth / 2)) * scale;
+        const scaledLaneWidth = scaledRoadWidth / 3;
+        const scaledGapCenter = (canvasWidth / 2) + (scaledLaneWidth * ob.gapLane);
         const scaledGapWidth = ob.gapWidth * scale;
+        // --- End gap calculation ---
+
         const gapLeft = scaledGapCenter - scaledGapWidth / 2;
         const gapRight = scaledGapCenter + scaledGapWidth / 2;
         // --- End scaling calculations ---
@@ -713,7 +716,6 @@ function drawGlow() {
     });
 
     // 2. Player Glow (No changes, car does not scale)
-    // --- `crashed` check removed ---
     racerCtx.shadowColor = '#19d7ff';
     racerCtx.translate(playerCar.x, playerCar.y + playerCar.height * 0.75);
     racerCtx.rotate(racerState.carSway + racerState.carTilt);
@@ -734,11 +736,17 @@ function drawGlow() {
     racerCtx.restore();
 }
 
+// --- ### MOD: Player draw logic updated ### ---
 function drawPlayer(delta) {
     if (!racerCtx) return;
-    // --- `crashed` check removed ---
 
-    const targetX = laneCenters[playerCar.lane];
+    // --- ### MOD: Calculate targetX based on perspective ### ---
+    const playerScale = getPerspectiveScale(playerCar.y); // Scale at player's Y
+    const scaledRoadWidth = (roadWidthAtBottom - (canvasWidth / 2)) * playerScale;
+    const scaledLaneWidth = scaledRoadWidth / 3;
+    const targetX = (canvasWidth / 2) + (scaledLaneWidth * playerCar.lane);
+    // --- End targetX calculation ---
+
     const effectiveDelta = delta || 16.67; 
     const lerpAmount = 1 - Math.pow(1 - racerState.laneLerpSpeed, effectiveDelta / 16.67);
     playerCar.x += (targetX - playerCar.x) * lerpAmount;
@@ -797,13 +805,19 @@ function drawObstacles() {
     racerState.obstacles.forEach(ob => {
         // --- Calculate scaled properties ---
         const scale = getPerspectiveScale(ob.y);
+        if (scale === 0) return; // Don't draw if above horizon
+
         const scaledHeight = obstacleHeight * scale;
         // Adjust top so the *bottom* of the obstacle moves with `ob.y`
         const top = ob.y - scaledHeight; 
         
-        // Scale the center position relative to the vanishing point
-        const scaledGapCenter = (ob.gapCenter - (canvasWidth / 2)) * scale + (canvasWidth / 2);
+        // --- ### MOD: Calculate gap X based on perspective ### ---
+        const scaledRoadWidth = (roadWidthAtBottom - (canvasWidth / 2)) * scale;
+        const scaledLaneWidth = scaledRoadWidth / 3;
+        const scaledGapCenter = (canvasWidth / 2) + (scaledLaneWidth * ob.gapLane);
         const scaledGapWidth = ob.gapWidth * scale;
+        // --- End gap calculation ---
+
         const gapLeft = scaledGapCenter - scaledGapWidth / 2;
         const gapRight = scaledGapCenter + scaledGapWidth / 2;
         
@@ -828,25 +842,24 @@ function drawObstacles() {
 }
 
 function spawnObstacle() {
-    const gapLane = Math.floor(Math.random() * laneCount);
+    // --- ### MOD: Store lane (-1, 0, 1) instead of center ### ---
+    const lanes = [-1, 0, 1];
+    const gapLane = lanes[Math.floor(Math.random() * lanes.length)];
     const colorHue = Math.floor(Math.random() * 360);
 
     const currentGapMultiplier = Math.max(
         racerState.gapWidthMinMultiplier,
         racerState.gapWidthStartMultiplier - (racerState.dodged * racerState.gapWidthTightenRate)
     );
-    let gapWidth = playerCar.width * currentGapMultiplier;
-    gapWidth = Math.max(gapWidth, playerCar.width + 6);
-    gapWidth = Math.min(gapWidth, Math.max(60, racerCanvas.width - 24));
-
-    let gapCenter = laneCenters[gapLane];
-    const half = gapWidth / 2;
-    gapCenter = Math.max(half + 8, Math.min(racerCanvas.width - half - 8, gapCenter));
+    // Base width is now based on car's base width, not lane width
+    let gapWidth = playerCar.baseWidth * currentGapMultiplier;
+    gapWidth = Math.max(gapWidth, playerCar.baseWidth + 20); // Ensure gap is always wider than car
+    gapWidth = Math.min(gapWidth, 250); // Max gap width in "world" units
 
     racerState.obstacles.push({
         y: horizonY, // <-- ### MOD: Spawn at horizon
-        gapCenter,
-        gapWidth,
+        gapLane: gapLane, // <-- ### MOD: Store lane
+        gapWidth: gapWidth, // <-- ### MOD: Store base gap width
         color: `hsl(${colorHue}, 90%, 60%)`,
         hue: colorHue 
     });
@@ -898,7 +911,7 @@ function startCrashAnimation() {
     const loop = (timestamp) => {
         const delta = timestamp - (racerState.lastCrashTimestamp || timestamp);
         racerState.lastCrashTimestamp = timestamp;
-        renderRacer(delta);
+        renderRacer(delta); // Will re-render the static car + particles
         const activeParticles = (racerState.explosionParticles.length > 0) || (racerState.particles.length > 0);
         const activeShake = racerState.shake.time > 0;
         const activeFlash = racerState.flash.alpha > 0.02;
@@ -914,7 +927,7 @@ function startCrashAnimation() {
 }
 
 function updateRacer(delta) {
-    if (!racerCanvas) return;
+    if (!racerCanvas || racerState.crashed) return; // <-- ### MOD: Stop update if crashed
     
     const speedInPxPerSecond = racerState.speed * 1.5;
     const traveled = (speedInPxPerSecond * (delta / 1000));
@@ -923,8 +936,6 @@ function updateRacer(delta) {
     racerState.distance += traveled;
     
     // --- Engine pitch update removed ---
-    // ...
-    // ...
     
     racerState.spawnTimer -= delta;
 
@@ -941,13 +952,15 @@ function updateRacer(delta) {
     racerState.obstacles = racerState.obstacles.filter(ob => {
         if (ob.y > racerCanvas.height + obstacleHeight) { // Wait until it's fully off-screen
             racerState.dodged += 1;
-            spawnWhooshLines(ob.gapCenter, racerCanvas.height - 40);
+            // Spawn whoosh near center
+            spawnWhooshLines(canvasWidth / 2, racerCanvas.height - 40);
             // --- playSound removed ---
             
             // --- NEW --- Add small dodge-shake
             racerState.shake.time = 8;
             racerState.shake.intensity = 2;
             
+            // Player width scaling (keep this, it looks cool)
             const scale = Math.min(1.3, 1 + racerState.dodged * 0.02);
             playerCar.width = playerCar.baseWidth * scale;
 
@@ -963,9 +976,12 @@ function updateRacer(delta) {
     // Move speed lines
     racerState.speedLines.forEach(line => {
         line.y += traveled * 1.6;
+        if (line.y > canvasHeight) {
+            line.y = 0;
+            line.x = 60 + Math.random() * (racerCanvas.width - 120);
+        }
     });
-    racerState.speedLines = racerState.speedLines.filter(line => line.y < racerCanvas.height + 40);
-    ensureSpeedLines();
+    ensureSpeedLines(); // Only runs if array is empty
 
     // Spawn engine trail particles
     if (racerState.running) {
@@ -993,9 +1009,13 @@ function updateRacer(delta) {
         const obTop = ob.y - scaledHeight;
         const obBottom = ob.y;
         
-        // Scale the center position relative to the vanishing point
-        const scaledGapCenter = (ob.gapCenter - (canvasWidth / 2)) * scale + (canvasWidth / 2);
+        // --- ### MOD: Calculate gap X based on perspective ### ---
+        const scaledRoadWidth = (roadWidthAtBottom - (canvasWidth / 2)) * scale;
+        const scaledLaneWidth = scaledRoadWidth / 3;
+        const scaledGapCenter = (canvasWidth / 2) + (scaledLaneWidth * ob.gapLane);
         const scaledGapWidth = ob.gapWidth * scale;
+        // --- End gap calculation ---
+
         const gapLeft = scaledGapCenter - scaledGapWidth / 2;
         const gapRight = scaledGapCenter + scaledGapWidth / 2;
         // --- End scaling calculations ---
@@ -1007,12 +1027,11 @@ function updateRacer(delta) {
                 cancelAnimationFrame(racerState.animationFrame);
                 racerState.animationFrame = null;
             }
-            saveRacerHighScore(); // <-- ### NEW: Check and save high score on crash
+            saveRacerHighScore(); 
             spawnCrash(playerCar.x, playerCar.y + playerCar.height / 2);
             racerState.running = false;
             startCrashAnimation();
             if (racerMessageEl) {
-                // Ensure no line break
                 racerMessageEl.textContent = 'Crash! Reset to roll out again.';
             }
             return;
@@ -1034,7 +1053,8 @@ function renderRacer(delta) {
     // This hides the obstacles popping in at y=120
     racerCtx.save();
     racerCtx.beginPath();
-    racerCtx.rect(0, horizonY + 1, racerCanvas.width, racerCanvas.height - horizonY - 1);
+    // Start clipping just below horizon line to avoid artifacts
+    racerCtx.rect(0, horizonY + 2, racerCanvas.width, racerCanvas.height - horizonY - 2); 
     racerCtx.clip();
 
     // --- Draw glow layer *under* main objects
@@ -1046,7 +1066,7 @@ function renderRacer(delta) {
     racerCtx.restore(); // Restore from clipping
     // --- ### End of clip ### ---
 
-    drawPlayer(delta);
+    drawPlayer(delta); // Draw player on top of road
 
     // Draw effects on top
     drawParticles();
@@ -1062,36 +1082,57 @@ function renderRacer(delta) {
 }
 
 function gameLoop(timestamp) {
-    if (!racerState.running) return;
-    const delta = timestamp - racerState.lastTimestamp;
+    // <-- ### MOD: Stop game loop if crashed ### ---
+    if (!racerState.running && !racerState.crashed) return; 
+    
+    const delta = timestamp - (racerState.lastTimestamp || timestamp);
     racerState.lastTimestamp = timestamp;
-    updateRacer(delta);
-    renderRacer(delta);
+    
+    if (racerState.running) { // Only update if not crashed
+        updateRacer(delta);
+    }
+    
+    renderRacer(delta); // Always render (for crash animation)
+    
     updateHud();
-    if (racerState.running) {
+
+    // <-- ### MOD: Stop requesting frames if crashed ### ---
+    if (racerState.running) { 
         racerState.animationFrame = requestAnimationFrame(gameLoop);
     }
 }
 
 function startRacer() {
     if (racerState.running) return;
+    
+    // If just reset from a crash, just start
+    if (racerState.crashed) {
+        resetRacer();
+    }
+    
     if (racerMessageEl) {
         racerMessageEl.textContent = 'Neon boost engaged!';
     }
     racerState.running = true;
+    racerState.crashed = false; // Ensure not crashed
     racerState.lastTimestamp = performance.now();
     racerState.spawnTimer = racerState.spawnStartTime; 
     
     // --- Audio start removed ---
-    // ...
     
+    if (racerState.animationFrame) {
+        cancelAnimationFrame(racerState.animationFrame);
+    }
     racerState.animationFrame = requestAnimationFrame(gameLoop);
 }
 
 function pauseRacer() {
-    if (!racerState.running) return;
+    if (!racerState.running) return; // Can't pause if not running
     racerState.running = false;
-    if (racerState.animationFrame) cancelAnimationFrame(racerState.animationFrame);
+    if (racerState.animationFrame) {
+        cancelAnimationFrame(racerState.animationFrame);
+        racerState.animationFrame = null;
+    }
     if (racerMessageEl) {
         racerMessageEl.textContent = 'Paused. Hit start to keep racing.';
     }
@@ -1106,13 +1147,11 @@ function resetRacer() {
     pauseRacer();
 
     // --- Audio reset removed ---
-    // ...
-    // ...
 
-    playerCar.lane = 1;
+    playerCar.lane = 0; // <-- ### MOD: Reset to center lane
     playerCar.baseWidth = laneWidth * 0.55;
     playerCar.width = playerCar.baseWidth;
-    playerCar.x = laneCenters[playerCar.lane];
+    playerCar.x = canvasWidth / 2; // <-- ### MOD: Reset to center X
     playerCar.height = 58;
     
     racerState.speed = 180;
@@ -1126,30 +1165,33 @@ function resetRacer() {
     racerState.carSway = 0;
     racerState.carTilt = 0;
     racerState.edgeFlash = 0;
-    // --- `crashed` state removed ---
+    racerState.crashed = false; // <-- ### MOD: Reset crashed state
     
     resetObstacles();
     ensureSpeedLines();
-    renderRacer(); 
+    renderRacer(0); // Render a single frame
     updateHud();
     if (racerMessageEl) {
-        // Ensure no line break
         racerMessageEl.textContent = 'Ready! Use ← and → to slide through the gaps.';
     }
 }
 
+// --- ### MOD: Lane shifting logic updated ### ---
 function shiftLane(offset) {
-    const nextLane = Math.min(laneCount - 1, Math.max(0, playerCar.lane + offset));
+    if (racerState.crashed) return; // <-- ### MOD: Don't allow steering if crashed
+    
+    const nextLane = Math.min(1, Math.max(-1, playerCar.lane + offset));
     if (nextLane === playerCar.lane) return;
     playerCar.lane = nextLane;
     if (!racerState.running) {
-        renderRacer(); 
+        renderRacer(0); // Re-render to show new position
         updateHud();
     }
 }
 
 function handleKey(event) {
     if (!racerModal || racerModal.style.display !== 'flex') return;
+    if (racerState.crashed) return; // <-- ### MOD: Don't allow steering if crashed
     
     if (event.key === 'ArrowLeft') {
         shiftLane(-1);
@@ -1161,7 +1203,7 @@ function handleKey(event) {
     }
 }
 
-// --- NEW: Functions to manage Racer high score ---
+// --- Functions to manage Racer high score ---
 function loadRacerHighScore() {
     racerState.mostGapsCleared = parseInt(localStorage.getItem('racer+mostGapsCleared')) || 0;
 }
@@ -1177,7 +1219,7 @@ function saveRacerHighScore() {
 function updateHud() {
     if (racerDistanceEl) racerDistanceEl.textContent = `Distance: ${Math.floor(racerState.distance)}m`;
     if (racerSpeedEl) racerSpeedEl.textContent = `Speed: ${Math.floor(racerState.speed)} mph`;
-    if (racerObstaclesEl) racerObstaclesEl.textContent = `Gaps cleared: ${racerState.dodged} | High: ${racerState.mostGapsCleared}`; // <-- ### MOD: Show high score
+    if (racerObstaclesEl) racerObstaclesEl.textContent = `Gaps cleared: ${racerState.dodged} | High: ${racerState.mostGapsCleared}`; 
 }
 
 // --- INIT RACER ---
@@ -1187,19 +1229,16 @@ function initRacerGame() {
     if (resetRacerBtn) resetRacerBtn.addEventListener('click', resetRacer);
     
     // --- Sound button logic removed ---
-    // ...
-    // ...
     
     // --- Audio properties removed ---
-    // ...
-    // ...
+    
     if (!document.__racerBound) {
         document.addEventListener('keydown', handleKey);
         document.__racerBound = true;
     }
 
     if (racerCanvas) {
-        loadRacerHighScore(); // <-- ### NEW: Load high score on init
+        loadRacerHighScore(); // Load high score on init
         resetRacer();
     }
 }
