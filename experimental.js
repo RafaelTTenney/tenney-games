@@ -4,12 +4,14 @@
 const tetrisModal = document.getElementById('tetrisModal');
 const runTetrisBtn = document.getElementById('runTetrisBtn');
 const modalCloseBtn = document.getElementById('modalCloseBtn');
+
 // Get game elements (INSIDE the modal)
 const canvas = document.getElementById('game');
 const ctx = canvas ? canvas.getContext('2d') : null;
 const scoreP = document.getElementById('score');
 const startBtn = document.getElementById('startBtn');
 const controlsBtn = document.getElementById('controlsBtn');
+
 // --- NEON RACER SCRIPT (ELEMENTS) ---
 // Get modal elements (Racer)
 const racerModal = document.getElementById('racerModal');
@@ -18,8 +20,7 @@ const racerModalCloseBtn = document.getElementById('racerModalCloseBtn');
 
 // Get Racer game elements (INSIDE the modal)
 const racerCanvas = document.getElementById('racer-canvas');
-const racerCtx = racerCanvas ?
-racerCanvas.getContext('2d') : null;
+const racerCtx = racerCanvas ? racerCanvas.getContext('2d') : null;
 const racerDistanceEl = document.getElementById('racer-distance');
 const racerSpeedEl = document.getElementById('racer-speed');
 const racerObstaclesEl = document.getElementById('racer-obstacles');
@@ -29,6 +30,7 @@ const pauseRacerBtn = document.getElementById('pauseRacerBtn');
 const resetRacerBtn = document.getElementById('resetRacerBtn');
 // --- Audio Elements Removed ---
 // --- Audio Elements Removed ---
+
 // --- FULL INVADERS SCRIPT (ELEMENTS) ---
 const invadersModal = document.getElementById('invadersModal');
 const runInvadersBtn = document.getElementById('runInvadersBtn');
@@ -60,13 +62,13 @@ function closeModal() {
   // Stop the game when closing
   if (game) {
     clearInterval(game);
-game = null;
+    game = null;
   }
   block = null; // Clear active block
   // Clear canvas
   if (ctx) {
     ctx.fillStyle = '#050505';
-ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 }
 
@@ -96,7 +98,7 @@ function closeRacerModal() {
     racerModal.style.display = 'none';
     if (typeof pauseRacer === 'function') {
         pauseRacer();
-}
+    }
 }
 
 if (racerModalCloseBtn) racerModalCloseBtn.addEventListener('click', closeRacerModal);
@@ -124,7 +126,7 @@ function closeInvadersModal() {
   invadersModal.style.display = 'none';
   if (typeof stopInvaders === 'function') {
     stopInvaders();
-}
+  }
 }
 
 if (invadersModalCloseBtn) invadersModalCloseBtn.addEventListener('click', closeInvadersModal);
@@ -150,7 +152,7 @@ let highScore;
 // High score (localStorage version)
 function loadHighScore() {
   highScore = parseInt(localStorage.getItem('tetris+HighScore')) || 0;
-if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
+  if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
 }
 
 function saveHighScore() {
@@ -161,10 +163,10 @@ function saveHighScore() {
 // In-game variables
 let block;
 let rows;
-let game;
-// This will hold the setInterval ID
+let game; // This will hold the setInterval ID
 let count;
 let currentLevel = 0;
+
 const colorPalettes = [
   { fill: '#00FFFF', stroke: '#33FFFF', shadow: '#00FFFF' }, // Level 0 (Cyan)
   { fill: '#FF00FF', stroke: '#FF33FF', shadow: '#FF00FF' }, // Level 1 (Magenta)
@@ -173,10 +175,10 @@ const colorPalettes = [
   { fill: '#FFFF00', stroke: '#FFFF33', shadow: '#FFFF00' }, // Level 4 (Yellow)
   { fill: '#9D00FF', stroke: '#8C00E6', shadow: '#9D00FF' }, // Level 5 (Purple)
   { fill: '#FD1C03', stroke: '#E41903', shadow: '#FD1C03' }, // Level 6 (Red)
-  { fill: '#FF69B4', stroke: 
-'#E6529E', shadow: '#FF69B4' }, // Level 7 (Pink)
+  { fill: '#FF69B4', stroke: '#E6529E', shadow: '#FF69B4' }, // Level 7 (Pink)
   { fill: '#F0F0F0', stroke: '#D9D9D9', shadow: '#F0F0F0' }  // Level 8 (White)
 ];
+
 // Block types
 const all_blocks = {
   0: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]],
@@ -192,13 +194,14 @@ const all_blocks = {
   10: [[0, 0, 1], [1, 1, 1], [1, 0, 0]], 
   11: [[1, 1, 1], [0, 1, 0], [0, 1, 0]] 
 };
+
 function start() {
   rows = [];
   for (let i = 0; i < 20; i++) {
     let row = [];
-for (let x = 0; x < 10; x++) {
+    for (let x = 0; x < 10; x++) {
       row.push(0);
-}
+    }
     rows.push(row);
   }
   score = 0;
@@ -206,18 +209,18 @@ for (let x = 0; x < 10; x++) {
   loadHighScore(); 
   count = 10;
   if (game) clearInterval(game);
-game = setInterval(drawFrame, speed);
+  game = setInterval(drawFrame, speed);
   if (startBtn) startBtn.textContent = 'Restart';
 }
 
 function rotate() {
   if (!block) return;
   block[0] = transpose(block[0]);
-block[0] = reverse(block[0]);
+  block[0] = reverse(block[0]);
   if (isColliding(block)) {
     block[0] = reverse(block[0]);
     block[0] = transpose(block[0]);
-}
+  }
 }
 
 function moveRight() {
@@ -235,9 +238,9 @@ function moveLeft() {
 function transpose(L) {
   let final = [];
   for (let i = 0; i < L[0].length; i++) final.push([]);
-for (let i = 0; i < L.length; i++) {
+  for (let i = 0; i < L.length; i++) {
     for (let x = 0; x < L[i].length; x++) final[x].push(L[i][x]);
-}
+  }
   return final;
 }
 
@@ -254,13 +257,12 @@ function isColliding(B) {
           (B[1] + x) < 0 || 
           (B[1] + x) >= 10 || 
           (B[2] + y) >= 20 
-        
-) {
+        ) {
           return true;
-}
+        }
         if (rows[B[2] + y] && rows[B[2] + y][B[1] + x] === 1) {
           return true;
-}
+        }
       }
     }
   }
@@ -271,62 +273,64 @@ function drawFrame() {
   if (!ctx) return; // Don't run if canvas isn't found
   
   if (!block) {
-    let blockPoolSize = 7 + currentLevel;
-if (blockPoolSize > 12) blockPoolSize = 12; // Cap is 12 (0-11)
+    let blockPoolSize = 7 + currentLevel; 
+    if (blockPoolSize > 12) blockPoolSize = 12; // Cap is 12 (0-11)
     
     let newBlockIndex = Math.floor(Math.random() * blockPoolSize);
-block = [all_blocks[newBlockIndex], 4, 0];
+    block = [all_blocks[newBlockIndex], 4, 0];
 
     if (isColliding(block)) {
       clearInterval(game);
       game = null;
-if (startBtn) startBtn.textContent = 'Start';
+      if (startBtn) startBtn.textContent = 'Start';
       if (score > highScore) {
         alert('Game Over! New high score: ' + score);
-highScore = score;
+        highScore = score;
         saveHighScore();
       } else {
         alert('Game Over! Score: ' + score);
-}
+      }
       return; 
     }
     return;
   }
   
   ctx.fillStyle = '#050505';
-ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   
   if (count === 0 || (fastFall && (count % 2 === 0))) {
     count = 10;
-block[2] += 1; 
+    block[2] += 1; 
     
     if (isColliding(block)) {
-      block[2] -= 1;
-for (let y = 0; y < block[0].length; y++) {
+      block[2] -= 1; 
+      
+      for (let y = 0; y < block[0].length; y++) {
         for (let x = 0; x < block[0][y].length; x++) {
           if (block[0][y][x] === 1) {
             if (rows[block[2] + y]) {
                 rows[block[2] + y][block[1] + x] = 1;
-}
+            }
           }
         }
       }
       
-      block = null;
-for (let i = 0; i < 20; i++) {
+      block = null; 
+      
+      for (let i = 0; i < 20; i++) {
         if (rows[i] && !rows[i].some(b => b === 0)) {
-          rows.splice(i, 1);
-let row = []
+          rows.splice(i, 1); 
+          
+          let row = []
           for (let x = 0; x < 10; x++) row.push(0);
-rows.unshift(row);
+          rows.unshift(row);
           
           score += 10;
           
-          let newLevel = Math.floor(score / 50);
-//potentially 100 points per level
+          let newLevel = Math.floor(score / 50); //potentially 100 points per level
           if (newLevel > currentLevel) {
               currentLevel = newLevel;
-console.log("Level up! Now on level " + currentLevel);
+              console.log("Level up! Now on level " + currentLevel);
           }
           
           if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
@@ -337,37 +341,36 @@ console.log("Level up! Now on level " + currentLevel);
   }
 
   let RaB = rows.map(row => [...row]);
-if (block) {
+  if (block) {
     for (let y = 0; y < block[0].length; y++) {
       for (let x = 0; x < block[0][y].length; x++) {
         if (block[0][y][x] === 1) {
           if (RaB[block[2] + y]) {
              RaB[block[2] + y][block[1] + x] = 1;
-}
+          }
         }
       }
     }
   }
 
   let palette = colorPalettes[currentLevel % colorPalettes.length];
-ctx.fillStyle = palette.fill;
+  ctx.fillStyle = palette.fill;
   ctx.strokeStyle = palette.stroke;
   ctx.lineWidth = 1;
   ctx.shadowColor = palette.shadow;
   ctx.shadowBlur = 5;
+
 // Draw the blocks with a larger separation
-  const size = box - 3;
-// New size (e.g., 21px)
-  const offset = 1.5;
-// Offset to center the 21px block in the 24px cell
+  const size = box - 3; // New size (e.g., 21px)
+  const offset = 1.5;   // Offset to center the 21px block in the 24px cell
 
   for (let y = 0; y < RaB.length; y++) {
     for (let x = 0; x < RaB[y].length; x++) {
       if (RaB[y][x] === 1) {
         // Use new size and offset
         ctx.fillRect(x * box + offset, y * box + offset, size, size);
-ctx.strokeRect(x * box + offset, y * box + offset, size, size);
-}
+        ctx.strokeRect(x * box + offset, y * box + offset, size, size);
+      }
     }
   }
   
@@ -390,16 +393,18 @@ document.addEventListener('keydown', event => {
   if (event.code === 'Space') rotate();
   if (event.key === 'ArrowDown') fastFall = true;
 });
+
 document.addEventListener('keyup', event => {
   if (event.key === 'ArrowDown') fastFall = false;
 });
+
 // --- INIT TETRIS ---
 function initTetrisGame() {
     if (startBtn) startBtn.addEventListener('click', start);
-if (controlsBtn) controlsBtn.addEventListener('click', function() {
+    if (controlsBtn) controlsBtn.addEventListener('click', function() {
       alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
     });
-// Load high score on script start
+    // Load high score on script start
     loadHighScore();
 }
 
@@ -408,42 +413,31 @@ if (controlsBtn) controlsBtn.addEventListener('click', function() {
 
 // Constants and State
 const laneCount = 3;
-const laneWidth = racerCanvas ?
-racerCanvas.width / laneCount : 100;
-const roadWidth = laneWidth * laneCount; // Total width of all lanes
+const laneWidth = racerCanvas ? racerCanvas.width / laneCount : 100;
+const horizonY = 120; // Y pixel of horizon
+const canvasWidth = racerCanvas ? racerCanvas.width : 340;
+const canvasHeight = racerCanvas ? racerCanvas.height : 520;
 
 const playerCar = {
     lane: 1,
     baseWidth: laneWidth * 0.55,
     width: laneWidth * 0.55,
     height: 58,
-    y: racerCanvas ?
-racerCanvas.height - 90 : 410,
-    x: 0 // X will now be controlled by lane, not lerped
+    y: racerCanvas ? racerCanvas.height - 90 : 410,
+    x: 0
 };
+
 const racerState = {
     running: false,
-    crashed: false,
     lastTimestamp: 0,
-    speed: 0, // Will be controlled by delta time
+    speed: 180,
     distance: 0,
     dodged: 0,
-    mostGapsCleared: 0,
+    mostGapsCleared: 0, // <-- ### NEW: High score variable
     obstacles: [],
     speedLines: [],
-    roadSegments: [], // <-- ### NEW: Array to hold all road segments
     spawnTimer: 0, 
     animationFrame: null,
-
-    // --- ### NEW: 3D Camera and World Properties ### ---
-    focalLength: 300, // (Camera "zoom")
-    cameraHeight: 120, // (How high camera is off the ground)
-    horizonY: 120, // (Y pixel of horizon) 
-    playerZ: 10,  // (Player's fixed Z distance from camera for collision)
-    segmentLength: 100, // (Length of one road segment in 3D space)
-    drawDistance: 30, // (How many segments to draw)
-    roadWidth: 800, // (Width of the road in 3D space)
-    // --- End 3D Props ---
 
     // Difficulty Tuning (Time-based)
     spawnStartTime: 1800,
@@ -473,9 +467,9 @@ const racerState = {
     // Visuals
     edgeFlash: 0,
 };
-const obstacleHeight = 60;
-// World X-coordinates for lanes
-const laneCenters = [ -racerState.roadWidth * 0.33, 0, racerState.roadWidth * 0.33];
+
+const obstacleHeight = 60; // This will now be the *base* height at full scale
+const laneCenters = Array.from({ length: laneCount }, (_, i) => i * laneWidth + laneWidth / 2);
 // --- Sound Control Removed ---
 // ...
 // ...
@@ -484,25 +478,25 @@ const laneCenters = [ -racerState.roadWidth * 0.33, 0, racerState.roadWidth * 0.
 // ...
 // ...
 
-// --- ### NEW: 3D Projection Function ### ---
+// --- ### NEW: Pseudo-3D Scaling Function ### ---
 /**
- * Projects a 3D world point (x, y, z) to 2D screen coordinates.
+ * Calculates a scale (0.0 to 1.0) based on Y position.
+ * @param {number} y - The current Y coordinate.
+ * @returns {number} A scale factor from 0.0 (horizon) to 1.0 (bottom).
  */
-function project(x, y, z) {
-    if (z === 0) z = 0.0001; // Avoid division by zero
-    const scale = racerState.focalLength / z;
-    return {
-        screenX: Math.round((racerCanvas.width / 2) + (scale * x)),
-        screenY: Math.round((racerState.horizonY) + (scale * (y - racerState.cameraHeight))),
-        scale: scale
-    };
+function getPerspectiveScale(y) {
+    if (y < horizonY) return 0; // Above horizon, scale is 0
+    // Simple linear interpolation
+    let scale = (y - horizonY) / (canvasHeight - horizonY);
+    // Add a minimum scale so it's visible, and clip at 1.0
+    return Math.max(0.05, Math.min(scale, 1.0)); 
 }
 
 
 function spawnWhooshLines(x, y) {
     const count = 10 + Math.floor(Math.random() * 6);
-for (let i = 0; i < count; i++) {
-        const angle = (Math.random() - 0.5) * 1.2;
+    for (let i = 0; i < count; i++) {
+        const angle = (Math.random() - 0.5) * 1.2; 
         const speed = 4 + Math.random() * 5;
         racerState.particles.push({
             type: 'whoosh',
@@ -510,12 +504,11 @@ for (let i = 0; i < count; i++) {
             y: y + (Math.random() - 0.5) * 10,
             vx: Math.sin(angle) * speed,
             vy: Math.cos(angle) * speed * 0.5 + 2.0,
-       
             life: 20 + Math.random() * 15,
             size: 1 + Math.random() * 2.5,
             color: 'rgba(150, 240, 255, 0.7)'
         });
-}
+    }
 }
 
 function spawnParticles(x, y, color, count = 12) {
@@ -525,40 +518,37 @@ function spawnParticles(x, y, color, count = 12) {
             x: x + (Math.random() - 0.5) * 20,
             y: y + (Math.random() - 0.5) * 12,
             vx: (Math.random() - 0.5) * 2.5,
-    
             vy: -1 - Math.random() * 1.6,
             life: 30 + Math.random() * 30,
             size: 1 + Math.random() * 2,
             color
         });
-}
+    }
 }
 
 function spawnCrash(x, y) {
     // --- Sound calls removed ---
-    racerState.crashed = true; // <-- ### NEW: Set crashed state
+    // --- `crashed` state removed ---
 
     // shards
     const shardCount = 18 + Math.floor(Math.random() * 8);
-for (let i = 0; i < shardCount; i++) {
+    for (let i = 0; i < shardCount; i++) {
         racerState.explosionParticles.push({
             type: 'shard', x: x + (Math.random() - 0.5) * 36, y: y + (Math.random() - 0.5) * 18,
             vx: (Math.random() - 0.5) * (4 + Math.random() * 6), vy: -2 - Math.random() * 6,
             life: 40 + Math.random() * 60, size: 4 + Math.random() * 8,
-    
             angle: Math.random() * Math.PI * 2, angularVel: (Math.random() - 0.5) * 0.4,
             color: `hsl(${Math.floor(Math.random()*40)},80%,60%)`
         });
-}
+    }
     // smoke
     const smokeCount = 8 + Math.floor(Math.random() * 6);
-for (let i = 0; i < smokeCount; i++) {
+    for (let i = 0; i < smokeCount; i++) {
         racerState.explosionParticles.push({
             type: 'smoke', x: x + (Math.random() - 0.5) * 30, y: y + (Math.random() - 0.5) * 10,
             vx: (Math.random() - 0.5) * 1.2, vy: -0.6 - Math.random() * 1.2,
             life: 50 + Math.random() * 50, size: 10 + Math.random() * 20, alpha: 0.45 + Math.random() * 0.15
-  
-      });
+        });
     }
     spawnParticles(x, y, 'rgba(255,200,120,0.95)', 12);
     racerState.shake.time = 28 + Math.floor(Math.random() * 18);
@@ -572,7 +562,7 @@ function drawParticles() {
     // Explosion particles
     for (let i = racerState.explosionParticles.length - 1; i >= 0; i--) {
         const p = racerState.explosionParticles[i];
-if (p.type === 'shard') {
+        if (p.type === 'shard') {
             racerCtx.save();
             racerCtx.globalAlpha = Math.max(0, p.life / 120);
             racerCtx.fillStyle = p.color;
@@ -582,7 +572,7 @@ if (p.type === 'shard') {
             racerCtx.restore();
             p.x += p.vx; p.y += p.vy; p.vy += 0.18; p.vx *= 0.995;
             p.angle += p.angularVel; p.life -= 1;
-if (p.life <= 0) racerState.explosionParticles.splice(i, 1);
+            if (p.life <= 0) racerState.explosionParticles.splice(i, 1);
         } else if (p.type === 'smoke') {
             racerCtx.save();
             const lifeRatio = Math.max(0, p.life / 100);
@@ -608,8 +598,7 @@ if (p.life <= 0) racerState.explosionParticles.splice(i, 1);
             racerCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
             racerCtx.fill();
             racerCtx.restore();
-            p.x += p.vx;
-            p.y += p.vy; p.vy += 0.08; p.vx *= 0.995;
+            p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.vx *= 0.995;
             p.life -= 1;
             if (p.life <= 0) racerState.particles.splice(i, 1);
         } else if (p.type === 'whoosh') {
@@ -622,195 +611,153 @@ if (p.life <= 0) racerState.explosionParticles.splice(i, 1);
             racerCtx.lineTo(p.x - p.vx * 2, p.y - p.vy * 2);
             racerCtx.stroke();
             racerCtx.restore();
-            p.x += p.vx; p.y += p.vy;
-            p.vy += 0.03;
+            p.x += p.vx; p.y += p.vy; p.vy += 0.03;
             p.life -= 1;
             if (p.life <= 0) racerState.particles.splice(i, 1);
-}
+        }
     }
 }
 
 function drawBackground() {
     if (!racerCtx || !racerCanvas) return;
     // gradient sky
-    const gradient = racerCtx.createLinearGradient(0, 0, 0, racerState.horizonY);
+    const gradient = racerCtx.createLinearGradient(0, 0, 0, racerCanvas.height);
     gradient.addColorStop(0, '#03051a');
+    gradient.addColorStop(0.6, '#050417');
     gradient.addColorStop(1, '#0a0e24');
     racerCtx.fillStyle = gradient;
-    racerCtx.fillRect(0, 0, racerCanvas.width, racerState.horizonY);
+    racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
 
-    // Ground
-    racerCtx.fillStyle = '#0a0e24';
-    racerCtx.fillRect(0, racerState.horizonY, racerCanvas.width, racerCanvas.height - racerState.horizonY);
-
-
-    // --- ### MOD: Removed old grid draw call ### ---
-    // drawPerspectiveGrid(); 
+    drawPerspectiveGrid(); // Back to drawing the static grid
 
     // edge flash
     let edgeAlpha = 0.06;
-if (racerState.edgeFlash > 0) {
+    if (racerState.edgeFlash > 0) {
         edgeAlpha = 0.06 + 0.74 * (racerState.edgeFlash / 20);
         racerState.edgeFlash -= 1;
     }
     racerCtx.fillStyle = `rgba(0,255,255,${edgeAlpha})`;
     racerCtx.fillRect(0, 0, 40, racerCanvas.height);
     racerCtx.fillRect(racerCanvas.width - 40, 0, 40, racerCanvas.height);
+
     // border
     racerCtx.strokeStyle = 'rgba(0,255,255,0.14)';
     racerCtx.lineWidth = 3;
     racerCtx.strokeRect(6, 6, racerCanvas.width - 12, racerCanvas.height - 12);
 
-    // --- ### MOD: Removed horizontal lines ### ---
-    // ...
-    // ...
-    // ...
-    // ...
+    // --- Horizontal lines removed as requested ---
 }
 
-// --- ### MOD: Rewritten Perspective Grid ### ---
 function drawPerspectiveGrid() {
     if (!racerCtx || !racerCanvas) return;
-    
-    const roadWidth = racerState.roadWidth;
-    const segments = racerState.drawDistance;
-    const segLength = racerState.segmentLength;
-
+    const vpX = racerCanvas.width / 2;
+    const vpY = 120;
+    const bottomY = racerCanvas.height;
     racerCtx.strokeStyle = 'rgba(28, 255, 255, 0.08)';
     racerCtx.lineWidth = 2;
-
-    // Draw vertical lane lines
-    for (let x of [-roadWidth * 0.5, -roadWidth * 0.16, roadWidth * 0.16, roadWidth * 0.5]) {
-        let p1 = project(x, 0, segLength);
-        let p2 = project(x, 0, segments * segLength);
-        racerCtx.beginPath();
-        racerCtx.moveTo(p1.screenX, p1.screenY);
-        racerCtx.lineTo(p2.screenX, p2.screenY);
-        racerCtx.stroke();
-    }
-
-    // Draw horizontal road segments
-    for (let n = 0; n < segments; n++) {
-        const z1 = n * segLength + 1; // +1 to avoid z=0
-        const z2 = (n + 1) * segLength + 1;
-
-        const p1_left = project(-roadWidth * 0.5, 0, z1);
-        const p1_right = project(roadWidth * 0.5, 0, z1);
-        const p2_left = project(-roadWidth * 0.5, 0, z2);
-        const p2_right = project(roadWidth * 0.5, 0, z2);
-
-        // Draw the segment (alternating color for checkerboard)
-        racerCtx.fillStyle = (n % 2 === 0) ? 'rgba(28, 255, 255, 0.02)' : 'rgba(0,0,0,0)';
-        
-        racerCtx.beginPath();
-        racerCtx.moveTo(p1_left.screenX, p1_left.screenY);
-        racerCtx.lineTo(p1_right.screenX, p1_right.screenY);
-        racerCtx.lineTo(p2_right.screenX, p2_right.screenY);
-        racerCtx.lineTo(p2_left.screenX, p2_left.screenY);
-        racerCtx.closePath();
-        racerCtx.fill();
+    const roadWidthTop = racerCanvas.width * 0.1;
+    const roadWidthBottom = racerCanvas.width * 1.2;
+    const numLines = 10;
+    for (let i = 0; i <= numLines; i++) {
+        const ratio = i / numLines;
+        const xTopL = vpX - roadWidthTop * (1 - ratio);
+        const xBottomL = vpX - roadWidthBottom * (1 - ratio);
+        racerCtx.beginPath(); racerCtx.moveTo(xTopL, vpY); racerCtx.lineTo(xBottomL, bottomY); racerCtx.stroke();
+        const xTopR = vpX + roadWidthTop * (1 - ratio);
+        const xBottomR = vpX + roadWidthBottom * (1 - ratio);
+        racerCtx.beginPath(); racerCtx.moveTo(xTopR, vpY); racerCtx.lineTo(xBottomR, bottomY); racerCtx.stroke();
     }
 }
 
-
-// --- ### MOD: Rewritten Speed Lines ### ---
 function drawSpeedLines() {
-if (!racerCtx) return;
+    if (!racerCtx) return;
     racerCtx.strokeStyle = 'rgba(0, 255, 255, 0.28)';
     racerCtx.lineWidth = 2;
-    
-    for (const line of racerState.speedLines) {
-        const p1 = project(line.x, 0, line.z);
-        const p2 = project(line.x, 0, line.z + line.length); // Line "end" is farther away
-
-        if(p1.screenY < racerState.horizonY) continue; // Don't draw above horizon
-        
+    racerState.speedLines.forEach(line => {
         racerCtx.beginPath();
-        racerCtx.moveTo(p1.screenX, p1.screenY);
-        racerCtx.lineTo(p2.screenX, p2.screenY);
+        racerCtx.moveTo(line.x, line.y);
+        racerCtx.lineTo(line.x, line.y + line.length);
         racerCtx.stroke();
-    }
+    });
 }
 
-
-// --- ### MOD: Rewritten Glow ### ---
+// --- ### MOD: Glow logic updated to use scaling ### ---
 function drawGlow() {
-if (!racerCtx) return;
+    if (!racerCtx) return;
+    
     racerCtx.save();
     racerCtx.shadowBlur = 28;
     
     // 1. Obstacle Glow
-    for (const ob of racerState.obstacles) {
-        if (ob.z < 1) continue; // Don't draw if behind camera
-
-        const p = project(0, 0, ob.z); // Project center to get scale
-        const obHeight = obstacleHeight * p.scale;
-        const obTop = p.screenY - obHeight; // Obstacles are drawn up from ground
+    racerState.obstacles.forEach(ob => {
+        // --- Calculate scaled properties ---
+        const scale = getPerspectiveScale(ob.y);
+        const scaledHeight = obstacleHeight * scale;
+        const top = ob.y - (scaledHeight - obstacleHeight); // Adjust top based on new height
         
-        const gapLeft_screen = project(ob.gapCenter - ob.gapWidth / 2, 0, ob.z).screenX;
-        const gapRight_screen = project(ob.gapCenter + ob.gapWidth / 2, 0, ob.z).screenX;
+        // Scale the center position relative to the vanishing point
+        const scaledGapCenter = (ob.gapCenter - (canvasWidth / 2)) * scale + (canvasWidth / 2);
+        const scaledGapWidth = ob.gapWidth * scale;
+        const gapLeft = scaledGapCenter - scaledGapWidth / 2;
+        const gapRight = scaledGapCenter + scaledGapWidth / 2;
+        // --- End scaling calculations ---
 
         racerCtx.shadowColor = ob.color;
         racerCtx.fillStyle = 'rgba(0,0,0,0)'; 
-        
-if (gapLeft_screen > 0) {
-            racerCtx.fillRect(0, obTop, gapLeft_screen, obHeight);
+        if (gapLeft > 0) {
+            racerCtx.fillRect(0, top, gapLeft, scaledHeight);
         }
-if (gapRight_screen < racerCanvas.width) {
-            racerCtx.fillRect(gapRight_screen, obTop, racerCanvas.width - gapRight_screen, obHeight);
+        if (gapRight < racerCanvas.width) {
+            racerCtx.fillRect(gapRight, top, racerCanvas.width - gapRight, scaledHeight);
         }
-    }
+    });
 
-    // 2. Player Glow
-    if (!racerState.crashed) { 
-        racerCtx.shadowColor = '#19d7ff';
-        racerCtx.translate(playerCar.x, playerCar.y + playerCar.height * 0.75);
-        racerCtx.rotate(racerState.carSway + racerState.carTilt);
-        const w = playerCar.width;
-        const h = playerCar.height;
-        const carY = -h * 0.75; 
-        racerCtx.fillStyle = 'rgba(0,0,0,0)';
-        racerCtx.beginPath();
-        racerCtx.moveTo(-w * 0.3, carY + h);
-        racerCtx.lineTo(w * 0.3, carY + h);
-        racerCtx.quadraticCurveTo(w * 0.45, carY + h * 0.4, w * 0.35, carY + h * 0.1);
-        racerCtx.lineTo(0, carY);
-        racerCtx.lineTo(-w * 0.35, carY + h * 0.1);
-        racerCtx.quadraticCurveTo(-w * 0.45, carY + h * 0.4, -w * 0.3, carY + h);
-        racerCtx.closePath();
-        racerCtx.fill();
-    }
+    // 2. Player Glow (No changes, car does not scale)
+    // --- `crashed` check removed ---
+    racerCtx.shadowColor = '#19d7ff';
+    racerCtx.translate(playerCar.x, playerCar.y + playerCar.height * 0.75);
+    racerCtx.rotate(racerState.carSway + racerState.carTilt);
+    const w = playerCar.width;
+    const h = playerCar.height;
+    const carY = -h * 0.75; 
+    racerCtx.fillStyle = 'rgba(0,0,0,0)';
+    racerCtx.beginPath();
+    racerCtx.moveTo(-w * 0.3, carY + h);
+    racerCtx.lineTo(w * 0.3, carY + h);
+    racerCtx.quadraticCurveTo(w * 0.45, carY + h * 0.4, w * 0.35, carY + h * 0.1);
+    racerCtx.lineTo(0, carY);
+    racerCtx.lineTo(-w * 0.35, carY + h * 0.1);
+    racerCtx.quadraticCurveTo(-w * 0.45, carY + h * 0.4, -w * 0.3, carY + h);
+    racerCtx.closePath();
+    racerCtx.fill();
     
     racerCtx.restore();
 }
 
-// --- ### MOD: Player Draw is now 2D overlay, but X is calculated ### ---
 function drawPlayer(delta) {
     if (!racerCtx) return;
-    if (racerState.crashed) return;
+    // --- `crashed` check removed ---
 
-    // Player X is no longer lerped, it's set directly
     const targetX = laneCenters[playerCar.lane];
-    // Project the player's world X to screen X
-    const p = project(targetX, 0, racerState.playerZ);
-    playerCar.x = p.screenX; // Set screen X
-    
     const effectiveDelta = delta || 16.67; 
-    
-    // --- Tilt logic removed as lerp is gone, but sway remains ---
-    // ...
-    // ...
-    // ...
+    const lerpAmount = 1 - Math.pow(1 - racerState.laneLerpSpeed, effectiveDelta / 16.67);
+    playerCar.x += (targetX - playerCar.x) * lerpAmount;
+
+    const targetTilt = (playerCar.x - targetX) * -0.005; 
+    const tiltLerp = 1 - Math.pow(1 - racerState.carTiltSpeed, effectiveDelta / 16.67);
+    racerState.carTilt += (targetTilt - racerState.carTilt) * tiltLerp;
+    racerState.carTilt = Math.max(-racerState.carTiltMax, Math.min(racerState.carTiltMax, racerState.carTilt));
+
     racerState.carSway = Math.sin(racerState.distance * racerState.carSwaySpeed) * racerState.carSwayMax;
     
     racerCtx.save();
-    // Translate to center of car sprite
     racerCtx.translate(playerCar.x, playerCar.y + playerCar.height * 0.75);
-    racerCtx.rotate(racerState.carSway); // Only apply sway
+    racerCtx.rotate(racerState.carSway + racerState.carTilt);
     
     const w = playerCar.width;
     const h = playerCar.height;
-    const carY = -h * 0.75;
+    const carY = -h * 0.75; 
+    
     // Main body (tapered shape)
     racerCtx.fillStyle = '#19d7ff';
     racerCtx.beginPath();
@@ -822,6 +769,7 @@ function drawPlayer(delta) {
     racerCtx.quadraticCurveTo(-w * 0.45, carY + h * 0.4, -w * 0.3, carY + h);
     racerCtx.closePath();
     racerCtx.fill();
+
     // "Cockpit" (darker)
     racerCtx.fillStyle = '#0b1f3a';
     racerCtx.beginPath();
@@ -831,48 +779,53 @@ function drawPlayer(delta) {
     racerCtx.quadraticCurveTo(-w * 0.25, carY + h * 0.5, -w * 0.15, carY + h * 0.8);
     racerCtx.closePath();
     racerCtx.fill();
+
     // Center highlight
     racerCtx.fillStyle = '#3be7ff';
     racerCtx.fillRect(-w * 0.05, carY + h * 0.2, w * 0.1, h * 0.6);
+
     racerCtx.restore();
 }
 
-// --- ### MOD: Rewritten Obstacles Draw ### ---
+// --- ### MOD: Obstacle draw logic updated to use scaling ### ---
 function drawObstacles() {
     if (!racerCtx) return;
-
-    // Draw from farthest to nearest
-    racerState.obstacles.sort((a, b) => b.z - a.z);
-
-    for (const ob of racerState.obstacles) {
-        if (ob.z < 1) continue; // Don't draw if behind camera
-
-        const p = project(0, 0, ob.z); // Project center to get scale
-        const obHeight = obstacleHeight * p.scale;
-        const obTop = p.screenY - obHeight; // Obstacles are drawn up from ground (y=0)
+    
+    // Sort obstacles so nearest are drawn last (on top)
+    racerState.obstacles.sort((a, b) => a.y - b.y);
+    
+    racerState.obstacles.forEach(ob => {
+        // --- Calculate scaled properties ---
+        const scale = getPerspectiveScale(ob.y);
+        const scaledHeight = obstacleHeight * scale;
+        // Adjust top so the *bottom* of the obstacle moves with `ob.y`
+        const top = ob.y - scaledHeight; 
         
-        const gapLeft_screen = project(ob.gapCenter - ob.gapWidth / 2, 0, ob.z).screenX;
-        const gapRight_screen = project(ob.gapCenter + ob.gapWidth / 2, 0, ob.z).screenX;
+        // Scale the center position relative to the vanishing point
+        const scaledGapCenter = (ob.gapCenter - (canvasWidth / 2)) * scale + (canvasWidth / 2);
+        const scaledGapWidth = ob.gapWidth * scale;
+        const gapLeft = scaledGapCenter - scaledGapWidth / 2;
+        const gapRight = scaledGapCenter + scaledGapWidth / 2;
         
-        const edgeHeight = 4 * p.scale;
+        const edgeHeight = 4 * scale;
+        // --- End scaling calculations ---
         
         // left chunk
-        if (gapLeft_screen > 0) {
+        if (gapLeft > 0) {
             racerCtx.fillStyle = ob.color;
-            racerCtx.fillRect(0, obTop + edgeHeight, gapLeft_screen, obHeight - edgeHeight);
+            racerCtx.fillRect(0, top + edgeHeight, gapLeft, scaledHeight - edgeHeight);
             racerCtx.fillStyle = `hsl(${ob.hue}, 90%, 75%)`;
-            racerCtx.fillRect(0, obTop, gapLeft_screen, edgeHeight);
+            racerCtx.fillRect(0, top, gapLeft, edgeHeight);
         }
         // right chunk
-        if (gapRight_screen < racerCanvas.width) {
+        if (gapRight < racerCanvas.width) {
             racerCtx.fillStyle = ob.color;
-            racerCtx.fillRect(gapRight_screen, obTop + edgeHeight, racerCanvas.width - gapRight_screen, obHeight - edgeHeight);
+            racerCtx.fillRect(gapRight, top + edgeHeight, canvasWidth - gapRight, scaledHeight - edgeHeight);
             racerCtx.fillStyle = `hsl(${ob.hue}, 90%, 75%)`;
-            racerCtx.fillRect(gapRight_screen, obTop, racerCanvas.width - gapRight_screen, edgeHeight);
+            racerCtx.fillRect(gapRight, top, canvasWidth - gapRight, edgeHeight);
         }
-    }
+    });
 }
-
 
 function spawnObstacle() {
     const gapLane = Math.floor(Math.random() * laneCount);
@@ -882,20 +835,23 @@ function spawnObstacle() {
         racerState.gapWidthMinMultiplier,
         racerState.gapWidthStartMultiplier - (racerState.dodged * racerState.gapWidthTightenRate)
     );
-    let gapWidth = playerCar.baseWidth * currentGapMultiplier; // Use base width for gap
-    gapWidth = Math.max(gapWidth, playerCar.baseWidth + 6);
-    gapWidth = Math.min(gapWidth, 700);
+    let gapWidth = playerCar.width * currentGapMultiplier;
+    gapWidth = Math.max(gapWidth, playerCar.width + 6);
+    gapWidth = Math.min(gapWidth, Math.max(60, racerCanvas.width - 24));
+
     let gapCenter = laneCenters[gapLane];
-    
+    const half = gapWidth / 2;
+    gapCenter = Math.max(half + 8, Math.min(racerCanvas.width - half - 8, gapCenter));
+
     racerState.obstacles.push({
-        z: (racerState.drawDistance * racerState.segmentLength), // Spawn at horizon
-        gapCenter, // World X
-        gapWidth,  // World Width
+        y: horizonY, // <-- ### MOD: Spawn at horizon
+        gapCenter,
+        gapWidth,
         color: `hsl(${colorHue}, 90%, 60%)`,
         hue: colorHue 
     });
 
-        const dynamicForwardTime = Math.max(
+    const dynamicForwardTime = Math.max(
         racerState.spawnMinTime,
         racerState.spawnStartTime - racerState.dodged * racerState.spawnTimeTightenRate
     );
@@ -909,15 +865,14 @@ function resetObstacles() {
     racerState.spawnTimer = 0;
 }
 
-// --- ### MOD: Rewritten Speed Lines ### ---
 function ensureSpeedLines() {
-if (!racerCanvas) return;
-    while (racerState.speedLines.length < 30) {
+    if (!racerCanvas) return;
+    while (racerState.speedLines.length < 14) {
         racerState.speedLines.push({
-            x: (Math.random() - 0.5) * racerState.roadWidth, // World X
-            z: Math.random() * (racerState.drawDistance * racerState.segmentLength), // World Z
-            length: 10 + Math.random() * 30 // Z-length
-    });
+            x: 60 + Math.random() * (racerCanvas.width - 120),
+            y: Math.random() * racerCanvas.height,
+            length: 18 + Math.random() * 28
+        });
     }
 }
 
@@ -939,7 +894,7 @@ function startCrashAnimation() {
     if (racerState.crashAnimId) {
         cancelAnimationFrame(racerState.crashAnimId);
         racerState.crashAnimId = null;
-}
+    }
     const loop = (timestamp) => {
         const delta = timestamp - (racerState.lastCrashTimestamp || timestamp);
         racerState.lastCrashTimestamp = timestamp;
@@ -952,52 +907,53 @@ function startCrashAnimation() {
         } else {
             racerState.flash.alpha = 0;
             racerState.crashAnimId = null;
-}
+        }
     };
     racerState.lastCrashTimestamp = performance.now();
     racerState.crashAnimId = requestAnimationFrame(loop);
 }
 
-// --- ### MOD: Rewritten Update ### ---
 function updateRacer(delta) {
     if (!racerCanvas) return;
     
-    const baseSpeed = 400; // Base speed in world units per second
-    racerState.speed = baseSpeed + racerState.dodged * 12 + Math.floor(racerState.distance / 20);
-    const traveled = (racerState.speed * (delta / 1000));
-    // ...
+    const speedInPxPerSecond = racerState.speed * 1.5;
+    const traveled = (speedInPxPerSecond * (delta / 1000));
+    
+    racerState.speed = Math.min(520, 180 + racerState.dodged * 6 + Math.floor(racerState.distance / 800));
     racerState.distance += traveled;
-    // ...
+    
+    // --- Engine pitch update removed ---
     // ...
     // ...
     
     racerState.spawnTimer -= delta;
+
     if (racerState.spawnTimer <= 0) {
         spawnObstacle();
     }
 
     // Move obstacles
     racerState.obstacles.forEach(ob => {
-        ob.z -= traveled;
+        ob.y += traveled;
     });
-    
+
     // Filter obstacles and handle dodges
     racerState.obstacles = racerState.obstacles.filter(ob => {
-        if (ob.z < 1) { // 1 is just in front of camera
+        if (ob.y > racerCanvas.height + obstacleHeight) { // Wait until it's fully off-screen
             racerState.dodged += 1;
-            // Spawn whoosh at screen center
-            spawnWhooshLines(racerCanvas.width / 2, racerCanvas.height - 40);
+            spawnWhooshLines(ob.gapCenter, racerCanvas.height - 40);
+            // --- playSound removed ---
             
+            // --- NEW --- Add small dodge-shake
             racerState.shake.time = 8;
             racerState.shake.intensity = 2;
             
-            // Player width scaling removed, not needed for 3D
-            // const scale = Math.min(1.3, 1 + racerState.dodged * 0.02);
-            // playerCar.width = playerCar.baseWidth * scale;
+            const scale = Math.min(1.3, 1 + racerState.dodged * 0.02);
+            playerCar.width = playerCar.baseWidth * scale;
 
             if (racerState.dodged > 0 && racerState.dodged % 10 === 0) {
-                // Speed is already handled above
-                if (racerMessageEl) racerMessageEl.textContent = `Boost!`;
+                racerState.speed = Math.min(520, racerState.speed + 24);
+                if (racerMessageEl) racerMessageEl.textContent = `Boost! Speed increased.`;
             }
             return false;
         }
@@ -1005,18 +961,14 @@ function updateRacer(delta) {
     });
 
     // Move speed lines
-racerState.speedLines.forEach(line => {
-        line.z -= traveled * 1.6; // Move lines faster
-        if (line.z < 1) {
-            line.z = (racerState.drawDistance * racerState.segmentLength); // Reset to horizon
-            line.x = (Math.random() - 0.5) * racerState.roadWidth;
-        }
+    racerState.speedLines.forEach(line => {
+        line.y += traveled * 1.6;
     });
-    // ensureSpeedLines() is only called once on reset
+    racerState.speedLines = racerState.speedLines.filter(line => line.y < racerCanvas.height + 40);
+    ensureSpeedLines();
 
-// Spawn engine trail particles
+    // Spawn engine trail particles
     if (racerState.running) {
-        // Use player's screen position
         const trailX = playerCar.x + (Math.random() - 0.5) * (playerCar.width * 0.2);
         const trailY = playerCar.y + playerCar.height - 5;
         racerState.particles.push({
@@ -1024,70 +976,89 @@ racerState.speedLines.forEach(line => {
              vx: (Math.random() - 0.5) * 0.5, vy: 1.5 + Math.random() * 1.5,
              life: 15 + Math.random() * 20, size: 1 + Math.random() * 2.5,
              color: `rgba(30, 200, 255, ${0.3 + Math.random() * 0.3})`
-     
-   });
+        });
     }
 
-    // --- ### MOD: Collision Check (World Z/X) ### ---
-    const carCenter = laneCenters[playerCar.lane]; // Player's WORLD X
+    // --- ### MOD: Collision Check with Scaling ### ---
+    const carCenter = playerCar.x;
     const carLeft = carCenter - playerCar.width / 2;
     const carRight = carCenter + playerCar.width / 2;
-    
+    const carTop = playerCar.y;
+    const carBottom = playerCar.y + playerCar.height;
+
     for (const ob of racerState.obstacles) {
-        // Check if obstacle Z is in the "danger zone"
-        if (ob.z < racerState.playerZ + 50 && ob.z > 1) {
-            
-            const gapLeft = ob.gapCenter - ob.gapWidth / 2;
-            const gapRight = ob.gapCenter + ob.gapWidth / 2;
-            
-    // Now check X collision in WORLD space
-            if (carLeft < gapLeft || carRight > gapRight) {
-                if (racerState.animationFrame) {
-                    cancelAnimationFrame(racerState.animationFrame);
-                    racerState.animationFrame = null;
-                }
-                saveRacerHighScore(); 
-                spawnCrash(playerCar.x, playerCar.y + playerCar.height / 2); // Crash at screen pos
-                racerState.running = false;
-                startCrashAnimation();
-                if (racerMessageEl) {
-                    racerMessageEl.textContent = 'Crash! Reset to roll out again.';
-                }
-                return;
-    }
+        // --- Calculate scaled properties ---
+        const scale = getPerspectiveScale(ob.y);
+        const scaledHeight = obstacleHeight * scale;
+        const obTop = ob.y - scaledHeight;
+        const obBottom = ob.y;
+        
+        // Scale the center position relative to the vanishing point
+        const scaledGapCenter = (ob.gapCenter - (canvasWidth / 2)) * scale + (canvasWidth / 2);
+        const scaledGapWidth = ob.gapWidth * scale;
+        const gapLeft = scaledGapCenter - scaledGapWidth / 2;
+        const gapRight = scaledGapCenter + scaledGapWidth / 2;
+        // --- End scaling calculations ---
+        
+        if (carBottom <= obTop || carTop >= obBottom) continue;
+        
+        if (carLeft < gapLeft || carRight > gapRight) {
+            if (racerState.animationFrame) {
+                cancelAnimationFrame(racerState.animationFrame);
+                racerState.animationFrame = null;
+            }
+            saveRacerHighScore(); // <-- ### NEW: Check and save high score on crash
+            spawnCrash(playerCar.x, playerCar.y + playerCar.height / 2);
+            racerState.running = false;
+            startCrashAnimation();
+            if (racerMessageEl) {
+                // Ensure no line break
+                racerMessageEl.textContent = 'Crash! Reset to roll out again.';
+            }
+            return;
         }
     }
 }
 
-
 function renderRacer(delta) {
     if (!racerCtx) return;
 
-    racerCtx.save(); // [1] Save for shake
+    racerCtx.save();
     applyShakeTransform();
-    // Draw world (sky, ground)
+
+    // Draw world
     drawBackground();
-
-    // --- ### MOD: Draw 3D elements ### ---
-    // Draw from farthest to nearest
-    drawPerspectiveGrid();
     drawSpeedLines();
-    drawGlow(); // (Now draws projected glow)
-    drawObstacles(); // (Now draws projected obstacles)
-    
-    // Draw 2D overlay
-    drawPlayer(delta); // (Draws 2D car sprite)
-    drawParticles(); // (Draws 2D particles)
 
-    // Draw flash overlay (outside clip)
+    // --- ### MOD: Clip to area below horizon ### ---
+    // This hides the obstacles popping in at y=120
+    racerCtx.save();
+    racerCtx.beginPath();
+    racerCtx.rect(0, horizonY + 1, racerCanvas.width, racerCanvas.height - horizonY - 1);
+    racerCtx.clip();
+
+    // --- Draw glow layer *under* main objects
+    drawGlow();
+    
+    // Draw main objects
+    drawObstacles();
+    
+    racerCtx.restore(); // Restore from clipping
+    // --- ### End of clip ### ---
+
+    drawPlayer(delta);
+
+    // Draw effects on top
+    drawParticles();
+
+    // Draw flash overlay
     if (racerState.flash.alpha > 0) {
         racerCtx.fillStyle = `rgba(255,255,255,${racerState.flash.alpha})`;
         racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
         racerState.flash.alpha *= 0.92;
         if (racerState.flash.alpha < 0.02) racerState.flash.alpha = 0;
     }
-    
-    racerCtx.restore(); // [1] Restore from shake
+    racerCtx.restore();
 }
 
 function gameLoop(timestamp) {
@@ -1099,17 +1070,19 @@ function gameLoop(timestamp) {
     updateHud();
     if (racerState.running) {
         racerState.animationFrame = requestAnimationFrame(gameLoop);
-}
+    }
 }
 
 function startRacer() {
     if (racerState.running) return;
     if (racerMessageEl) {
-    racerMessageEl.textContent = 'Neon boost engaged!';
+        racerMessageEl.textContent = 'Neon boost engaged!';
     }
     racerState.running = true;
     racerState.lastTimestamp = performance.now();
-    racerState.spawnTimer = racerState.spawnStartTime;
+    racerState.spawnTimer = racerState.spawnStartTime; 
+    
+    // --- Audio start removed ---
     // ...
     
     racerState.animationFrame = requestAnimationFrame(gameLoop);
@@ -1120,28 +1093,29 @@ function pauseRacer() {
     racerState.running = false;
     if (racerState.animationFrame) cancelAnimationFrame(racerState.animationFrame);
     if (racerMessageEl) {
-    racerMessageEl.textContent = 'Paused. Hit start to keep racing.';
+        racerMessageEl.textContent = 'Paused. Hit start to keep racing.';
     }
-    // ...
+    // --- Audio pause removed ---
 }
 
 function resetRacer() {
     if (racerState.crashAnimId) {
         cancelAnimationFrame(racerState.crashAnimId);
-    racerState.crashAnimId = null;
+        racerState.crashAnimId = null;
     }
     pauseRacer();
 
+    // --- Audio reset removed ---
     // ...
     // ...
 
     playerCar.lane = 1;
     playerCar.baseWidth = laneWidth * 0.55;
     playerCar.width = playerCar.baseWidth;
-    playerCar.x = racerCanvas.width / 2; // Reset to screen center
+    playerCar.x = laneCenters[playerCar.lane];
     playerCar.height = 58;
     
-    racerState.speed = 0;
+    racerState.speed = 180;
     racerState.distance = 0;
     racerState.dodged = 0;
     racerState.speedLines = [];
@@ -1152,13 +1126,14 @@ function resetRacer() {
     racerState.carSway = 0;
     racerState.carTilt = 0;
     racerState.edgeFlash = 0;
-    racerState.crashed = false; 
+    // --- `crashed` state removed ---
     
     resetObstacles();
-    ensureSpeedLines(); // Create speed lines once
-    renderRacer(0); // Render one frame
+    ensureSpeedLines();
+    renderRacer(); 
     updateHud();
     if (racerMessageEl) {
+        // Ensure no line break
         racerMessageEl.textContent = 'Ready! Use ← and → to slide through the gaps.';
     }
 }
@@ -1168,22 +1143,22 @@ function shiftLane(offset) {
     if (nextLane === playerCar.lane) return;
     playerCar.lane = nextLane;
     if (!racerState.running) {
-        renderRacer(0); // Re-render to show new position
+        renderRacer(); 
         updateHud();
     }
 }
 
 function handleKey(event) {
     if (!racerModal || racerModal.style.display !== 'flex') return;
+    
     if (event.key === 'ArrowLeft') {
         shiftLane(-1);
-        // <--- ### BUG FIX ### (was -l)
         event.preventDefault();
-}
+    }
     if (event.key === 'ArrowRight') {
         shiftLane(1);
         event.preventDefault();
-}
+    }
 }
 
 // --- NEW: Functions to manage Racer high score ---
@@ -1200,8 +1175,8 @@ function saveRacerHighScore() {
 // --- End of new functions ---
 
 function updateHud() {
-    if (racerDistanceEl) racerDistanceEl.textContent = `Distance: ${Math.floor(racerState.distance / 10)}m`; // Adjusted distance
-    if (racerSpeedEl) racerSpeedEl.textContent = `Speed: ${Math.floor(racerState.speed / 5)} mph`; // Adjusted speed
+    if (racerDistanceEl) racerDistanceEl.textContent = `Distance: ${Math.floor(racerState.distance)}m`;
+    if (racerSpeedEl) racerSpeedEl.textContent = `Speed: ${Math.floor(racerState.speed)} mph`;
     if (racerObstaclesEl) racerObstaclesEl.textContent = `Gaps cleared: ${racerState.dodged} | High: ${racerState.mostGapsCleared}`; // <-- ### MOD: Show high score
 }
 
@@ -1211,20 +1186,22 @@ function initRacerGame() {
     if (pauseRacerBtn) pauseRacerBtn.addEventListener('click', pauseRacer);
     if (resetRacerBtn) resetRacerBtn.addEventListener('click', resetRacer);
     
+    // --- Sound button logic removed ---
     // ...
     // ...
     
+    // --- Audio properties removed ---
     // ...
     // ...
     if (!document.__racerBound) {
         document.addEventListener('keydown', handleKey);
         document.__racerBound = true;
-}
+    }
 
     if (racerCanvas) {
         loadRacerHighScore(); // <-- ### NEW: Load high score on init
         resetRacer();
-}
+    }
 }
 
 // --- FULL INVADERS SCRIPT (LOGIC) ---
@@ -1243,7 +1220,7 @@ function initRacerGame() {
    ============================ */
 let invaderState = {
   player: { x: 140, y: 350, width: 20, height: 16, lives: 3, alive: true }, // keep starting lives at 3 as requested
-  // bullet represented as small rect for collisions;will be drawn as a laser stroke
+  // bullet represented as small rect for collisions; will be drawn as a laser stroke
   bullet: { x: 0, y: 0, width: 4, height: 14, active: false, alive: false, speed: 24 },//14
   enemies: [],
   enemyBullets: [],
@@ -1262,12 +1239,12 @@ let invaderState = {
 
 // color palettes retained
 const invaderPalettes = ['#FF00FF','#FFA500','#FFFF00','#00FF00','#00FFFF','#9D00FF','#FD1C03','#FF69B4'];
+
 /* ============================
    BUNKERS: Connected defense matrices (like spaceInvaders.js)
-   We'll build 4 bunkers;
-each bunker uses a connected pattern (6x12).
+   We'll build 4 bunkers; each bunker uses a connected pattern (6x12).
    We'll store bunker blocks in pixel coords for direct drawing and collision.
-============================ */
+   ============================ */
 
 const bunkerPatternConnected = [
   [0,1,1,1,1,1,1,1,1,1,1,0],
@@ -1277,21 +1254,19 @@ const bunkerPatternConnected = [
   [1,1,1,0,0,0,0,0,0,1,1,1],
   [1,1,1,0,0,0,0,0,0,1,1,1]
 ];
+
 function createBunkers() {
   invaderState.bunkers = [];
   if (!invadersCanvas) return;
-  const blockSize = 6;
-  // pixel size for each pattern cell
+  const blockSize = 6; // pixel size for each pattern cell
   const bunkerCount = 4;
   // center bunkers evenly across playable width, leave 30px margin left/right
   const usableWidth = invadersCanvas.width - 60;
   const bunkerTotalWidth = bunkerPatternConnected[0].length * blockSize;
   const spacing = usableWidth / bunkerCount;
-  const baseX = 30;
-  // left margin
+  const baseX = 30; // left margin
 
-  const bunkerY = Math.max( invadersCanvas.height - 140, 260 );
-  // place above player area
+  const bunkerY = Math.max( invadersCanvas.height - 140, 260 ); // place above player area
 
   for (let b = 0; b < bunkerCount; b++) {
     const center = baseX + spacing * b + spacing / 2;
@@ -1308,7 +1283,7 @@ function createBunkers() {
             height: blockSize,
             alive: true
           });
-}
+        }
       }
     }
   }
@@ -1319,7 +1294,7 @@ function createBunkers() {
    - We'll compute columns based on canvas width to use more horizontal space
    - Keep behavior (move left/right, drop when hitting edges), shooting preserved
    ============================ */
-  function createEnemies() {
+function createEnemies() {
   const state = invaderState;
   state.enemies = [];
 
@@ -1334,6 +1309,7 @@ function createBunkers() {
 
   const enemyWidth = approxEnemyWidth;
   const enemyHeight = 14;
+
   const totalWidth = cols * enemyWidth + (cols - 1) * padding;
   const startX = Math.max(12, Math.round((invadersCanvas.width - totalWidth) / 2));
   let startY = 28 + (state.level - 1) * 6;
@@ -1359,23 +1335,27 @@ function createBunkers() {
    ============================ */
 function checkCollision(objA, objB) {
   if (('alive' in objA && !objA.alive) || ('alive' in objB && !objB.alive)) return false;
-  return objA.x < objB.x + objB.width && objA.x + objA.width > objB.x && objA.y < objB.y + objB.height && objA.y + objA.height > objB.y;
+  return objA.x < objB.x + objB.width &&
+         objA.x + objA.width > objB.x &&
+         objA.y < objB.y + objB.height &&
+         objA.y + objA.height > objB.y;
 }
 
 /* ============================
    Update logic
    Mostly keeps prior invaders behavior but adapted to new structures.
-============================ */
+   ============================ */
 function updateInvaders() {
   if (invaderState.gameOver || !invadersCanvas) return;
   const state = invaderState;
+
   // Player bullet movement (laser)
   if (state.bullet.active) {
     state.bullet.y -= state.bullet.speed;
-  if (state.bullet.y + state.bullet.height < 0) {
+    if (state.bullet.y + state.bullet.height < 0) {
       state.bullet.active = false;
       state.bullet.alive = false;
-}
+    }
 
     // Collide with bunkers (connected bunkers represented as many small rectangles)
     for (let b = state.bunkers.length - 1; b >= 0; b--) {
@@ -1421,13 +1401,14 @@ function updateInvaders() {
   state.enemyMoveTimer--;
   if (state.enemyMoveTimer <= 0) {
     let moveDown = false;
-    let moveStep = 4;
-    // smaller horizontal step to slow lateral movement
+    let moveStep = 4; // smaller horizontal step to slow lateral movement
 
     let aliveEnemies = state.enemies.filter(e => e.alive);
+
     // Check edges
     for (const enemy of aliveEnemies) {
-      if ((state.enemyDirection > 0 && enemy.x + enemy.width >= invadersCanvas.width - 6) || (state.enemyDirection < 0 && enemy.x <= 6)) {
+      if ((state.enemyDirection > 0 && enemy.x + enemy.width >= invadersCanvas.width - 6) ||
+          (state.enemyDirection < 0 && enemy.x <= 6)) {
         moveDown = true;
         state.enemyDirection *= -1;
         moveStep = 0;
@@ -1444,6 +1425,7 @@ function updateInvaders() {
         stopInvaders("GAME OVER: They reached you!");
       }
     });
+
     let progress = (state.initialEnemies - aliveEnemies.length) / state.initialEnemies;
     // gentler acceleration: slower base and less aggressive speed-up based on progress
     state.enemyMoveInterval = Math.max(6, (36 - (state.level - 1) * 1.2) * (1 - progress * 0.7));
@@ -1474,17 +1456,17 @@ function updateInvaders() {
   let aliveEnemies = state.enemies.filter(e => e.alive);
   // make shooting less frequent: higher threshold and slower increase per level
   let shootThreshold = Math.max(0.75, 0.98 - (state.level * 0.015));
-    if (Math.random() > shootThreshold && aliveEnemies.length > 0) {
-      let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
-      state.enemyBullets.push({
-        x: shooter.x + Math.floor(shooter.width / 2) - 1,
-        y: shooter.y + shooter.height,
-        width: 2,
-        height: 14,
-        alive: true,
-        speed: 3 + state.level * 0.15 // slightly slower bullets
+  if (Math.random() > shootThreshold && aliveEnemies.length > 0) {
+    let shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
+    state.enemyBullets.push({
+      x: shooter.x + Math.floor(shooter.width / 2) - 1,
+      y: shooter.y + shooter.height,
+      width: 2,
+      height: 14,
+      alive: true,
+      speed: 3 + state.level * 0.15 // slightly slower bullets
     });
-}
+  }
 
   // Move enemy bullets, collide with bunkers/player
   state.enemyBullets = state.enemyBullets.filter(bullet => {
@@ -1500,8 +1482,7 @@ function updateInvaders() {
 
     if (checkCollision(bullet, state.player)) {
       state.player.lives--;
-   
-   if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
+      if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
       if (state.player.lives <= 0) {
         state.player.alive = false;
         stopInvaders("GAME OVER: You were hit!");
@@ -1513,15 +1494,16 @@ function updateInvaders() {
 
     return bullet.y < invadersCanvas.height;
   });
-// Lose if all bunkers destroyed (same as before)
+
+  // Lose if all bunkers destroyed (same as before)
   if (state.bunkers.length > 0 && state.bunkers.filter(b => b.alive).length === 0) {
     stopInvaders("GAME OVER: Bases destroyed!");
-}
+  }
 
   // Level cleared
   if (aliveEnemies.length === 0 && !state.gameOver) {
     startNextLevel();
-}
+  }
 }
 
 /* ============================
@@ -1534,20 +1516,22 @@ function drawInvaders() {
   // clear frame
   invadersCtx.fillStyle = '#000';
   invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
-// Draw bunkers (connected style: blocks arranged in matrix)
+
+  // Draw bunkers (connected style: blocks arranged in matrix)
   invaderState.bunkers.forEach(block => {
     if (block.alive) {
       invadersCtx.fillStyle = '#00FF00';
       invadersCtx.fillRect(block.x, block.y, block.width, block.height);
     }
   });
+
   // Draw player (rectangle)
   if (state.player.alive) {
     invadersCtx.fillStyle = '#00FFFF';
     // Draw as a small pixel-art ship like before but keep rect for collisions
     // We'll draw a simple filled rect for clarity
     invadersCtx.fillRect(state.player.x, state.player.y, state.player.width, state.player.height);
-}
+  }
 
   // Player bullet: DRAW AS NEON LASER LINE
   if (state.bullet.active) {
@@ -1573,7 +1557,8 @@ function drawInvaders() {
       invadersCtx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
     }
   });
-// Mystery ship (keeps earlier visual)
+
+  // Mystery ship (keeps earlier visual)
   if (state.mysteryShip.active) {
     const ms = state.mysteryShip;
     invadersCtx.save();
@@ -1587,10 +1572,10 @@ function drawInvaders() {
       invadersCtx.fillRect(ms.x + 3 + i * 5, ms.y + ms.height - 4, 3, 3);
     }
     invadersCtx.restore();
-}
+  }
 
-    // Enemy bullets: draw as thin red lasers
-    state.enemyBullets.forEach(bullet => {
+  // Enemy bullets: draw as thin red lasers
+  state.enemyBullets.forEach(bullet => {
     invadersCtx.save();
     invadersCtx.strokeStyle = '#FF5555';
     invadersCtx.lineWidth = 2;
@@ -1603,8 +1588,9 @@ function drawInvaders() {
     invadersCtx.stroke();
     invadersCtx.restore();
   });
-// Lives UI: show two boxes at start; when hit, show one at left and one on the side.
-// This still represents 3 total lives (active ship + two reserve boxes).
+
+  // Lives UI: show two boxes at start; when hit, show one at left and one on the side.
+  // This still represents 3 total lives (active ship + two reserve boxes).
   const lifeBoxW = 14;
   const lifeBoxH = 10;
   const lifeLeftX = 10;
@@ -1624,12 +1610,13 @@ function drawInvaders() {
     invadersCtx.fillRect(lifeLeftX, lifeY, lifeBoxW, lifeBoxH);
     const sideX = Math.min(invadersCanvas.width - lifeBoxW - 8, lifeLeftX + 60);
     invadersCtx.fillRect(sideX, lifeY, lifeBoxW, lifeBoxH);
-} else if (state.player.lives === 1) {
+  } else if (state.player.lives === 1) {
     // only the side box remains to indicate the last life (STATIC)
     const sideX = Math.min(invadersCanvas.width - lifeBoxW - 8, lifeLeftX + 60);
     invadersCtx.fillRect(sideX, lifeY, lifeBoxW, lifeBoxH);
   }
   // Note: the active ship itself is still drawn at state.player.x, so the player always sees the active ship + these "reserve" boxes.
+
   // HUD
   invadersCtx.font = '15px "Courier New", monospace';
   invadersCtx.fillStyle = '#fff';
@@ -1649,19 +1636,20 @@ function drawInvaders() {
    ============================ */
 function invadersGameLoop() {
   if (invaderState.gameOver) return;
-    updateInvaders();
-    drawInvaders();
-    invaderState.gameLoopId = requestAnimationFrame(invadersGameLoop);
+  updateInvaders();
+  drawInvaders();
+  invaderState.gameLoopId = requestAnimationFrame(invadersGameLoop);
 }
 
 function startNextLevel() {
   const state = invaderState;
   state.level++;
-if (invadersMessageEl) invadersMessageEl.textContent = `Space Invaders++ — Level ${state.level}`;
+  if (invadersMessageEl) invadersMessageEl.textContent = `Space Invaders++ — Level ${state.level}`;
 
   state.enemyBullets = [];
   state.bullet.active = false;
   state.bullet.alive = false;
+
   // gentler progression: slower interval decrease and smaller drop speed growth
   state.enemyMoveInterval = Math.max(8, 36 - (state.level - 1) * 1.2);
   state.enemyMoveTimer = state.enemyMoveInterval;
@@ -1669,18 +1657,19 @@ if (invadersMessageEl) invadersMessageEl.textContent = `Space Invaders++ — Lev
 
   createEnemies();
   createBunkers();
-if (invadersMessageEl) {
+
+  if (invadersMessageEl) {
     const palette = invaderPalettes[(state.level - 1) % invaderPalettes.length];
     invadersMessageEl.style.color = palette;
     setTimeout(() => { if (invadersMessageEl) invadersMessageEl.style.color = '#eee'; }, 1200);
-}
+  }
 }
 
 function startInvaders() {
   if (invaderState.gameLoopId) {
     cancelAnimationFrame(invaderState.gameLoopId);
     invaderState.gameLoopId = null;
-}
+  }
 
   // Reset game state
   invaderState.gameOver = false;
@@ -1697,12 +1686,11 @@ function startInvaders() {
   invaderState.enemyMoveInterval = 36; // slower starting interval
   invaderState.mysteryShip.active = false;
   invaderState.mysteryShip.alive = false;
-  invaderState.dropSpeed = 6;
-  // reduced base drop speed
+  invaderState.dropSpeed = 6; // reduced base drop speed
 
   if (invadersScoreEl) invadersScoreEl.textContent = "Score: 0";
   if (invadersMessageEl) invadersMessageEl.textContent = "Good luck!";
-if (startInvadersBtn) startInvadersBtn.textContent = 'Restart';
+  if (startInvadersBtn) startInvadersBtn.textContent = 'Restart';
 
   createEnemies();
   createBunkers();
@@ -1711,7 +1699,7 @@ if (startInvadersBtn) startInvadersBtn.textContent = 'Restart';
 
 function stopInvaders(message = "GAME OVER") {
   invaderState.gameOver = true;
-if (invaderState.gameLoopId) {
+  if (invaderState.gameLoopId) {
     cancelAnimationFrame(invaderState.gameLoopId);
     invaderState.gameLoopId = null;
   }
@@ -1726,29 +1714,27 @@ if (invaderState.gameLoopId) {
 function handleInvadersKey(event) {
   // Only run if the invaders modal is open
   if (!invadersModal || invadersModal.style.display !== 'flex') return;
+
   const state = invaderState;
 
   // Allow shooting even if game is over (to restart)
   if (event.key === ' ' || event.key === 'Spacebar') {
       event.preventDefault();
       if (state.gameOver) {
-          startInvaders();
-          // Restart game on spacebar if game is over
+          startInvaders(); // Restart game on spacebar if game is over
           return;
-}
+      }
 
       if (!state.bullet.active && state.player.alive) {
         // create bullet rectangle for collisions
         state.bullet.x = state.player.x + (state.player.width / 2) - (state.bullet.width / 2);
         state.bullet.y = state.player.y - state.bullet.height;
         state.bullet.active = true;
-        state.bullet.alive = true;
-        // for collision check
+        state.bullet.alive = true; // for collision check
       }
   }
 
-  if (state.gameOver || !state.player.alive) return;
-  // Don't move if game is over or player is dead
+  if (state.gameOver || !state.player.alive) return; // Don't move if game is over or player is dead
 
   if (event.key === 'ArrowLeft') {
     event.preventDefault();
@@ -1764,7 +1750,7 @@ function handleInvadersKey(event) {
 function initInvadersGame() {
     if (startInvadersBtn) {
       startInvadersBtn.addEventListener('click', startInvaders);
-}
+    }
 
     // Bind keyboard listener for invaders
     if (!document.__invadersBound) {
