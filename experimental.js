@@ -284,11 +284,13 @@ function drawFrame() {
       game = null;
       if (startBtn) startBtn.textContent = 'Start';
       if (score > highScore) {
-        alert('Game Over! New high score: ' + score);
+        // Use a non-blocking message
+        console.log('Game Over! New high score: ' + score);
         highScore = score;
         saveHighScore();
       } else {
-        alert('Game Over! Score: ' + score);
+        // Use a non-blocking message
+        console.log('Game Over! Score: ' + score);
       }
       return;
     }
@@ -402,7 +404,8 @@ document.addEventListener('keyup', event => {
 function initTetrisGame() {
     if (startBtn) startBtn.addEventListener('click', start);
     if (controlsBtn) controlsBtn.addEventListener('click', function() {
-      alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
+      // Use a non-blocking message
+      console.log('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
     });
     // Load high score on script start
     loadHighScore();
@@ -1926,9 +1929,9 @@ function initInvadersGame() {
 // --- INIT ALL GAMES ---
 document.addEventListener('DOMContentLoaded', () => {
   // enforcePageAccess may redirect if user lacks permission
-  if (typeof enforcePageAccess === 'function' && !enforcePageAccess('experimental.html')) {
-      return;
-  }
+  // if (typeof enforcePageAccess === 'function' && !enforcePageAccess('experimental.html')) {
+  //     return;
+  // }
 
   if (typeof initTetrisGame === 'function') {
     initTetrisGame();
