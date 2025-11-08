@@ -982,7 +982,7 @@ function renderRacer(delta) {
     // --- ### NEW: Clip to area below horizon ### ---
     racerCtx.save(); // [2] Save for clip
     racerCtx.beginPath();
-    racerCtx.rect(0, 120, racerCanvas.width, racerCanvas.height - 120); [cite_start]// 120 is vpY [cite: 127]
+    racerCtx.rect(0, 120, racerCanvas.width, racerCanvas.height - 120); // 120 is vpY [cite: 127]
     racerCtx.clip();
 
     // --- Draw glow layer *under* main objects
@@ -1052,8 +1052,8 @@ function resetRacer() {
     pauseRacer();
 
     // --- Audio reset removed ---
-// ...
-// ...
+    // ...
+    // ...
 
     playerCar.lane = 1;
     playerCar.baseWidth = laneWidth * 0.55;
