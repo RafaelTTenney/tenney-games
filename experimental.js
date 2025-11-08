@@ -913,8 +913,7 @@ if (racerState.spawnTimer <= 0) {
             const scale = Math.min(1.3, 1 + racerState.dodged * 0.02);
             playerCar.width = playerCar.baseWidth * scale;
 
-            if (racerState.dodged > 0 && racerState.dodged % 10 === 
-0) {
+            if (racerState.dodged > 0 && racerState.dodged % 10 === 0) {
                 racerState.speed = Math.min(520, racerState.speed + 24);
                 if (racerMessageEl) racerMessageEl.textContent = `Boost! Speed increased.`;
             }
@@ -964,8 +963,7 @@ racerState.animationFrame = null;
 racerState.running = false;
             startCrashAnimation();
             if (racerMessageEl) {
-                racerMessageEl.textContent = 'Crash!
-Reset to roll out again.';
+                racerMessageEl.textContent = 'Crash! Reset to roll out again.';
             }
             return;
 }
@@ -977,7 +975,7 @@ function renderRacer(delta) {
 
     racerCtx.save(); // [1] Save for shake
     applyShakeTransform();
-// Draw world (sky, grid, lines)
+    // Draw world (sky, grid, lines)
     drawBackground();
     drawSpeedLines();
 
@@ -1060,18 +1058,18 @@ function resetRacer() {
     playerCar.lane = 1;
     playerCar.baseWidth = laneWidth * 0.55;
     playerCar.width = playerCar.baseWidth;
-playerCar.x = laneCenters[playerCar.lane];
+    playerCar.x = laneCenters[playerCar.lane];
     playerCar.height = 58;
     
     racerState.speed = 180;
     racerState.distance = 0;
     racerState.dodged = 0;
     racerState.speedLines = [];
-racerState.particles = [];
+    racerState.particles = [];
     racerState.explosionParticles = [];
     racerState.shake = { time: 0, intensity: 0 };
     racerState.flash = { alpha: 0 };
-racerState.carSway = 0;
+    racerState.carSway = 0;
     racerState.carTilt = 0;
     racerState.edgeFlash = 0;
     racerState.crashed = false; // <-- ### NEW: Reset crashed state
@@ -1081,8 +1079,7 @@ racerState.carSway = 0;
     renderRacer(); 
     updateHud();
 if (racerMessageEl) {
-        racerMessageEl.textContent = 'Ready!
-Use ← and → to slide through the gaps.';
+        racerMessageEl.textContent = 'Ready! Use ← and → to slide through the gaps.';
     }
 }
 
@@ -1100,7 +1097,7 @@ function handleKey(event) {
     if (!racerModal || racerModal.style.display !== 'flex') return;
 if (event.key === 'ArrowLeft') {
         shiftLane(-1);
-// <--- ### BUG FIX ### (was -l)
+        // <--- ### BUG FIX ### (was -l)
         event.preventDefault();
 }
     if (event.key === 'ArrowRight') {
@@ -1135,12 +1132,12 @@ if (pauseRacerBtn) pauseRacerBtn.addEventListener('click', pauseRacer);
     if (resetRacerBtn) resetRacerBtn.addEventListener('click', resetRacer);
     
     // --- Sound button logic removed ---
-// ...
-// ...
-    
+    // ...
+    // ...
+        
     // --- Audio properties removed ---
-// ...
-// ...
+    // ...
+    // ...
     if (!document.__racerBound) {
         document.addEventListener('keydown', handleKey);
         document.__racerBound = true;
