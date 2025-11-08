@@ -155,8 +155,7 @@ if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScor
 
 function saveHighScore() {
   localStorage.setItem('tetris+HighScore', highScore); // <-- ### FIX: Changed key to 'tetris+HighScore'
-  if(scoreP) scoreP.textContent = 'Score: ' + score + ' |
-High Score: ' + highScore;
+  if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
 }
 
 // In-game variables
@@ -331,8 +330,7 @@ rows.unshift(row);
 console.log("Level up! Now on level " + currentLevel);
           }
           
-          if(scoreP) scoreP.textContent = 'Score: ' + score + ' |
-High Score: ' + highScore;
+          if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
           i--;
         }
       }
