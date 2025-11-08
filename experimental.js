@@ -155,7 +155,8 @@ if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScor
 
 function saveHighScore() {
   localStorage.setItem('tetris+HighScore', highScore); // <-- ### FIX: Changed key to 'tetris+HighScore'
-  if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
+  if(scoreP) scoreP.textContent = 'Score: ' + score + ' |
+High Score: ' + highScore;
 }
 
 // In-game variables
@@ -330,7 +331,8 @@ rows.unshift(row);
 console.log("Level up! Now on level " + currentLevel);
           }
           
-          if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
+          if(scoreP) scoreP.textContent = 'Score: ' + score + ' |
+High Score: ' + highScore;
           i--;
         }
       }
@@ -423,6 +425,7 @@ racerCanvas.height - 90 : 410,
 };
 const racerState = {
     running: false,
+    crashed: false, // <-- ### NEW: To hide car on crash
     lastTimestamp: 0,
     speed: 180,
     distance: 0,
@@ -460,8 +463,6 @@ explosionParticles: [],
     
     // Visuals
     edgeFlash: 0,
-
-    // --- Sound State Removed ---
 };
 const obstacleHeight = 60;
 const laneCenters = Array.from({ length: laneCount }, (_, i) => i * laneWidth + laneWidth / 2);
@@ -510,7 +511,7 @@ function spawnParticles(x, y, color, count = 12) {
 
 function spawnCrash(x, y) {
     // --- Sound calls removed ---
-// ...
+racerState.crashed = true; // <-- ### NEW: Set crashed state
 
     // shards
     const shardCount = 18 + Math.floor(Math.random() * 8);
@@ -697,28 +698,31 @@ if (gapLeft > 0) {
         }
     });
 // 2. Player Glow
-    racerCtx.shadowColor = '#19d7ff';
-    racerCtx.translate(playerCar.x, playerCar.y + playerCar.height * 0.75);
-    racerCtx.rotate(racerState.carSway + racerState.carTilt);
+    if (!racerState.crashed) { // <-- ### MOD: Don't draw glow if crashed
+        racerCtx.shadowColor = '#19d7ff';
+        racerCtx.translate(playerCar.x, playerCar.y + playerCar.height * 0.75);
+        racerCtx.rotate(racerState.carSway + racerState.carTilt);
 const w = playerCar.width;
-    const h = playerCar.height;
-    const carY = -h * 0.75; 
-    racerCtx.fillStyle = 'rgba(0,0,0,0)';
-    racerCtx.beginPath();
+        const h = playerCar.height;
+        const carY = -h * 0.75; 
+        racerCtx.fillStyle = 'rgba(0,0,0,0)';
+        racerCtx.beginPath();
 racerCtx.moveTo(-w * 0.3, carY + h);
-    racerCtx.lineTo(w * 0.3, carY + h);
+        racerCtx.lineTo(w * 0.3, carY + h);
 racerCtx.quadraticCurveTo(w * 0.45, carY + h * 0.4, w * 0.35, carY + h * 0.1);
-    racerCtx.lineTo(0, carY);
+        racerCtx.lineTo(0, carY);
 racerCtx.lineTo(-w * 0.35, carY + h * 0.1);
-    racerCtx.quadraticCurveTo(-w * 0.45, carY + h * 0.4, -w * 0.3, carY + h);
+        racerCtx.quadraticCurveTo(-w * 0.45, carY + h * 0.4, -w * 0.3, carY + h);
 racerCtx.closePath();
-    racerCtx.fill();
+        racerCtx.fill();
+    }
     
     racerCtx.restore();
 }
 
 function drawPlayer(delta) {
     if (!racerCtx) return;
+    if (racerState.crashed) return; // <-- ### MOD: Don't draw player if crashed
 
     const targetX = laneCenters[playerCar.lane];
 const effectiveDelta = delta || 16.67; 
@@ -962,7 +966,8 @@ racerState.animationFrame = null;
 racerState.running = false;
             startCrashAnimation();
             if (racerMessageEl) {
-                racerMessageEl.textContent = 'Crash! Reset to roll out again.';
+                racerMessageEl.textContent = 'Crash!
+Reset to roll out again.';
             }
             return;
 }
@@ -972,28 +977,39 @@ racerState.running = false;
 function renderRacer(delta) {
     if (!racerCtx) return;
 
-    racerCtx.save();
+    racerCtx.save(); // [1] Save for shake
     applyShakeTransform();
-// Draw world
+// Draw world (sky, grid, lines)
     drawBackground();
     drawSpeedLines();
 
-    // --- NEW --- Draw glow layer *under* main objects
-    drawGlow();
-// Draw main objects
+    // --- ### NEW: Clip to area below horizon ### ---
+    racerCtx.save(); // [2] Save for clip
+    racerCtx.beginPath();
+    racerCtx.rect(0, 120, racerCanvas.width, racerCanvas.height - 120); [cite_start]// 120 is vpY [cite: 127]
+    racerCtx.clip();
+
+    // --- Draw glow layer *under* main objects
+drawGlow();
+    // Draw main objects
     drawObstacles();
-    drawPlayer(delta);
+    drawPlayer(delta); // (This function now checks racerState.crashed)
 
     // Draw effects on top
     drawParticles();
-// Draw flash overlay
+
+    racerCtx.restore(); // [2] Restore from clipping
+    // --- ### End of new clip ### ---
+
+// Draw flash overlay (outside clip)
     if (racerState.flash.alpha > 0) {
         racerCtx.fillStyle = `rgba(255,255,255,${racerState.flash.alpha})`;
 racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
         racerState.flash.alpha *= 0.92;
         if (racerState.flash.alpha < 0.02) racerState.flash.alpha = 0;
     }
-    racerCtx.restore();
+    
+    racerCtx.restore(); // [1] Restore from shake
 }
 
 function gameLoop(timestamp) {
@@ -1002,7 +1018,7 @@ function gameLoop(timestamp) {
     racerState.lastTimestamp = timestamp;
     updateRacer(delta);
     renderRacer(delta);
-    updateHud();
+updateHud();
     if (racerState.running) {
         racerState.animationFrame = requestAnimationFrame(gameLoop);
 }
@@ -1060,13 +1076,15 @@ racerState.particles = [];
 racerState.carSway = 0;
     racerState.carTilt = 0;
     racerState.edgeFlash = 0;
+    racerState.crashed = false; // <-- ### NEW: Reset crashed state
     
     resetObstacles();
     ensureSpeedLines();
     renderRacer(); 
     updateHud();
 if (racerMessageEl) {
-        racerMessageEl.textContent = 'Ready! Use ← and → to slide through the gaps.';
+        racerMessageEl.textContent = 'Ready!
+Use ← and → to slide through the gaps.';
     }
 }
 
@@ -1151,8 +1169,10 @@ if (pauseRacerBtn) pauseRacerBtn.addEventListener('click', pauseRacer);
    State and configuration
    ============================ */
 let invaderState = {
-  player: { x: 140, y: 350, width: 20, height: 16, lives: 3, alive: true }, // keep starting lives at 3 as requested
-  // bullet represented as small rect for collisions; will be drawn as a laser stroke
+  player: { x: 140, y: 350, width: 20, height: 16, 
+lives: 3, alive: true }, // keep starting lives at 3 as requested
+  // bullet represented as small rect for collisions;
+will be drawn as a laser stroke
   bullet: { x: 0, y: 0, width: 4, height: 14, active: false, alive: false, speed: 24 },//14
   enemies: [],
   enemyBullets: [],
@@ -1166,7 +1186,8 @@ let invaderState = {
   dropSpeed: 6, // reduced default drop speed to make levels gentler
   initialEnemies: 0,
   enemyMoveTimer: 0,
-  enemyMoveInterval: 40 // slower base interval to reduce early-level speed
+  enemyMoveInterval: 40 // slower 
+base interval to reduce early-level speed
 };
 
 // color palettes retained
@@ -1194,7 +1215,7 @@ function createBunkers() {
   const bunkerCount = 4;
 // center bunkers evenly across playable width, leave 30px margin left/right
   const usableWidth = invadersCanvas.width - 60;
-  const bunkerTotalWidth = bunkerPatternConnected[0].length * blockSize;
+const bunkerTotalWidth = bunkerPatternConnected[0].length * blockSize;
   const spacing = usableWidth / bunkerCount;
   const baseX = 30;
 // left margin
@@ -1204,12 +1225,12 @@ function createBunkers() {
 
   for (let b = 0; b < bunkerCount; b++) {
     const center = baseX + spacing * b + spacing / 2;
-    const left = Math.round(center - bunkerTotalWidth / 2);
+const left = Math.round(center - bunkerTotalWidth / 2);
     for (let r = 0; r < bunkerPatternConnected.length; r++) {
       for (let c = 0; c < bunkerPatternConnected[0].length; c++) {
         if (bunkerPatternConnected[r][c]) {
           const px = left + c * blockSize;
-          const py = bunkerY + r * blockSize;
+const py = bunkerY + r * blockSize;
           invaderState.bunkers.push({
             x: px,
             y: py,
@@ -1447,7 +1468,7 @@ const state = invaderState;
   // clear frame
   invadersCtx.fillStyle = '#000';
   invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
-// Draw bunkers (connected style: blocks arranged in matrix)
+  // Draw bunkers (connected style: blocks arranged in matrix)
   invaderState.bunkers.forEach(block => {
     if (block.alive) {
       invadersCtx.fillStyle = '#00FF00';
@@ -1457,7 +1478,7 @@ const state = invaderState;
 // Draw player (rectangle)
   if (state.player.alive) {
     invadersCtx.fillStyle = '#00FFFF';
-// Draw as a small pixel-art ship like before but keep rect for collisions
+    // Draw as a small pixel-art ship like before but keep rect for collisions
     // We'll draw a simple filled rect for clarity
     invadersCtx.fillRect(state.player.x, state.player.y, state.player.width, state.player.height);
 }
@@ -1465,14 +1486,14 @@ const state = invaderState;
   // Player bullet: DRAW AS NEON LASER LINE
   if (state.bullet.active) {
     invadersCtx.save();
-invadersCtx.strokeStyle = '#88FFFF';
+    invadersCtx.strokeStyle = '#88FFFF';
     invadersCtx.lineWidth = 3;
     invadersCtx.shadowColor = '#88FFFF';
     invadersCtx.shadowBlur = 12;
 // draw vertical laser centered at bullet.x
     const bx = Math.round(state.bullet.x + state.bullet.width / 2);
     invadersCtx.beginPath();
-invadersCtx.moveTo(bx, Math.round(state.bullet.y + state.bullet.height));
+    invadersCtx.moveTo(bx, Math.round(state.bullet.y + state.bullet.height));
     invadersCtx.lineTo(bx, Math.round(state.bullet.y));
     invadersCtx.stroke();
     invadersCtx.restore();
@@ -1480,7 +1501,7 @@ invadersCtx.moveTo(bx, Math.round(state.bullet.y + state.bullet.height));
 
   // Draw enemies (rectangles - old style)
   const enemyColor = invaderPalettes[(state.level - 1) % invaderPalettes.length];
-invadersCtx.fillStyle = enemyColor;
+  invadersCtx.fillStyle = enemyColor;
   state.enemies.forEach(enemy => {
     if (enemy.alive) {
       invadersCtx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
@@ -1490,11 +1511,11 @@ invadersCtx.fillStyle = enemyColor;
   if (state.mysteryShip.active) {
     const ms = state.mysteryShip;
     invadersCtx.save();
-invadersCtx.shadowColor = '#FFD700';
+    invadersCtx.shadowColor = '#FFD700';
     invadersCtx.shadowBlur = 12;
     invadersCtx.fillStyle = '#FFD700';
     invadersCtx.fillRect(ms.x, ms.y, ms.width, ms.height);
-const lights = ['#FD1C03', '#00FF00', '#00FFFF', '#FF00FF', '#FFD700'];
+    const lights = ['#FD1C03', '#00FF00', '#00FFFF', '#FF00FF', '#FFD700'];
     for (let i = 0; i < 5; i++) {
       invadersCtx.fillStyle = lights[i % lights.length];
 invadersCtx.fillRect(ms.x + 3 + i * 5, ms.y + ms.height - 4, 3, 3);
@@ -1519,12 +1540,12 @@ invadersCtx.fillRect(ms.x + 3 + i * 5, ms.y + ms.height - 4, 3, 3);
 // Lives UI: show two boxes at start; when hit, show one at left and one on the side.
 // This still represents 3 total lives (active ship + two reserve boxes).
   const lifeBoxW = 14;
-const lifeBoxH = 10;
+  const lifeBoxH = 10;
   const lifeLeftX = 10;
   const lifeY = invadersCanvas.height - 28;
 
   invadersCtx.fillStyle = '#00FFFF';
-// lives mapping:
+  // lives mapping:
   // lives === 3 -> two boxes at left
   // lives === 2 -> one box at left, and one "on the side" (STATIC)
   // lives === 1 -> one "on the side" (STATIC)
@@ -1548,12 +1569,12 @@ invadersCtx.fillRect(sideX, lifeY, lifeBoxW, lifeBoxH);
   invadersCtx.fillStyle = '#fff';
   invadersCtx.fillText(`Score: ${state.score}`, 12, 18);
   invadersCtx.fillStyle = '#88FFFF';
-invadersCtx.fillText(`Level: ${state.level}`, invadersCanvas.width - 90, 18);
+  invadersCtx.fillText(`Level: ${state.level}`, invadersCanvas.width - 90, 18);
 
   if (invadersMessageEl) {
     invadersCtx.font = '14px Arial';
     invadersCtx.fillStyle = '#FFD700';
-invadersCtx.fillText(invadersMessageEl.textContent, 16, 35);
+    invadersCtx.fillText(invadersMessageEl.textContent, 16, 35);
   }
 }
 
@@ -1600,13 +1621,13 @@ function startInvaders() {
   invaderState.score = 0;
   invaderState.level = 1;
   invaderState.enemyBullets = [];
-invaderState.bullet.active = false;
+  invaderState.bullet.active = false;
   invaderState.bullet.alive = false;
   invaderState.player.x = Math.max(10, (invadersCanvas ? invadersCanvas.width : 300) / 2 - invaderState.player.width / 2);
-invaderState.player.lives = 3; // keep player lives at 3 per request
+  invaderState.player.lives = 3; // keep player lives at 3 per request
   invaderState.player.alive = true;
   invaderState.enemyDirection = 1;
-invaderState.enemyMoveTimer = 0;
+  invaderState.enemyMoveTimer = 0;
   invaderState.enemyMoveInterval = 36; // slower starting interval
   invaderState.mysteryShip.active = false;
   invaderState.mysteryShip.alive = false;
@@ -1615,7 +1636,7 @@ invaderState.enemyMoveTimer = 0;
 
   if (invadersScoreEl) invadersScoreEl.textContent = "Score: 0";
   if (invadersMessageEl) invadersMessageEl.textContent = "Good luck!";
-if (startInvadersBtn) startInvadersBtn.textContent = 'Restart';
+  if (startInvadersBtn) startInvadersBtn.textContent = 'Restart';
 
   createEnemies();
   createBunkers();
