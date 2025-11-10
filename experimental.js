@@ -702,7 +702,7 @@ function drawBackground() {
     racerCtx.fillRect(0, 0, racerCanvas.width, racerCanvas.height);
     
     drawStars(); // <-- ### NEW: Draw starfield ###
-    // --- ### END MOD ### ---
+    // --- ### END MOD ### --
 
     drawPerspectiveGrid(); // Draw grid on top of stars
 
@@ -934,13 +934,15 @@ function spawnObstacle() {
         racerState.gapWidthStartMultiplier - (racerState.dodged * racerState.gapWidthTightenRate)
     );
     
-    // Calculate the base gap width
+    // Calculate the base gap width (intended to represent width at player plane)
     let gapWidth = playerCar.baseWidth * currentGapMultiplier;
 
-    // --- ### FIX: Gap Size Safety Net ### ---
-    // Ensure the gap is always wider than the player's *current* width, plus a buffer.
-    // playerCar.width grows as the player dodges, so this check becomes stricter.
-    const minSafeGap = playerCar.width * 1.1; // 10% buffer
+    // --- ### FIX: Gap Size Safety Net ###
+    // Ensure the gap is always wider than the player's *potential* width.
+    // The vehicle can grow up to ~130% according to design, so we ensure a safe margin.
+    // Use both current width and baseWidth*1.3 as references and add a small buffer.
+    const expectedMaxWidth = Math.max(playerCar.width, playerCar.baseWidth * 1.3);
+    const minSafeGap = expectedMaxWidth * 1.05; // 5% buffer
     if (gapWidth < minSafeGap) {
         gapWidth = minSafeGap;
     }
@@ -949,10 +951,14 @@ function spawnObstacle() {
     // Apply a maximum gap width
     gapWidth = Math.min(gapWidth, 250);
 
+    // Spawn exactly at the horizon/vanishing point so the obstacle "appears" where the perspective lines meet.
+    // Add a tiny epsilon so scale math doesn't yield 0 and to ensure it shows as the very first thin object at the vanishing point.
+    const spawnY = horizonY + 1;
+
     racerState.obstacles.push({
-        y: horizonY, // Spawn at horizon
+        y: spawnY, // Spawn at horizon/vanishing point
         gapLane: gapLane,
-        gapWidth: gapWidth, // Use the safe-checked gap width
+        gapWidth: gapWidth, // Use the safe-checked gap width (represents player-plane width)
         color: `hsl(${colorHue}, 90%, 60%)`,
         hue: colorHue
     });
