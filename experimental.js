@@ -778,7 +778,7 @@ function drawGlow() {
     // 1. Obstacle Glow
     racerState.obstacles.forEach(ob => {
         const scale = getPerspectiveScale(ob.y);
-        if (scale <= 0.01) return; // Don't draw if basically invisible
+        if (scale < 0.01) return; // allow scale == 0.01 to render the initial tiny appearance
 
         const scaledHeight = obstacleHeight * scale;
         const top = ob.y - scaledHeight;
@@ -890,7 +890,7 @@ function drawObstacles() {
 
     racerState.obstacles.forEach(ob => {
         const scale = getPerspectiveScale(ob.y);
-        if (scale <= 0.01) return; // Don't draw if invisible
+        if (scale < 0.01) return; // allow the tiny initial appearance at the vanishing point
 
         const scaledHeight = obstacleHeight * scale;
         const top = ob.y - scaledHeight;
@@ -951,9 +951,8 @@ function spawnObstacle() {
     // Apply a maximum gap width
     gapWidth = Math.min(gapWidth, 250);
 
-    // Spawn exactly at the horizon/vanishing point so the obstacle "appears" where the perspective lines meet.
-    // Add a tiny epsilon so scale math doesn't yield 0 and to ensure it shows as the very first thin object at the vanishing point.
-    const spawnY = horizonY + 1;
+    // Spawn at the horizon/vanishing point so the obstacle "appears" where perspective lines meet.
+    const spawnY = horizonY; // exactly at the vanishing point
 
     racerState.obstacles.push({
         y: spawnY, // Spawn at horizon/vanishing point
@@ -1100,7 +1099,7 @@ function updateRacer(delta) {
         }
     });
     ensureStars(); // Ensure pool is full
-    // --- ### END NEW ### ---
+    // --- ### END NEW ### --
 
     // --- ### NEW: Update Camera Shake ### ---
     // Target intensity based on speed (0 to 1 ratio)
