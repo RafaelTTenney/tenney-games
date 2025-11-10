@@ -284,7 +284,7 @@ function tetrisLoop(ts) {
   t_accumulator += delta;
 
   // gravity step interval changes when fast-falling
-  const gravityInterval = t_fastFall ? Math.max(10, T_SPEED / 2) : T_SPEED;
+  const gravityInterval = t_fastFall ? Math.min(90, T_SPEED / 2) : T_SPEED;
 
   // run as many gravity steps as accumulated time allows (keeps physics stable when tab focus changes)
   while (t_accumulator >= gravityInterval) {
