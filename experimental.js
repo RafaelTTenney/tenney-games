@@ -776,19 +776,22 @@ function drawGlow() {
     racerCtx.shadowBlur = 36;
 
     // 1. Obstacle Glow
+    // NOTE: we now use ob.gapWidthAtPlayer and scale gaps by the ratio of roadWidthAtY / roadWidthAtPlayer
     racerState.obstacles.forEach(ob => {
         const scale = getPerspectiveScale(ob.y);
-        if (scale < 0.01) return; // allow scale == 0.01 to render the initial tiny appearance
+        if (scale < 0.01) return; // don't draw when entirely behind horizon
 
         const scaledHeight = obstacleHeight * scale;
         const top = ob.y - scaledHeight;
 
-        // --- ### MOD: Use wider road width constants ### ---
-        const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
-        const scaledLaneWidth = roadWidthAtPlayer / 3;
+        // road widths
+        const roadWidthAtY = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
+        // roadWidthAtPlayer is stored on obstacle for consistent scaling
+        const roadWidthAtPlayer = ob.roadWidthAtPlayer || ((roadWidthAtBottom - roadWidthTop) * getPerspectiveScale(playerCar.y) + roadWidthTop);
+        const scaledLaneWidth = roadWidthAtY / 3;
         const scaledGapCenter = (canvasWidth / 2) + (scaledLaneWidth * ob.gapLane);
-        const scaledGapWidth = ob.gapWidth * scale;
-        // --- End gap calculation ---
+        // scale the gap relative to the player's road width
+        const scaledGapWidth = (ob.gapWidthAtPlayer) * (roadWidthAtY / roadWidthAtPlayer);
 
         const gapLeft = scaledGapCenter - scaledGapWidth / 2;
         const gapRight = scaledGapCenter + scaledGapWidth / 2;
@@ -895,12 +898,14 @@ function drawObstacles() {
         const scaledHeight = obstacleHeight * scale;
         const top = ob.y - scaledHeight;
 
-        // --- ### MOD: Use wider road width constants ### ---
-        const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
-        const scaledLaneWidth = roadWidthAtPlayer / 3;
+        // compute road widths
+        const roadWidthAtY = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
+        const roadWidthAtPlayer = ob.roadWidthAtPlayer || ((roadWidthAtBottom - roadWidthTop) * getPerspectiveScale(playerCar.y) + roadWidthTop);
+        const scaledLaneWidth = roadWidthAtY / 3;
         const scaledGapCenter = (canvasWidth / 2) + (scaledLaneWidth * ob.gapLane);
-        const scaledGapWidth = ob.gapWidth * scale;
-        // --- End gap calculation ---
+
+        // scale the gap relative to the player's road width
+        const scaledGapWidth = (ob.gapWidthAtPlayer) * (roadWidthAtY / roadWidthAtPlayer);
 
         const gapLeft = scaledGapCenter - scaledGapWidth / 2;
         const gapRight = scaledGapCenter + scaledGapWidth / 2;
@@ -934,30 +939,36 @@ function spawnObstacle() {
         racerState.gapWidthStartMultiplier - (racerState.dodged * racerState.gapWidthTightenRate)
     );
     
-    // Calculate the base gap width (intended to represent width at player plane)
-    let gapWidth = playerCar.baseWidth * currentGapMultiplier;
+    // --- NEW: compute gap width relative to the player's road/lane width ---
+    // Determine player's road width at player's Y
+    const playerScale = getPerspectiveScale(playerCar.y);
+    const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * playerScale + roadWidthTop;
+    const laneWidthAtPlayer = roadWidthAtPlayer / 3;
 
-    // --- ### FIX: Gap Size Safety Net ###
-    // Ensure the gap is always wider than the player's *potential* width.
-    // The vehicle can grow up to ~130% according to design, so we ensure a safe margin.
-    // Use both current width and baseWidth*1.3 as references and add a small buffer.
-    const expectedMaxWidth = Math.max(playerCar.width, playerCar.baseWidth * 1.3);
-    const minSafeGap = expectedMaxWidth * 1.05; // 5% buffer
-    if (gapWidth < minSafeGap) {
-        gapWidth = minSafeGap;
+    // Calculate gap width in PIXELS at the player's plane (this is stored on obstacle)
+    // Use the same relative factor as the car base width originally used, but based on laneWidthAtPlayer.
+    let gapWidthAtPlayer = (laneWidthAtPlayer * 0.55) * currentGapMultiplier;
+
+    // Safety net: ensure the gap at player plane is always at least slightly wider than the current car width
+    const minSafeGap = Math.max(playerCar.width * 1.05, playerCar.baseWidth * 0.9); // a small buffer
+    if (gapWidthAtPlayer < minSafeGap) {
+        gapWidthAtPlayer = minSafeGap;
     }
-    // --- ### END FIX ### ---
 
-    // Apply a maximum gap width
-    gapWidth = Math.min(gapWidth, 250);
+    // Cap absolute size
+    gapWidthAtPlayer = Math.min(gapWidthAtPlayer, 250);
 
-    // Spawn at the horizon/vanishing point so the obstacle "appears" where perspective lines meet.
-    const spawnY = horizonY; // exactly at the vanishing point
+    // Spawn exactly at the horizon/vanishing point so the obstacle "appears" where perspective lines meet.
+    // Use horizonY (getPerspectiveScale will clamp to 0.01 internally)
+    const spawnY = horizonY;
 
     racerState.obstacles.push({
         y: spawnY, // Spawn at horizon/vanishing point
         gapLane: gapLane,
-        gapWidth: gapWidth, // Use the safe-checked gap width (represents player-plane width)
+        // store the gap width as the width AT THE PLAYER'S PLANE (not at bottom)
+        gapWidthAtPlayer: gapWidthAtPlayer,
+        // store the roadWidthAtPlayer for correct scaling when obstacle moves
+        roadWidthAtPlayer: roadWidthAtPlayer,
         color: `hsl(${colorHue}, 90%, 60%)`,
         hue: colorHue
     });
@@ -1088,7 +1099,7 @@ function updateRacer(delta) {
     });
     ensureSpeedLines();
     
-    // --- ### NEW: Update starfield ### ---
+    // --- ### NEW: Update starfield ###
     racerState.stars.forEach(star => {
         star.z -= traveled * 0.1; // Move star towards player
         if (star.z <= 0.1) { // If star is at or behind camera
@@ -1101,7 +1112,7 @@ function updateRacer(delta) {
     ensureStars(); // Ensure pool is full
     // --- ### END NEW ### --
 
-    // --- ### NEW: Update Camera Shake ### ---
+    // --- ### NEW: Update Camera Shake ###
     // Target intensity based on speed (0 to 1 ratio)
     const speedRatio = (racerState.speed - 180) / (520 - 180); 
     const targetIntensity = speedRatio * 0.2; // Max intensity from speed (very subtle)
@@ -1125,7 +1136,7 @@ function updateRacer(delta) {
     // --- ### END NEW ### ---
 
 
-    // --- ### MOD: Spawn sleek trail particles ### ---
+    // --- ### MOD: Spawn sleek trail particles ###
     if (racerState.running && Math.random() > 0.3) { // Spawn frequently
         const carAngle = racerState.carSway + racerState.carTilt;
         // Calculate spawn position at the "back" of the tilted car
@@ -1159,12 +1170,14 @@ function updateRacer(delta) {
         const obTop = ob.y - scaledHeight;
         const obBottom = ob.y;
 
-        // --- ### MOD: Use wider road width constants ### ---
-        const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
-        const scaledLaneWidth = roadWidthAtPlayer / 3;
+        // compute road widths
+        const roadWidthAtY = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
+        const roadWidthAtPlayer = ob.roadWidthAtPlayer || ((roadWidthAtBottom - roadWidthTop) * getPerspectiveScale(playerCar.y) + roadWidthTop);
+        const scaledLaneWidth = roadWidthAtY / 3;
         const scaledGapCenter = (canvasWidth / 2) + (scaledLaneWidth * ob.gapLane);
-        const scaledGapWidth = ob.gapWidth * scale;
-        // --- End gap calculation ---
+
+        // scale the gap relative to the player's road width
+        const scaledGapWidth = (ob.gapWidthAtPlayer) * (roadWidthAtY / roadWidthAtPlayer);
 
         const gapLeft = scaledGapCenter - scaledGapWidth / 2;
         const gapRight = scaledGapCenter + scaledGapWidth / 2;
@@ -1172,7 +1185,7 @@ function updateRacer(delta) {
         // Simple AABB collision check
         if (carBottom <= obTop || carTop >= obBottom) continue; // No Y-overlap
 
-        // Check for X-overlap (collision)
+        // Check for X-overlap (collision). If any part of the car is outside the gap -> crash.
         if (carLeft < gapLeft || carRight > gapRight) {
             // CRASH!
             if (racerState.animationFrame) {
