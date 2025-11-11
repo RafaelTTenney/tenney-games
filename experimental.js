@@ -1192,9 +1192,11 @@ function updateRacer(delta) {
         const roadWidthAtY = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
         const roadWidthAtPlayerStored = ob.roadWidthAtPlayer || roadWidthAtPlayer;
 
-        // Project the lane center to obstacle Y using linear scaling (consistent with drawing)
-        const scaledLaneWidthAtY = roadWidthAtY / 3;
-        const scaledGapCenter = (canvasWidth / 2) + ob.gapLane * scaledLaneWidthAtY;
+        // Project the lane center to obstacle Y using the SAME projection logic used by drawGlow/drawObstacles
+        // This ensures the gap center used for collision matches the visible gap center precisely.
+        const playerLaneCenterAtPlayer = (canvasWidth / 2) + (ob.gapLane * (roadWidthAtPlayerStored / 3));
+        const gapCenterOffsetFromVP = playerLaneCenterAtPlayer - (canvasWidth / 2);
+        const scaledGapCenter = (canvasWidth / 2) + gapCenterOffsetFromVP * (roadWidthAtY / roadWidthAtPlayerStored);
 
         // scale the gap relative to the player's road width (stored at spawn)
         const scaledGapWidth = ob.gapWidthAtPlayer * (roadWidthAtY / roadWidthAtPlayerStored);
@@ -1210,6 +1212,7 @@ function updateRacer(delta) {
         const EPS = Math.max(2, Math.round(playerCar.width * 0.03)); // 2px minimum
 
         // Check for X-overlap (collision). Allow a small EPS margin inside the gap.
+        // Collision occurs if any part of the car overlaps the obstacle (i.e., is outside the gap bounds).
         if (carLeft < gapLeft + EPS || carRight > gapRight - EPS) {
             // CRASH!
             if (racerState.animationFrame) {
