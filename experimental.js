@@ -1024,6 +1024,11 @@ function applyShakeTransform() {
 }
 // --- ### END NEW ### ---
 
+// Helper: AABB overlap check
+function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
 function startCrashAnimation() {
     if (racerState.crashAnimId) {
         cancelAnimationFrame(racerState.crashAnimId);
@@ -1211,9 +1216,29 @@ function updateRacer(delta) {
         // give a tiny collision tolerance (epsilon) in pixels. This is small and proportional to car width.
         const EPS = Math.max(2, Math.round(playerCar.width * 0.03)); // 2px minimum
 
-        // Check for X-overlap (collision). Allow a small EPS margin inside the gap.
-        // Collision occurs if any part of the car overlaps the obstacle (i.e., is outside the gap bounds).
-        if (carLeft < gapLeft + EPS || carRight > gapRight - EPS) {
+        // Build the left and right obstacle "chunks" as rectangles (projected)
+        // Expand the gap by EPS (effectively shrink obstacle chunks) so edges are slightly forgiving.
+        const gapLeftAdj = gapLeft + EPS;
+        const gapRightAdj = gapRight - EPS;
+
+        // Left solid chunk: x=0 -> width = gapLeftAdj
+        const leftChunkX = 0;
+        const leftChunkW = Math.max(0, gapLeftAdj);
+        // Right solid chunk: x = gapRightAdj -> width = canvasWidth - gapRightAdj
+        const rightChunkX = Math.max(0, gapRightAdj);
+        const rightChunkW = Math.max(0, canvasWidth - rightChunkX);
+
+        // Car rect (using exact lane center for collision)
+        const carRectX = carLeft;
+        const carRectY = carTop;
+        const carRectW = playerCar.width;
+        const carRectH = playerCar.height;
+
+        // If car overlaps either solid chunk, it's a collision.
+        const hitLeft = leftChunkW > 0 && rectsOverlap(carRectX, carRectY, carRectW, carRectH, leftChunkX, obTop, leftChunkW, scaledHeight);
+        const hitRight = rightChunkW > 0 && rectsOverlap(carRectX, carRectY, carRectW, carRectH, rightChunkX, obTop, rightChunkW, scaledHeight);
+
+        if (hitLeft || hitRight) {
             // CRASH!
             if (racerState.animationFrame) {
                 cancelAnimationFrame(racerState.animationFrame);
