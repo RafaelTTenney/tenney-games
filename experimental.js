@@ -416,6 +416,7 @@ function initTetrisGame() {
 
 // Constants and State
 const laneCount = 3;
+// laneWidth is simple screen-space division (used only as fallback)
 const laneWidth = racerCanvas ? racerCanvas.width / laneCount : 100;
 const horizonY = 120; // Y pixel of horizon
 const canvasWidth = racerCanvas ? racerCanvas.width : 340;
@@ -424,11 +425,11 @@ const canvasHeight = racerCanvas ? racerCanvas.height : 520;
 const roadWidthAtBottom = racerCanvas.width * 1.6; // <-- ### FIX: Was 1.2
 const roadWidthTop = racerCanvas.width * 0.08; // <-- ### FIX: Was 0.1
 
-
+// playerCar baseWidth will be computed dynamically at reset to match perspective
 const playerCar = {
     lane: 0, // Using -1, 0, 1 for lanes
-    baseWidth: laneWidth * 0.55,
-    width: laneWidth * 0.55,
+    baseWidth: 0, // computed later using perspective so car aligns with lane centers at player plane
+    width: 0,
     height: 58,
     y: racerCanvas ? racerCanvas.height - 90 : 410,
     x: racerCanvas ? racerCanvas.width / 2 : 170 // Start at center
@@ -788,8 +789,15 @@ function drawGlow() {
         const roadWidthAtY = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
         // roadWidthAtPlayer is stored on obstacle for consistent scaling
         const roadWidthAtPlayer = ob.roadWidthAtPlayer || ((roadWidthAtBottom - roadWidthTop) * getPerspectiveScale(playerCar.y) + roadWidthTop);
-        const scaledLaneWidth = roadWidthAtY / 3;
-        const scaledGapCenter = (canvasWidth / 2) + (scaledLaneWidth * ob.gapLane);
+        // scaled lane width at obstacle Y
+        const scaledLaneWidthAtY = roadWidthAtY / 3;
+
+        // Calculate the gap center by projecting the player's lane center to obstacle Y.
+        // This avoids small misalignments between lane center definitions.
+        const playerLaneCenterAtPlayer = (canvasWidth / 2) + (ob.gapLane * (roadWidthAtPlayer / 3));
+        const gapCenterOffsetFromVP = playerLaneCenterAtPlayer - (canvasWidth / 2);
+        const scaledGapCenter = (canvasWidth / 2) + gapCenterOffsetFromVP * (roadWidthAtY / roadWidthAtPlayer);
+
         // scale the gap relative to the player's road width
         const scaledGapWidth = (ob.gapWidthAtPlayer) * (roadWidthAtY / roadWidthAtPlayer);
 
@@ -902,7 +910,11 @@ function drawObstacles() {
         const roadWidthAtY = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
         const roadWidthAtPlayer = ob.roadWidthAtPlayer || ((roadWidthAtBottom - roadWidthTop) * getPerspectiveScale(playerCar.y) + roadWidthTop);
         const scaledLaneWidth = roadWidthAtY / 3;
-        const scaledGapCenter = (canvasWidth / 2) + (scaledLaneWidth * ob.gapLane);
+
+        // Project player's lane center to obstacle Y to align lane centers precisely
+        const playerLaneCenterAtPlayer = (canvasWidth / 2) + (ob.gapLane * (roadWidthAtPlayer / 3));
+        const gapCenterOffsetFromVP = playerLaneCenterAtPlayer - (canvasWidth / 2);
+        const scaledGapCenter = (canvasWidth / 2) + gapCenterOffsetFromVP * (roadWidthAtY / roadWidthAtPlayer);
 
         // scale the gap relative to the player's road width
         const scaledGapWidth = (ob.gapWidthAtPlayer) * (roadWidthAtY / roadWidthAtPlayer);
@@ -950,7 +962,7 @@ function spawnObstacle() {
     let gapWidthAtPlayer = (laneWidthAtPlayer * 0.55) * currentGapMultiplier;
 
     // Safety net: ensure the gap at player plane is always at least slightly wider than the current car width
-    const minSafeGap = Math.max(playerCar.width * 1.05, playerCar.baseWidth * 0.9); // a small buffer
+    const minSafeGap = Math.max(playerCar.width * 1.05, playerCar.baseWidth * 0.95, laneWidthAtPlayer * 0.5); // safety checks
     if (gapWidthAtPlayer < minSafeGap) {
         gapWidthAtPlayer = minSafeGap;
     }
@@ -959,7 +971,6 @@ function spawnObstacle() {
     gapWidthAtPlayer = Math.min(gapWidthAtPlayer, 250);
 
     // Spawn exactly at the horizon/vanishing point so the obstacle "appears" where perspective lines meet.
-    // Use horizonY (getPerspectiveScale will clamp to 0.01 internally)
     const spawnY = horizonY;
 
     racerState.obstacles.push({
@@ -1173,8 +1184,11 @@ function updateRacer(delta) {
         // compute road widths
         const roadWidthAtY = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
         const roadWidthAtPlayer = ob.roadWidthAtPlayer || ((roadWidthAtBottom - roadWidthTop) * getPerspectiveScale(playerCar.y) + roadWidthTop);
-        const scaledLaneWidth = roadWidthAtY / 3;
-        const scaledGapCenter = (canvasWidth / 2) + (scaledLaneWidth * ob.gapLane);
+
+        // Project player's lane center to obstacle Y to align lane centers precisely (same as in draw)
+        const playerLaneCenterAtPlayer = (canvasWidth / 2) + (ob.gapLane * (roadWidthAtPlayer / 3));
+        const gapCenterOffsetFromVP = playerLaneCenterAtPlayer - (canvasWidth / 2);
+        const scaledGapCenter = (canvasWidth / 2) + gapCenterOffsetFromVP * (roadWidthAtY / roadWidthAtPlayer);
 
         // scale the gap relative to the player's road width
         const scaledGapWidth = (ob.gapWidthAtPlayer) * (roadWidthAtY / roadWidthAtPlayer);
@@ -1301,10 +1315,16 @@ function resetRacer() {
     }
     pauseRacer();
 
-    // Reset player
+    // Reset player lane
     playerCar.lane = 0;
-    playerCar.baseWidth = laneWidth * 0.55;
+
+    // Recompute baseWidth to match perspective lane width at player's Y so lane centers and gaps align.
+    const playerScale = getPerspectiveScale(playerCar.y);
+    const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * playerScale + roadWidthTop;
+    playerCar.baseWidth = (roadWidthAtPlayer / 3) * 0.55;
     playerCar.width = playerCar.baseWidth;
+
+    // Position player at center target X to ensure alignment with projected lane centers
     playerCar.x = canvasWidth / 2;
     playerCar.height = 58;
 
@@ -1397,7 +1417,7 @@ function initRacerGame() {
 
     if (racerCanvas) {
         loadRacerHighScore();
-        resetRacer(); // Perform initial setup
+        resetRacer(); // Perform initial setup (this computes baseWidth correctly)
     }
 }
 
