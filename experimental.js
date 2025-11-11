@@ -1169,9 +1169,16 @@ function updateRacer(delta) {
 
 
     // Collision Check
-    const carCenter = playerCar.x;
-    const carLeft = carCenter - playerCar.width / 2;
-    const carRight = carCenter + playerCar.width / 2;
+    // Instead of using the interpolated playerCar.x (which introduces a small lag due to smoothing),
+    // compute the exact lane center at the player's plane and use that for collision testing.
+    // This ensures the collision box aligns exactly with the lane centers used when computing obstacle gaps.
+    const playerScale = getPerspectiveScale(playerCar.y);
+    const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * playerScale + roadWidthTop;
+    const laneWidthAtPlayer = roadWidthAtPlayer / 3;
+    const exactPlayerCenterX = (canvasWidth / 2) + (laneWidthAtPlayer * playerCar.lane);
+    const carCenterForCollision = exactPlayerCenterX;
+    const carLeft = carCenterForCollision - playerCar.width / 2;
+    const carRight = carCenterForCollision + playerCar.width / 2;
     const carTop = playerCar.y;
     const carBottom = playerCar.y + playerCar.height;
 
@@ -1181,26 +1188,29 @@ function updateRacer(delta) {
         const obTop = ob.y - scaledHeight;
         const obBottom = ob.y;
 
-        // compute road widths
+        // compute road widths at obstacle y
         const roadWidthAtY = (roadWidthAtBottom - roadWidthTop) * scale + roadWidthTop;
-        const roadWidthAtPlayer = ob.roadWidthAtPlayer || ((roadWidthAtBottom - roadWidthTop) * getPerspectiveScale(playerCar.y) + roadWidthTop);
+        const roadWidthAtPlayerStored = ob.roadWidthAtPlayer || roadWidthAtPlayer;
 
-        // Project player's lane center to obstacle Y to align lane centers precisely (same as in draw)
-        const playerLaneCenterAtPlayer = (canvasWidth / 2) + (ob.gapLane * (roadWidthAtPlayer / 3));
-        const gapCenterOffsetFromVP = playerLaneCenterAtPlayer - (canvasWidth / 2);
-        const scaledGapCenter = (canvasWidth / 2) + gapCenterOffsetFromVP * (roadWidthAtY / roadWidthAtPlayer);
+        // Project the lane center to obstacle Y using linear scaling (consistent with drawing)
+        const scaledLaneWidthAtY = roadWidthAtY / 3;
+        const scaledGapCenter = (canvasWidth / 2) + ob.gapLane * scaledLaneWidthAtY;
 
-        // scale the gap relative to the player's road width
-        const scaledGapWidth = (ob.gapWidthAtPlayer) * (roadWidthAtY / roadWidthAtPlayer);
+        // scale the gap relative to the player's road width (stored at spawn)
+        const scaledGapWidth = ob.gapWidthAtPlayer * (roadWidthAtY / roadWidthAtPlayerStored);
 
         const gapLeft = scaledGapCenter - scaledGapWidth / 2;
         const gapRight = scaledGapCenter + scaledGapWidth / 2;
 
-        // Simple AABB collision check
+        // Simple AABB collision check (Y overlap)
         if (carBottom <= obTop || carTop >= obBottom) continue; // No Y-overlap
 
-        // Check for X-overlap (collision). If any part of the car is outside the gap -> crash.
-        if (carLeft < gapLeft || carRight > gapRight) {
+        // To avoid unfair edge collisions caused by rounding / smoothing visuals,
+        // give a tiny collision tolerance (epsilon) in pixels. This is small and proportional to car width.
+        const EPS = Math.max(2, Math.round(playerCar.width * 0.03)); // 2px minimum
+
+        // Check for X-overlap (collision). Allow a small EPS margin inside the gap.
+        if (carLeft < gapLeft + EPS || carRight > gapRight - EPS) {
             // CRASH!
             if (racerState.animationFrame) {
                 cancelAnimationFrame(racerState.animationFrame);
