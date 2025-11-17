@@ -48,7 +48,7 @@
     <h2>Snake Game</h2>
     <div>
       <span id="snake-score">Score: 0</span>
-      <button onclick="resetSnake()">Restart</button>
+      <button id="snakeRestartBtn">Restart</button>
     </div>
     <canvas id="snake-canvas" width="320" height="320"></canvas>
     <p>Use arrow keys to move the snake.</p>
@@ -57,7 +57,7 @@
     <h2>Memory Match</h2>
     <div>
       <span id="memory-moves">Moves: 0</span>
-      <button onclick="resetMemory()">Restart</button>
+      <button id="memoryRestartBtn">Restart</button>
     </div>
     <div id="memory-board"></div>
   </div>
@@ -70,10 +70,10 @@
     <canvas id="paperio-canvas" width="400" height="400"></canvas>
     <div id="paperio-scoreboard"></div>
     <div id="paperio-elim"></div>
-    <button onclick="resetPaperio()">Restart</button>
+    <button id="paperioRestartBtn">Restart</button>
   </div>
 
-  <div id="racer-game" class="game-container" aria-hidden="true">
+    <div id="racer-game" class="game-container" aria-hidden="true">
     <h2>Neon Racer</h2>
     <div id="racer-hud">
       <span id="racer-distance">Distance: 0m</span>
@@ -83,14 +83,23 @@
     <canvas id="racer-canvas" width="320" height="420"></canvas>
     <div id="racer-message">Ready to race! Use &larr; and &rarr; to change lanes.</div>
     <div>
-      <button onclick="startRacer()">Start</button>
-      <button onclick="pauseRacer()">Pause</button>
-      <button onclick="resetRacer()">Reset</button>
+      <button id="racerStartBtn">Start</button>
+      <button id="racerPauseBtn">Pause</button>
+      <button id="racerResetBtn">Reset</button>
     </div>
   </div>
 
     <script src="login.js"></script>
-  <script src="multi-game.js"></script>
+
+  <!-- Per-game files for multi-game page -->
+  <script src="games/snake.js"></script>
+  <script src="games/memory.js"></script>
+  <script src="games/paperio.js"></script>
+  <script src="games/racer.js"></script>
+
+  <!-- UI loader: handles tab/menu and lazy init -->
+  <script src="multi-game-ui.js"></script>
+
   <footer>
     &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </footer>

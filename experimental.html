@@ -355,29 +355,13 @@
         </div>
     </div>
     <script src="login.js"></script>
-    <script>
-        // Access protection: only admins may enter
-        document.addEventListener('DOMContentLoaded', () => {
-            // enforcePageAccess will redirect if not allowed.
-            // Make sure login.js defines this function
-            if (typeof enforcePageAccess === 'function' && !enforcePageAccess('experimental.html')) {
-                return;
-            }
 
-            // Since all games are now on this page, we must initialize all.
-            // Their scripts are in experimental.js
-            if (typeof initTetrisGame === 'function') {
-                initTetrisGame();
-            }
-            if (typeof initRacerGame === 'function') {
-                initRacerGame();
-            }
-            if (typeof initInvadersGame === 'function') {
-                initInvadersGame();
-            }
-        });
-    </script>
+    <!-- load per-game experimental modules (split files) -->
+    <script src="experimental/neon-tetris.js"></script>
+    <script src="experimental/neon-racer-plus.js"></script>
+    <script src="experimental/space-invaders-plus.js"></script>
 
-    <script src="experimental.js"></script>
+    <!-- lightweight experimental page UI loader (replaces old experimental.js) -->
+    <script src="experimental-ui.js"></script>
 </body>
 </html>
