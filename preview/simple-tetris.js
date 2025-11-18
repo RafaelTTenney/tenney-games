@@ -303,7 +303,7 @@
     if (tetrisModalCloseBtn) tetrisModalCloseBtn.addEventListener('click', t_closeModal);
     if (tetrisStartBtn) tetrisStartBtn.addEventListener('click', t_start);
     if (tetrisControlsBtn) tetrisControlsBtn.addEventListener('click', function () {
-      alert('Controls:\nRight Arrow: Move Right\nLeft Arrow: Move Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
+      console.log('Controls:\nRight Arrow: Move Right\nLeft Arrow: Move Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
     });
     if (tetrisModal) {
       tetrisModal.addEventListener('click', function (e) {
