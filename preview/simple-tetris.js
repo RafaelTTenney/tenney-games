@@ -29,6 +29,9 @@
   let t_offscreenCanvas = null;
   let t_offscreenCtx = null;
 
+  // New: paused flag so controls are disabled while paused
+  let t_isPaused = false;
+
   const T_PALETTE = { fill: '#00FFFF', stroke: '#33FFFF', shadow: '#00FFFF' };
   const T_PLAYFIELD_BG = '#23262b';
 
@@ -66,23 +69,32 @@
     }
   }
 
-  function t_start() {
-    t_rows = [];
-    for (let i = 0; i < 20; i++) {
-      let row = [];
-      for (let x = 0; x < 10; x++) row.push(0);
-      t_rows.push(row);
+  // MODIFIED: Added isResume argument
+  function t_start(isResume = false) {
+    // Un-pause when starting/resuming
+    t_isPaused = false;
+
+    if (!isResume) {
+      t_rows = [];
+      for (let i = 0; i < 20; i++) {
+        let row = [];
+        for (let x = 0; x < 10; x++) row.push(0);
+        t_rows.push(row);
+      }
+      t_score = 0;
+      t_loadHighScore();
+      t_messageTimer = 0;
+      t_block = null;
     }
-    t_score = 0;
-    t_loadHighScore();
-    t_messageTimer = 0;
-    t_block = null;
+    
     t_accumulator = 0;
     t_lastTime = performance.now();
     if (!t_offscreenCanvas) t_initOffscreen();
     if (t_tetrisLoopId) cancelAnimationFrame(t_tetrisLoopId);
     t_tetrisLoopId = requestAnimationFrame(tetrisLoop);
-    if (tetrisStartBtn) tetrisStartBtn.textContent = 'Restart';
+    
+    // Only set text to 'Restart' if it's a fresh start, not a resume from pause
+    if (!isResume && tetrisStartBtn) tetrisStartBtn.textContent = 'Restart'; 
   }
 
   function t_rotate() {
@@ -262,26 +274,40 @@
     t_drawToOffscreen();
   }
 
-  function t_stopGame() {
+  // MODIFIED: Added isPause argument
+  function t_stopGame(isPause = false) {
     if (t_tetrisLoopId) {
       cancelAnimationFrame(t_tetrisLoopId);
       t_tetrisLoopId = null;
     }
-    t_block = null;
+
+    // Track paused state so input handlers can ignore inputs while paused
+    t_isPaused = !!isPause;
+
+    // Only set t_block to null on permanent game-over stop, not on pause
+    // if (!isPause) t_block = null; 
+    
     if (tetrisCtx) {
       tetrisCtx.fillStyle = T_PLAYFIELD_BG;
       tetrisCtx.fillRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
     }
-    if (tetrisStartBtn) tetrisStartBtn.textContent = 'Start';
+    // Only change Start button text if it's not a temporary pause
+    if (tetrisStartBtn && !isPause) tetrisStartBtn.textContent = 'Start';
   }
 
   // Keyboard handlers for the preview Tetris modal
   function onKeyDown(e) {
     if (!tetrisModal || tetrisModal.style.display !== 'flex') return;
+    // Prevent scrolling/default actions when game is active or paused
     if (['ArrowRight','ArrowLeft','ArrowUp','ArrowDown',' '].includes(e.key) || e.code === 'Space') {
       e.preventDefault();
     }
+    // If paused, do not accept inputs
+    if (t_isPaused) return;
+
+    // Only allow controls if game loop is active (i.e., not fully stopped) or there's an active block
     if (!t_block && !t_tetrisLoopId) return;
+    
     if (e.key === 'ArrowLeft') t_moveLeft();
     if (e.key === 'ArrowRight') t_moveRight();
     if (e.code === 'Space' || e.key === ' ') t_rotate();
@@ -301,10 +327,31 @@
       });
     }
     if (tetrisModalCloseBtn) tetrisModalCloseBtn.addEventListener('click', t_closeModal);
-    if (tetrisStartBtn) tetrisStartBtn.addEventListener('click', t_start);
-    if (tetrisControlsBtn) tetrisControlsBtn.addEventListener('click', function () {
-      console.log('Controls:\nRight Arrow: Move Right\nLeft Arrow: Move Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
+
+    // Wrap the start call so the event object isn't treated as isResume
+    if (tetrisStartBtn) tetrisStartBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      t_start(false);
     });
+    
+    // MODIFIED LOGIC: Pause game, show alert, and resume game
+    if (tetrisControlsBtn) tetrisControlsBtn.addEventListener('click', function () {
+      const wasRunning = t_tetrisLoopId !== null;
+          
+      // 1. Pause the game, but keep the block and state
+      if (wasRunning) {
+        t_stopGame(true); // true means it's a pause, don't reset button text and set paused flag
+      }
+      
+      // 2. Show the controls alert (this blocks execution)
+      alert('Controls:\nRight Arrow: Move Right\nLeft Arrow: Move Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
+          
+      // 3. Resume the game if it was running
+      if (wasRunning) {
+        t_start(true); // true means it's a resume, don't re-init/reset score/board
+      }
+    });
+    
     if (tetrisModal) {
       tetrisModal.addEventListener('click', function (e) {
         if (e.target === tetrisModal) t_closeModal();
