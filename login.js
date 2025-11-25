@@ -15,7 +15,7 @@ const users = [
   { username: 'ccarty', hash: 'e3bd890850be9d6ffc4568c23a497e84fc8ed079ed196ce6d978a24a731f1de8', accountStatus: 'standard', firstName: 'Colleen' },
   { username: 'smartinez', hash: 'cfadedad585d18910973603153c102a1ab83edd78886db527315b07d0630281e', accountStatus: 'advance', firstName: 'Santi' },
   { username: 'rtenney', hash: 'd2809be3fe85fcf081294d173edc0580b93d17b8c6df3ccabc8b56d5b4f62714', accountStatus: 'advance', firstName: 'Robert' }
-  { username: 'cdillon', hash: 'd2809be3fe85fcf081294d173edc0580b93d17b8c6df3ccabc8b56d5b4f62714', accountStatus: 'admin', firstName: 'Calvin' }
+  { username: 'cdillon', hash: '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8', accountStatus: 'admin', firstName: 'Calvin' }
 ];
 
 function isLoggedIn() {
