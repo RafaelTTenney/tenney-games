@@ -256,7 +256,7 @@
   <script src="paperio.js"></script>
   <script src="racer.js"></script>
 
-  <!-- UI loader: handles card clicks and game initialization -->
+  <!-- UI loader: handles card clicks, game initialization, and control buttons -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const gameButtons = document.querySelectorAll('.game-grid button[data-game-target]');
@@ -266,39 +266,71 @@
 
       // Function to initialize the specific game script
       const initializeGame = (gameId) => {
-        // Call the specific initialization function from the external script files (e.g., snake.js)
+        // Call the specific initialization function from the external script files
         console.log(`Initializing game: ${gameId}`);
-        // NOTE: We use the function names exported by the individual JS files.
-        // Snake.js exports 'initSnake'. The others export 'init*Game'.
+        
         switch (gameId) {
             case 'snake':
-                // Check if initSnake function exists before calling
-                if (typeof initSnake === 'function') initSnake();
+                // FIX: Use initSnakeGame() to match the exported function name in snake.js
+                if (typeof initSnakeGame === 'function') initSnakeGame();
                 break;
             case 'memory':
-                // Corrected function call to match memory.js export
                 if (typeof initMemoryGame === 'function') initMemoryGame();
                 break;
             case 'paperio':
-                // Corrected function call to match paperio.js export
                 if (typeof initPaperioGame === 'function') initPaperioGame();
                 break;
             case 'racer':
-                // Corrected function call to match racer.js export
                 if (typeof initRacerGame === 'function') initRacerGame();
                 break;
             default:
                 console.error(`No initialization function found for game ID: ${gameId}`);
         }
       };
+      
+      // Function to attach event listeners to control buttons
+      const attachGameControls = () => {
+          // Snake Controls
+          document.getElementById('snakeRestartBtn')?.addEventListener('click', () => {
+              // Calls the global reset function exposed by snake.js
+              if (typeof resetSnake === 'function') resetSnake();
+          });
 
+          // Memory Controls
+          document.getElementById('memoryRestartBtn')?.addEventListener('click', () => {
+              // Calls the global reset function exposed by memory.js
+              if (typeof resetMemory === 'function') resetMemory();
+          });
+
+          // Paper-io Controls (FIXES THE USER'S ISSUE)
+          document.getElementById('paperioRestartBtn')?.addEventListener('click', () => {
+              // Calls the global reset function exposed by paperio.js
+              if (typeof resetPaperio === 'function') resetPaperio();
+          });
+
+          // Racer Controls
+          document.getElementById('racerStartBtn')?.addEventListener('click', () => {
+              // Calls the global start function exposed by racer.js
+              if (typeof startRacer === 'function') startRacer();
+          });
+          document.getElementById('racerPauseBtn')?.addEventListener('click', () => {
+              // Calls the global pause function exposed by racer.js
+              if (typeof pauseRacer === 'function') pauseRacer();
+          });
+          document.getElementById('racerResetBtn')?.addEventListener('click', () => {
+              // Calls the global reset function exposed by racer.js
+              if (typeof resetRacer === 'function') resetRacer();
+          });
+      };
+
+      // Listener for the main game cards
       gameButtons.forEach(button => {
         button.addEventListener('click', (event) => {
           const targetId = button.getAttribute('data-game-target');
           const targetContainer = document.getElementById(`${targetId}-game`);
 
           if (targetContainer) {
-            // Hide all cards/grid
+            // Hide main hub elements
             gameGrid.style.display = 'none';
             mainTitle.style.display = 'none';
 
@@ -317,6 +349,9 @@
           }
         });
       });
+      
+      // Attach the control buttons listeners immediately
+      attachGameControls();
     });
   </script>
 
