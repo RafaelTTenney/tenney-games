@@ -49,7 +49,6 @@
         <button class="btn" id="runPreviewInvadersBtn">Play Now</button>
       </div>
     </div>
-
     <!-- NEON TETRIS MODAL -->
     <div id="previewNeonTetrisModal" class="modal">
       <div class="modal-content">
@@ -61,7 +60,6 @@
         <button id="preview-neon-tetris-closeBtn" class="btn" style="background:red;">Close Game</button>
       </div>
     </div>
-
     <!-- INVADERS MODAL -->
     <div id="preview-invadersModal" class="modal">
       <div class="modal-content">
@@ -86,12 +84,12 @@
       document.getElementById('previewNeonTetrisModal').style.display = 'flex';
       if (typeof initPreviewNeonTetris === 'function') initPreviewNeonTetris();
     });
+    document.getElementById('preview-neon-tetris-startBtn').addEventListener('click', () => {
+      if (typeof startPreviewNeonTetris === 'function') startPreviewNeonTetris();
+    });
     document.getElementById('preview-neon-tetris-closeBtn').addEventListener('click', () => {
       document.getElementById('previewNeonTetrisModal').style.display = 'none';
       if (typeof stopPreviewNeonTetris === 'function') stopPreviewNeonTetris();
-    });
-    document.getElementById('preview-neon-tetris-startBtn').addEventListener('click', () => {
-      if (typeof startPreviewNeonTetris === 'function') startPreviewNeonTetris();
     });
     document.getElementById('preview-neon-tetris-controlsBtn').addEventListener('click', () => {
       alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
@@ -102,12 +100,12 @@
       if (typeof initPreviewInvadersGame === 'function') initPreviewInvadersGame();
       document.getElementById('preview-invaders-score').textContent = 'Score: 0';
     });
+    document.getElementById('preview-invaders-startBtn').addEventListener('click', () => {
+      if (typeof startPreviewInvaders === 'function') startPreviewInvaders();
+    });
     document.getElementById('preview-invaders-closeBtn').addEventListener('click', () => {
       document.getElementById('preview-invadersModal').style.display = 'none';
       if (typeof stopPreviewInvaders === 'function') stopPreviewInvaders();
-    });
-    document.getElementById('preview-invaders-startBtn').addEventListener('click', () => {
-      if (typeof startPreviewInvaders === 'function') startPreviewInvaders();
     });
     document.getElementById('preview-invaders-controlsBtn').addEventListener('click', () => {
       alert('Controls:\nLeft/Right Arrow: Move\nSpace Bar: Fire\nDestroy waves to advance.');
