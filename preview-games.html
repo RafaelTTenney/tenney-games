@@ -5,37 +5,24 @@
   <title>Preview Games | Games & Programs</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    :root { --primary: #3366cc; --muted: #666; --card: #e6f0ff; --bg:#f6f8fb; --neon: #00FFFF;}
-    body { background: var(--bg); font-family: 'Inter', 'Segoe UI', Arial, sans-serif; margin:0; padding:0; }
-    header { background: var(--primary); color: #fff; padding: 12px 16px; text-align:center; font-weight:700; }
-    .container { max-width:900px; margin: 24px auto; background:#fff; padding:16px; border-radius:10px; box-shadow:0 8px 24px rgba(51,102,204,0.08); }
-    .game-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px; }
-    .card { background: var(--card); padding:12px; border-radius:8px; border:1px solid #99ccff; display:flex; flex-direction:column; justify-content:space-between;}
-    .card h3 { margin:0 0 6px 0; color:var(--primary);}
-    .card p { color:var(--muted); margin:0 0 8px 0; flex:1;}
-    .btn { background:var(--primary); color:#fff; padding:8px 10px; border-radius:6px; text-decoration:none; font-weight:700; display:inline-block; border:none; cursor:pointer;}
-    .btn.secondary { background:#fff; color:var(--primary); border:1px solid #99ccff; }
-    .report { margin-top:14px; background:#fff; padding:12px; border-radius:8px; border:1px solid #e6eefc; }
-    label { display:block; color:var(--primary); font-weight:600; margin-bottom:6px; }
-    input[type="text"], textarea { width:100%; padding:8px; border-radius:6px; border:1px solid #99ccff; background:#e6f0ff; box-sizing:border-box; }
-    textarea { min-height:100px; resize:vertical; }
-    .modal {
-      display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center;
-    }
-    .modal-content {
-      background: #000;
-      padding: 24px 18px;
-      border-radius: 10px;
-      border: 4px solid var(--neon);
-      box-shadow: 0 0 30px var(--neon);
-      text-align: center;
-    }
-    .modal h2 { color: var(--neon); margin-top: 0;}
+    :root { --primary: #3366cc; --muted: #666; --card: #e6f0ff; --bg: #f6f8fb; --neon: #00FFFF;}
+    body { background: var(--bg); font-family: 'Inter', 'Segoe UI', Arial, sans-serif; margin:0;}
+    header { background: var(--primary); color: #fff; padding: 12px 16px; text-align:center; font-weight:700;}
+    .container { max-width:900px; margin:24px auto; background:#fff; padding:16px; border-radius:10px; box-shadow:0 8px 24px rgba(51,102,204,0.08);}
+    .game-grid {display:grid; grid-template-columns:repeat(auto-fit, minmax(240px,1fr)); gap:12px;}
+    .card {background:var(--card); padding:12px; border-radius:8px; border:1px solid #99ccff; display:flex; flex-direction:column; justify-content:space-between;}
+    .card h3 {margin:0 0 6px 0; color:var(--primary);}
+    .card p {color:var(--muted); margin:0 0 8px 0; flex:1;}
+    .btn {background:var(--primary); color:#fff; padding:8px 10px; border-radius:6px; text-decoration:none; font-weight:700; border:none; cursor:pointer;}
+    .btn.secondary {background:#fff; color:var(--primary); border:1px solid #99ccff;}
+    .modal {display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center;}
+    .modal-content {background: #000; padding:24px 18px; border-radius:10px; border:4px solid var(--neon); box-shadow:0 0 30px var(--neon); text-align:center;}
+    .modal h2 { color: var(--neon); margin-top:0;}
     .modal canvas { background: #050505; display: block; margin: 0 auto; border: 2px solid var(--neon); box-shadow: 0 0 10px var(--neon);}
     .modal .btn { margin:4px;}
-    footer { text-align:center; padding:16px; color:#999; }
+    footer { text-align:center; padding:16px; color:#999;}
     footer a { color: var(--primary);}
-    @media (max-width: 700px) {
+    @media (max-width:700px) {
       .container {padding:6px;}
       .card {padding:6px;}
       .game-grid {gap:7px;}
@@ -49,13 +36,8 @@
     <a id="dashboardBtn" class="btn secondary" href="loggedIn.html" title="Open Dashboard">Dashboard</a>
   </div>
   <div class="container">
-    <p style="color:#3366cc; font-weight:600;">Advance users can preview short, in-development games here and submit bug reports or suggestions.</p>
+    <p style="color:#3366cc;font-weight:600;">Advance users can preview short, in-development games here and submit bug reports or suggestions.</p>
     <div class="game-grid" id="previewGrid">
-      <div class="card">
-        <h3>Simple Tetris (Preview)</h3>
-        <p>Fixed-speed classic Tetris for beginners.</p>
-        <button class="btn" id="runSimpleTetrisBtn">Play Now</button>
-      </div>
       <div class="card">
         <h3>Neon Tetris (Preview)</h3>
         <p>A classic block-stacking game with a bright neon style. New experience for the classic genre.</p>
@@ -65,18 +47,6 @@
         <h3>Full Invaders</h3>
         <p>Classic Space Invaders preview with levels, UFO and bunkers.</p>
         <button class="btn" id="runPreviewInvadersBtn">Play Now</button>
-      </div>
-    </div>
-
-    <!-- SIMPLE TETRIS MODAL -->
-    <div id="previewSimpleTetrisModal" class="modal">
-      <div class="modal-content">
-        <h2>Simple Tetris</h2>
-        <canvas id="preview-game" width="240" height="480"></canvas>
-        <p id="preview-score" style="color: white; font-weight: bold;">Score: 0 | High Score: 0</p>
-        <button id="preview-startBtn" class="btn" style="background:#00FF00; color:#000;">Start</button>
-        <button id="preview-controlsBtn" class="btn" style="background:#FFA500; color:#000;">Controls</button>
-        <button id="preview-modalCloseBtn" class="btn" style="background:red;">Close Game</button>
       </div>
     </div>
 
@@ -103,44 +73,14 @@
         <button id="preview-invaders-closeBtn" class="btn" style="background:red;">Close Game</button>
       </div>
     </div>
-
-    <section class="report" aria-label="Report a bug">
-      <h3 style="margin-top:0;">Report a bug or suggest an improvement</h3>
-      <form id="reportForm">
-        <label for="gameName">Game / Preview name</label>
-        <input id="gameName" type="text" required placeholder="Name of the previewed game">
-        <label for="reportText">Describe the issue or suggestion</label>
-        <textarea id="reportText" required placeholder="What happened? How can it be improved?"></textarea>
-        <button class="btn" type="submit" style="margin-top:10px;">Send Report</button>
-      </form>
-      <div id="reportMessage" style="margin-top:10px;color:var(--muted)"></div>
-    </section>
   </div>
   <footer>
     &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </footer>
-
   <script src="login.js"></script>
-  <script src="simple-tetris.js"></script>
   <script src="neon-tetris.js"></script>
   <script src="full-invaders.js"></script>
   <script>
-    // Simple tetris preview modal logic
-    document.getElementById('runSimpleTetrisBtn').addEventListener('click', () => {
-      document.getElementById('previewSimpleTetrisModal').style.display = 'flex';
-      if (typeof initPreviewSimpleTetris === 'function') initPreviewSimpleTetris();
-    });
-    document.getElementById('preview-modalCloseBtn').addEventListener('click', () => {
-      document.getElementById('previewSimpleTetrisModal').style.display = 'none';
-      if (typeof stopPreviewTetris === 'function') stopPreviewTetris();
-    });
-    document.getElementById('preview-startBtn').addEventListener('click', () => {
-      if (typeof startPreviewTetris === 'function') startPreviewTetris();
-    });
-    document.getElementById('preview-controlsBtn').addEventListener('click', () => {
-      alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
-    });
-
     // Neon tetris preview modal logic
     document.getElementById('runNeonTetrisBtn').addEventListener('click', () => {
       document.getElementById('previewNeonTetrisModal').style.display = 'flex';
@@ -156,7 +96,6 @@
     document.getElementById('preview-neon-tetris-controlsBtn').addEventListener('click', () => {
       alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
     });
-
     // Full Invaders preview modal logic
     document.getElementById('runPreviewInvadersBtn').addEventListener('click', () => {
       document.getElementById('preview-invadersModal').style.display = 'flex';
