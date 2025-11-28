@@ -6,22 +6,20 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <style>
         :root {
-            --primary: #00FFFF; /* Neon Cyan */
-            --dark: #00AAAA; /* Darker Cyan */
-            --bg: #050505; /* Near Black */
-            --card: #111; /* Very Dark Grey */
+            --primary: #00FFFF;
+            --dark: #00AAAA;
+            --bg: #050505;
+            --card: #111;
             --muted: #888;
             --glow: 0 0 5px var(--primary), 0 0 10px var(--primary);
         }
-
         body {
             margin: 0;
-            font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+            font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
             background: var(--bg);
             color: #eee;
             min-height: 100vh;
         }
-
         header {
             background: var(--card);
             color: var(--primary);
@@ -31,7 +29,6 @@
             border-bottom: 2px solid var(--primary);
             text-shadow: var(--glow);
         }
-
         .top {
             display: flex;
             justify-content: space-between;
@@ -41,12 +38,10 @@
             gap: 8px;
             flex-wrap: wrap;
         }
-
         .top .links {
             display: flex;
             gap: 10px;
         }
-
         .btn {
             background: transparent;
             color: var(--primary);
@@ -57,21 +52,18 @@
             border: 1px solid var(--primary);
             transition: all 0.2s ease;
             box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.4);
-            cursor: pointer; /* Added for buttons */
+            cursor: pointer;
         }
-
         .btn.secondary {
             background: var(--card);
             color: var(--primary);
             border: 1px solid var(--primary);
         }
-
         .btn:hover {
             background: var(--primary);
             color: var(--bg);
             box-shadow: var(--glow);
         }
-
         .container {
             max-width: 900px;
             margin: 28px auto;
@@ -80,24 +72,20 @@
             border-radius: 12px;
             border: 1px solid #222;
         }
-
         h1 {
             color: var(--primary);
             margin: 0 0 8px 0;
             text-shadow: var(--glow);
         }
-
         p.lead {
             color: var(--muted);
             margin: 6px 0 16px 0;
         }
-
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
             gap: 12px;
         }
-
         .card {
             background: var(--card);
             padding: 12px;
@@ -108,35 +96,29 @@
             flex-direction: column;
             gap: 8px;
         }
-
         .card h3 {
             margin: 0;
             color: var(--primary);
         }
-
         .card .meta {
             color: var(--muted);
             font-size: 0.95em;
         }
-
         .card .actions {
             margin-top: auto;
             display: flex;
             gap: 8px;
             justify-content: flex-end;
         }
-
         .footer {
             text-align: center;
             color: #555;
             padding: 20px 10px;
             font-size: 0.95em;
         }
-
         .footer a {
             color: var(--muted);
         }
-
         pre.demo {
             background: var(--bg);
             padding: 8px;
@@ -146,17 +128,14 @@
             max-height: 160px;
             color: #ccc;
         }
-
         @media (max-width: 520px) {
             .top {
                 flex-direction: column;
                 align-items: flex-start;
             }
         }
-
-        /* --- Modal Styles --- */
         .modal-overlay {
-            display: none; /* Hidden by default */
+            display: none;
             position: fixed;
             z-index: 1000;
             left: 0;
@@ -168,7 +147,6 @@
             justify-content: center;
             align-items: center;
         }
-
         .modal-content {
             background-color: var(--card);
             margin: auto;
@@ -179,46 +157,37 @@
             box-shadow: 0 0 20px var(--primary);
             text-align: center;
         }
-
         .modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 15px;
         }
-
         .modal-header h2 {
             color: var(--primary);
             margin: 0;
             text-shadow: var(--glow);
         }
-
         .modal-close {
             color: var(--muted);
             font-size: 28px;
             font-weight: bold;
             cursor: pointer;
         }
-
-        .modal-close:hover,
-        .modal-close:focus {
+        .modal-close:hover, .modal-close:focus {
             color: var(--primary);
             text-decoration: none;
         }
-
-        /* Specific game canvas style */
-        #game, #racer-canvas, #invaders-canvas {
+        #racer-canvas, #invaders-canvas {
             background: var(--bg);
             border: 2px solid var(--primary);
             box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.5);
         }
-
         #score {
             color: #eee;
             font-size: 1.1em;
             font-weight: 700;
         }
-
         .modal-controls {
             display: flex;
             gap: 10px;
@@ -229,7 +198,6 @@
 </head>
 <body>
     <header>Experimental Demos</header>
-
     <div class="top" role="navigation" aria-label="experimental top">
         <div class="links">
             <a class="btn" href="loggedIn.html">Dashboard</a>
@@ -237,24 +205,10 @@
         </div>
         <div style="color:var(--primary);font-weight:700;">Add experiments below — each card is a formatted placeholder</div>
     </div>
-
     <main class="container">
         <h1>Experimental</h1>
         <p class="lead">This page is an admin area for uploading and testing experiments. Only administrators may access this page.</p>
-
         <div class="grid" id="experimentalGrid" aria-live="polite">
-
-            <section class="card">
-                <h3>Neon Tetris</h3>
-                <div class="meta">A classic block-stacking game with a new neon theme.</div>
-                <pre class="demo">// Runs in a pop-up modal
-// High score saved to localStorage
-// Supabase elements removed</pre>
-                <div class="actions">
-                    <a class="btn" href="#" id="runTetrisBtn">Run</a>
-                </div>
-            </section>
-
             <section class="card">
                 <h3>Neon Racer++</h3>
                 <div class="meta">A high-speed avoidance game with a retro-neon theme — upgraded to Neon Racer++ with slick visuals and progressive difficulty.</div>
@@ -266,7 +220,6 @@
                     <a class="btn" href="#" id="runRacerBtn">Run</a>
                 </div>
             </section>
-
             <section class="card">
                 <h3>Space Invaders++</h3>
                 <div class="meta">A "better" but still incomplete arcade shooter — now with progressive waves.</div>
@@ -278,9 +231,7 @@
                 </div>
             </section>
         </div>
-
         <hr style="margin:20px 0;border:none;border-top:1px solid #333;" />
-
         <section style="margin-top:12px;">
             <h3 style="color:var(--primary);margin-top:0;">How to add a new experiment</h3>
             <ol style="color:var(--muted);line-height:1.6;">
@@ -290,52 +241,31 @@
             </ol>
         </section>
     </main>
-
     <div class="footer">
         &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
     </div>
-
-    <div id="tetrisModal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Neon Tetris</h2>
-                <span class="modal-close" id="modalCloseBtn">&times;</span>
-            </div>
-
-            <canvas id="game" width="240" height="480"></canvas>
-            <p id="score">Score: 0 | High Score: 0</p>
-
-            <div class="modal-controls">
-                <button id="startBtn" class="btn">Start</button>
-                <button id="controlsBtn" class="btn secondary">Controls</button>
-            </div>
-
-        </div>
-    </div>
+    <!-- Racer Modal -->
     <div id="racerModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Neon Racer++</h2>
                 <span class="modal-close" id="racerModalCloseBtn">&times;</span>
             </div>
-
             <canvas id="racer-canvas" width="340" height="520"></canvas>
-
             <div id="racer-hud" style="color:#eee; font-weight:700; margin: 10px 0; min-height: 45px; text-align: left; padding: 0 10px;">
                 <div id="racer-distance">Distance: 0m</div>
                 <div id="racer-speed">Speed: 0 mph</div>
                 <div id="racer-obstacles">Gaps cleared: 0</div>
             </div>
             <p id="racer-message" style="color:var(--primary); min-height: 1.2em; margin: 5px 0 10px 0;">Ready!</p>
-
             <div class="modal-controls">
                 <button id="startRacerBtn" class="btn">Start</button>
                 <button id="pauseRacerBtn" class="btn secondary">Pause</button>
                 <button id="resetRacerBtn" class="btn secondary">Reset</button>
             </div>
-
         </div>
     </div>
+    <!-- Invaders Modal -->
     <div id="invadersModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
@@ -343,25 +273,18 @@
                 <span class="modal-close" id="invadersModalCloseBtn">&times;</span>
             </div>
             <canvas id="invaders-canvas" width="420" height="420" style="background:#000; border: 2px solid var(--primary); box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.5);"></canvas>
-
             <div style="display: flex; justify-content: space-between; padding: 0 10px; margin-top: 10px;">
                 <p id="invaders-score" style="color:var(--primary); font-weight: 700; margin: 0;">Score: 0</p>
                 <p id="invaders-message" style="color:#eee; min-height: 1.2em; margin: 0;">Press Start!</p>
             </div>
-
             <div class="modal-controls" style="margin-top: 15px;">
                 <button id="startInvadersBtn" class="btn">Start</button>
             </div>
         </div>
     </div>
     <script src="login.js"></script>
-
-    <!-- load per-game experimental modules (split files) -->
-    <script src="neon-tetris.js"></script>
     <script src="neon-racer-plus.js"></script>
     <script src="space-invaders-plus.js"></script>
-
-    <!-- lightweight experimental page UI loader (replaces old experimental.js) -->
     <script src="experimental-ui.js"></script>
 </body>
 </html>
