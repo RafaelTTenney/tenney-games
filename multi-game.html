@@ -2,359 +2,356 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Arcade Hub: Snake, Memory, Paper-io & Neon Racer</title>
+  <title>Arcade Hub: Snake, Simple Tetris, Paper-io, Classic Racer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Use Inter font for a clean, modern look -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
-    /* Dark Arcade Color Scheme Variables */
+    /* Dark Arcade Color Scheme */
     :root {
-      --primary: #238636; /* Vibrant Green (Action Color) */
-      --secondary: #58a6ff; /* Neon Blue (Accent Color) */
-      --muted: #8b949e; /* Muted text/border (Gray) */
-      --bg: #0d1117; /* Dark Background (GitHub Dark/Arcade Black) */
-      --card-bg: #161b22; /* Slightly Lighter Dark Card Background */
-      --text-dark: #e6e6e6; /* Light Text for dark backgrounds */
-      --text-light: #ffffff; /* White text (for buttons/header) */
+      --primary: #238636;      /* Vibrant Green */
+      --secondary: #58a6ff;    /* Neon Blue */
+      --muted: #8b949e;        /* Muted text */
+      --bg: #0d1117;           /* Dark background */
+      --card-bg: #161b22;      /* Card background */
+      --text-dark: #e6e6e6;
+      --text-light: #fff;
     }
-
-    /* Base Styling using Tailwind and custom adjustments */
     body {
       background: var(--bg);
-      font-family: 'Inter', sans-serif;
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
       color: var(--text-dark);
       margin: 0;
-      padding: 0;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
     }
-
-    /* Header Bar */
     .topbar {
-      background: var(--card-bg); /* Dark Header */
+      background: var(--card-bg);
       color: var(--text-dark);
       border-bottom: 2px solid var(--secondary);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      padding: 1rem 0;
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
     }
     .topbar a {
         color: var(--text-light);
+        background: var(--primary);
+        padding: 0.5rem 1.2rem;
+        border-radius: 999px;
+        font-weight: 600;
+        box-shadow: 0 3px #1b6f2e;
+        text-decoration: none;
+        transition: background 0.15s;
     }
-
-    /* Card Style */
+    .topbar a:hover { background: #2ea043;}
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      font-size: 2.2rem;
+      color: var(--secondary);
+      font-weight: 700;
+      margin-bottom: 2rem;
+      letter-spacing: 0.02em;
+      text-align: center;
+    }
+    .game-grid {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(auto-fit,minmax(260px,1fr));
+      gap: 1.25rem;
+      margin-bottom: 2.5rem;
+    }
     .game-card {
       background: var(--card-bg);
-      border: 1px solid #30363d; /* Dark border */
-      border-radius: 12px;
+      border: 1px solid #30363d;
+      border-radius: 1rem;
       box-shadow: 0 8px 15px rgba(0,0,0,0.5);
-      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 1.3rem 1rem;
+      transition: box-shadow 0.2s,border-color 0.2s,transform 0.2s;
     }
     .game-card:hover {
-      box-shadow: 0 0 20px rgba(35, 134, 54, 0.5); /* Primary Green Glow on hover */
-      transform: translateY(-4px);
+      box-shadow: 0 0 18px rgba(35, 134, 54, 0.5);
       border-color: var(--primary);
+      transform: translateY(-2px);
     }
     .card-title {
-        color: var(--secondary); /* Neon Blue Titles */
+      color: var(--secondary);
+      font-size: 1.3em;
+      font-weight: 700;
+      margin-bottom: 0.5em;
     }
-
-    /* Button Style (Primary Green) */
+    .game-card p {
+      flex: 1;
+      color: var(--muted);
+      font-size: 1em;
+      margin-bottom: 0.7em;
+    }
     .primary-btn {
       background: var(--primary);
       color: var(--text-light);
       font-weight: 700;
       border-radius: 9999px;
-      box-shadow: 0 4px #1b6f2e; /* 3D effect */
-      transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+      box-shadow: 0 4px #1b6f2e;
+      border: none;
+      padding: 0.65em 1.5em;
+      margin-bottom: 0.25em;
+      transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.03em;
+      cursor: pointer;
     }
     .primary-btn:hover {
       background: #2ea043;
       transform: translateY(-1px);
-      box-shadow: 0 5px #1b6f2e;
+      box-shadow: 0 6px #1b6f2e;
     }
     .primary-btn:active {
       transform: translateY(2px);
       box-shadow: 0 2px #1b6f2e;
     }
-    
-    /* Game-specific container styles */
-    .game-container { 
-        display: none; 
-        justify-content: center; 
-        align-items: center; 
-        flex-direction: column; 
-        margin-top: 24px;
-        padding: 30px;
-        background: var(--card-bg); /* Dark container background */
-        border-radius: 12px;
-        border: 2px solid var(--secondary); /* Blue accent border */
+    .primary-btn:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+    .game-container {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 1.5rem;
+        padding: 2rem 1rem;
+        background: var(--card-bg);
+        border-radius: 1rem;
+        border: 2px solid var(--secondary);
         box-shadow: 0 0 20px rgba(88, 166, 255, 0.2);
+        width: 100%;
+        max-width: 500px;
     }
-    canvas { 
-        background: #000; 
-        border: 4px solid var(--primary); /* Green border */
-        margin-top: 20px; 
-        box-shadow: 0 0 20px rgba(35, 134, 54, 0.5); /* Green glow */
+    canvas {
+        background: #000;
+        border: 4px solid var(--primary);
+        margin-top: 1rem;
+        box-shadow: 0 0 20px rgba(35, 134, 54, 0.5);
         border-radius: 8px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
     }
-    
-    /* Memory Game Cards */
-    #memory-board { 
-        display: grid; 
-        grid-template-columns: repeat(4, 60px); 
-        gap: 12px; /* Increased gap */
-        justify-content: center; 
-        margin-top: 20px; 
-    }
-    .card-memory { 
-        width: 60px; 
-        height: 60px; 
-        background: #30363d; /* Dark muted color for un-flipped cards */
-        color: var(--text-dark); 
-        font-size: 2em; 
-        border-radius: 8px; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-        cursor: pointer; 
-        user-select: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.5);
-    }
-    .card-memory.flipped { 
-        background: var(--secondary); /* Neon Blue when flipped */
-        color: var(--bg); /* Dark text on bright card */
-        cursor: default; 
-    }
-    .card-memory.matched {
-        background: var(--primary); /* Green when matched */
-        color: var(--text-light);
-        box-shadow: 0 0 10px var(--primary);
-    }
-    
-    /* Ensure footer is at the bottom */
     footer {
-        margin-top: auto;
-        padding: 16px;
-        text-align: center;
-        color: var(--muted);
-        font-size: 0.85rem;
+      margin-top: auto;
+      padding: 1.3rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.95em;
     }
-    footer a { color: var(--secondary); }
-
-    /* Responsive adjustments */
+    footer a { color: var(--secondary);}
     @media (max-width: 700px) {
-      #memory-board { grid-template-columns: repeat(4, 48px); gap: 8px; }
-      canvas { max-width: 95%; }
-      .game-container { padding: 15px; }
+      .container { padding: 1rem 0.1rem;}
+      .game-card { padding: 1rem 0.5rem;}
+      .game-grid { gap: 0.75rem;}
+      canvas { max-width:95%;}
+      .game-container { padding: 1rem;}
     }
   </style>
 </head>
 <body>
-  <div class="topbar flex justify-center items-center p-4">
-    <a href="index.html" class="primary-btn px-4 py-2 rounded-full mx-2">Home</a>
-    <a href="loggedIn.html" class="primary-btn px-4 py-2 rounded-full mx-2">Dashboard</a>
-  </div>
-
-  <div class="max-w-4xl mx-auto p-4 flex flex-col items-center">
-    <h1 class="text-3xl font-bold mb-6 mt-4" style="color:var(--secondary);">Arcade Hub: Select a Game</h1>
-
-    <!-- Game Card Grid (Main game selection view) -->
-    <div class="game-grid grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-      
+  <nav class="topbar">
+    <a href="index.html">Home</a>
+    <a href="loggedIn.html">Dashboard</a>
+  </nav>
+  <div class="container">
+    <h1>Arcade Hub: Select a Game</h1>
+    <div class="game-grid">
       <!-- Snake Card -->
-      <div class="game-card p-6 rounded-xl flex flex-col justify-between">
-        <h3 class="text-2xl font-semibold mb-3 card-title">Classic Snake</h3>
-        <p class="text-gray-400 text-sm mb-4">Maneuver your growing snake to eat food while avoiding walls and your own tail. The ultimate test of reflexes and precision.</p>
-        <button type="button" class="primary-btn px-6 py-2 rounded-full" data-game-target="snake" aria-pressed="false" aria-controls="snake-game">Play Snake</button>
+      <div class="game-card">
+        <div>
+          <div class="card-title">Classic Snake</div>
+          <p>Maneuver your growing snake to eat food while avoiding walls and your own tail. The ultimate test of reflexes and precision.</p>
+        </div>
+        <button type="button" class="primary-btn" data-game-target="snake" aria-pressed="false" aria-controls="snake-game">Play Snake</button>
       </div>
 
-      <!-- Memory Match Card -->
-      <div class="game-card p-6 rounded-xl flex flex-col justify-between">
-        <h3 class="text-2xl font-semibold mb-3 card-title">Memory Match</h3>
-        <p class="text-gray-400 text-sm mb-4">Test your short-term memory by matching pairs of hidden cards in the fewest moves possible. A brain-boosting classic.</p>
-        <button type="button" class="primary-btn px-6 py-2 rounded-full" data-game-target="memory" aria-pressed="false" aria-controls="memory-game">Play Memory Match</button>
+      <!-- Simple Tetris Card (memory match replaced) -->
+      <div class="game-card">
+        <div>
+          <div class="card-title">Simple Tetris</div>
+          <p>Fixed-speed classic Tetris for beginners.</p>
+        </div>
+        <button type="button" class="primary-btn" id="openSimpleTetrisBtn">Play Tetris</button>
       </div>
-      
+
       <!-- Paper-io Card -->
-      <div class="game-card p-6 rounded-xl flex flex-col justify-between">
-        <h3 class="text-2xl font-semibold mb-3 card-title">Paper-io</h3>
-        <p class="text-gray-400 text-sm mb-4">Claim territory by drawing trails and connecting them back to your base. Eliminate other players by cutting their vulnerable trails.</p>
-        <button type="button" class="primary-btn px-6 py-2 rounded-full" data-game-target="paperio" aria-pressed="false" aria-controls="paperio-game">Play Paper-io</button>
-      </div>
-      
-      <!-- Neon Racer Card -->
-      <div class="game-card p-6 rounded-xl flex flex-col justify-between">
-        <h3 class="text-2xl font-semibold mb-3 card-title">Classic Racer</h3>
-        <p class="text-gray-400 text-sm mb-4">A high-speed endless runner. Dodge obstacles across multiple lanes and see how far you can push your speed in the classic track.</p>
-        <button type="button" class="primary-btn px-6 py-2 rounded-full" data-game-target="racer" aria-pressed="false" aria-controls="racer-game">Play Classic Racer</button>
+      <div class="game-card">
+        <div>
+          <div class="card-title">Paper-io</div>
+          <p>Claim territory by drawing trails and connecting them back to your base. Eliminate other players by cutting their vulnerable trails.</p>
+        </div>
+        <button type="button" class="primary-btn" data-game-target="paperio" aria-pressed="false" aria-controls="paperio-game">Play Paper-io</button>
       </div>
 
+      <!-- Classic Racer Card -->
+      <div class="game-card">
+        <div>
+          <div class="card-title">Classic Racer</div>
+          <p>A high-speed endless runner. Dodge obstacles across multiple lanes and see how far you can push your speed in the classic track.</p>
+        </div>
+        <button type="button" class="primary-btn" data-game-target="racer" aria-pressed="false" aria-controls="racer-game">Play Classic Racer</button>
+      </div>
+
+      <!-- Empty Experiment Card -->
+      <div class="game-card">
+        <div>
+          <div class="card-title">New Experiment</div>
+          <p></p>
+        </div>
+        <button type="button" class="primary-btn" disabled>Coming Soon</button>
+      </div>
     </div>
-    <!-- End Game Card Grid -->
 
     <!-- Game Containers (Hidden until 'Play' is clicked) -->
-    <div id="snake-game" class="game-container w-full max-w-lg" aria-hidden="true">
-      <h2 class="text-2xl card-title mb-4">Snake Game</h2>
+    <div id="snake-game" class="game-container" aria-hidden="true">
+      <h2 class="card-title">Snake Game</h2>
       <div class="flex gap-6 items-center mb-4">
-        <span id="snake-score" class="text-xl">Score: 0</span>
-        <button id="snakeRestartBtn" class="primary-btn px-4 py-1 rounded-full text-sm">Restart</button>
+        <span id="snake-score" style="font-size:1.1em; font-weight:600;">Score: 0</span>
+        <button id="snakeRestartBtn" class="primary-btn" style="font-size:0.95em;">Restart</button>
       </div>
       <canvas id="snake-canvas" width="320" height="320"></canvas>
-      <p class="mt-4 text-gray-400">Use arrow keys to move the snake.</p>
-      <button class="primary-btn mt-6 px-4 py-2 rounded-full text-sm" onclick="location.reload()">Back to Hub</button>
+      <p style="margin-top:1em; color:var(--muted);">Use arrow keys to move the snake.</p>
+      <button class="primary-btn" style="margin-top:1.5em;" onclick="location.reload()">Back to Hub</button>
     </div>
 
-    <div id="memory-game" class="game-container w-full max-w-lg" aria-hidden="true">
-      <h2 class="text-2xl card-title mb-4">Memory Match</h2>
-      <div class="flex gap-6 items-center mb-4">
-        <span id="memory-moves" class="text-xl">Moves: 0</span>
-        <button id="memoryRestartBtn" class="primary-btn px-4 py-1 rounded-full text-sm">Restart</button>
+    <!-- Simple Tetris Modal (as game container, not overlay) -->
+    <div id="simple-tetris-modal" class="game-container" aria-hidden="true">
+      <h2 class="card-title">Simple Tetris</h2>
+      <canvas id="simple-tetris-canvas" width="240" height="480"></canvas>
+      <p id="simple-tetris-score" style="color:white; font-weight:bold;">Score: 0 | High Score: 0</p>
+      <div style="display:flex; gap:0.5em; margin-top:1em;">
+        <button id="simple-tetris-startBtn" class="primary-btn" style="background:#00FF00; color:#000;">Start</button>
+        <button id="simple-tetris-controlsBtn" class="primary-btn" style="background:#FFA500; color:#000;">Controls</button>
+        <button id="simple-tetris-closeBtn" class="primary-btn" style="background:red;">Back to Hub</button>
       </div>
-      <div id="memory-board"></div>
-      <button class="primary-btn mt-6 px-4 py-2 rounded-full text-sm" onclick="location.reload()">Back to Hub</button>
     </div>
 
-    <div id="paperio-game" class="game-container w-full max-w-lg" aria-hidden="true">
-      <h2 class="text-2xl card-title mb-4">Paper-io</h2>
-      <div id="paperio-info" class="text-center text-sm mb-4" style="color:var(--secondary);">
+    <div id="paperio-game" class="game-container" aria-hidden="true">
+      <h2 class="card-title">Paper-io</h2>
+      <div id="paperio-info" class="text-center" style="color:var(--secondary); font-size:0.97em;">
         Use arrow keys to move and claim territory.<br>
         Avoid crashing into trails! Last player alive wins.
       </div>
       <canvas id="paperio-canvas" width="400" height="400"></canvas>
-      <div id="paperio-scoreboard" class="mt-4 text-xl"></div>
-      <div id="paperio-elim" class="text-red-500 font-bold mt-2 min-h-6"></div>
-      <button id="paperioRestartBtn" class="primary-btn mt-4 px-4 py-1 rounded-full text-sm">Restart</button>
-      <button class="primary-btn mt-6 px-4 py-2 rounded-full text-sm" onclick="location.reload()">Back to Hub</button>
+      <div id="paperio-scoreboard" style="margin-top:1em; font-size:1.08em;"></div>
+      <div id="paperio-elim" style="color:#F55; font-weight:600; margin-top:0.7em; min-height:1.2em;"></div>
+      <button id="paperioRestartBtn" class="primary-btn" style="margin-top:1em; font-size:0.95em;">Restart</button>
+      <button class="primary-btn" style="margin-top:1em;" onclick="location.reload()">Back to Hub</button>
     </div>
 
-    <div id="racer-game" class="game-container w-full max-w-lg" aria-hidden="true">
-      <h2 class="text-2xl card-title mb-4">Neon Racer</h2>
-      <div id="racer-hud" class="text-sm mb-4 flex gap-4 text-gray-300">
-        <span id="racer-distance" class="inline-block min-w-[110px]">Distance: 0m</span>
-        <span id="racer-speed" class="inline-block min-w-[110px]">Speed: 0 mph</span>
-        <span id="racer-obstacles" class="inline-block min-w-[110px]">Dodged: 0</span>
+    <div id="racer-game" class="game-container" aria-hidden="true">
+      <h2 class="card-title">Classic Racer</h2>
+      <div id="racer-hud" style="font-size:0.97em; margin-bottom:0.6em; display:flex; gap:1.3em; color:#ccc;">
+        <span id="racer-distance">Distance: 0m</span>
+        <span id="racer-speed">Speed: 0 mph</span>
+        <span id="racer-obstacles">Dodged: 0</span>
       </div>
       <canvas id="racer-canvas" width="320" height="420"></canvas>
-      <div id="racer-message" class="mt-4 min-h-6 text-yellow-300">Ready to race! Use &larr; and &rarr; to change lanes.</div>
-      <div class="flex gap-4 mt-4">
-        <button id="racerStartBtn" class="primary-btn px-4 py-1 rounded-full text-sm">Start</button>
-        <button id="racerPauseBtn" class="primary-btn px-4 py-1 rounded-full text-sm">Pause</button>
-        <button id="racerResetBtn" class="primary-btn px-4 py-1 rounded-full text-sm">Reset</button>
+      <div id="racer-message" style="margin-top:1em; color:#FFD700; min-height:1.2em;">Ready to race! Use &larr; and &rarr; to change lanes.</div>
+      <div style="display:flex; gap:1em; margin-top:1em;">
+        <button id="racerStartBtn" class="primary-btn" style="font-size:0.95em;">Start</button>
+        <button id="racerPauseBtn" class="primary-btn" style="font-size:0.95em;">Pause</button>
+        <button id="racerResetBtn" class="primary-btn" style="font-size:0.95em;">Reset</button>
       </div>
-      <button class="primary-btn mt-6 px-4 py-2 rounded-full text-sm" onclick="location.reload()">Back to Hub</button>
+      <button class="primary-btn" style="margin-top:1em;" onclick="location.reload()">Back to Hub</button>
     </div>
-
   </div>
 
   <script src="login.js"></script>
-  <!-- Per-game files for multi-game page -->
   <script src="snake.js"></script>
-  <script src="memory.js"></script>
+  <script src="simple-tetris.js"></script>
   <script src="paperio.js"></script>
   <script src="racer.js"></script>
-
-  <!-- UI loader: handles card clicks, game initialization, and control buttons -->
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const gameButtons = document.querySelectorAll('.game-grid button[data-game-target]');
-      const gameContainers = document.querySelectorAll('.game-container');
-      const gameGrid = document.querySelector('.game-grid');
-      const mainTitle = document.querySelector('h1');
+    // Unified modal/game switching
+    const gameCards = document.querySelectorAll('.primary-btn[data-game-target]');
+    const gameContainers = document.querySelectorAll('.game-container');
+    const gameGrid = document.querySelector('.game-grid');
+    const mainTitle = document.querySelector('h1');
 
-      // Function to initialize the specific game script
-      const initializeGame = (gameId) => {
-        // Call the specific initialization function from the external script files
-        console.log(`Initializing game: ${gameId}`);
-        
-        switch (gameId) {
-            case 'snake':
-                // FIX: Use initSnakeGame() to match the exported function name in snake.js
-                if (typeof initSnakeGame === 'function') initSnakeGame();
-                break;
-            case 'memory':
-                if (typeof initMemoryGame === 'function') initMemoryGame();
-                break;
-            case 'paperio':
-                if (typeof initPaperioGame === 'function') initPaperioGame();
-                break;
-            case 'racer':
-                if (typeof initRacerGame === 'function') initRacerGame();
-                break;
-            default:
-                console.error(`No initialization function found for game ID: ${gameId}`);
-        }
-      };
-      
-      // Function to attach event listeners to control buttons
-      const attachGameControls = () => {
-          // Snake Controls
-          document.getElementById('snakeRestartBtn')?.addEventListener('click', () => {
-              // Calls the global reset function exposed by snake.js
-              if (typeof resetSnake === 'function') resetSnake();
+    // Show selected game
+    gameCards.forEach(button => {
+      button.addEventListener('click', () => {
+        const targetId = button.getAttribute('data-game-target');
+        const targetContainer = document.getElementById(targetId + '-game');
+        if (targetContainer) {
+          gameGrid.style.display = 'none';
+          mainTitle.style.display = 'none';
+          gameContainers.forEach(container => {
+            container.style.display = 'none';
+            container.setAttribute('aria-hidden', 'true');
           });
-
-          // Memory Controls
-          document.getElementById('memoryRestartBtn')?.addEventListener('click', () => {
-              // Calls the global reset function exposed by memory.js
-              if (typeof resetMemory === 'function') resetMemory();
-          });
-
-          // Paper-io Controls (FIXES THE USER'S ISSUE)
-          document.getElementById('paperioRestartBtn')?.addEventListener('click', () => {
-              // Calls the global reset function exposed by paperio.js
-              if (typeof resetPaperio === 'function') resetPaperio();
-          });
-
-          // Racer Controls
-          document.getElementById('racerStartBtn')?.addEventListener('click', () => {
-              // Calls the global start function exposed by racer.js
-              if (typeof startRacer === 'function') startRacer();
-          });
-          document.getElementById('racerPauseBtn')?.addEventListener('click', () => {
-              // Calls the global pause function exposed by racer.js
-              if (typeof pauseRacer === 'function') pauseRacer();
-          });
-          document.getElementById('racerResetBtn')?.addEventListener('click', () => {
-              // Calls the global reset function exposed by racer.js
-              if (typeof resetRacer === 'function') resetRacer();
-          });
-      };
-
-      // Listener for the main game cards
-      gameButtons.forEach(button => {
-        button.addEventListener('click', (event) => {
-          const targetId = button.getAttribute('data-game-target');
-          const targetContainer = document.getElementById(`${targetId}-game`);
-
-          if (targetContainer) {
-            // Hide main hub elements
-            gameGrid.style.display = 'none';
-            mainTitle.style.display = 'none';
-
-            // Hide all game containers
-            gameContainers.forEach(container => {
-              container.style.display = 'none';
-              container.setAttribute('aria-hidden', 'true');
-            });
-
-            // Show the target container
-            targetContainer.style.display = 'flex';
-            targetContainer.setAttribute('aria-hidden', 'false');
-
-            // Initialize the game logic
-            initializeGame(targetId);
+          targetContainer.style.display = 'flex';
+          targetContainer.setAttribute('aria-hidden', 'false');
+          // Init game scripts if needed
+          switch(targetId) {
+            case "snake": if (typeof initSnakeGame === 'function') initSnakeGame(); break;
+            case "paperio": if (typeof initPaperioGame === 'function') initPaperioGame(); break;
+            case "racer": if (typeof initRacerGame === 'function') initRacerGame(); break;
           }
-        });
+        }
       });
-      
-      // Attach the control buttons listeners immediately
-      attachGameControls();
+    });
+
+    // Simple Tetris: modal as game container
+    document.getElementById('openSimpleTetrisBtn').addEventListener('click', () => {
+      gameGrid.style.display = 'none';
+      mainTitle.style.display = 'none';
+      gameContainers.forEach(container => {
+        container.style.display = 'none';
+        container.setAttribute('aria-hidden', 'true');
+      });
+      document.getElementById('simple-tetris-modal').style.display = 'flex';
+      document.getElementById('simple-tetris-modal').setAttribute('aria-hidden', 'false');
+      if (typeof initPreviewSimpleTetris === 'function') initPreviewSimpleTetris();
+    });
+    document.getElementById('simple-tetris-closeBtn').addEventListener('click', () => {
+      document.getElementById('simple-tetris-modal').style.display = 'none';
+      document.getElementById('simple-tetris-modal').setAttribute('aria-hidden', 'true');
+      gameGrid.style.display = '';
+      mainTitle.style.display = 'block';
+      if (typeof stopPreviewTetris === 'function') stopPreviewTetris();
+    });
+    document.getElementById('simple-tetris-startBtn').addEventListener('click', () => {
+      if (typeof startPreviewTetris === 'function') startPreviewTetris();
+    });
+    document.getElementById('simple-tetris-controlsBtn').addEventListener('click', () => {
+      alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
+    });
+
+    // Controls for individual games
+    document.getElementById('snakeRestartBtn')?.addEventListener('click', () => {
+      if (typeof resetSnake === 'function') resetSnake();
+    });
+    document.getElementById('paperioRestartBtn')?.addEventListener('click', () => {
+      if (typeof resetPaperio === 'function') resetPaperio();
+    });
+    document.getElementById('racerStartBtn')?.addEventListener('click', () => {
+      if (typeof startRacer === 'function') startRacer();
+    });
+    document.getElementById('racerPauseBtn')?.addEventListener('click', () => {
+      if (typeof pauseRacer === 'function') pauseRacer();
+    });
+    document.getElementById('racerResetBtn')?.addEventListener('click', () => {
+      if (typeof resetRacer === 'function') resetRacer();
     });
   </script>
-
   <footer>
     &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </footer>
