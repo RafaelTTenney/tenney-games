@@ -302,7 +302,11 @@
       if (typeof initPreviewSimpleTetris === 'function') initPreviewSimpleTetris();
     });
     document.getElementById('simple-tetris-startBtn').addEventListener('click', () => {
-      if (typeof startPreviewTetris === 'function') startPreviewTetris();
+      if (typeof startPreviewTetris === 'function') { startPreviewTetris(); return;}
+      if (typeof startTetris === 'function') { startTetris(); return;}
+      if (typeof start === 'function') { start(); return;}
+      if (typeof t_start === 'function') { t_start(); return;}
+      alert("No working start function found for Simple Tetris.");
     });
     document.getElementById('simple-tetris-closeBtn').addEventListener('click', () => {
       document.getElementById('simple-tetris-modal').style.display = 'none';
