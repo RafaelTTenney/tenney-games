@@ -5,13 +5,12 @@
   <title>Arcade Hub: Snake, Simple Tetris, Paper-io, Classic Racer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    /* Dark Arcade Color Scheme */
     :root {
-      --primary: #238636;      /* Vibrant Green */
-      --secondary: #58a6ff;    /* Neon Blue */
-      --muted: #8b949e;        /* Muted text */
-      --bg: #0d1117;           /* Dark background */
-      --card-bg: #161b22;      /* Card background */
+      --primary: #238636;
+      --secondary: #58a6ff;
+      --muted: #8b949e;
+      --bg: #0d1117;
+      --card-bg: #161b22;
       --text-dark: #e6e6e6;
       --text-light: #fff;
     }
@@ -120,11 +119,7 @@
       transform: translateY(2px);
       box-shadow: 0 2px #1b6f2e;
     }
-    .primary-btn:disabled {
-      opacity: 0.65;
-      cursor: not-allowed;
-    }
-    .game-container {
+    .game-container, #simple-tetris-modal {
         display: none;
         flex-direction: column;
         align-items: center;
@@ -147,6 +142,9 @@
         margin-left: auto;
         margin-right: auto;
     }
+    .modal-controls {
+      display: flex; gap: 0.8em; margin-top:1em;
+    }
     footer {
       margin-top: auto;
       padding: 1.3rem;
@@ -160,7 +158,7 @@
       .game-card { padding: 1rem 0.5rem;}
       .game-grid { gap: 0.75rem;}
       canvas { max-width:95%;}
-      .game-container { padding: 1rem;}
+      .game-container, #simple-tetris-modal { padding: 1rem;}
     }
   </style>
 </head>
@@ -181,7 +179,7 @@
         <button type="button" class="primary-btn" data-game-target="snake" aria-pressed="false" aria-controls="snake-game">Play Snake</button>
       </div>
 
-      <!-- Simple Tetris Card (memory match replaced) -->
+      <!-- Simple Tetris Card (memory match replaced, buttons will work) -->
       <div class="game-card">
         <div>
           <div class="card-title">Simple Tetris</div>
@@ -207,21 +205,12 @@
         </div>
         <button type="button" class="primary-btn" data-game-target="racer" aria-pressed="false" aria-controls="racer-game">Play Classic Racer</button>
       </div>
-
-      <!-- Empty Experiment Card -->
-      <div class="game-card">
-        <div>
-          <div class="card-title">New Experiment</div>
-          <p></p>
-        </div>
-        <button type="button" class="primary-btn" disabled>Coming Soon</button>
-      </div>
     </div>
 
-    <!-- Game Containers (Hidden until 'Play' is clicked) -->
+    <!-- Game Containers -->
     <div id="snake-game" class="game-container" aria-hidden="true">
       <h2 class="card-title">Snake Game</h2>
-      <div class="flex gap-6 items-center mb-4">
+      <div style="display:flex; gap:1em; margin-bottom:1em;">
         <span id="snake-score" style="font-size:1.1em; font-weight:600;">Score: 0</span>
         <button id="snakeRestartBtn" class="primary-btn" style="font-size:0.95em;">Restart</button>
       </div>
@@ -230,12 +219,12 @@
       <button class="primary-btn" style="margin-top:1.5em;" onclick="location.reload()">Back to Hub</button>
     </div>
 
-    <!-- Simple Tetris Modal (as game container, not overlay) -->
-    <div id="simple-tetris-modal" class="game-container" aria-hidden="true">
+    <!-- Simple Tetris Modal -->
+    <div id="simple-tetris-modal" aria-hidden="true">
       <h2 class="card-title">Simple Tetris</h2>
       <canvas id="simple-tetris-canvas" width="240" height="480"></canvas>
       <p id="simple-tetris-score" style="color:white; font-weight:bold;">Score: 0 | High Score: 0</p>
-      <div style="display:flex; gap:0.5em; margin-top:1em;">
+      <div class="modal-controls">
         <button id="simple-tetris-startBtn" class="primary-btn" style="background:#00FF00; color:#000;">Start</button>
         <button id="simple-tetris-controlsBtn" class="primary-btn" style="background:#FFA500; color:#000;">Controls</button>
         <button id="simple-tetris-closeBtn" class="primary-btn" style="background:red;">Back to Hub</button>
@@ -279,13 +268,11 @@
   <script src="paperio.js"></script>
   <script src="racer.js"></script>
   <script>
-    // Unified modal/game switching
+    // Card to container logic
     const gameCards = document.querySelectorAll('.primary-btn[data-game-target]');
     const gameContainers = document.querySelectorAll('.game-container');
     const gameGrid = document.querySelector('.game-grid');
     const mainTitle = document.querySelector('h1');
-
-    // Show selected game
     gameCards.forEach(button => {
       button.addEventListener('click', () => {
         const targetId = button.getAttribute('data-game-target');
@@ -299,7 +286,6 @@
           });
           targetContainer.style.display = 'flex';
           targetContainer.setAttribute('aria-hidden', 'false');
-          // Init game scripts if needed
           switch(targetId) {
             case "snake": if (typeof initSnakeGame === 'function') initSnakeGame(); break;
             case "paperio": if (typeof initPaperioGame === 'function') initPaperioGame(); break;
@@ -309,7 +295,7 @@
       });
     });
 
-    // Simple Tetris: modal as game container
+    // Simple Tetris (modal-style container)
     document.getElementById('openSimpleTetrisBtn').addEventListener('click', () => {
       gameGrid.style.display = 'none';
       mainTitle.style.display = 'none';
