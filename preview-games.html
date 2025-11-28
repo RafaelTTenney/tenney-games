@@ -85,7 +85,11 @@
       if (typeof initPreviewNeonTetris === 'function') initPreviewNeonTetris();
     });
     document.getElementById('preview-neon-tetris-startBtn').addEventListener('click', () => {
-      if (typeof startPreviewNeonTetris === 'function') startPreviewNeonTetris();
+      if (typeof startPreviewNeonTetris === 'function') { startPreviewNeonTetris(); return;}
+      if (typeof startTetris === 'function') { startTetris(); return;}
+      if (typeof start === 'function') { start(); return;}
+      if (typeof t_start === 'function') { t_start(); return;}
+      alert("No working start function found for Neon Tetris.");
     });
     document.getElementById('preview-neon-tetris-closeBtn').addEventListener('click', () => {
       document.getElementById('previewNeonTetrisModal').style.display = 'none';
