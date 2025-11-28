@@ -178,8 +178,7 @@
         </div>
         <button type="button" class="primary-btn" data-game-target="snake" aria-pressed="false" aria-controls="snake-game">Play Snake</button>
       </div>
-
-      <!-- Simple Tetris Card (memory match replaced, buttons will work) -->
+      <!-- Simple Tetris Card -->
       <div class="game-card">
         <div>
           <div class="card-title">Simple Tetris</div>
@@ -187,7 +186,6 @@
         </div>
         <button type="button" class="primary-btn" id="openSimpleTetrisBtn">Play Tetris</button>
       </div>
-
       <!-- Paper-io Card -->
       <div class="game-card">
         <div>
@@ -196,7 +194,6 @@
         </div>
         <button type="button" class="primary-btn" data-game-target="paperio" aria-pressed="false" aria-controls="paperio-game">Play Paper-io</button>
       </div>
-
       <!-- Classic Racer Card -->
       <div class="game-card">
         <div>
@@ -206,7 +203,6 @@
         <button type="button" class="primary-btn" data-game-target="racer" aria-pressed="false" aria-controls="racer-game">Play Classic Racer</button>
       </div>
     </div>
-
     <!-- Game Containers -->
     <div id="snake-game" class="game-container" aria-hidden="true">
       <h2 class="card-title">Snake Game</h2>
@@ -218,9 +214,8 @@
       <p style="margin-top:1em; color:var(--muted);">Use arrow keys to move the snake.</p>
       <button class="primary-btn" style="margin-top:1.5em;" onclick="location.reload()">Back to Hub</button>
     </div>
-
-    <!-- Simple Tetris Modal -->
-    <div id="simple-tetris-modal" aria-hidden="true">
+    <!-- Simple Tetris Modal/Container -->
+    <div id="simple-tetris-modal" class="game-container" aria-hidden="true">
       <h2 class="card-title">Simple Tetris</h2>
       <canvas id="simple-tetris-canvas" width="240" height="480"></canvas>
       <p id="simple-tetris-score" style="color:white; font-weight:bold;">Score: 0 | High Score: 0</p>
@@ -230,7 +225,6 @@
         <button id="simple-tetris-closeBtn" class="primary-btn" style="background:red;">Back to Hub</button>
       </div>
     </div>
-
     <div id="paperio-game" class="game-container" aria-hidden="true">
       <h2 class="card-title">Paper-io</h2>
       <div id="paperio-info" class="text-center" style="color:var(--secondary); font-size:0.97em;">
@@ -243,7 +237,6 @@
       <button id="paperioRestartBtn" class="primary-btn" style="margin-top:1em; font-size:0.95em;">Restart</button>
       <button class="primary-btn" style="margin-top:1em;" onclick="location.reload()">Back to Hub</button>
     </div>
-
     <div id="racer-game" class="game-container" aria-hidden="true">
       <h2 class="card-title">Classic Racer</h2>
       <div id="racer-hud" style="font-size:0.97em; margin-bottom:0.6em; display:flex; gap:1.3em; color:#ccc;">
@@ -261,14 +254,16 @@
       <button class="primary-btn" style="margin-top:1em;" onclick="location.reload()">Back to Hub</button>
     </div>
   </div>
-
+  <footer>
+    &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
+  </footer>
   <script src="login.js"></script>
   <script src="snake.js"></script>
   <script src="simple-tetris.js"></script>
   <script src="paperio.js"></script>
   <script src="racer.js"></script>
   <script>
-    // Card to container logic
+    // Card container logic
     const gameCards = document.querySelectorAll('.primary-btn[data-game-target]');
     const gameContainers = document.querySelectorAll('.game-container');
     const gameGrid = document.querySelector('.game-grid');
@@ -294,8 +289,7 @@
         }
       });
     });
-
-    // Simple Tetris (modal-style container)
+    // Modal logic for Simple Tetris
     document.getElementById('openSimpleTetrisBtn').addEventListener('click', () => {
       gameGrid.style.display = 'none';
       mainTitle.style.display = 'none';
@@ -307,6 +301,9 @@
       document.getElementById('simple-tetris-modal').setAttribute('aria-hidden', 'false');
       if (typeof initPreviewSimpleTetris === 'function') initPreviewSimpleTetris();
     });
+    document.getElementById('simple-tetris-startBtn').addEventListener('click', () => {
+      if (typeof startPreviewTetris === 'function') startPreviewTetris();
+    });
     document.getElementById('simple-tetris-closeBtn').addEventListener('click', () => {
       document.getElementById('simple-tetris-modal').style.display = 'none';
       document.getElementById('simple-tetris-modal').setAttribute('aria-hidden', 'true');
@@ -314,13 +311,9 @@
       mainTitle.style.display = 'block';
       if (typeof stopPreviewTetris === 'function') stopPreviewTetris();
     });
-    document.getElementById('simple-tetris-startBtn').addEventListener('click', () => {
-      if (typeof startPreviewTetris === 'function') startPreviewTetris();
-    });
     document.getElementById('simple-tetris-controlsBtn').addEventListener('click', () => {
       alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
     });
-
     // Controls for individual games
     document.getElementById('snakeRestartBtn')?.addEventListener('click', () => {
       if (typeof resetSnake === 'function') resetSnake();
@@ -338,8 +331,5 @@
       if (typeof resetRacer === 'function') resetRacer();
     });
   </script>
-  <footer>
-    &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
-  </footer>
 </body>
 </html>
