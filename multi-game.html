@@ -184,7 +184,8 @@
           <div class="card-title">Simple Tetris</div>
           <p>Fixed-speed classic Tetris for beginners.</p>
         </div>
-        <button type="button" class="primary-btn" id="openSimpleTetrisBtn">Play Tetris</button>
+        <!-- Changed the button id to the one simple-tetris.js expects -->
+        <button type="button" class="primary-btn" id="runSimpleTetrisBtn">Play Tetris</button>
       </div>
       <!-- Paper-io Card -->
       <div class="game-card">
@@ -214,17 +215,22 @@
       <p style="margin-top:1em; color:var(--muted);">Use arrow keys to move the snake.</p>
       <button class="primary-btn" style="margin-top:1.5em;" onclick="location.reload()">Back to Hub</button>
     </div>
-    <!-- Simple Tetris Modal/Container -->
-    <div id="simple-tetris-modal" class="game-container" aria-hidden="true">
+    <!-- Simple Tetris Modal/Container
+         NOTE: IDs below are set to match simple-tetris.js expectations so the preview implementation can bind correctly:
+         previewSimpleTetrisModal, preview-game, preview-score, preview-startBtn, preview-controlsBtn, preview-modalCloseBtn, runSimpleTetrisBtn (open)
+    -->
+    <div id="previewSimpleTetrisModal" class="game-container" aria-hidden="true">
       <h2 class="card-title">Simple Tetris</h2>
-      <canvas id="simple-tetris-canvas" width="240" height="480"></canvas>
-      <p id="simple-tetris-score" style="color:white; font-weight:bold;">Score: 0 | High Score: 0</p>
+      <!-- canvas id matching simple-tetris.js -->
+      <canvas id="preview-game" width="240" height="480"></canvas>
+      <p id="preview-score" style="color:white; font-weight:bold;">Score: 0 | High Score: 0</p>
       <div class="modal-controls">
-        <button id="simple-tetris-startBtn" class="primary-btn" style="background:#00FF00; color:#000;">Start</button>
-        <button id="simple-tetris-controlsBtn" class="primary-btn" style="background:#FFA500; color:#000;">Controls</button>
-        <button id="simple-tetris-closeBtn" class="primary-btn" style="background:red;">Back to Hub</button>
+        <button id="preview-startBtn" class="primary-btn" style="background:#00FF00; color:#000;">Start</button>
+        <button id="preview-controlsBtn" class="primary-btn" style="background:#FFA500; color:#000;">Controls</button>
+        <button id="preview-modalCloseBtn" class="primary-btn" style="background:red;">Back to Hub</button>
       </div>
     </div>
+
     <div id="paperio-game" class="game-container" aria-hidden="true">
       <h2 class="card-title">Paper-io</h2>
       <div id="paperio-info" class="text-center" style="color:var(--secondary); font-size:0.97em;">
@@ -289,36 +295,57 @@
         }
       });
     });
-    // Modal logic for Simple Tetris
-    document.getElementById('openSimpleTetrisBtn').addEventListener('click', () => {
+
+    // Open Simple Tetris - use the runSimpleTetrisBtn that simple-tetris.js expects
+    document.getElementById('runSimpleTetrisBtn').addEventListener('click', () => {
       gameGrid.style.display = 'none';
       mainTitle.style.display = 'none';
       gameContainers.forEach(container => {
         container.style.display = 'none';
         container.setAttribute('aria-hidden', 'true');
       });
-      document.getElementById('simple-tetris-modal').style.display = 'flex';
-      document.getElementById('simple-tetris-modal').setAttribute('aria-hidden', 'false');
+      // show the modal/container that simple-tetris.js will bind to
+      const modal = document.getElementById('previewSimpleTetrisModal');
+      if (modal) {
+        modal.style.display = 'flex';
+        modal.setAttribute('aria-hidden', 'false');
+      }
+      // initPreviewSimpleTetris is provided by simple-tetris.js; it will bind start/controls/keys
       if (typeof initPreviewSimpleTetris === 'function') initPreviewSimpleTetris();
     });
-    document.getElementById('simple-tetris-startBtn').addEventListener('click', () => {
-      if (typeof startPreviewTetris === 'function') { startPreviewTetris(); return;}
-      if (typeof startTetris === 'function') { startTetris(); return;}
-      if (typeof start === 'function') { start(); return;}
-      if (typeof t_start === 'function') { t_start(); return;}
+
+    // Start button - try the preview-friendly names first (startPreviewTetris)
+    // simple-tetris.js exports startPreviewTetris as t_start
+    document.getElementById('preview-startBtn').addEventListener('click', () => {
+      if (typeof startPreviewTetris === 'function') { startPreviewTetris(); return; }
+      if (typeof startTetris === 'function') { startTetris(); return; }
+      if (typeof start === 'function') { start(); return; }
+      if (typeof t_start === 'function') { t_start(); return; }
       alert("No working start function found for Simple Tetris.");
     });
-    document.getElementById('simple-tetris-closeBtn').addEventListener('click', () => {
-      document.getElementById('simple-tetris-modal').style.display = 'none';
-      document.getElementById('simple-tetris-modal').setAttribute('aria-hidden', 'true');
+
+    // Close simple tetris modal and return to hub
+    document.getElementById('preview-modalCloseBtn').addEventListener('click', () => {
+      const modal = document.getElementById('previewSimpleTetrisModal');
+      if (modal) {
+        modal.style.display = 'none';
+        modal.setAttribute('aria-hidden', 'true');
+      }
       gameGrid.style.display = '';
       mainTitle.style.display = 'block';
       if (typeof stopPreviewTetris === 'function') stopPreviewTetris();
     });
-    document.getElementById('simple-tetris-controlsBtn').addEventListener('click', () => {
+
+    // Controls button - if simple-tetris.js bound controls it will override; otherwise show fallback alert
+    document.getElementById('preview-controlsBtn').addEventListener('click', () => {
+      if (typeof initPreviewSimpleTetris === 'function') {
+        // the module binds a controls handler when initialized; prefer that
+        return;
+      }
       alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
     });
-    // Controls for individual games
+
+    // Controls for other games
     document.getElementById('snakeRestartBtn')?.addEventListener('click', () => {
       if (typeof resetSnake === 'function') resetSnake();
     });
