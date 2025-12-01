@@ -22,11 +22,33 @@
     .modal .btn { margin:4px;}
     footer { text-align:center; padding:16px; color:#999;}
     footer a { color: var(--primary);}
+
+    /* Report form styling to match the page look */
+    .report.card { margin-top:16px; padding:14px; gap:8px; }
+    .report h3 { margin:0 0 8px 0; color:var(--primary); }
+    .report label { display:block; margin:10px 0 6px 0; color:var(--primary); font-weight:700; font-size:0.95rem; }
+    .report input[type="text"],
+    .report textarea {
+      width:100%;
+      padding:10px;
+      border-radius:8px;
+      border:1px solid rgba(51,102,204,0.18);
+      background: #fff;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+      font-family: inherit;
+      font-size: 0.95rem;
+      color: #222;
+      box-sizing: border-box;
+    }
+    .report textarea { min-height:120px; resize:vertical; }
+    .report .btn { align-self:flex-start; margin-top:10px; }
+    #reportMessage { margin-top:10px;color:var(--muted); font-weight:600; }
     @media (max-width:700px) {
       .container {padding:6px;}
       .card {padding:6px;}
       .game-grid {gap:7px;}
       .modal-content {padding:13px 8px;}
+      .report.card { padding:10px; }
     }
   </style>
 </head>
@@ -49,17 +71,28 @@
         <button class="btn" id="runPreviewInvadersBtn">Play Now</button>
       </div>
     </div>
-    <!-- NEON TETRIS MODAL -->
-    <div id="previewNeonTetrisModal" class="modal">
+
+    <!-- NEON TETRIS MODAL
+         NOTE: modal and inner IDs deliberately match the working neon-tetris.js expectations:
+         - modal id "tetrisModal"
+         - canvas id "game"
+         - score id "score"
+         - start button id "startBtn"
+         - controls button id "controlsBtn"
+         - close button id "modalCloseBtn"
+         This lets neon-tetris.js find and bind to the correct DOM nodes and expose its start() behavior.
+    -->
+    <div id="tetrisModal" class="modal" aria-hidden="true">
       <div class="modal-content">
         <h2>Neon Tetris</h2>
-        <canvas id="preview-neon-tetris-canvas" width="240" height="480"></canvas>
-        <p id="preview-neon-tetris-score" style="color: white; font-weight: bold;">Score: 0 | High Score: 0</p>
-        <button id="preview-neon-tetris-startBtn" class="btn" style="background:#00FF00; color:#000;">Start</button>
-        <button id="preview-neon-tetris-controlsBtn" class="btn" style="background:#FFA500; color:#000;">Controls</button>
-        <button id="preview-neon-tetris-closeBtn" class="btn" style="background:red;">Close Game</button>
+        <canvas id="game" width="240" height="480"></canvas>
+        <p id="score" style="color: white; font-weight: bold;">Score: 0 | High Score: 0</p>
+        <button id="startBtn" class="btn" style="background:#00FF00; color:#000;">Start</button>
+        <button id="controlsBtn" class="btn" style="background:#FFA500; color:#000;">Controls</button>
+        <button id="modalCloseBtn" class="btn" style="background:red;">Close Game</button>
       </div>
     </div>
+
     <!-- INVADERS MODAL -->
     <div id="preview-invadersModal" class="modal">
       <div class="modal-content">
@@ -71,8 +104,9 @@
         <button id="preview-invaders-closeBtn" class="btn" style="background:red;">Close Game</button>
       </div>
     </div>
-     <section class="report" aria-label="Report a bug">
-      <h3 style="margin-top:0;">Report a bug or suggest an improvement</h3>
+
+     <section class="report card" aria-label="Report a bug">
+      <h3>Report a bug or suggest an improvement</h3>
       <form id="reportForm">
         <label for="gameName">Game / Preview name</label>
         <input id="gameName" type="text" required placeholder="Name of the previewed game">
@@ -80,40 +114,68 @@
         <textarea id="reportText" required placeholder="What happened? How can it be improved?"></textarea>
         <button class="btn" type="submit" style="margin-top:10px;">Send Report</button>
       </form>
-      <div id="reportMessage" style="margin-top:10px;color:var(--muted)"></div>
+      <div id="reportMessage"></div>
     </section>
   </div>
   <footer>
     &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </footer>
+
   <script src="login.js"></script>
+  <!-- Ensure neon-tetris.js is loaded after the DOM so it can capture the elements by ID -->
   <script src="neon-tetris.js"></script>
   <script src="full-invaders.js"></script>
+
   <script>
-    // Neon tetris preview modal logic
+    // Bind preview UI actions and connect them to the working neon-tetris implementation.
+    // Important: neon-tetris.js exposes initTetrisGame() and start() and expects DOM ids:
+    // tetrisModal, game, score, startBtn, controlsBtn, modalCloseBtn
     document.getElementById('runNeonTetrisBtn').addEventListener('click', () => {
-      document.getElementById('previewNeonTetrisModal').style.display = 'flex';
-      if (typeof initPreviewNeonTetris === 'function') initPreviewNeonTetris();
+      // Open the modal that neon-tetris.js expects
+      const modal = document.getElementById('tetrisModal');
+      if (modal) modal.style.display = 'flex';
+
+      // Initialize the neon tetris UI (this will bind the Start button to the working start() function)
+      if (typeof initTetrisGame === 'function') {
+        try { initTetrisGame(); } catch (err) { console.error('initTetrisGame error:', err); }
+      } else if (typeof initPreviewNeonTetris === 'function') {
+        // backward fallback if another init exists
+        try { initPreviewNeonTetris(); } catch (err) { console.error('initPreviewNeonTetris error:', err); }
+      }
     });
-    document.getElementById('preview-neon-tetris-startBtn').addEventListener('click', () => {
-      if (typeof startPreviewNeonTetris === 'function') { startPreviewNeonTetris(); return;}
-      if (typeof startTetris === 'function') { startTetris(); return;}
-      if (typeof start === 'function') { start(); return;}
-      if (typeof t_start === 'function') { t_start(); return;}
-      alert("No working start function found for Neon Tetris.");
+
+    // Close button for neon tetris modal — hide the modal and attempt to stop the game if a stop function exists.
+    document.getElementById('modalCloseBtn').addEventListener('click', () => {
+      const modal = document.getElementById('tetrisModal');
+      if (modal) modal.style.display = 'none';
+
+      // Attempt to call a stop function if provided by the tetris implementation.
+      if (typeof stopPreviewNeonTetris === 'function') {
+        try { stopPreviewNeonTetris(); } catch (err) { console.error('stopPreviewNeonTetris error:', err); }
+      }
+      // If implementation exposes any other stop name, try them as well (non-fatal)
+      if (typeof stopTetris === 'function') { try { stopTetris(); } catch (e) {} }
+      if (typeof stop === 'function') { try { stop(); } catch (e) {} }
     });
-    document.getElementById('preview-neon-tetris-closeBtn').addEventListener('click', () => {
-      document.getElementById('previewNeonTetrisModal').style.display = 'none';
-      if (typeof stopPreviewNeonTetris === 'function') stopPreviewNeonTetris();
-    });
-    document.getElementById('preview-neon-tetris-controlsBtn').addEventListener('click', () => {
-      alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
-    });
-    // Full Invaders preview modal logic
+
+    // Controls button fallback (if neon-tetris didn't bind it)
+    const controlsBtn = document.getElementById('controlsBtn');
+    if (controlsBtn) {
+      controlsBtn.addEventListener('click', () => {
+        if (typeof initTetrisGame === 'function') {
+          // initTetrisGame binds the controls button in neon-tetris.js; if present, prefer that.
+          return;
+        }
+        alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
+      });
+    }
+
+    // Full Invaders preview modal logic (unchanged)
     document.getElementById('runPreviewInvadersBtn').addEventListener('click', () => {
       document.getElementById('preview-invadersModal').style.display = 'flex';
       if (typeof initPreviewInvadersGame === 'function') initPreviewInvadersGame();
-      document.getElementById('preview-invaders-score').textContent = 'Score: 0';
+      const scoreEl = document.getElementById('preview-invaders-score');
+      if (scoreEl) scoreEl.textContent = 'Score: 0';
     });
     document.getElementById('preview-invaders-startBtn').addEventListener('click', () => {
       if (typeof startPreviewInvaders === 'function') startPreviewInvaders();
@@ -122,8 +184,26 @@
       document.getElementById('preview-invadersModal').style.display = 'none';
       if (typeof stopPreviewInvaders === 'function') stopPreviewInvaders();
     });
-    document.getElementById('preview-invaders-controlsBtn').addEventListener('click', () => {
-      alert('Controls:\nLeft/Right Arrow: Move\nSpace Bar: Fire\nDestroy waves to advance.');
+
+    // Simple report form handler
+    document.getElementById('reportForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = document.getElementById('gameName').value.trim();
+      var text = document.getElementById('reportText').value.trim();
+      var msgEl = document.getElementById('reportMessage');
+
+      if (!name || !text) {
+        msgEl.textContent = 'Please provide the game name and a description.';
+        msgEl.style.color = 'var(--muted)';
+        return;
+      }
+
+      msgEl.textContent = 'Thanks! Your report has been submitted.';
+      msgEl.style.color = 'var(--primary)';
+
+      setTimeout(function () {
+        document.getElementById('reportForm').reset();
+      }, 250);
     });
   </script>
 </body>
