@@ -71,18 +71,18 @@
         <button id="preview-invaders-closeBtn" class="btn" style="background:red;">Close Game</button>
       </div>
     </div>
+     <section class="report" aria-label="Report a bug">
+      <h3 style="margin-top:0;">Report a bug or suggest an improvement</h3>
+      <form id="reportForm">
+        <label for="gameName">Game / Preview name</label>
+        <input id="gameName" type="text" required placeholder="Name of the previewed game">
+        <label for="reportText">Describe the issue or suggestion</label>
+        <textarea id="reportText" required placeholder="What happened? How can it be improved?"></textarea>
+        <button class="btn" type="submit" style="margin-top:10px;">Send Report</button>
+      </form>
+      <div id="reportMessage" style="margin-top:10px;color:var(--muted)"></div>
+    </section>
   </div>
-  <section class="report" aria-label="Report a bug">
-    <h3 style="margin-top:0;">Report a bug or suggest an improvement</h3>
-    <form id="reportForm">
-      <label for="gameName">Game / Preview name</label>
-      <input id="gameName" type="text" required placeholder="Name of the previewed game">
-      <label for="reportText">Describe the issue or suggestion</label>
-      <textarea id="reportText" required placeholder="What happened? How can it be improved?"></textarea>
-      <button class="btn" type="submit" style="margin-top:10px;">Send Report</button>
-    </form>
-    <div id="reportMessage" style="margin-top:10px;color:var(--muted)"></div>
-  </section>
   <footer>
     &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </footer>
