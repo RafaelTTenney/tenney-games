@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Apply for Account</title>
+  <title>Sign Up Help</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css">
   <style>
     :root {
       --primary-blue: #3366cc;
@@ -15,69 +14,39 @@
       --text-main: #222;
       --text-light: #fff;
     }
-   body { background: var(--background); font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }
-    .container { max-width: 400px; margin: 60px auto 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 16px rgba(51,102,204,0.08); padding: 36px 28px 24px 28px; }
-    h1 { color: var(--primary-blue); font-size: 2em; margin-bottom: 20px; text-align: center; }
-    label { display: block; margin-bottom: 7px; color: var(--primary-blue); font-weight: 500; }
-    input[type="text"], input[type="email"], input[type="password"], textarea { width: 100%; padding: 11px 9px; margin-bottom: 22px; border: 1px solid var(--accent-blue); border-radius: 4px; background: var(--light-blue); font-size: 1em; color: var(--text-main); box-sizing: border-box; transition: border-color 0.2s; }
-    textarea { min-height: 60px; resize: vertical; }
-    input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, textarea:focus { border-color: var(--primary-blue); outline: none; }
-    button { width: 100%; padding: 13px 0; font-size: 1em; background: var(--primary-blue); color: var(--text-light); border: none; border-radius: 4px; font-weight: 600; cursor: pointer; margin-top: 8px; transition: background 0.2s; }
-    button:hover, button:focus { background: var(--dark-blue); }
-    .note { color: #666; font-size: 0.97em; margin-top: 24px; text-align: center; }
-    .btn-home { display: inline-block; margin-top: 18px; padding: 0.6em 1.3em; background: #3366cc; color: #fff; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 1em; letter-spacing: 1px; text-align: center; }
+    body { background: var(--background); font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }
+    .container { max-width: 460px; margin: 60px auto 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 16px rgba(51,102,204,0.08); padding: 28px 24px 24px; }
+    h1 { color: var(--primary-blue); font-size: 2em; margin-bottom: 16px; text-align: center; }
+    p { color: #254a99; line-height: 1.6; }
+    ol { color: #254a99; padding-left: 18px; }
+    li { margin-bottom: 8px; }
+    .tip { background: var(--light-blue); border: 1px solid var(--accent-blue); color: var(--primary-blue); border-radius: 6px; padding: 10px 12px; margin-top: 14px; }
+    .btn-home { display: inline-block; margin-top: 16px; padding: 0.6em 1.3em; background: #3366cc; color: #fff; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 1em; letter-spacing: 1px; text-align: center; }
     .btn-home:hover { background: #254a99; }
-    .reminder { color: #254a99; background: #e6f0ff; border-radius: 6px; padding: 10px; font-size: 1em; margin-bottom: 18px; text-align: center; }
-    .username-notice { background: #e6f0ff; color: #3366cc; padding: 8px 12px; border-radius: 6px; margin-bottom: 18px; font-size: 1em; text-align: center; border: 1px solid #99ccff;}
+    .footer { text-align: center; padding: 2em 1em 1em; color: #999; font-size: 0.95em; }
     @media (max-width: 500px) { .container { margin: 24px 8px; padding: 20px 8px; } }
   </style>
-  <script>
-    function formatMailto(e) {
-      e.preventDefault();
-      var name = document.getElementById('name').value.trim();
-      var lastname = document.getElementById('lastname').value.trim();
-      var email = document.getElementById('email').value.trim();
-      var desiredPassword = document.getElementById('password').value.trim();
-      var reason = document.getElementById('reason').value.trim();
-
-      window.location.href = 'admin.html';
-      setTimeout(function() {
-        window.location.href = "account-application-sucess.html?name=" + encodeURIComponent(name) + "&lastname=" + encodeURIComponent(lastname) + "&email=" + encodeURIComponent(email);
-      }, 500);
-    }
-  </script>
 </head>
 <body>
   <div class="container">
-    <h1>Apply for an Account</h1>
-    <div class="reminder">
-      Reminder: It may take up to three days for your account to be ready.
+    <h1>Create Your Account</h1>
+    <p>
+      Accounts are now made directly through Supabase. You no longer need to send an application—just sign up on the login page.
+    </p>
+    <ol>
+      <li>Go to the <strong>Login</strong> page.</li>
+      <li>Enter the email and password you want to use.</li>
+      <li>Click <strong>Sign up</strong>. Supabase will create your account instantly.</li>
+      <li>After signing up, you will be logged in and taken to the dashboard.</li>
+    </ol>
+    <div class="tip">
+      Your high scores and access level are stored in Supabase. If you ever request an upgrade, admins review it inside the site—no emails needed.
     </div>
-    <div class="username-notice">
-      <strong>Your username will be:</strong><br>
-      the first letter of your first name, followed by your last name.<br>
-      <em>(No spaces, all lowercase)</em>
-      <br>
-      <br>
-      <span style="font-size:0.95em;">Example: John Smith → <b>jsmith</b></span>
-    </div>
-    <form onsubmit="formatMailto(event)">
-      <label for="name">First Name</label>
-      <input type="text" id="name" name="name" required>
-      <label for="lastname">Last Name</label>
-      <input type="text" id="lastname" name="lastname" required>
-      <label for="email">Email</label>
-      <input type="email" id="email" name="email" required>
-      <label for="password">Desired Password</label>
-      <input type="password" id="password" name="password" required>
-      <label for="reason">Why do you want the account?</label>
-      <textarea id="reason" name="reason" required></textarea>
-      <button type="submit">Send Application</button>
-    </form>
-    <a href="index.html" class="btn-home">Home</a>
-    <div class="note">
-      <em>After pressing "Send Application", we'll send you to the admin panel so your request is recorded.</em>
-    </div>
+    <a href="login.html" class="btn-home">Go to Login / Sign up</a>
+    <a href="index.html" class="btn-home" style="background:#777; margin-left:8px;">Home</a>
+  </div>
+  <div class="footer">
+    &copy; 2025 Games & Programs | Contact: <a href="admin.html">admin panel</a>
   </div>
 </body>
 </html>
