@@ -161,12 +161,18 @@
   </div>
 
   <div class="footer">
-    &copy; Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
+    &copy; Games & Programs | Contact: <a href="admin.html">admin panel</a>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-client.js"></script>
+  <script src="supabase-highscores.js"></script>
   <script src="login.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      if (window.supabaseHelpers) {
+        window.supabaseHelpers.refreshSessionFromSupabase();
+      }
       if (!isLoggedIn()) {
         window.location.replace('index.html');
         return;
@@ -192,4 +198,3 @@
     });
   </script>
 </body>
-</html>
