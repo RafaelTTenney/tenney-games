@@ -20,6 +20,14 @@
     function updateScore() {
       const scoreEl = document.getElementById('snake-score');
       if (scoreEl) scoreEl.textContent = `Score: ${score}`;
+      if (score > personalBest) {
+        personalBest = score;
+        const bestEl = document.getElementById('snake-highscore');
+        if (bestEl) bestEl.textContent = `High Score: ${personalBest}`;
+        if (window.supabaseHighScores) {
+          window.supabaseHighScores.updateHighScore('highscore-snake', personalBest);
+        }
+      }
     }
 
     function randomPosition() {
@@ -151,9 +159,17 @@
   }
 
   let snakeModule = null;
+  let personalBest = 0;
   function initSnakeGame() {
     if (!snakeModule) snakeModule = createSnakeModule();
-    if (snakeModule && typeof snakeModule.init === 'function') snakeModule.init();
+    if (snakeModule && typeof snakeModule.init === 'function') {
+      snakeModule.init();
+      if (window.supabaseHighScores) {
+        window.supabaseHighScores.loadAndDisplay('highscore-snake', 'snake-highscore').then(best => {
+          if (typeof best === 'number') personalBest = best;
+        });
+      }
+    }
   }
 
   // expose globals for backward compatibility
