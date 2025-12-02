@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Application Received | Games & Programs</title>
+  <title>Request Saved | Games & Programs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: "Roboto", "Arial", sans-serif; background: #f6f8fb; margin: 0; padding: 0; min-height: 100vh;}
-     .login-container { max-width: 380px; margin: 5em auto 0 auto; background: #fff; box-shadow: 0 8px 24px rgba(51,102,204,0.08); border-radius: 12px; padding: 2em; display: flex; flex-direction: column; }
+    .login-container { max-width: 380px; margin: 5em auto 0 auto; background: #fff; box-shadow: 0 8px 24px rgba(51,102,204,0.08); border-radius: 12px; padding: 2em; display: flex; flex-direction: column; }
     h2 { margin-bottom: 1em; color: #3366cc; font-size: 1.4em; font-weight: 600; letter-spacing: 1px;}
     .footer { text-align: center; padding: 2em 1em 1em; color: #999; font-size: 0.95em;}
     .message { color: #254a99; font-size: 1em; line-height: 1.6; margin-top: 1em;}
@@ -19,10 +19,8 @@
 </head>
 <body>
   <div class="login-container">
-    <h2>Account Application Received</h2>
-    <div class="reminder">
-      Reminder: It may take up to three days for your account to be ready.
-    </div>
+    <h2>Request saved</h2>
+    <div class="reminder" id="reminderBox"></div>
     <div class="message" id="success-message"></div>
     <div style="margin-top:1.5em;">
       <a href="login.html">Back to login</a>
@@ -35,22 +33,20 @@
   </div>
   <script>
     const params = new URLSearchParams(window.location.search);
-    const name = params.get('name');
-    const lastname = params.get('lastname');
-    const email = params.get('email');
-    document.getElementById('success-message').innerHTML = `
-      <p>
-      Dear ${name} ${lastname},<br><br>
-      Thank you for applying for an account with Games & Programs.<br>
-      Your request has been received and your account will be added within three days.<br><br>
-      <b>Your account details:</b><br>
-      Name: ${name} ${lastname}<br>
-      Email: ${email}<br><br>
-      If you have any questions or need assistance, feel free to contact us at <a href="admin.html">admin panel</a>.<br><br>
-      Best regards,<br>
-      Games & Programs Team
-      </p>
-    `;
+    const fallbackName = params.get('name') || 'Player';
+    const username = localStorage.getItem('username') || fallbackName;
+    const requestType = params.get('type') || 'upgrade';
+
+    const successBox = document.getElementById('success-message');
+    const reminder = document.getElementById('reminderBox');
+
+    if (requestType === 'signup') {
+      reminder.textContent = 'Your account was created through Supabase. You can log in right away with the email and password you chose.';
+      successBox.innerHTML = `Welcome, ${username}!<br>Your profile and high-score row are ready.`;
+    } else {
+      reminder.textContent = 'Your message was stored in Supabase and can be reviewed inside the admin panel.';
+      successBox.innerHTML = `Thanks, ${username}! Your request is saved. Keep playing while an admin reviews it.`;
+    }
   </script>
 </body>
 </html>
