@@ -680,9 +680,17 @@
 
           if (carBottom <= obTop || carTop >= obBottom) continue;
 
-          const cushion = Math.max(6, Math.round(collisionWidth * 0.08));
-          const safeGapLeft = gapLeft - cushion;
-          const safeGapRight = gapRight + cushion;
+                   const baseCushion = Math.max(5, Math.round(collisionWidth * 0.06));
+          const innerLaneBonus = Math.max(8, Math.round(collisionWidth * 0.12));
+
+          let safeGapLeft = gapLeft - baseCushion;
+          let safeGapRight = gapRight + baseCushion;
+
+          if (ob.gapLane === -1) {
+              safeGapRight += innerLaneBonus;
+          } else if (ob.gapLane === 1) {
+              safeGapLeft -= innerLaneBonus;
+          }
 
           if (carLeft < safeGapLeft || carRight > safeGapRight) {
               if (racerState.animationFrame) {
