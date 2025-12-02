@@ -680,16 +680,21 @@
 
           if (carBottom <= obTop || carTop >= obBottom) continue;
 
-                   const baseCushion = Math.max(5, Math.round(collisionWidth * 0.06));
-          const innerLaneBonus = Math.max(8, Math.round(collisionWidth * 0.12));
+          const baseCushion = Math.max(5, Math.round(collisionWidth * 0.06));
+          const innerLaneBonus = Math.max(10, Math.round(collisionWidth * 0.18));
+          const outerLaneTrim = Math.max(4, Math.round(collisionWidth * 0.08));
 
           let safeGapLeft = gapLeft - baseCushion;
           let safeGapRight = gapRight + baseCushion;
 
           if (ob.gapLane === -1) {
+              // Left lane: push the safe gap toward center by trimming the outer edge
+              safeGapLeft += outerLaneTrim;
               safeGapRight += innerLaneBonus;
           } else if (ob.gapLane === 1) {
+              // Right lane: push the safe gap toward center by trimming the outer edge
               safeGapLeft -= innerLaneBonus;
+              safeGapRight -= outerLaneTrim;
           }
 
           if (carLeft < safeGapLeft || carRight > safeGapRight) {
