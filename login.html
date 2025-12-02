@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Login | Games & Programs</title>
+ <title>Login | Games & Programs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: "Roboto", "Arial", sans-serif; background: #f6f8fb; margin: 0; padding: 0; min-height: 100vh;}
@@ -27,25 +27,27 @@
 </head>
 <body>
   <div class="login-container">
-    <h2>Login</h2>
+    <h2>Login or Sign Up</h2>
     <div class="info">
-      Please enter your username and password to access the Games & Programs.<br>
-      <span style="color:#3366cc;font-weight:500;">No coding knowledge required!</span>
+      Use the email + password you want for your account. Click "Sign up" to create it in Supabase or "Login" if you already have one.
     </div>
     <form class="login-form" id="loginForm">
       <div>
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username" required autocomplete="username">
+        <label for="username">Email</label>
+        <input type="text" id="username" name="username" required autocomplete="username" placeholder="you@example.com">
       </div>
       <div>
         <label for="password">Password</label>
         <input type="password" id="password" name="password" required autocomplete="current-password">
       </div>
-      <button type="submit">Login</button>
+      <div style="display:flex; gap:0.5em;">
+        <button id="loginBtn" type="submit" style="flex:1;">Login</button>
+        <button id="signupBtn" type="button" style="flex:1; background:#1bbf48;">Sign up</button>
+      </div>
       <div id="loginError"></div>
     </form>
     <div class="links">
-      <a href="apply-account.html">Apply for an account</a>
+      <a href="apply-account.html">Need help signing up?</a>
       <br>
       <a href="forgot-password.html">Forgot your password?</a>
       <br>
@@ -53,8 +55,10 @@
     </div>
   </div>
   <div class="footer">
-    &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
+    &copy; 2025 Games & Programs | Contact: <a href="admin.html">admin panel</a>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-client.js"></script>
   <script src="login.js"></script>
 </body>
 </html>
