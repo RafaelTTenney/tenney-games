@@ -81,7 +81,7 @@ function adminSetAccountStatusOverride(username, newStatus) {
   }
 }
 
-async function handleAuth(type, email, password) {
+async function handleAuth(type, email, password, firstName) {
   if (!window.supabaseClient) throw new Error('Supabase not initialized');
   const trimmedEmail = email.trim();
   const trimmedPassword = password.trim();
@@ -89,22 +89,32 @@ async function handleAuth(type, email, password) {
     throw new Error('Please fill in both email and password.');
   }
   if (type === 'signup') {
-    return window.supabaseClient.auth.signUp({ email: trimmedEmail, password: trimmedPassword });
+    const metadata = firstName ? { firstName } : {};
+    return window.supabaseClient.auth.signUp({
+      email: trimmedEmail,
+      password: trimmedPassword,
+      options: { data: metadata }
+    });
   }
   return window.supabaseClient.auth.signInWithPassword({ email: trimmedEmail, password: trimmedPassword });
 }
 
-async function finishLogin(user) {
+async function finishLogin(user, firstNameFromForm = '') {
   if (!user) return;
-  await window.supabaseHelpers.ensureHighScoreRow(user);
+  const startingFirst = firstNameFromForm || (user.user_metadata && user.user_metadata.firstName) || '';
+  await window.supabaseHelpers.ensureHighScoreRow(user, startingFirst);
   let status = 'standard';
+  let firstName = startingFirst;
   if (window.supabaseHelpers && window.supabaseHelpers.fetchAccountProfile) {
     const profile = await window.supabaseHelpers.fetchAccountProfile(user.id);
     if (profile && profile['acess-level']) {
       status = profile['acess-level'];
     }
+    if (profile && (profile.firstName || profile.firstname)) {
+      firstName = profile.firstName || profile.firstname;
+    }
   }
-  window.supabaseHelpers.storeUserSession(user, status);
+  window.supabaseHelpers.storeUserSession(user, status, firstName);
   window.location.replace('loggedIn.html');
 }
 
