@@ -29,7 +29,7 @@
     </div>
   </div>
   <div class="footer">
-    &copy; 2025 Games & Programs | Contact: <a href="admin.html">admin panel</a>
+    &copy; 2025 Games & Programs | Contact: <a href="contact.html">contact form</a>
   </div>
   <script>
     const params = new URLSearchParams(window.location.search);
@@ -43,6 +43,9 @@
     if (requestType === 'signup') {
       reminder.textContent = 'Your account was created through Supabase. You can log in right away with the email and password you chose.';
       successBox.innerHTML = `Welcome, ${username}!<br>Your profile and high-score row are ready.`;
+    } else if (requestType === 'contact') {
+      reminder.textContent = 'Your message was saved inside Supabase so the admins can review it from their dashboard.';
+      successBox.innerHTML = `Thanks for reaching out, ${username}! We'll look at your note and reply through your account access.`;
     } else {
       reminder.textContent = 'Your message was stored in Supabase and can be reviewed inside the admin panel.';
       successBox.innerHTML = `Thanks, ${username}! Your request is saved. Keep playing while an admin reviews it.`;
