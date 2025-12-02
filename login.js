@@ -1,60 +1,32 @@
-// login.js (updated)
-// Adds accountStatus support and role-based access helpers.
-
-async function sha256(message) {
-  const msgBuffer = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// Note: accountStatus values: 'standard', 'advance', 'admin'
-const users = [
-  { username: 'admin', hash: '02079b31824a4d18a105f16b9d45e751a114ce5b4ff3d49c6f19633aed25abbc', accountStatus: 'admin', firstName: 'admin' },
-  { username: 'amagee', hash: 'e52a1359297822655226696b53192f9085c5f161d1bda5cbaed8e9ceb64c904b', accountStatus: 'admin', firstName: 'Andrew' },
-  { username: 'ccarty', hash: 'e3bd890850be9d6ffc4568c23a497e84fc8ed079ed196ce6d978a24a731f1de8', accountStatus: 'standard', firstName: 'Colleen' },
-  { username: 'smartinez', hash: 'cfadedad585d18910973603153c102a1ab83edd78886db527315b07d0630281e', accountStatus: 'advance', firstName: 'Santi' },
-  { username: 'rtenney', hash: 'd2809be3fe85fcf081294d173edc0580b93d17b8c6df3ccabc8b56d5b4f62714', accountStatus: 'advance', firstName: 'Robert' },
-  { username: 'cdillon', hash: '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8', accountStatus: 'admin', firstName: 'Calvin' }
-];
+// Supabase-powered auth helpers for the site.
+// This file keeps the same helper names the rest of the pages already use
+// (isLoggedIn, logout, etc.) but now backs them with Supabase Auth.
 
 function isLoggedIn() {
-  return localStorage.getItem('loggedIn') === 'true';
+  return localStorage.getItem('loggedIn') === 'true' && !!localStorage.getItem('user');
 }
+
 function logout() {
   localStorage.removeItem('loggedIn');
+  localStorage.removeItem('user');
   localStorage.removeItem('username');
-  localStorage.removeItem('accountStatus');
   localStorage.removeItem('firstName');
-  // Also remove any admin-managed overrides stored locally
-  // (keeps behavior predictable when testing)
-  // DO NOT clear other app data if used elsewhere.
+  localStorage.removeItem('accountStatus');
+  localStorage.removeItem('accountStatusOverrides');
+  if (window.supabaseClient) {
+    window.supabaseClient.auth.signOut();
+  }
   window.location.replace('index.html');
 }
+
 function getAccountStatus() {
-  // First check override map (admin edits saved to localStorage)
-  // Stored structure: { username: status, ... } as JSON string under 'accountStatusOverrides'
-  try {
-    const username = localStorage.getItem('username');
-    if (!username) return null;
-    const overridesRaw = localStorage.getItem('accountStatusOverrides');
-    if (overridesRaw) {
-      const overrides = JSON.parse(overridesRaw);
-      if (overrides && overrides[username]) {
-        return overrides[username];
-      }
-    }
-  } catch (e) {
-    console.error('Error reading accountStatusOverrides', e);
-  }
-  // Otherwise use stored session accountStatus (set at login)
-  return localStorage.getItem('accountStatus') || null;
+  return localStorage.getItem('accountStatus') || 'standard';
 }
+
 function isAdmin() { return getAccountStatus() === 'admin'; }
 function isAdvance() { return getAccountStatus() === 'advance' || isAdmin(); }
 function isStandard() { return getAccountStatus() === 'standard' || isAdvance() || isAdmin(); }
 
-// Page access map
 const PAGE_ACCESS = {
   'loggedin.html': ['standard', 'advance', 'admin'],
   'loggedIn.html': ['standard', 'advance', 'admin'],
@@ -69,51 +41,35 @@ const PAGE_ACCESS = {
 
 function pageNameFromPath(p) {
   if (!p) return '';
-  try {
-    const u = new URL(p, window.location.origin);
-    const parts = u.pathname.split('/');
-    return parts[parts.length - 1] || parts[parts.length - 2] || '';
-  } catch (e) {
-    // fallback: try split
-    const parts = p.split('/');
-    return parts[parts.length - 1];
-  }
+  const parts = p.split('/');
+  return parts[parts.length - 1];
 }
 
 function canAccessPage(pathOrName) {
   const page = pageNameFromPath(pathOrName).toLowerCase();
-  if (!page) return false;
   const allowed = PAGE_ACCESS[page];
-  if (!allowed) {
-    // If page not listed, default to require login only
-    return isLoggedIn();
-  }
-  const status = getAccountStatus();
-  return isLoggedIn() && allowed.includes(status);
+  if (!allowed) return isLoggedIn();
+  return isLoggedIn() && allowed.includes(getAccountStatus());
 }
 
-// Helper to use in pages: if canAccessPage(...) === false, redirect to loggedIn.html or index.
 function enforcePageAccess(pathOrName) {
   if (!isLoggedIn()) {
-    window.location.replace('index.html');
+    window.location.replace('login.html');
     return false;
   }
   if (!canAccessPage(pathOrName)) {
-    // Not allowed to view this page — send back to dashboard
     window.location.replace('loggedIn.html');
     return false;
   }
   return true;
 }
 
-// Admin utility: set override statuses (persisted to localStorage)
 function adminSetAccountStatusOverride(username, newStatus) {
   try {
     const raw = localStorage.getItem('accountStatusOverrides');
     const overrides = raw ? JSON.parse(raw) : {};
     overrides[username] = newStatus;
     localStorage.setItem('accountStatusOverrides', JSON.stringify(overrides));
-    // If the currently logged-in user is the one changed, update session accountStatus
     const current = localStorage.getItem('username');
     if (current === username) {
       localStorage.setItem('accountStatus', newStatus);
@@ -125,33 +81,78 @@ function adminSetAccountStatusOverride(username, newStatus) {
   }
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-  // Login form behavior (if exists on page)
-  const loginForm = document.getElementById('loginForm');
-  if (!loginForm) {
-    // Nothing to do here if there's no login form
-    return;
+async function handleAuth(type, email, password) {
+  if (!window.supabaseClient) throw new Error('Supabase not initialized');
+  const trimmedEmail = email.trim();
+  const trimmedPassword = password.trim();
+  if (!trimmedEmail || !trimmedPassword) {
+    throw new Error('Please fill in both email and password.');
   }
-  loginForm.addEventListener('submit', async function (e) {
+  if (type === 'signup') {
+    return window.supabaseClient.auth.signUp({ email: trimmedEmail, password: trimmedPassword });
+  }
+  return window.supabaseClient.auth.signInWithPassword({ email: trimmedEmail, password: trimmedPassword });
+}
+
+async function finishLogin(user) {
+  if (!user) return;
+  await window.supabaseHelpers.ensureHighScoreRow(user);
+  let status = 'standard';
+  if (window.supabaseHelpers && window.supabaseHelpers.fetchAccountProfile) {
+    const profile = await window.supabaseHelpers.fetchAccountProfile(user.id);
+    if (profile && profile['acess-level']) {
+      status = profile['acess-level'];
+    }
+  }
+  window.supabaseHelpers.storeUserSession(user, status);
+  window.location.replace('loggedIn.html');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  const loginForm = document.getElementById('loginForm');
+  const loginError = document.getElementById('loginError');
+  const signupBtn = document.getElementById('signupBtn');
+  const loginBtn = document.getElementById('loginBtn');
+
+  if (!loginForm) return;
+
+  async function authFlow(mode) {
+    loginError.textContent = '';
+    try {
+      const email = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const { data, error } = await handleAuth(mode, email, password);
+      if (error) {
+        loginError.textContent = error.message;
+        return;
+      }
+      const user = data && data.user;
+      if (user) {
+        await finishLogin(user);
+      } else {
+        loginError.textContent = 'No user returned from Supabase.';
+      }
+    } catch (err) {
+      loginError.textContent = err.message || 'Unexpected error';
+    }
+  }
+
+  loginForm.addEventListener('submit', function (e) {
     e.preventDefault();
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    const user = users.find(u => u.username === username);
-    if (!user) {
-      document.getElementById('loginError').textContent = 'Invalid username or password.';
-      return;
-    }
-    const inputHash = await sha256(password);
-    if (inputHash === user.hash) {
-      localStorage.setItem('loggedIn', 'true');
-      localStorage.setItem('username', username);
-      localStorage.setItem('firstName', user.firstName);
-      // Save initial accountStatus from users array (session); admin may override later
-      localStorage.setItem('accountStatus', user.accountStatus || 'standard');
-      // Redirect to the new loggedIn landing page
-      window.location.replace('loggedIn.html');
-    } else {
-      document.getElementById('loginError').textContent = 'Invalid username or password.';
-    }
+    authFlow('login');
   });
+
+  if (signupBtn) {
+    signupBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      authFlow('signup');
+    });
+  }
+
+  if (loginBtn) {
+    loginBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      authFlow('login');
+    });
+  }
 });
