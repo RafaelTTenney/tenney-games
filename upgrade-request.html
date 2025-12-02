@@ -38,31 +38,80 @@
     <div id="msg" style="margin-top:12px;color:#666;"></div>
   </div>
 
-  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a></footer>
+  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="admin.html">Go to the admin panel</a></footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-client.js"></script>
   <script src="login.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       if (!enforcePageAccess('upgrade-request.html')) return;
       const form = document.getElementById('upgradeForm');
-      form.addEventListener('submit', function(e) {
+      const messageBox = document.getElementById('msg');
+      const user = window.supabaseHelpers.getStoredUser();
+
+      if (!user || !window.supabaseClient) {
+        messageBox.textContent = 'Please log in before submitting a request.';
+        return;
+      }
+
+      async function loadExistingMessages() {
+        const { data, error } = await window.supabaseClient
+          .from('HighScores')
+          .select('messages')
+          .eq('id', user.id)
+          .single();
+        if (error) {
+          console.warn('Could not load messages', error);
+          return [];
+        }
+        const raw = data && data.messages;
+        if (!raw) return [];
+        try {
+          return Array.isArray(raw) ? raw : JSON.parse(raw);
+        } catch (e) {
+          return [];
+        }
+      }
+
+      form.addEventListener('submit', async function(e) {
         e.preventDefault();
         const status = document.getElementById('desiredStatus').value;
         const why = document.getElementById('why').value.trim();
         const intent = document.getElementById('intent').value.trim();
         const username = localStorage.getItem('username') || '';
         if (!status || !why || !intent) {
-          document.getElementById('msg').textContent = 'Please complete all fields.';
+          messageBox.textContent = 'Please complete all fields.';
           return;
         }
-        // Use mailto so the site owner gets the request (client-side)
-        const subject = encodeURIComponent('Account Upgrade Request: ' + (username || 'Unknown'));
-        const body = encodeURIComponent(`User: ${username}\nRequested status: ${status}\n\nWhy:\n${why}\n\nIntent:\n${intent}`);
-        window.location.href = `mailto:maintinence2025@outlook.com?subject=${subject}&body=${body}`;
-        // redirect to the existing success page (account-application-sucess.html)
+
+        const existing = await loadExistingMessages();
+        const newMessage = {
+          id: Date.now(),
+          username,
+          desiredStatus: status,
+          why,
+          intent,
+          createdAt: new Date().toISOString(),
+          dismissed: false
+        };
+
+        const updatedMessages = [...existing, newMessage];
+        const { error } = await window.supabaseClient
+          .from('HighScores')
+          .update({ messages: JSON.stringify(updatedMessages) })
+          .eq('id', user.id);
+
+        if (error) {
+          console.error('Error saving message', error);
+          messageBox.textContent = 'Could not send request. Please try again.';
+          return;
+        }
+
+        messageBox.textContent = 'Request saved! An admin can review it on the admin page.';
         setTimeout(() => {
-          window.location.href = `account-application-sucess.html?name=${encodeURIComponent(username)}&lastname=&email=`;
-        }, 600);
+          window.location.href = `account-application-sucess.html?name=${encodeURIComponent(username)}&type=upgrade`;
+        }, 800);
       });
     });
   </script>
