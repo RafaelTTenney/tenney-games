@@ -209,6 +209,7 @@
       <h2 class="card-title">Snake Game</h2>
       <div style="display:flex; gap:1em; margin-bottom:1em;">
         <span id="snake-score" style="font-size:1.1em; font-weight:600;">Score: 0</span>
+        <span id="snake-highscore" style="font-size:1.1em; font-weight:600; color:var(--secondary);">High Score: 0</span>
         <button id="snakeRestartBtn" class="primary-btn" style="font-size:0.95em;">Restart</button>
       </div>
       <canvas id="snake-canvas" width="320" height="320"></canvas>
@@ -261,8 +262,11 @@
     </div>
   </div>
   <footer>
-    &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
+     &copy; 2025 Games & Programs | Contact: <a href="admin.html">admin panel</a>
   </footer>
+   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-client.js"></script>
+  <script src="supabase-highscores.js"></script>
   <script src="login.js"></script>
   <script src="snake.js"></script>
   <script src="simple-tetris.js"></script>
