@@ -23,7 +23,7 @@
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <div>
         <h2 style="margin:0;color:var(--primary);">Account Monitor</h2>
-        <div class="help">View and manage account statuses. Changes are saved to your browser (localStorage) for demo/testing. To persist server-side, implement a backend API.</div>
+        <div class="help">View and manage account statuses saved in Supabase. Updates write straight to your HighScores table so everyone sees the changes.</div>
       </div>
       <div>
         <a class="btn" href="loggedIn.html">Dashboard</a>
@@ -37,71 +37,187 @@
       <tbody></tbody>
     </table>
 
-    <div style="margin-top:12px;color:var(--muted);">Note: This admin panel updates a client-side override map stored under <code>accountStatusOverrides</code> in localStorage. To make permanent across users, wire these changes to your server.</div>
+    <h3 style="color:var(--primary);">Access level requests</h3>
+    <div class="help">These requests are saved in Supabase when a user fills out the upgrade form. Use the buttons below to update their access level and dismiss the message.</div>
+    <div id="requestList" style="margin-top:10px; display:grid; gap:10px;"></div>
+
+    <div style="margin-top:12px;color:var(--muted);">Note: This admin panel writes directly to Supabase. The access level is stored in the <code>acess-level</code> column and messages are stored in the <code>messages</code> column of your HighScores table.</div>
   </div>
 
-  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a></footer>
+  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="admin.html">Go to the admin panel</a></footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-client.js"></script>
   <script src="login.js"></script>
   <script>
     // Admin-only page to view and change account statuses
     document.addEventListener('DOMContentLoaded', function() {
       if (!enforcePageAccess('admin.html')) return;
-      // Load base user list from login.js 'users' variable accessible globally
-      // If not accessible, we'll show the currently-logged-in user as fallback
       const tbody = document.querySelector('#usersTable tbody');
+      const requestList = document.getElementById('requestList');
+      let profiles = [];
 
-      // build display list using 'users' array if present, otherwise fallback
-      const baseUsers = (typeof users !== 'undefined' && Array.isArray(users)) ? users : [{ username: localStorage.getItem('username') || 'unknown', accountStatus: getAccountStatus() }];
+      function parseMessages(raw) {
+        if (!raw) return [];
+        if (Array.isArray(raw)) return raw;
+        try {
+          return JSON.parse(raw) || [];
+        } catch (e) {
+          return [];
+        }
+      }
 
-      function render() {
+      function applyLocalStatus(username, newStatus) {
+        const current = localStorage.getItem('username');
+        if (current === username) {
+          localStorage.setItem('accountStatus', newStatus);
+        }
+      }
+
+      async function updateAccessLevel(userId, username, newStatus, newMessages) {
+        const updates = { 'acess-level': newStatus };
+        if (Array.isArray(newMessages)) updates.messages = JSON.stringify(newMessages);
+        const { error } = await supabaseClient
+          .from('HighScores')
+          .update(updates)
+          .eq('id', userId);
+        if (error) {
+          console.warn('Could not update status', error);
+          alert('Saving to Supabase failed.');
+          return false;
+        }
+        applyLocalStatus(username, newStatus);
+        return true;
+      }
+
+      function renderTable() {
+        if (!tbody) return;
         tbody.innerHTML = '';
-        // Use copy to ensure stable iteration
-        baseUsers.forEach(u => {
+        profiles.forEach(p => {
+          const currentStatus = p['acess-level'] || 'standard';
           const tr = document.createElement('tr');
-          const currentStatus = (function() {
-            // Show override if present
-            const overridesRaw = localStorage.getItem('accountStatusOverrides');
-            if (overridesRaw) {
-              try {
-                const overrides = JSON.parse(overridesRaw);
-                if (overrides && overrides[u.username]) return overrides[u.username];
-              } catch (e) {}
-            }
-            return u.accountStatus || 'standard';
-          })();
           tr.innerHTML = `
-            <td>${u.username}</td>
+            <td>${p.username || 'unknown'}</td>
             <td>${currentStatus}</td>
             <td>
-              <select data-user="${u.username}">
+              <select data-user="${p.id}">
                 <option value="standard" ${currentStatus==='standard'?'selected':''}>Standard</option>
                 <option value="advance" ${currentStatus==='advance'?'selected':''}>Advance</option>
                 <option value="admin" ${currentStatus==='admin'?'selected':''}>Admin</option>
               </select>
             </td>
-            <td><button class="btn apply" data-user="${u.username}">Apply</button></td>
+            <td><button class="btn apply" data-user="${p.id}" data-username="${p.username || ''}">Apply</button></td>
           `;
           tbody.appendChild(tr);
         });
-        // Bind buttons
+
         document.querySelectorAll('button.apply').forEach(btn => {
-          btn.onclick = () => {
-            const uname = btn.dataset.user;
-            const sel = document.querySelector(`select[data-user="${uname}"]`);
+          btn.onclick = async () => {
+            const userId = btn.dataset.user;
+            const username = btn.dataset.username || 'unknown';
+            const sel = document.querySelector(`select[data-user="${userId}"]`);
             const newStatus = sel.value;
-            const ok = adminSetAccountStatusOverride(uname, newStatus);
+            const ok = await updateAccessLevel(userId, username, newStatus);
             if (ok) {
-              alert(`Status for ${uname} set to ${newStatus} (saved locally).`);
-              render();
-            } else {
-              alert('Error saving the status. Check console for details.');
+              alert(`Status for ${username} set to ${newStatus}.`);
+              profiles = profiles.map(p => p.id === userId ? { ...p, ['acess-level']: newStatus } : p);
+              renderTable();
             }
           };
         });
       }
 
-      render();
+      function renderRequests() {
+        if (!requestList) return;
+        requestList.innerHTML = '';
+        const allMessages = profiles.flatMap(p => {
+          const msgs = parseMessages(p.messages);
+          return msgs.filter(m => !m.dismissed).map(m => ({ ...m, userId: p.id }));
+        });
+
+        if (!allMessages.length) {
+          requestList.textContent = 'No pending requests yet.';
+          return;
+        }
+
+        allMessages.forEach(req => {
+          const card = document.createElement('div');
+          card.style.border = '1px solid #99ccff';
+          card.style.padding = '10px';
+          card.style.borderRadius = '8px';
+          card.style.background = '#e6f0ff';
+          card.innerHTML = `
+            <div style="font-weight:700; color:#254a99;">${req.username || 'Unknown user'} wants: ${req.desiredStatus}</div>
+            <div class="help">Why: ${req.why}</div>
+            <div class="help">Intent: ${req.intent}</div>
+            <div class="help">Requested at: ${new Date(req.createdAt).toLocaleString()}</div>
+          `;
+
+          const actions = document.createElement('div');
+          actions.style.display = 'flex';
+          actions.style.gap = '8px';
+          actions.style.marginTop = '6px';
+
+          const approveBtn = document.createElement('button');
+          approveBtn.textContent = 'Apply access + dismiss';
+          approveBtn.className = 'btn';
+          approveBtn.onclick = async () => {
+            const profile = profiles.find(p => p.id === req.userId);
+            const messages = parseMessages(profile ? profile.messages : []).map(m => m.id === req.id ? { ...m, dismissed: true } : m);
+            const ok = await updateAccessLevel(req.userId, req.username, req.desiredStatus, messages);
+            if (ok) {
+              profiles = profiles.map(p => p.id === req.userId ? { ...p, ['acess-level']: req.desiredStatus, messages } : p);
+              renderTable();
+              renderRequests();
+            }
+          };
+
+          const dismissBtn = document.createElement('button');
+          dismissBtn.textContent = 'Dismiss';
+          dismissBtn.className = 'btn';
+          dismissBtn.style.background = '#999';
+          dismissBtn.onclick = async () => {
+            const profile = profiles.find(p => p.id === req.userId);
+            const messages = parseMessages(profile ? profile.messages : []).map(m => m.id === req.id ? { ...m, dismissed: true } : m);
+            const { error } = await supabaseClient
+              .from('HighScores')
+              .update({ messages: JSON.stringify(messages) })
+              .eq('id', req.userId);
+            if (!error) {
+              profiles = profiles.map(p => p.id === req.userId ? { ...p, messages } : p);
+              renderRequests();
+            } else {
+              alert('Could not dismiss request.');
+            }
+          };
+
+          actions.appendChild(approveBtn);
+          actions.appendChild(dismissBtn);
+          card.appendChild(actions);
+          requestList.appendChild(card);
+        });
+      }
+
+      async function loadProfiles() {
+        const { data, error } = await supabaseClient
+          .from('HighScores')
+          .select('id, username, messages, "acess-level"');
+        if (error) {
+          console.error('Could not load profiles', error);
+          requestList.textContent = 'Unable to load data from Supabase.';
+          return;
+        }
+        profiles = data || [];
+        renderTable();
+        renderRequests();
+      }
+
+      if (!window.supabaseClient) {
+        alert('Supabase client missing. Please reload the page.');
+        return;
+      }
+
+      loadProfiles();
     });
   </script>
 </body>
