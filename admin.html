@@ -44,7 +44,7 @@
     <div style="margin-top:12px;color:var(--muted);">Note: This admin panel writes directly to Supabase. The access level is stored in the <code>acess-level</code> column and messages are stored in the <code>messages</code> column of your HighScores table.</div>
   </div>
 
-  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="admin.html">Go to the admin panel</a></footer>
+  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="contact.html">contact form</a></footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-client.js"></script>
@@ -146,10 +146,16 @@
           card.style.padding = '10px';
           card.style.borderRadius = '8px';
           card.style.background = '#e6f0ff';
+          const kind = req.kind || (req.desiredStatus ? 'upgrade' : 'contact');
+          const summary = kind === 'upgrade'
+            ? `${req.username || 'Unknown user'} wants: ${req.desiredStatus}`
+            : `${req.username || 'Unknown user'} sent a message (${req.reason || 'general'})`;
+          const details = kind === 'upgrade'
+            ? `<div class="help">Why: ${req.why || 'No reason provided'}</div><div class="help">Intent: ${req.intent || 'N/A'}</div>`
+            : `<div class="help">Message: ${req.note || req.why || 'No details provided'}</div>`;
           card.innerHTML = `
-            <div style="font-weight:700; color:#254a99;">${req.username || 'Unknown user'} wants: ${req.desiredStatus}</div>
-            <div class="help">Why: ${req.why}</div>
-            <div class="help">Intent: ${req.intent}</div>
+            <div style="font-weight:700; color:#254a99;">${summary}</div>
+            ${details}
             <div class="help">Requested at: ${new Date(req.createdAt).toLocaleString()}</div>
           `;
 
@@ -158,24 +164,28 @@
           actions.style.gap = '8px';
           actions.style.marginTop = '6px';
 
-          const approveBtn = document.createElement('button');
-          approveBtn.textContent = 'Apply access + dismiss';
-          approveBtn.className = 'btn';
-          approveBtn.onclick = async () => {
-            const profile = profiles.find(p => p.id === req.userId);
-            const messages = parseMessages(profile ? profile.messages : []).map(m => m.id === req.id ? { ...m, dismissed: true } : m);
-            const ok = await updateAccessLevel(req.userId, req.username, req.desiredStatus, messages);
-            if (ok) {
-              profiles = profiles.map(p => p.id === req.userId ? { ...p, ['acess-level']: req.desiredStatus, messages } : p);
-              renderTable();
-              renderRequests();
-            }
-          };
-
           const dismissBtn = document.createElement('button');
           dismissBtn.textContent = 'Dismiss';
           dismissBtn.className = 'btn';
           dismissBtn.style.background = '#999';
+
+          if (kind === 'upgrade') {
+            const approveBtn = document.createElement('button');
+            approveBtn.textContent = 'Apply access + dismiss';
+            approveBtn.className = 'btn';
+            approveBtn.onclick = async () => {
+              const profile = profiles.find(p => p.id === req.userId);
+              const messages = parseMessages(profile ? profile.messages : []).map(m => m.id === req.id ? { ...m, dismissed: true } : m);
+              const ok = await updateAccessLevel(req.userId, req.username, req.desiredStatus, messages);
+              if (ok) {
+                profiles = profiles.map(p => p.id === req.userId ? { ...p, ['acess-level']: req.desiredStatus, messages } : p);
+                renderTable();
+                renderRequests();
+              }
+            };
+            actions.appendChild(approveBtn);
+          }
+
           dismissBtn.onclick = async () => {
             const profile = profiles.find(p => p.id === req.userId);
             const messages = parseMessages(profile ? profile.messages : []).map(m => m.id === req.id ? { ...m, dismissed: true } : m);
@@ -191,7 +201,6 @@
             }
           };
 
-          actions.appendChild(approveBtn);
           actions.appendChild(dismissBtn);
           card.appendChild(actions);
           requestList.appendChild(card);
