@@ -15,7 +15,7 @@
       --text-main: #222;
       --text-light: #fff;
     }
-    body { background: var(--background); font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }
+   body { background: var(--background); font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }
     .container { max-width: 400px; margin: 60px auto 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 16px rgba(51,102,204,0.08); padding: 36px 28px 24px 28px; }
     h1 { color: var(--primary-blue); font-size: 2em; margin-bottom: 20px; text-align: center; }
     label { display: block; margin-bottom: 7px; color: var(--primary-blue); font-weight: 500; }
@@ -40,12 +40,7 @@
       var desiredPassword = document.getElementById('password').value.trim();
       var reason = document.getElementById('reason').value.trim();
 
-      var subject = encodeURIComponent('Account Application');
-      var body = encodeURIComponent(
-        `Hello,\n\nMy name is ${name} ${lastname}.\n\nI would like to apply for an account on Games & Programs.\n\nHere are my details:\n\nEmail: ${email}\nDesired password: ${desiredPassword}\nReason for account:\n${reason}\n\nThank you!\n\nPlease note: I understand it may take up to three days for my account to be ready.`
-      );
-      var mailto = `mailto:maintinence2025@outlook.com?subject=${subject}&body=${body}`;
-      window.location.href = mailto;
+      window.location.href = 'admin.html';
       setTimeout(function() {
         window.location.href = "account-application-sucess.html?name=" + encodeURIComponent(name) + "&lastname=" + encodeURIComponent(lastname) + "&email=" + encodeURIComponent(email);
       }, 500);
@@ -81,7 +76,7 @@
     </form>
     <a href="index.html" class="btn-home">Home</a>
     <div class="note">
-      <em>After pressing "Send Application", your email client will open with a nicely formatted message to send.</em>
+      <em>After pressing "Send Application", we'll send you to the admin panel so your request is recorded.</em>
     </div>
   </div>
 </body>
