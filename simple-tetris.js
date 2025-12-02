@@ -45,12 +45,22 @@
     6: [[0, 0, 1], [1, 1, 1], [0, 0, 0]],
   };
 
+  async function t_loadHighScore() {
+    if (window.supabaseHighScores) {
+      const best = await window.supabaseHighScores.fetchHighScore('highscore-tetris');
+      if (typeof best === 'number') t_highScore = best;
+    } else {
+      t_highScore = parseInt(localStorage.getItem('tetrisHighScore')) || 0;
+    }
   function t_loadHighScore() {
     t_highScore = parseInt(localStorage.getItem('tetrisHighScore')) || 0;
     if (tetrisScoreP) tetrisScoreP.textContent = 'Score: ' + t_score + ' | High Score: ' + t_highScore;
   }
 
   function t_saveHighScore() {
+    if (window.supabaseHighScores) {
+      window.supabaseHighScores.updateHighScore('highscore-tetris', t_highScore);
+    }
     localStorage.setItem('tetrisHighScore', t_highScore);
     if (tetrisScoreP) tetrisScoreP.textContent = 'Score: ' + t_score + ' | High Score: ' + t_highScore;
   }
