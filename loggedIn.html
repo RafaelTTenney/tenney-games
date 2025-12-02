@@ -128,6 +128,12 @@
     <p class="lead">You've successfully logged in. Use the links below to open the different parts of the site.</p>
 
     <div class="links-grid" role="navigation" aria-label="Logged-in links">
+      <a class="card" id="profileCard" href="profile.html">
+        <div id="profileName">Your Profile</div>
+        <small>Status: <span id="profileStatus">-</span></small>
+        <span class="btn">View details</span>
+      </a>
+
       <a class="card" href="menu-guesser.html">
         <div>Menu Guessers</div>
         <small>All available password & PIN guesser tools</small>
@@ -161,7 +167,7 @@
   </div>
 
   <div class="footer">
-    &copy; Games & Programs | Contact: <a href="admin.html">admin panel</a>
+    &copy; Games & Programs | Contact: <a href="contact.html">contact form</a>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -185,6 +191,11 @@
       } else {
         title.textContent = 'Welcome!';
       }
+      const status = getAccountStatus();
+      const profileName = document.getElementById('profileName');
+      const profileStatus = document.getElementById('profileStatus');
+      if (profileName && firstname) profileName.textContent = `${firstname}'s Profile`;
+      if (profileStatus) profileStatus.textContent = status.charAt(0).toUpperCase() + status.slice(1);
       // Show experimental/admin links only if allowed
       if (isAdmin()) {
         document.getElementById('experimentalCard').style.display = '';
@@ -198,3 +209,4 @@
     });
   </script>
 </body>
+</html>
