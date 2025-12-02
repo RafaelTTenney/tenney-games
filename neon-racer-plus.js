@@ -680,9 +680,11 @@
 
           if (carBottom <= obTop || carTop >= obBottom) continue;
 
-          const EPS = Math.max(3, Math.round(collisionWidth * 0.04));
+          const cushion = Math.max(6, Math.round(collisionWidth * 0.08));
+          const safeGapLeft = gapLeft - cushion;
+          const safeGapRight = gapRight + cushion;
 
-          if (carLeft < gapLeft + EPS || carRight > gapRight - EPS) {
+          if (carLeft < safeGapLeft || carRight > safeGapRight) {
               if (racerState.animationFrame) {
                   cancelAnimationFrame(racerState.animationFrame);
                   racerState.animationFrame = null;
