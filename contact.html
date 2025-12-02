@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Contact the Team | Games & Programs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: "Roboto", "Arial", sans-serif; background: #f6f8fb; margin: 0; padding: 0; min-height: 100vh;}
+    .container { max-width: 520px; margin: 3em auto; background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(51,102,204,0.08); padding: 1.6em; }
+    h1 { color: #3366cc; margin-bottom: 0.4em; }
+    p { color: #254a99; line-height: 1.5; }
+    label { display:block; margin: 12px 0 6px 0; color: #254a99; font-weight: 600; }
+    select, textarea, input[type="text"] { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #99ccff; background: #e6f0ff; box-sizing: border-box; font-size: 1em; }
+    textarea { min-height: 120px; resize: vertical; }
+    button { margin-top: 12px; background: #3366cc; color: #fff; border: none; border-radius: 8px; padding: 0.75em 1.2em; font-size: 1.05em; font-weight: 700; cursor: pointer; }
+    button:hover { background: #254a99; }
+    .message { margin-top: 10px; color: #254a99; font-weight: 700; }
+    .footer { text-align: center; padding: 1.5em 1em 1em; color: #999; font-size: 0.95em; }
+    .hint { background:#e6f0ff; padding:10px; border-radius: 8px; color:#254a99; border:1px solid #99ccff; }
+    .link-row { display:flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .link-row a { background: #3366cc; color: #fff; padding: 0.5em 1em; border-radius: 8px; text-decoration: none; font-weight: 700; }
+    .link-row a.secondary { background: #fff; color: #3366cc; border: 1px solid #99ccff; }
+    @media (max-width: 540px) { .container { margin: 1em 0.6em; padding: 1.1em; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Contact the admin team</h1>
+    <p>Use this form instead of email. Choose why you're contacting us and add a short explanation. We'll save it to Supabase so admins can review and respond through the site.</p>
+    <div class="hint" id="loginHint">You'll need to be logged in so we can attach your message to your account.</div>
+    <form id="contactForm">
+      <label for="contactReason">Reason</label>
+      <select id="contactReason" required>
+        <option value="">Select a reason</option>
+        <option value="access">Access level question or upgrade follow-up</option>
+        <option value="bug">Bug report or broken feature</option>
+        <option value="feedback">General feedback</option>
+        <option value="support">Account help (password, login, or scores)</option>
+      </select>
+      <label for="contactMessage">What do you want to tell us?</label>
+      <textarea id="contactMessage" placeholder="Explain the issue or request" required></textarea>
+      <button type="submit">Send to admins</button>
+      <div class="message" id="contactStatus"></div>
+    </form>
+    <div class="link-row">
+      <a class="secondary" href="loggedIn.html">Back to dashboard</a>
+      <a class="secondary" href="index.html">Home</a>
+    </div>
+  </div>
+  <div class="footer">
+    &copy; 2025 Games & Programs | Contact: <a href="contact.html">contact form</a>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-client.js"></script>
+  <script src="login.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const form = document.getElementById('contactForm');
+      const statusBox = document.getElementById('contactStatus');
+      const loginHint = document.getElementById('loginHint');
+
+      async function loadExistingMessages(userId) {
+        const { data, error } = await window.supabaseClient
+          .from('HighScores')
+          .select('messages')
+          .eq('id', userId)
+          .single();
+        if (error) {
+          console.warn('Could not load messages', error);
+          return [];
+        }
+        const raw = data && data.messages;
+        if (!raw) return [];
+        try { return Array.isArray(raw) ? raw : JSON.parse(raw); } catch (_) { return []; }
+      }
+
+      form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        statusBox.textContent = '';
+        const reason = document.getElementById('contactReason').value;
+        const message = document.getElementById('contactMessage').value.trim();
+        if (!reason || !message) {
+          statusBox.textContent = 'Please choose a reason and add a note.';
+          return;
+        }
+        if (!isLoggedIn()) {
+          statusBox.textContent = 'Please log in first so we can connect this message to your account.';
+          return;
+        }
+        const user = window.supabaseHelpers.getStoredUser();
+        if (!user) {
+          statusBox.textContent = 'We could not find your Supabase session. Please log in again.';
+          return;
+        }
+
+        const existing = await loadExistingMessages(user.id);
+        const username = localStorage.getItem('username') || 'Player';
+        const newMessage = {
+          id: Date.now(),
+          username,
+          kind: 'contact',
+          reason,
+          note: message,
+          createdAt: new Date().toISOString(),
+          dismissed: false
+        };
+
+        const updated = [...existing, newMessage];
+        const { error } = await window.supabaseClient
+          .from('HighScores')
+          .update({ messages: JSON.stringify(updated) })
+          .eq('id', user.id);
+
+        if (error) {
+          console.error('Error saving contact', error);
+          statusBox.textContent = 'Could not save your note. Please try again in a moment.';
+          return;
+        }
+
+        statusBox.textContent = 'Saved! We stored your message for the admins.';
+        window.location.href = `account-application-sucess.html?type=contact&name=${encodeURIComponent(username)}`;
+      });
+
+      if (isLoggedIn() && loginHint) {
+        const firstname = localStorage.getItem('firstName') || 'player';
+        loginHint.textContent = `Hi ${firstname}, we will attach your message to your account automatically.`;
+      }
+    });
+  </script>
+</body>
+</html>
