@@ -33,7 +33,7 @@
       <select id="contactReason" required>
         <option value="">Select a reason</option>
         <option value="access">Access level question or upgrade follow-up</option>
-        <option value="bug">Bug report or broken feature</option>
+       <option value="bug">Bug report or broken feature</option>
         <option value="feedback">General feedback</option>
         <option value="support">Account help (password, login, or scores)</option>
       </select>
@@ -58,10 +58,11 @@
       const form = document.getElementById('contactForm');
       const statusBox = document.getElementById('contactStatus');
       const loginHint = document.getElementById('loginHint');
+      const TABLE = window.HIGH_SCORES_TABLE || 'HighScores';
 
       async function loadExistingMessages(userId) {
         const { data, error } = await window.supabaseClient
-          .from('HighScores')
+          .from(TABLE)
           .select('messages')
           .eq('id', userId)
           .single();
@@ -107,7 +108,7 @@
 
         const updated = [...existing, newMessage];
         const { error } = await window.supabaseClient
-          .from('HighScores')
+          .from(TABLE)
           .update({ messages: JSON.stringify(updated) })
           .eq('id', user.id);
 
