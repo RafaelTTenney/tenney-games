@@ -1,0 +1,29 @@
+ok, i want you to make sure the data is enterin the table, not just the local storage. also, the variable acess-level should be access-level. please think deeply about my problem 
+
+
+thhe following came up when i tried to sign up as a test: 
+
+Could not find the table 'public.HighScores' in the schema cache. Double-check the HighScores table exists and the column names match (id, username, acess-level).
+
+the following was in the console:
+supabase-js@2:7   GET https://xeqvlrmvvksetzgbhqqc.supabase.co/rest/v1/HighScores?select=id%2Cusername%2Cmessages%2C%22acess-level%22&id=eq.e2d748c8-83b2-4c18-8b08-0303f02a29d9 404 (Not Found)
+e.442.t.resolveFetch @ supabase-js@2:7
+e.442.t.fetchWithAuth @ supabase-js@2:7
+await in e.442.t.fetchWithAuth
+then @ supabase-js@2:7
+supabase-client.js:107  Could not load profile row {code: 'PGRST205', details: null, hint: null, message: "Could not find the table 'public.HighScores' in the schema cache"}
+fetchAccountProfile @ supabase-client.js:107
+await in fetchAccountProfile
+finishLogin @ login.js:108
+(anonymous) @ signup.html:88
+[NEW] Explain Console errors by using Copilot in Edge: click
+         
+         to explain an error. 
+        Learn more
+        Don't show again
+supabase-js@2:7   POST https://xeqvlrmvvksetzgbhqqc.supabase.co/rest/v1/HighScores?columns=%22id%22%2C%22username%22%2C%22acess-level%22 404 (Not Found)
+e.442.t.resolveFetch @ supabase-js@2:7
+e.442.t.fetchWithAuth @ supabase-js@2:7
+await in e.442.t.fetchWithAuth
+then @ supabase-js@2:7
+supabase-client.js:88  High score row upsert failed {code: 'PGRST205', details: null, hint: null, message: "Could not find the table 'public.HighScores' in the schema cache"}
