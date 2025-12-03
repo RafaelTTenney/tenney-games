@@ -52,8 +52,6 @@
     } else {
       t_highScore = parseInt(localStorage.getItem('tetrisHighScore')) || 0;
     }
-  function t_loadHighScore() {
-    t_highScore = parseInt(localStorage.getItem('tetrisHighScore')) || 0;
     if (tetrisScoreP) tetrisScoreP.textContent = 'Score: ' + t_score + ' | High Score: ' + t_highScore;
   }
 
