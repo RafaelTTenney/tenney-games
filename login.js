@@ -102,7 +102,6 @@ async function handleAuth(type, email, password, firstName) {
 async function finishLogin(user, firstNameFromForm = '') {
   if (!user) return;
   const startingFirst = firstNameFromForm || (user.user_metadata && user.user_metadata.firstName) || '';
-  await window.supabaseHelpers.ensureHighScoreRow(user, startingFirst);
   let status = 'standard';
   let firstName = startingFirst;
   if (window.supabaseHelpers && window.supabaseHelpers.fetchAccountProfile) {
@@ -114,6 +113,7 @@ async function finishLogin(user, firstNameFromForm = '') {
       firstName = profile.firstName || profile.firstname;
     }
   }
+  await window.supabaseHelpers.ensureHighScoreRow(user, status, firstName);
   window.supabaseHelpers.storeUserSession(user, status, firstName);
   window.location.replace('loggedIn.html');
 }
