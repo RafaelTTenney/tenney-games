@@ -77,7 +77,7 @@ function adminSetAccountStatusOverride(username, newStatus) {
     return true;
   } catch (e) {
     console.error('Error saving account status override', e);
-    return false;
+     return false;
   }
 }
 
