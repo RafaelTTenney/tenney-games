@@ -49,6 +49,7 @@
       const form = document.getElementById('upgradeForm');
       const messageBox = document.getElementById('msg');
       const user = window.supabaseHelpers.getStoredUser();
+      const TABLE = window.HIGH_SCORES_TABLE || 'HighScores';
 
       if (!user || !window.supabaseClient) {
         messageBox.textContent = 'Please log in before submitting a request.';
