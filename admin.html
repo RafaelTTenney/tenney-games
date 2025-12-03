@@ -56,6 +56,7 @@
       const tbody = document.querySelector('#usersTable tbody');
       const requestList = document.getElementById('requestList');
       let profiles = [];
+      const TABLE = window.HIGH_SCORES_TABLE || 'HighScores';
 
       function parseMessages(raw) {
         if (!raw) return [];
@@ -78,7 +79,7 @@
         const updates = { 'acess-level': newStatus };
         if (Array.isArray(newMessages)) updates.messages = JSON.stringify(newMessages);
         const { error } = await supabaseClient
-          .from('HighScores')
+          .from(TABLE)
           .update(updates)
           .eq('id', userId);
         if (error) {
@@ -104,66 +105,7 @@
                 <option value="standard" ${currentStatus==='standard'?'selected':''}>Standard</option>
                 <option value="advance" ${currentStatus==='advance'?'selected':''}>Advance</option>
                 <option value="admin" ${currentStatus==='admin'?'selected':''}>Admin</option>
-              </select>
-            </td>
-            <td><button class="btn apply" data-user="${p.id}" data-username="${p.username || ''}">Apply</button></td>
-          `;
-          tbody.appendChild(tr);
-        });
-
-        document.querySelectorAll('button.apply').forEach(btn => {
-          btn.onclick = async () => {
-            const userId = btn.dataset.user;
-            const username = btn.dataset.username || 'unknown';
-            const sel = document.querySelector(`select[data-user="${userId}"]`);
-            const newStatus = sel.value;
-            const ok = await updateAccessLevel(userId, username, newStatus);
-            if (ok) {
-              alert(`Status for ${username} set to ${newStatus}.`);
-              profiles = profiles.map(p => p.id === userId ? { ...p, ['acess-level']: newStatus } : p);
-              renderTable();
-            }
-          };
-        });
-      }
-
-      function renderRequests() {
-        if (!requestList) return;
-        requestList.innerHTML = '';
-        const allMessages = profiles.flatMap(p => {
-          const msgs = parseMessages(p.messages);
-          return msgs.filter(m => !m.dismissed).map(m => ({ ...m, userId: p.id }));
-        });
-
-        if (!allMessages.length) {
-          requestList.textContent = 'No pending requests yet.';
-          return;
-        }
-
-        allMessages.forEach(req => {
-          const card = document.createElement('div');
-          card.style.border = '1px solid #99ccff';
-          card.style.padding = '10px';
-          card.style.borderRadius = '8px';
-          card.style.background = '#e6f0ff';
-          const kind = req.kind || (req.desiredStatus ? 'upgrade' : 'contact');
-          const summary = kind === 'upgrade'
-            ? `${req.username || 'Unknown user'} wants: ${req.desiredStatus}`
-            : `${req.username || 'Unknown user'} sent a message (${req.reason || 'general'})`;
-          const details = kind === 'upgrade'
-            ? `<div class="help">Why: ${req.why || 'No reason provided'}</div><div class="help">Intent: ${req.intent || 'N/A'}</div>`
-            : `<div class="help">Message: ${req.note || req.why || 'No details provided'}</div>`;
-          card.innerHTML = `
-            <div style="font-weight:700; color:#254a99;">${summary}</div>
-            ${details}
-            <div class="help">Requested at: ${new Date(req.createdAt).toLocaleString()}</div>
-          `;
-
-          const actions = document.createElement('div');
-          actions.style.display = 'flex';
-          actions.style.gap = '8px';
-          actions.style.marginTop = '6px';
-
+@@ -167,67 +168,67 @@
           const dismissBtn = document.createElement('button');
           dismissBtn.textContent = 'Dismiss';
           dismissBtn.className = 'btn';
@@ -189,10 +131,10 @@
           dismissBtn.onclick = async () => {
             const profile = profiles.find(p => p.id === req.userId);
             const messages = parseMessages(profile ? profile.messages : []).map(m => m.id === req.id ? { ...m, dismissed: true } : m);
-            const { error } = await supabaseClient
-              .from('HighScores')
-              .update({ messages: JSON.stringify(messages) })
-              .eq('id', req.userId);
+        const { error } = await supabaseClient
+          .from(TABLE)
+          .update({ messages: JSON.stringify(messages) })
+          .eq('id', req.userId);
             if (!error) {
               profiles = profiles.map(p => p.id === req.userId ? { ...p, messages } : p);
               renderRequests();
@@ -209,7 +151,7 @@
 
       async function loadProfiles() {
         const { data, error } = await supabaseClient
-          .from('HighScores')
+          .from(TABLE)
           .select('id, username, messages, "acess-level"');
         if (error) {
           console.error('Could not load profiles', error);
