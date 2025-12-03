@@ -12,13 +12,14 @@ const supabaseClient = typeof supabase !== 'undefined'
   ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
-function storeUserSession(user, accountStatus = 'standard') {
+function storeUserSession(user, accountStatus = 'standard', firstName = '') {
   if (!user) return;
   const username = user.email ? user.email.split('@')[0] : user.id;
+  const safeFirstName = firstName || (user.user_metadata && user.user_metadata.firstName) || username;
   localStorage.setItem('loggedIn', 'true');
   localStorage.setItem('user', JSON.stringify(user));
   localStorage.setItem('username', username);
-  localStorage.setItem('firstName', username);
+  localStorage.setItem('firstName', safeFirstName);
   localStorage.setItem('accountStatus', accountStatus || 'standard');
 }
 
@@ -32,12 +33,20 @@ function getStoredUser() {
   }
 }
 
-async function ensureHighScoreRow(user) {
+async function ensureHighScoreRow(user, accountStatus = 'standard', firstName = '') {
   if (!supabaseClient || !user) return;
   const username = user.email ? user.email.split('@')[0] : user.id;
+  const profileFirstName = firstName || (user.user_metadata && user.user_metadata.firstName) || username;
+  const payload = {
+    id: user.id,
+    username,
+    email: user.email || null,
+    firstName: profileFirstName,
+    'acess-level': accountStatus || 'standard'
+  };
   const { error } = await supabaseClient
     .from('HighScores')
-    .upsert([{ id: user.id, username }]);
+    .upsert([payload]);
   if (error) console.error('High score row upsert failed', error);
 }
 
@@ -77,7 +86,8 @@ async function refreshSessionFromSupabase() {
     return null;
   }
   if (data && data.session && data.session.user) {
-    storeUserSession(data.session.user, localStorage.getItem('accountStatus'));
+    const storedFirst = localStorage.getItem('firstName');
+    storeUserSession(data.session.user, localStorage.getItem('accountStatus'), storedFirst);
     return data.session.user;
   }
   return null;
