@@ -1,7 +1,7 @@
 // Simple helpers to load/update per-game high scores using Supabase.
 (function () {
   const client = window.supabaseClient;
-  const TABLE = 'HighScores';
+  const TABLE = window.HIGH_SCORES_TABLE || 'HighScores';
 
   function getUserId() {
     const stored = window.supabaseHelpers ? window.supabaseHelpers.getStoredUser() : null;
