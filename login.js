@@ -113,9 +113,21 @@ async function finishLogin(user, firstNameFromForm = '') {
       firstName = profile.firstName || profile.firstname;
     }
   }
-  await window.supabaseHelpers.ensureHighScoreRow(user, status, firstName);
-  window.supabaseHelpers.storeUserSession(user, status, firstName);
-  window.location.replace('loggedIn.html');
+  const creationResult = await window.supabaseHelpers.ensureHighScoreRow(user, status, firstName);
+  if (creationResult && creationResult.ok) {
+    window.supabaseHelpers.storeUserSession(user, status, firstName);
+    window.location.replace('loggedIn.html');
+  } else {
+    const message = creationResult && creationResult.error
+      ? creationResult.error
+      : 'Could not save your profile row in Supabase. Check the console for details.';
+    const onPageError = document.getElementById('loginError');
+    if (onPageError) {
+      onPageError.textContent = message;
+    } else {
+      alert(message);
+    }
+  }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
