@@ -3,6 +3,7 @@
 // This keeps everything in one place so every page uses the same settings.
 const SUPABASE_URL = 'https://xeqvlrmvvksetzgbhqqc.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhlcXZscm12dmtzZXR6Z2JocXFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA5NjA3MzksImV4cCI6MjA3NjUzNjczOX0.vKlGH1L748e1_QxHui_Mme-nLu-jpC07Eyk_zYgpc_I';
+const HIGH_SCORES_TABLE = (typeof window !== 'undefined' && window.HIGH_SCORES_TABLE) ? window.HIGH_SCORES_TABLE : 'HighScores';
 
 if (typeof supabase === 'undefined') {
   console.error('Supabase CDN was not loaded. Please include it before supabase-client.js');
@@ -11,6 +12,38 @@ if (typeof supabase === 'undefined') {
 const supabaseClient = typeof supabase !== 'undefined'
   ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
+
+if (typeof window !== 'undefined') {
+  // Expose the table name so the rest of the site can reuse the same value.
+  window.HIGH_SCORES_TABLE = HIGH_SCORES_TABLE;
+}
+
+const TABLE_CANDIDATES = Array.from(new Set([
+  HIGH_SCORES_TABLE,
+  HIGH_SCORES_TABLE.toLowerCase()
+]));
+
+function looksLikeMissingTable(error) {
+  if (!error || !error.message) return false;
+  const msg = error.message.toLowerCase();
+  return msg.includes('does not exist') || msg.includes('does not exist in schema');
+}
+
+async function runAgainstHighScores(fn) {
+  let lastError = null;
+  for (const table of TABLE_CANDIDATES) {
+    const { data, error } = await fn(table);
+    if (!error) {
+      if (typeof window !== 'undefined') {
+        window.HIGH_SCORES_TABLE = table;
+      }
+      return { data, error: null };
+    }
+    lastError = error;
+    if (!looksLikeMissingTable(error)) break;
+  }
+  return { data: null, error: lastError };
+}
 
 function storeUserSession(user, accountStatus = 'standard', firstName = '') {
   if (!user) return;
@@ -46,9 +79,11 @@ async function ensureHighScoreRow(user, accountStatus = 'standard', firstName = 
     username,
     'acess-level': accountStatus || 'standard'
   };
-  const { error } = await supabaseClient
-    .from('HighScores')
-    .upsert([payload]);
+  const { error } = await runAgainstHighScores(table =>
+    supabaseClient
+      .from(table)
+      .upsert([payload])
+  );
   if (error) {
     console.error('High score row upsert failed', error);
     const hint = error.code === '42501'
@@ -61,11 +96,13 @@ async function ensureHighScoreRow(user, accountStatus = 'standard', firstName = 
 
 async function fetchAccountProfile(userId) {
   if (!supabaseClient || !userId) return null;
-  const { data, error } = await supabaseClient
-    .from('HighScores')
-    .select('id, username, messages, "acess-level"')
-    .eq('id', userId)
-    .single();
+  const { data, error } = await runAgainstHighScores(table =>
+    supabaseClient
+      .from(table)
+      .select('id, username, messages, "acess-level"')
+      .eq('id', userId)
+      .single()
+  );
   if (error) {
     console.warn('Could not load profile row', error);
     return null;
@@ -76,10 +113,12 @@ async function fetchAccountProfile(userId) {
 async function saveMessages(userId, messages) {
   if (!supabaseClient || !userId) return false;
   const payload = Array.isArray(messages) ? JSON.stringify(messages) : messages;
-  const { error } = await supabaseClient
-    .from('HighScores')
-    .update({ messages: payload })
-    .eq('id', userId);
+  const { error } = await runAgainstHighScores(table =>
+    supabaseClient
+      .from(table)
+      .update({ messages: payload })
+      .eq('id', userId)
+  );
   if (error) {
     console.warn('Could not save messages', error);
     return false;
