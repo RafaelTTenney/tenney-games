@@ -49,7 +49,7 @@
       const form = document.getElementById('upgradeForm');
       const messageBox = document.getElementById('msg');
       const user = window.supabaseHelpers.getStoredUser();
-      const TABLE = window.HIGH_SCORES_TABLE || 'HighScores';
+      const TABLE = window.HIGH_SCORES_TABLE || 'tenney-games';
 
       if (!user || !window.supabaseClient) {
         messageBox.textContent = 'Please log in before submitting a request.';
@@ -58,7 +58,7 @@
 
       async function loadExistingMessages() {
         const { data, error } = await window.supabaseClient
-          .from('HighScores')
+          .from('tenney-games')
           .select('messages')
           .eq('id', user.id)
           .single();
@@ -99,7 +99,7 @@
 
         const updatedMessages = [...existing, newMessage];
         const { error } = await window.supabaseClient
-          .from('HighScores')
+          .from('tenney-games')
           .update({ messages: JSON.stringify(updatedMessages) })
           .eq('id', user.id);
 
