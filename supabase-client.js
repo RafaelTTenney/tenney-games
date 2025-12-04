@@ -3,7 +3,7 @@
 // This keeps everything in one place so every page uses the same settings.
 const SUPABASE_URL = 'https://xeqvlrmvvksetzgbhqqc.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhlcXZscm12dmtzZXR6Z2JocXFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA5NjA3MzksImV4cCI6MjA3NjUzNjczOX0.vKlGH1L748e1_QxHui_Mme-nLu-jpC07Eyk_zYgpc_I';
-const HIGH_SCORES_TABLE = (typeof window !== 'undefined' && window.HIGH_SCORES_TABLE) ? window.HIGH_SCORES_TABLE : 'HighScores';
+const HIGH_SCORES_TABLE = (typeof window !== 'undefined' && window.HIGH_SCORES_TABLE) ? window.HIGH_SCORES_TABLE : 'tenney-games';
 
 if (typeof supabase === 'undefined') {
   console.error('Supabase CDN was not loaded. Please include it before supabase-client.js');
