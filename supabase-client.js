@@ -77,7 +77,7 @@ async function ensureHighScoreRow(user, accountStatus = 'standard', firstName = 
   const payload = {
     id: user.id,
     username,
-    'acess-level': accountStatus || 'standard'
+    'access-level': accountStatus || 'standard'
   };
   const { error } = await runAgainstHighScores(table =>
     supabaseClient
