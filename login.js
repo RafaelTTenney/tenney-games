@@ -99,6 +99,9 @@ async function handleAuth(type, email, password, firstName) {
   return window.supabaseClient.auth.signInWithPassword({ email: trimmedEmail, password: trimmedPassword });
 }
 
+// 🔑 Make the function global so the inline script can use it
+window.handleAuth = handleAuth;
+
 async function finishLogin(user, firstNameFromForm = '') {
   if (!user) return;
   const startingFirst = firstNameFromForm || (user.user_metadata && user.user_metadata.firstName) || '';
