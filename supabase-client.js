@@ -99,7 +99,7 @@ async function fetchAccountProfile(userId) {
   const { data, error } = await runAgainstHighScores(table =>
     supabaseClient
       .from(table)
-      .select('id, username, messages, "acess-level"')
+      .select('id, firstName, messages, "access-level"')
       .eq('id', userId)
       .single()
   );
