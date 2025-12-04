@@ -88,7 +88,7 @@ async function ensureHighScoreRow(user, accountStatus = 'standard', firstName = 
     console.error('High score row upsert failed', error);
     const hint = error.code === '42501'
       ? 'Your Supabase table policies may be blocking inserts. Allow authenticated users to insert into HighScores.'
-      : 'Double-check the HighScores table exists and the column names match (id, username, acess-level).';
+      : 'Double-check the HighScores table exists and the column names match (id, firstName, access-level).';
     return { ok: false, error: `${error.message}. ${hint}` };
   }
   return { ok: true };
