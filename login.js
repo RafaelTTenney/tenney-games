@@ -109,8 +109,8 @@ async function finishLogin(user, firstNameFromForm = '') {
   let firstName = startingFirst;
   if (window.supabaseHelpers && window.supabaseHelpers.fetchAccountProfile) {
     const profile = await window.supabaseHelpers.fetchAccountProfile(user.id);
-    if (profile && profile['acess-level']) {
-      status = profile['acess-level'];
+    if (profile && profile['access-level']) {
+      status = profile['access-level'];
     }
     if (profile && (profile.firstName || profile.firstname)) {
       firstName = profile.firstName || profile.firstname;
