@@ -66,28 +66,32 @@ function getStoredUser() {
   }
 }
 
+// IMPORTANT: user.id is a UUID. id (in DB) is int8/bigint (auto). Use user_uuid for user.id.
 async function ensureHighScoreRow(user, accountStatus = 'standard', firstName = '') {
   if (!supabaseClient || !user) {
     return { ok: false, error: 'Supabase client not ready or user missing' };
   }
   const username = user.email ? user.email.split('@')[0] : user.id;
   const safeFirstName = firstName || (user.user_metadata && user.user_metadata.firstName) || username;
-  // IMPORTANT: Only send id, firstName, and access-level
+
   const payload = {
-    id: user.id,
+    user_uuid: user.id, // <--- user.id (UUID) now stored in user_uuid
     firstName: safeFirstName,
     'access-level': accountStatus || 'standard'
+    // Don't include "id" -- let DB auto-generate
   };
+
+  // Upsert on user_uuid (if unique)
   const { error } = await runAgainstHighScores(table =>
     supabaseClient
       .from(table)
-      .upsert([payload])
+      .upsert([payload], { onConflict: 'user_uuid' })
   );
   if (error) {
     console.error('High score row upsert failed', error);
     const hint = error.code === '42501'
       ? 'Your Supabase table policies may be blocking inserts. Allow authenticated users to insert into HighScores.'
-      : 'Double-check the HighScores table exists and the column names match (id, firstName, access-level).';
+      : 'Double-check the HighScores table exists and the column names match (user_uuid, firstName, access-level).';
     return { ok: false, error: `${error.message}. ${hint}` };
   }
   return { ok: true };
@@ -95,11 +99,12 @@ async function ensureHighScoreRow(user, accountStatus = 'standard', firstName = 
 
 async function fetchAccountProfile(userId) {
   if (!supabaseClient || !userId) return null;
+  // Query by user_uuid, NOT id
   const { data, error } = await runAgainstHighScores(table =>
     supabaseClient
       .from(table)
-      .select('id, firstName, messages, "access-level"')
-      .eq('id', userId)
+      .select('id, user_uuid, firstName, messages, "access-level"')
+      .eq('user_uuid', userId)
       .single()
   );
   if (error) {
@@ -116,7 +121,7 @@ async function saveMessages(userId, messages) {
     supabaseClient
       .from(table)
       .update({ messages: payload })
-      .eq('id', userId)
+      .eq('user_uuid', userId) // <-- scope by user_uuid, not "id"
   );
   if (error) {
     console.warn('Could not save messages', error);
