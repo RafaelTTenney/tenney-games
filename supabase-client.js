@@ -99,36 +99,77 @@ async function ensureHighScoreRow(user, accountStatus = 'standard', firstName = 
 
 async function fetchAccountProfile(userId) {
   if (!supabaseClient || !userId) return null;
-  // Query by user_uuid, NOT id
+  
+  // FIX 1: Use .maybeSingle() instead of .single()
+  // .single() throws an error if 0 rows exist (creating red console logs).
+  // .maybeSingle() simply returns data: null, error: null.
   const { data, error } = await runAgainstHighScores(table =>
     supabaseClient
       .from(table)
       .select('id, user_uuid, firstName, messages, "access-level"')
       .eq('user_uuid', userId)
-      .single()
+      .maybeSingle() 
   );
+
   if (error) {
-    console.warn('Could not load profile row', error);
+    console.warn('Error checking profile:', error.message);
     return null;
   }
-  return data;
+  
+  return data; // Returns the user object OR null (if new user)
+}
+
+async function ensureHighScoreRow(user, accountStatus = 'standard', firstName = '') {
+  if (!supabaseClient || !user) {
+    return { ok: false, error: 'Supabase client not ready or user missing' };
+  }
+  const username = user.email ? user.email.split('@')[0] : user.id;
+  const safeFirstName = firstName || (user.user_metadata && user.user_metadata.firstName) || username;
+
+  const payload = {
+    user_uuid: user.id,
+    firstName: safeFirstName,
+    'access-level': accountStatus || 'standard'
+  };
+
+  // FIX 2: Explicitly handle the "Upsert" logic
+  const { error } = await runAgainstHighScores(table =>
+    supabaseClient
+      .from(table)
+      .upsert(payload, { onConflict: 'user_uuid' }) 
+  );
+
+  if (error) {
+    console.error('High score row upsert failed', error);
+    // improved error handling msg
+    return { ok: false, error: error.message }; 
+  }
+  return { ok: true };
 }
 
 async function saveMessages(userId, messages) {
   if (!supabaseClient || !userId) return false;
-  const payload = Array.isArray(messages) ? JSON.stringify(messages) : messages;
+
+  // FIX 3: JSON Type handling
+  // If your DB column is type 'json' or 'jsonb', DO NOT manually stringify.
+  // Supabase/Postgres handles the conversion. 
+  // If column is 'text', keep the stringify. Assuming 'jsonb' is best practice:
+  const payload = messages; 
+
   const { error } = await runAgainstHighScores(table =>
     supabaseClient
       .from(table)
       .update({ messages: payload })
-      .eq('user_uuid', userId) // <-- scope by user_uuid, not "id"
+      .eq('user_uuid', userId)
   );
+
   if (error) {
     console.warn('Could not save messages', error);
     return false;
   }
   return true;
 }
+
 
 async function refreshSessionFromSupabase() {
   if (!supabaseClient) return null;
