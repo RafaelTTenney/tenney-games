@@ -71,12 +71,11 @@ async function ensureHighScoreRow(user, accountStatus = 'standard', firstName = 
     return { ok: false, error: 'Supabase client not ready or user missing' };
   }
   const username = user.email ? user.email.split('@')[0] : user.id;
-  // Keep the insert aligned with the existing HighScores table shape. Extra fields that
-  // are not in the table (like email or a separate firstName column) will make Supabase
-  // reject the write, so we only send the columns that are known to exist.
+  const safeFirstName = firstName || (user.user_metadata && user.user_metadata.firstName) || username;
+  // IMPORTANT: Only send id, firstName, and access-level
   const payload = {
     id: user.id,
-    username,
+    firstName: safeFirstName,
     'access-level': accountStatus || 'standard'
   };
   const { error } = await runAgainstHighScores(table =>
