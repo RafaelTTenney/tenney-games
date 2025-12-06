@@ -64,7 +64,8 @@ const PAGE_ACCESS = {
   'experimental.html': ['admin'],
   'admin.html': ['admin'],
   'profile.html': ['standard', 'advance', 'admin'],
-  'upgrade-request.html': ['standard', 'advance', 'admin']
+  'upgrade-request.html': ['standard', 'advance', 'admin'],
+  'modifiedgames.html': ['standard', 'advance', 'admin']
 };
 
 function pageNameFromPath(p) {
