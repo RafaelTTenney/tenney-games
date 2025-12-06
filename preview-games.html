@@ -16,40 +16,29 @@
     .btn {background:var(--primary); color:#fff; padding:8px 10px; border-radius:6px; text-decoration:none; font-weight:700; border:none; cursor:pointer;}
     .btn.secondary {background:#fff; color:var(--primary); border:1px solid #99ccff;}
     .modal {display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center;}
-    .modal-content {background: #000; padding:24px 18px; border-radius:10px; border:4px solid var(--neon); box-shadow:0 0 30px var(--neon); text-align:center;}
-    .modal h2 { color: var(--neon); margin-top:0;}
-    .modal canvas { background: #050505; display: block; margin: 0 auto; border: 2px solid var(--neon); box-shadow: 0 0 10px var(--neon);}
-    .modal .btn { margin:4px;}
+    .modal-content {background: #000; padding:24px 18px; border-radius:10px; border:4px solid #fff; box-shadow:0 0 30px #aaa; text-align:center;}
+    .modal h2 { color: #fff; margin-top:0;}
+    
     footer { text-align:center; padding:16px; color:#999;}
     footer a { color: var(--primary);}
 
-    /* Report form styling to match the page look */
+    /* Report form styling */
     .report.card { margin-top:16px; padding:14px; gap:8px; }
     .report h3 { margin:0 0 8px 0; color:var(--primary); }
     .report label { display:block; margin:10px 0 6px 0; color:var(--primary); font-weight:700; font-size:0.95rem; }
-    .report input[type="text"],
-    .report textarea {
-      width:100%;
-      padding:10px;
-      border-radius:8px;
-      border:1px solid rgba(51,102,204,0.18);
-      background: #fff;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
-      font-family: inherit;
-      font-size: 0.95rem;
-      color: #222;
-      box-sizing: border-box;
-    }
+    .report input[type="text"], .report textarea { width:100%; padding:10px; border-radius:8px; border:1px solid rgba(51,102,204,0.18); background: #fff; font-family: inherit; font-size: 0.95rem; box-sizing: border-box;}
     .report textarea { min-height:120px; resize:vertical; }
-    .report .btn { align-self:flex-start; margin-top:10px; }
     #reportMessage { margin-top:10px;color:var(--muted); font-weight:600; }
-    @media (max-width:700px) {
-      .container {padding:6px;}
-      .card {padding:6px;}
-      .game-grid {gap:7px;}
-      .modal-content {padding:13px 8px;}
-      .report.card { padding:10px; }
-    }
+    
+    /* Minesweeper Styles (Classic) */
+    #minesweeper-grid { display: grid; border: 1px solid #333; margin: 10px auto; background: #ccc;}
+    .minesweeper-cell { width: 30px; height: 30px; background-color: #555; border: 1px solid #777; cursor: pointer; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 1.1em; user-select: none; color: #eee; }
+    .minesweeper-cell.revealed { background-color: #222; border: 1px solid #333; cursor: default; color: #00FFFF; }
+    .minesweeper-cell.mine { background-color: #F00; color: #FFF; }
+    .minesweeper-cell.flagged { background-color: #00AAAA; color: #FF0; }
+    .minesweeper-cell[data-adjacent="1"] { color: #00F; } 
+    .minesweeper-cell[data-adjacent="2"] { color: #080; } 
+    .minesweeper-cell[data-adjacent="3"] { color: #F00; }
   </style>
 </head>
 <body>
@@ -60,49 +49,48 @@
   <div class="container">
     <p style="color:#3366cc;font-weight:600;">Advance users can preview short, in-development games here and submit bug reports or suggestions.</p>
     <div class="game-grid" id="previewGrid">
+      
       <div class="card">
-        <h3>Neon Tetris (Preview)</h3>
-        <p>A classic block-stacking game with a bright neon style. New experience for the classic genre.</p>
-        <button class="btn" id="runNeonTetrisBtn">Play Now</button>
-      </div>
-      <div class="card">
-        <h3>Full Invaders</h3>
-        <p>Classic Space Invaders preview with levels, UFO and bunkers.</p>
+        <h3>Space Invaders</h3>
+        <p>Full classic shooter logic. Levels, UFOs, and bunkers included.</p>
         <button class="btn" id="runPreviewInvadersBtn">Play Now</button>
       </div>
-    </div>
 
-    <!-- NEON TETRIS MODAL
-         NOTE: modal and inner IDs deliberately match the working neon-tetris.js expectations:
-         - modal id "tetrisModal"
-         - canvas id "game"
-         - score id "score"
-         - start button id "startBtn"
-         - controls button id "controlsBtn"
-         - close button id "modalCloseBtn"
-         This lets neon-tetris.js find and bind to the correct DOM nodes and expose its start() behavior.
-    -->
-    <div id="tetrisModal" class="modal" aria-hidden="true">
-      <div class="modal-content">
-        <h2>Neon Tetris</h2>
-        <canvas id="game" width="240" height="480"></canvas>
-        <p id="score" style="color: white; font-weight: bold;">Score: 0 | High Score: 0</p>
-        <button id="startBtn" class="btn" style="background:#00FF00; color:#000;">Start</button>
-        <button id="controlsBtn" class="btn" style="background:#FFA500; color:#000;">Controls</button>
-        <button id="modalCloseBtn" class="btn" style="background:red;">Close Game</button>
+      <div class="card">
+        <h3>Minesweeper (Classic)</h3>
+        <p>The simple logic game: clear a rectangular board containing hidden "mines".</p>
+        <button class="btn" id="runMinesweeperBtn">Play Now</button>
       </div>
+
     </div>
 
-    <!-- INVADERS MODAL -->
     <div id="preview-invadersModal" class="modal">
       <div class="modal-content">
-        <h2>Full Invaders (Preview)</h2>
-        <canvas id="preview-invaders-canvas" width="420" height="420"></canvas>
+        <h2>Space Invaders</h2>
+        <canvas id="preview-invaders-canvas" width="420" height="420" style="background:#000; border: 2px solid #3366cc;"></canvas>
         <p id="preview-invaders-score" style="color: #FFD700;">Score: 0</p>
-        <button id="preview-invaders-startBtn" class="btn" style="background:#00FF00; color:#000;">Start</button>
-        <button id="preview-invaders-controlsBtn" class="btn" style="background:#FFA500; color:#000;">Controls</button>
-        <button id="preview-invaders-closeBtn" class="btn" style="background:red;">Close Game</button>
+        <div style="display:flex; justify-content:center; gap:10px; margin-top:10px;">
+            <button id="preview-invaders-startBtn" class="btn" style="background:#00FF00; color:#000;">Start</button>
+            <button id="preview-invaders-controlsBtn" class="btn" style="background:#FFA500; color:#000;">Controls</button>
+            <button id="preview-invaders-closeBtn" class="btn" style="background:red;">Close Game</button>
+        </div>
       </div>
+    </div>
+
+    <div id="minesweeperModal" class="modal">
+        <div class="modal-content" style="background: #111; border-color: #3366cc;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h2 style="color:#3366cc; margin:0;">Minesweeper</h2>
+                <button id="minesweeperModalCloseBtn" class="btn" style="background:transparent; border:1px solid #555;">X</button>
+            </div>
+            <div id="minesweeper-hud" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 5px; color:#fff;">
+                <div id="mine-count" style="color: #FF0; font-weight: 700;">Mines: 10</div>
+                <button id="newGameMinesweeperBtn" class="btn secondary" style="padding: 6px 10px; font-size: 0.9em;">New Game</button>
+                <div id="minesweeper-timer" style="color: #3366cc; font-weight: 700;">Time: 0</div>
+            </div>
+            <div id="minesweeper-grid" oncontextmenu="return false;"></div>
+            <p id="minesweeper-message" style="color:#3366cc; min-height: 1.2em; margin: 10px 0 0 0;">Click 'New Game' to start!</p>
+        </div>
     </div>
 
      <section class="report card" aria-label="Report a bug">
@@ -122,85 +110,50 @@
   </footer>
 
   <script src="login.js"></script>
-  <!-- Ensure neon-tetris.js is loaded after the DOM so it can capture the elements by ID -->
-  <script src="neon-tetris.js"></script>
-  <script src="full-invaders.js"></script>
-
-  <script>
-    // Bind preview UI actions and connect them to the working neon-tetris implementation.
-    // Important: neon-tetris.js exposes initTetrisGame() and start() and expects DOM ids:
-    // tetrisModal, game, score, startBtn, controlsBtn, modalCloseBtn
-    document.getElementById('runNeonTetrisBtn').addEventListener('click', () => {
-      // Open the modal that neon-tetris.js expects
-      const modal = document.getElementById('tetrisModal');
-      if (modal) modal.style.display = 'flex';
-
-      // Initialize the neon tetris UI (this will bind the Start button to the working start() function)
-      if (typeof initTetrisGame === 'function') {
-        try { initTetrisGame(); } catch (err) { console.error('initTetrisGame error:', err); }
-      } else if (typeof initPreviewNeonTetris === 'function') {
-        // backward fallback if another init exists
-        try { initPreviewNeonTetris(); } catch (err) { console.error('initPreviewNeonTetris error:', err); }
-      }
-    });
-
-    // Close button for neon tetris modal — hide the modal and attempt to stop the game if a stop function exists.
-    document.getElementById('modalCloseBtn').addEventListener('click', () => {
-      const modal = document.getElementById('tetrisModal');
-      if (modal) modal.style.display = 'none';
-
-      // Attempt to call a stop function if provided by the tetris implementation.
-      if (typeof stopPreviewNeonTetris === 'function') {
-        try { stopPreviewNeonTetris(); } catch (err) { console.error('stopPreviewNeonTetris error:', err); }
-      }
-      // If implementation exposes any other stop name, try them as well (non-fatal)
-      if (typeof stopTetris === 'function') { try { stopTetris(); } catch (e) {} }
-      if (typeof stop === 'function') { try { stop(); } catch (e) {} }
-    });
-
-    // Controls button fallback (if neon-tetris didn't bind it)
-    const controlsBtn = document.getElementById('controlsBtn');
-    if (controlsBtn) {
-      controlsBtn.addEventListener('click', () => {
-        if (typeof initTetrisGame === 'function') {
-          // initTetrisGame binds the controls button in neon-tetris.js; if present, prefer that.
-          return;
-        }
-        alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
-      });
-    }
-
-    // Full Invaders preview modal logic (unchanged)
+  <script src="minesweeper.js"></script> <script src="full-invaders.js"></script> <script>
+    // Space Invaders Hookup
     document.getElementById('runPreviewInvadersBtn').addEventListener('click', () => {
-      document.getElementById('preview-invadersModal').style.display = 'flex';
-      if (typeof initPreviewInvadersGame === 'function') initPreviewInvadersGame();
-      const scoreEl = document.getElementById('preview-invaders-score');
-      if (scoreEl) scoreEl.textContent = 'Score: 0';
+        document.getElementById('preview-invadersModal').style.display = 'flex';
+        if (typeof initPreviewInvadersGame === 'function') initPreviewInvadersGame();
     });
     document.getElementById('preview-invaders-startBtn').addEventListener('click', () => {
-      if (typeof startPreviewInvaders === 'function') startPreviewInvaders();
+        if (typeof startPreviewInvaders === 'function') startPreviewInvaders();
     });
     document.getElementById('preview-invaders-closeBtn').addEventListener('click', () => {
-      document.getElementById('preview-invadersModal').style.display = 'none';
-      if (typeof stopPreviewInvaders === 'function') stopPreviewInvaders();
+        document.getElementById('preview-invadersModal').style.display = 'none';
+        if (typeof stopPreviewInvaders === 'function') stopPreviewInvaders();
+    });
+    // Controls fallback
+    document.getElementById('preview-invaders-controlsBtn').addEventListener('click', () => {
+        alert("Left/Right Arrows to move. Space to shoot.");
     });
 
-    // Simple report form handler
+    // Minesweeper Hookup
+    document.getElementById('runMinesweeperBtn').addEventListener('click', () => {
+        const modal = document.getElementById('minesweeperModal');
+        modal.style.display = 'flex';
+        if(typeof initMinesweeperGame === 'function') {
+            initMinesweeperGame();
+        }
+    });
+
+    document.getElementById('minesweeperModalCloseBtn').addEventListener('click', () => {
+        document.getElementById('minesweeperModal').style.display = 'none';
+    });
+    
+    // Report Form Logic
     document.getElementById('reportForm').addEventListener('submit', function (e) {
       e.preventDefault();
       var name = document.getElementById('gameName').value.trim();
       var text = document.getElementById('reportText').value.trim();
       var msgEl = document.getElementById('reportMessage');
-
       if (!name || !text) {
         msgEl.textContent = 'Please provide the game name and a description.';
         msgEl.style.color = 'var(--muted)';
         return;
       }
-
       msgEl.textContent = 'Thanks! Your report has been submitted.';
       msgEl.style.color = 'var(--primary)';
-
       setTimeout(function () {
         document.getElementById('reportForm').reset();
       }, 250);
