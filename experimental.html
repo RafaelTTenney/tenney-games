@@ -194,6 +194,62 @@
             justify-content: center;
             margin-top: 15px;
         }
+        /* --- Minesweeper Specific Styles --- */
+        #minesweeper-grid {
+            display: grid;
+            border: 1px solid #333;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+            margin: 10px auto;
+        }
+
+        .minesweeper-cell {
+            width: 30px;
+            height: 30px;
+            background-color: #555;
+            border: 1px solid #777;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.1em;
+            user-select: none;
+            color: #eee;
+            transition: background-color 0.1s;
+        }
+
+        .minesweeper-cell.hidden {
+            background-color: #444;
+            border-color: #666 #222 #222 #666; /* Light 3D effect */
+            border-width: 2px;
+        }
+
+        .minesweeper-cell.revealed {
+            background-color: #222;
+            border: 1px solid #333;
+            cursor: default;
+            color: var(--primary);
+        }
+
+        .minesweeper-cell.mine {
+            background-color: #F00; /* Red on explosion */
+            color: #FFF;
+        }
+
+        .minesweeper-cell.flagged {
+            background-color: var(--dark);
+            color: #FF0;
+        }
+
+        /* Number Colors (for contrast on revealed background) */
+        .minesweeper-cell[data-adjacent="1"] { color: #00F; } /* Blue */
+        .minesweeper-cell[data-adjacent="2"] { color: #080; } /* Dark Green */
+        .minesweeper-cell[data-adjacent="3"] { color: #F00; } /* Red */
+        .minesweeper-cell[data-adjacent="4"] { color: #008; } /* Dark Blue */
+        .minesweeper-cell[data-adjacent="5"] { color: #800; } /* Brown */
+        .minesweeper-cell[data-adjacent="6"] { color: #088; } /* Cyan-Green */
+        .minesweeper-cell[data-adjacent="7"] { color: #000; } /* Black (unlikely on dark theme) */
+        .minesweeper-cell[data-adjacent="8"] { color: #888; } /* Gray */
     </style>
 </head>
 <body>
@@ -231,11 +287,13 @@
                 </div>
             </section>
             <section class="card">
-                <h3>New Experiment</h3>
-                <div class="meta"></div>
-                <pre class="demo"></pre>
+                <h3>Minesweeper</h3>
+                <div class="meta">The classic logic game: clear a rectangular board containing hidden "mines" without detonating any of them.</div>
+                <pre class="demo">// Left-Click to reveal a cell.
+// Right-Click to flag a cell (or unflag).
+// Default: 10x10 board with 10 mines.</pre>
                 <div class="actions">
-                    <!-- No action button for blank card -->
+                    <a class="btn" href="#" id="runMinesweeperBtn">Run</a>
                 </div>
             </section>
         </div>
@@ -252,7 +310,6 @@
     <div class="footer">
         &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
     </div>
-    <!-- Racer Modal -->
     <div id="racerModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
@@ -273,7 +330,6 @@
             </div>
         </div>
     </div>
-    <!-- Invaders Modal -->
     <div id="invadersModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
@@ -290,9 +346,26 @@
             </div>
         </div>
     </div>
+    <div id="minesweeperModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Minesweeper</h2>
+                <span class="modal-close" id="minesweeperModalCloseBtn">&times;</span>
+            </div>
+            <div id="minesweeper-hud" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 5px;">
+                <div id="mine-count" style="color: #FF0; font-weight: 700;">Mines: 10</div>
+                <button id="newGameMinesweeperBtn" class="btn secondary" style="padding: 6px 10px; font-size: 0.9em;">New Game</button>
+                <div id="minesweeper-timer" style="color: var(--primary); font-weight: 700;">Time: 0</div>
+            </div>
+            <div id="minesweeper-grid" oncontextmenu="return false;">
+                </div>
+            <p id="minesweeper-message" style="color:var(--primary); min-height: 1.2em; margin: 10px 0 0 0;">Click 'New Game' to start!</p>
+        </div>
+    </div>
     <script src="login.js"></script>
     <script src="neon-racer-plus.js"></script>
     <script src="space-invaders-plus.js"></script>
     <script src="experimental-ui.js"></script>
+    <script src="minesweeper.js"></script>
 </body>
 </html>
