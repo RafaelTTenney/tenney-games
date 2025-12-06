@@ -13,6 +13,7 @@
       --card-bg: #161b22;
       --text-dark: #e6e6e6;
       --text-light: #fff;
+      --modified-gradient: linear-gradient(135deg, #663399, #ff00ff);
     }
     body {
       background: var(--bg);
@@ -96,6 +97,20 @@
       font-size: 1em;
       margin-bottom: 0.7em;
     }
+    /* Special Style for Modified Games Card */
+    .game-card.modified-folder {
+        border: 2px solid #ff00ff;
+        background: radial-gradient(circle at top right, #2a0e36, #161b22);
+    }
+    .game-card.modified-folder .card-title {
+        color: #ff00ff;
+        text-shadow: 0 0 5px #ff00ff;
+    }
+    .game-card.modified-folder:hover {
+        box-shadow: 0 0 25px rgba(255, 0, 255, 0.4);
+        transform: scale(1.02);
+    }
+    
     .primary-btn {
       background: var(--primary);
       color: var(--text-light);
@@ -109,6 +124,9 @@
       text-transform: uppercase;
       letter-spacing: 0.03em;
       cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      text-align: center;
     }
     .primary-btn:hover {
       background: #2ea043;
@@ -119,6 +137,15 @@
       transform: translateY(2px);
       box-shadow: 0 2px #1b6f2e;
     }
+    .btn-modified {
+        background: var(--modified-gradient);
+        box-shadow: 0 4px #4b0082;
+    }
+    .btn-modified:hover {
+        filter: brightness(1.2);
+        box-shadow: 0 6px #4b0082;
+    }
+
     .game-container, #simple-tetris-modal {
         display: none;
         flex-direction: column;
@@ -170,41 +197,43 @@
   <div class="container">
     <h1>Arcade Hub: Select a Game</h1>
     <div class="game-grid">
-      <!-- Snake Card -->
+      <div class="game-card modified-folder">
+        <div>
+          <div class="card-title">Modified Games</div>
+          <p>A collection of heavily modified, neon-infused, and experimental versions of classic games.</p>
+        </div>
+        <a href="modifiedgames.html" class="primary-btn btn-modified">Open Folder</a>
+      </div>
+
       <div class="game-card">
         <div>
           <div class="card-title">Classic Snake</div>
-          <p>Maneuver your growing snake to eat food while avoiding walls and your own tail. The ultimate test of reflexes and precision.</p>
+          <p>Maneuver your growing snake to eat food while avoiding walls and your own tail.</p>
         </div>
         <button type="button" class="primary-btn" data-game-target="snake" aria-pressed="false" aria-controls="snake-game">Play Snake</button>
       </div>
-      <!-- Simple Tetris Card -->
       <div class="game-card">
         <div>
           <div class="card-title">Simple Tetris</div>
           <p>Fixed-speed classic Tetris for beginners.</p>
         </div>
-        <!-- Changed the button id to the one simple-tetris.js expects -->
         <button type="button" class="primary-btn" id="runSimpleTetrisBtn">Play Tetris</button>
       </div>
-      <!-- Paper-io Card -->
       <div class="game-card">
         <div>
           <div class="card-title">Paper-io</div>
-          <p>Claim territory by drawing trails and connecting them back to your base. Eliminate other players by cutting their vulnerable trails.</p>
+          <p>Claim territory by drawing trails. Eliminate other players by cutting their vulnerable trails.</p>
         </div>
         <button type="button" class="primary-btn" data-game-target="paperio" aria-pressed="false" aria-controls="paperio-game">Play Paper-io</button>
       </div>
-      <!-- Classic Racer Card -->
       <div class="game-card">
         <div>
           <div class="card-title">Classic Racer</div>
-          <p>A high-speed endless runner. Dodge obstacles across multiple lanes and see how far you can push your speed in the classic track.</p>
+          <p>A high-speed endless runner. Dodge obstacles across multiple lanes.</p>
         </div>
         <button type="button" class="primary-btn" data-game-target="racer" aria-pressed="false" aria-controls="racer-game">Play Classic Racer</button>
       </div>
     </div>
-    <!-- Game Containers -->
     <div id="snake-game" class="game-container" aria-hidden="true">
       <h2 class="card-title">Snake Game</h2>
       <div style="display:flex; gap:1em; margin-bottom:1em;">
@@ -215,13 +244,9 @@
       <p style="margin-top:1em; color:var(--muted);">Use arrow keys to move the snake.</p>
       <button class="primary-btn" style="margin-top:1.5em;" onclick="location.reload()">Back to Hub</button>
     </div>
-    <!-- Simple Tetris Modal/Container
-         NOTE: IDs below are set to match simple-tetris.js expectations so the preview implementation can bind correctly:
-         previewSimpleTetrisModal, preview-game, preview-score, preview-startBtn, preview-controlsBtn, preview-modalCloseBtn, runSimpleTetrisBtn (open)
-    -->
+    
     <div id="previewSimpleTetrisModal" class="game-container" aria-hidden="true">
       <h2 class="card-title">Simple Tetris</h2>
-      <!-- canvas id matching simple-tetris.js -->
       <canvas id="preview-game" width="240" height="480"></canvas>
       <p id="preview-score" style="color:white; font-weight:bold;">Score: 0 | High Score: 0</p>
       <div class="modal-controls">
@@ -296,7 +321,7 @@
       });
     });
 
-    // Open Simple Tetris - use the runSimpleTetrisBtn that simple-tetris.js expects
+    // Open Simple Tetris
     document.getElementById('runSimpleTetrisBtn').addEventListener('click', () => {
       gameGrid.style.display = 'none';
       mainTitle.style.display = 'none';
@@ -304,18 +329,14 @@
         container.style.display = 'none';
         container.setAttribute('aria-hidden', 'true');
       });
-      // show the modal/container that simple-tetris.js will bind to
       const modal = document.getElementById('previewSimpleTetrisModal');
       if (modal) {
         modal.style.display = 'flex';
         modal.setAttribute('aria-hidden', 'false');
       }
-      // initPreviewSimpleTetris is provided by simple-tetris.js; it will bind start/controls/keys
       if (typeof initPreviewSimpleTetris === 'function') initPreviewSimpleTetris();
     });
 
-    // Start button - try the preview-friendly names first (startPreviewTetris)
-    // simple-tetris.js exports startPreviewTetris as t_start
     document.getElementById('preview-startBtn').addEventListener('click', () => {
       if (typeof startPreviewTetris === 'function') { startPreviewTetris(); return; }
       if (typeof startTetris === 'function') { startTetris(); return; }
@@ -324,7 +345,6 @@
       alert("No working start function found for Simple Tetris.");
     });
 
-    // Close simple tetris modal and return to hub
     document.getElementById('preview-modalCloseBtn').addEventListener('click', () => {
       const modal = document.getElementById('previewSimpleTetrisModal');
       if (modal) {
@@ -336,16 +356,11 @@
       if (typeof stopPreviewTetris === 'function') stopPreviewTetris();
     });
 
-    // Controls button - if simple-tetris.js bound controls it will override; otherwise show fallback alert
     document.getElementById('preview-controlsBtn').addEventListener('click', () => {
-      if (typeof initPreviewSimpleTetris === 'function') {
-        // the module binds a controls handler when initialized; prefer that
-        return;
-      }
+      if (typeof initPreviewSimpleTetris === 'function') return;
       alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
     });
 
-    // Controls for other games
     document.getElementById('snakeRestartBtn')?.addEventListener('click', () => {
       if (typeof resetSnake === 'function') resetSnake();
     });
