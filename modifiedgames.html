@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Modified Games | Neon & Cyber</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --bg: #0f0014;
+            --card-bg: #1a0b2e;
+            --neon-pink: #ff00ff;
+            --neon-blue: #00ffff;
+            --neon-purple: #9d00ff;
+            --text: #fff;
+        }
+        body {
+            background: var(--bg);
+            background-image: linear-gradient(0deg, transparent 24%, rgba(255, 0, 255, .05) 25%, rgba(255, 0, 255, .05) 26%, transparent 27%, transparent 74%, rgba(0, 255, 255, .05) 75%, rgba(0, 255, 255, .05) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(255, 0, 255, .05) 25%, rgba(255, 0, 255, .05) 26%, transparent 27%, transparent 74%, rgba(0, 255, 255, .05) 75%, rgba(0, 255, 255, .05) 76%, transparent 77%, transparent);
+            background-size: 50px 50px;
+            font-family: 'Segoe UI', sans-serif;
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            text-align: center;
+            padding: 2rem;
+            border-bottom: 2px solid var(--neon-purple);
+            box-shadow: 0 0 20px var(--neon-purple);
+        }
+        h1 {
+            font-size: 3rem;
+            margin: 0;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 10px rgba(255,0,255,0.5);
+        }
+        .nav-back {
+            display: inline-block;
+            margin-top: 10px;
+            color: var(--neon-blue);
+            text-decoration: none;
+            font-weight: bold;
+            border: 1px solid var(--neon-blue);
+            padding: 5px 15px;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        .nav-back:hover {
+            background: var(--neon-blue);
+            color: #000;
+            box-shadow: 0 0 15px var(--neon-blue);
+        }
+        .container {
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+        .game-card {
+            background: var(--card-bg);
+            border: 2px solid var(--neon-pink);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0 30px rgba(255, 0, 255, 0.6);
+        }
+        .game-card h2 {
+            color: var(--neon-blue);
+            text-shadow: 0 0 5px var(--neon-blue);
+        }
+        .game-card p {
+            color: #ddd;
+            line-height: 1.5;
+        }
+        .btn {
+            display: inline-block;
+            background: transparent;
+            color: var(--neon-pink);
+            border: 2px solid var(--neon-pink);
+            padding: 10px 25px;
+            margin-top: 15px;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-shadow: 0 0 5px var(--neon-pink);
+        }
+        .btn:hover {
+            background: var(--neon-pink);
+            color: #fff;
+            box-shadow: 0 0 20px var(--neon-pink);
+        }
+
+        /* Modal Styles matching neon-tetris.js expectations */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: #000;
+            padding: 24px;
+            border-radius: 10px;
+            border: 4px solid var(--neon-blue);
+            box-shadow: 0 0 40px var(--neon-blue);
+            text-align: center;
+            position: relative;
+        }
+        .modal h2 { color: var(--neon-blue); margin-top: 0; }
+        .modal canvas {
+            background: #050505;
+            display: block;
+            margin: 0 auto;
+            border: 2px solid var(--neon-pink);
+            box-shadow: 0 0 15px var(--neon-pink);
+        }
+        .modal .btn-group { margin-top: 15px; }
+        .modal .btn { margin: 5px; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Modified Zone</h1>
+        <a href="multi-game.html" class="nav-back">&larr; Back to Hub</a>
+    </header>
+
+    <div class="container">
+        <div class="game-card">
+            <h2>Neon Tetris</h2>
+            <p>The classic block-stacking game reimagined with a high-contrast neon aesthetic. Experience the flow.</p>
+            <button class="btn" id="runNeonTetrisBtn">Enter the Matrix</button>
+        </div>
+
+        <div class="game-card" style="border-color: #555; opacity: 0.7;">
+            <h2 style="color: #888;">Coming Soon</h2>
+            <p>More modified experiments are currently being compiled...</p>
+        </div>
+    </div>
+
+    <div id="tetrisModal" class="modal" aria-hidden="true">
+      <div class="modal-content">
+        <h2>Neon Tetris</h2>
+        <canvas id="game" width="240" height="480"></canvas>
+        <p id="score" style="color: white; font-weight: bold; font-family: monospace; font-size: 1.2em; margin-top: 10px;">Score: 0 | High Score: 0</p>
+        <div class="btn-group">
+            <button id="startBtn" class="btn" style="border-color:#00FF00; color:#00FF00;">Start</button>
+            <button id="controlsBtn" class="btn" style="border-color:#FFA500; color:#FFA500;">Controls</button>
+            <button id="modalCloseBtn" class="btn" style="border-color:red; color:red;">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="login.js"></script>
+    <script src="neon-tetris.js"></script>
+    <script>
+        // Bind UI actions for Neon Tetris
+        document.getElementById('runNeonTetrisBtn').addEventListener('click', () => {
+          const modal = document.getElementById('tetrisModal');
+          if (modal) modal.style.display = 'flex';
+
+          if (typeof initTetrisGame === 'function') {
+            try { initTetrisGame(); } catch (err) { console.error('initTetrisGame error:', err); }
+          } else if (typeof initPreviewNeonTetris === 'function') {
+            try { initPreviewNeonTetris(); } catch (err) { console.error('initPreviewNeonTetris error:', err); }
+          }
+        });
+
+        document.getElementById('modalCloseBtn').addEventListener('click', () => {
+          const modal = document.getElementById('tetrisModal');
+          if (modal) modal.style.display = 'none';
+
+          if (typeof stopPreviewNeonTetris === 'function') {
+            try { stopPreviewNeonTetris(); } catch (err) { }
+          }
+          if (typeof stopTetris === 'function') { try { stopTetris(); } catch (e) {} }
+        });
+
+        const controlsBtn = document.getElementById('controlsBtn');
+        if (controlsBtn) {
+          controlsBtn.addEventListener('click', () => {
+            if (typeof initTetrisGame === 'function') return;
+            alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
+          });
+        }
+    </script>
+</body>
+</html>
