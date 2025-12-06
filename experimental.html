@@ -264,11 +264,14 @@
                 <h2>Neon Racer++</h2>
                 <span class="modal-close" id="racerModalCloseBtn">&times;</span>
             </div>
-            <canvas id="racer-canvas" width="340" height="520" style="background:#000;"></canvas>
-            <div id="racer-hud">
+            <canvas id="racer-canvas" width="340" height="520"></canvas>
+            <div id="racer-hud" style="color:#eee; font-weight:700; margin: 10px 0; min-height: 45px; text-align: left; padding: 0 10px;">
                 <div id="racer-distance">Distance: 0m</div>
+                <div id="racer-speed">Speed: 0 mph</div>
+                <div id="racer-obstacles">Gaps cleared: 0</div>
             </div>
-            <div class="modal-controls" style="margin-top:10px;">
+            <p id="racer-message" style="color:var(--primary); min-height: 1.2em; margin: 5px 0 10px 0;">Ready!</p>
+            <div class="modal-controls">
                 <button id="startRacerBtn" class="btn">Start</button>
                 <button id="pauseRacerBtn" class="btn secondary">Pause</button>
                 <button id="resetRacerBtn" class="btn secondary">Reset</button>
@@ -315,13 +318,27 @@
 
     <script src="login.js"></script>
     <script src="neon-racer-plus.js"></script>
-    <script src="minesweeper-elite.js"></script> <script>
-        // Racer Hookup
+    <script src="minesweeper-elite.js"></script>
+
+    <script>
+        // Racer Hookup (Added manual listeners for buttons to fix functionality)
         document.getElementById('runRacerBtn').addEventListener('click', () => {
              document.getElementById('racerModal').style.display = 'flex';
         });
         document.getElementById('racerModalCloseBtn').addEventListener('click', () => {
              document.getElementById('racerModal').style.display = 'none';
+        });
+        
+        // Explicitly bind the racer buttons in case the external script misses them
+        document.getElementById('startRacerBtn').addEventListener('click', () => {
+            if(typeof startRacer === 'function') startRacer();
+            else if(typeof initRacer === 'function') initRacer();
+        });
+        document.getElementById('pauseRacerBtn').addEventListener('click', () => {
+            if(typeof pauseRacer === 'function') pauseRacer();
+        });
+        document.getElementById('resetRacerBtn').addEventListener('click', () => {
+            if(typeof resetRacer === 'function') resetRacer();
         });
 
         // Minesweeper Modal Hookup
