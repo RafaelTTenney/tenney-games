@@ -51,9 +51,9 @@
     <div class="game-grid" id="previewGrid">
       
       <div class="card">
-        <h3>Space Invaders</h3>
-        <p>Full classic shooter logic. Levels, UFOs, and bunkers included.</p>
-        <button class="btn" id="runPreviewInvadersBtn">Play Now</button>
+        <h3>Space Invaders Plus</h3>
+        <p>The "Plus" version with progressive waves and difficulty.</p>
+        <button class="btn" id="runInvadersBtn">Play Now</button>
       </div>
 
       <div class="card">
@@ -64,15 +64,17 @@
 
     </div>
 
-    <div id="preview-invadersModal" class="modal">
+    <div id="invadersModal" class="modal">
       <div class="modal-content">
-        <h2>Space Invaders</h2>
-        <canvas id="preview-invaders-canvas" width="420" height="420" style="background:#000; border: 2px solid #3366cc;"></canvas>
-        <p id="preview-invaders-score" style="color: #FFD700;">Score: 0</p>
+        <h2>Space Invaders Plus</h2>
+        <canvas id="invaders-canvas" width="420" height="420" style="background:#000; border: 2px solid #3366cc;"></canvas>
+        <div style="display: flex; justify-content: space-between; padding: 0 10px; margin-top: 10px;">
+             <p id="invaders-score" style="color:var(--primary); font-weight: 700; margin: 0; color: #FFD700;">Score: 0</p>
+             <p id="invaders-message" style="color:#eee; min-height: 1.2em; margin: 0;">Press Start!</p>
+        </div>
         <div style="display:flex; justify-content:center; gap:10px; margin-top:10px;">
-            <button id="preview-invaders-startBtn" class="btn" style="background:#00FF00; color:#000;">Start</button>
-            <button id="preview-invaders-controlsBtn" class="btn" style="background:#FFA500; color:#000;">Controls</button>
-            <button id="preview-invaders-closeBtn" class="btn" style="background:red;">Close Game</button>
+            <button id="startInvadersBtn" class="btn" style="background:#00FF00; color:#000;">Start</button>
+            <button id="closeInvadersModalBtn" class="btn" style="background:red;">Close Game</button>
         </div>
       </div>
     </div>
@@ -110,22 +112,23 @@
   </footer>
 
   <script src="login.js"></script>
-  <script src="minesweeper.js"></script> <script src="full-invaders.js"></script> <script>
-    // Space Invaders Hookup
-    document.getElementById('runPreviewInvadersBtn').addEventListener('click', () => {
-        document.getElementById('preview-invadersModal').style.display = 'flex';
-        if (typeof initPreviewInvadersGame === 'function') initPreviewInvadersGame();
+  <script src="minesweeper.js"></script> <script src="space-invaders-plus.js"></script> <script>
+    // Space Invaders Plus Hookup
+    document.getElementById('runInvadersBtn').addEventListener('click', () => {
+        // Open the modal corresponding to the ID in the original experimental logic
+        const modal = document.getElementById('invadersModal');
+        modal.style.display = 'flex';
+        
+        // If the script exposes an init function, call it.
+        // space-invaders-plus.js usually auto-binds to the IDs (invaders-canvas, startInvadersBtn)
+        // providing the elements exist when the script loaded. If they didn't exist then, we might need a manual start.
+        if (typeof initInvadersPlus === 'function') initInvadersPlus();
     });
-    document.getElementById('preview-invaders-startBtn').addEventListener('click', () => {
-        if (typeof startPreviewInvaders === 'function') startPreviewInvaders();
-    });
-    document.getElementById('preview-invaders-closeBtn').addEventListener('click', () => {
-        document.getElementById('preview-invadersModal').style.display = 'none';
-        if (typeof stopPreviewInvaders === 'function') stopPreviewInvaders();
-    });
-    // Controls fallback
-    document.getElementById('preview-invaders-controlsBtn').addEventListener('click', () => {
-        alert("Left/Right Arrows to move. Space to shoot.");
+
+    document.getElementById('closeInvadersModalBtn').addEventListener('click', () => {
+        document.getElementById('invadersModal').style.display = 'none';
+        // Try to stop if function exists
+        if (typeof stopInvaders === 'function') stopInvaders();
     });
 
     // Minesweeper Hookup
