@@ -143,3 +143,28 @@
     });
   });
 })();
+
+// Get the new Minesweeper modal elements
+const minesweeperModal = document.getElementById('minesweeperModal');
+const minesweeperCloseBtn = document.getElementById('minesweeperModalCloseBtn');
+
+// Function to close the Minesweeper modal
+function closeMinesweeperModal() {
+    minesweeperModal.style.display = 'none';
+    // If you have a stop game function for minesweeper, call it here:
+    // stopMinesweeperGame(); 
+}
+
+// Close when the 'x' button is clicked (already handled in minesweeper.js, but good practice)
+if (minesweeperCloseBtn) {
+    minesweeperCloseBtn.addEventListener('click', closeMinesweeperModal);
+}
+
+// Close when clicking outside the modal content
+if (minesweeperModal) {
+    minesweeperModal.addEventListener('click', (e) => {
+        if (e.target === minesweeperModal) {
+            closeMinesweeperModal();
+        }
+    });
+}
