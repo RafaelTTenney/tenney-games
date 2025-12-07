@@ -150,7 +150,7 @@
             width: auto;
             box-shadow: 0 0 20px var(--primary);
             text-align: center;
-            position: relative; /* Added position relative for absolute positioning */
+            position: relative; /* Keep this for absolute positioning within modals */
         }
         .modal-header {
             display: flex;
@@ -171,7 +171,7 @@
         }
         .modal-close:hover { color: var(--primary); }
         
-        /* New Minesweeper Specifics */
+        /* Minesweeper Elite Specifics (From original updated code) */
         .ms-menu { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
         .ms-row { display: flex; gap: 10px; justify-content: center; }
         .ms-btn { padding: 8px 16px; background: #333; border: 1px solid #555; color: #fff; cursor: pointer; }
@@ -184,7 +184,7 @@
         .ms-cell.mine { background: #f00; color: #000; }
         .ms-c1 { color: #5555ff; } .ms-c2 { color: #00aa00; } .ms-c3 { color: #ff5555; }
         
-        /* --- SENTINEL GAME UI STYLES (New) --- */
+        /* Sentinel Grid TD UI STYLES (Kept for modal) */
         #sentinel-ui-layout {
             display: flex;
             flex-direction: column;
