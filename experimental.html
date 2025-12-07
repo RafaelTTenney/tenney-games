@@ -1,390 +1,542 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <title>Experimental | Games & Programs</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <style>
-        :root {
-            --primary: #00FFFF;
-            --dark: #00AAAA;
-            --bg: #050505;
-            --card: #111;
-            --muted: #888;
-            --glow: 0 0 5px var(--primary), 0 0 10px var(--primary);
-            --flagship: #ffcc00;
-        }
-        body {
-            margin: 0;
-            font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
-            background: var(--bg);
-            color: #eee;
-            min-height: 100vh;
-        }
-        header {
-            background: var(--card);
-            color: var(--primary);
-            padding: 14px 18px;
-            text-align: center;
-            font-weight: 700;
-            border-bottom: 2px solid var(--primary);
-            text-shadow: var(--glow);
-        }
-        .top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 18px;
-            background: #0a0a0a;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        .top .links {
-            display: flex;
-            gap: 10px;
-        }
-        .btn {
-            background: transparent;
-            color: var(--primary);
-            padding: 8px 12px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: 700;
-            border: 1px solid var(--primary);
-            transition: all 0.2s ease;
-            box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.4);
-            cursor: pointer;
-        }
-        .btn.secondary {
-            background: var(--card);
-            color: var(--primary);
-            border: 1px solid var(--primary);
-        }
-        .btn:hover {
-            background: var(--primary);
-            color: var(--bg);
-            box-shadow: var(--glow);
-        }
-        .container {
-            max-width: 900px;
-            margin: 28px auto;
-            padding: 18px;
-            background: var(--card);
-            border-radius: 12px;
-            border: 1px solid #222;
-        }
-        h1 {
-            color: var(--primary);
-            margin: 0 0 8px 0;
-            text-shadow: var(--glow);
-        }
-        p.lead {
-            color: var(--muted);
-            margin: 6px 0 16px 0;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 12px;
-        }
-        .card {
-            background: var(--card);
-            padding: 12px;
-            border-radius: 10px;
-            border: 1px solid #333;
-            min-height: 120px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .card.flagship {
-            border: 2px solid var(--flagship);
-            box-shadow: 0 0 15px rgba(255, 204, 0, 0.2);
-        }
-        .card h3 {
-            margin: 0;
-            color: var(--primary);
-        }
-        .card.flagship h3 { color: var(--flagship); }
+    <meta charset="utf-8" />
+    <title>Experimental | Games & Programs</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        /* --- CORE STYLES (FROM ORIGINAL REQUEST #1) --- */
+        :root {
+            --primary: #00FFFF;
+            --dark: #00AAAA;
+            --bg: #050505;
+            --card: #111;
+            --muted: #888;
+            --glow: 0 0 5px var(--primary), 0 0 10px var(--primary);
+            --flagship: #ffcc00; /* Minesweeper Flagship Color */
+            /* Added TD Green for Sentinel Grid */
+            --td-green: #00FF00;
+        }
+        body {
+            margin: 0;
+            font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+            background: var(--bg);
+            color: #eee;
+            min-height: 100vh;
+        }
+        header {
+            background: var(--card);
+            color: var(--primary);
+            padding: 14px 18px;
+            text-align: center;
+            font-weight: 700;
+            border-bottom: 2px solid var(--primary);
+            text-shadow: var(--glow);
+        }
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 18px;
+            background: #0a0a0a;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .top .links {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            background: transparent;
+            color: var(--primary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 700;
+            border: 1px solid var(--primary);
+            transition: all 0.2s ease;
+            box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.4);
+            cursor: pointer;
+        }
+        .btn.secondary {
+            background: var(--card);
+            color: var(--primary);
+            border: 1px solid var(--primary);
+        }
+        .btn:hover {
+            background: var(--primary);
+            color: var(--bg);
+            box-shadow: var(--glow);
+        }
+        .container {
+            max-width: 900px;
+            margin: 28px auto;
+            padding: 18px;
+            background: var(--card);
+            border-radius: 12px;
+            border: 1px solid #222;
+        }
+        h1 {
+            color: var(--primary);
+            margin: 0 0 8px 0;
+            text-shadow: var(--glow);
+        }
+        p.lead {
+            color: var(--muted);
+            margin: 6px 0 16px 0;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 12px;
+        }
+        .card {
+            background: var(--card);
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        /* Flagship card styles retained from original #1 */
+        .card.flagship {
+            border: 2px solid var(--flagship);
+            box-shadow: 0 0 15px rgba(255, 204, 0, 0.2);
+        }
+        .card h3 {
+            margin: 0;
+            color: var(--primary);
+        }
+        .card.flagship h3 { color: var(--flagship); }
 
-        .card .meta {
-            color: var(--muted);
-            font-size: 0.95em;
-        }
-        .card .actions {
-            margin-top: auto;
-            display: flex;
-            gap: 8px;
-            justify-content: flex-end;
-        }
-        pre.demo {
-            background: var(--bg);
-            padding: 8px;
-            border-radius: 6px;
-            border: 1px solid #333;
-            overflow: auto;
-            max-height: 160px;
-            color: #ccc;
-        }
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.9);
-            justify-content: center;
-            align-items: center;
-        }
-        .modal-content {
-            background-color: var(--card);
-            margin: auto;
-            padding: 20px;
-            border: 1px solid var(--primary);
-            border-radius: 8px;
-            width: auto;
-            box-shadow: 0 0 20px var(--primary);
-            text-align: center;
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        .modal-header h2 {
-            color: var(--primary);
-            margin: 0;
-            text-shadow: var(--glow);
-        }
-        .modal-close {
-            color: var(--muted);
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .modal-close:hover { color: var(--primary); }
-        
-        /* New Minesweeper Specifics */
-        .ms-menu { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
-        .ms-row { display: flex; gap: 10px; justify-content: center; }
-        .ms-btn { padding: 8px 16px; background: #333; border: 1px solid #555; color: #fff; cursor: pointer; }
-        .ms-btn.selected { background: var(--flagship); color: #000; font-weight: bold; border-color: #fff;}
-        #ms-game-container { margin-top: 15px; display: inline-block; background: #222; padding: 10px; border: 2px solid #555; border-radius: 5px; }
-        #ms-grid { display: grid; gap: 1px; background: #000; }
-        .ms-cell { width: 25px; height: 25px; background: #888; display: flex; justify-content: center; align-items: center; font-weight: bold; font-family: monospace; cursor: pointer; user-select: none; border: 1px solid #aaa; }
-        .ms-cell.revealed { background: #333; border: 1px solid #222; color: #eee; }
-        .ms-cell.flag { background: #333; color: #ff0000; }
-        .ms-cell.mine { background: #f00; color: #000; }
-        .ms-c1 { color: #5555ff; } .ms-c2 { color: #00aa00; } .ms-c3 { color: #ff5555; }
-        
-        .footer { text-align: center; color: #555; padding: 20px; }
-    </style>
+        .card .meta {
+            color: var(--muted);
+            font-size: 0.95em;
+        }
+        .card .actions {
+            margin-top: auto;
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+        pre.demo {
+            background: var(--bg);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #333;
+            overflow: auto;
+            max-height: 160px;
+            color: #ccc;
+        }
+
+        /* --- MODAL STYLES (FROM EXAMPLE #2) --- */
+        .modal-overlay {
+            display: none; /* Hidden by default */
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.9);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: var(--card);
+            margin: auto;
+            padding: 20px;
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            width: auto;
+            box-shadow: 0 0 20px var(--primary);
+            text-align: center;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .modal-header h2 {
+            color: var(--primary);
+            margin: 0;
+            text-shadow: var(--glow);
+        }
+
+        .modal-close {
+            color: var(--muted);
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .modal-close:hover,
+        .modal-close:focus {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .modal-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        
+        /* Specific game canvas style */
+        #racer-canvas, #sentinel-canvas, #rogue-canvas {
+            border: 2px solid var(--primary);
+            box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+        
+        /* --- GAME-SPECIFIC STYLES (FROM ORIGINAL REQUEST #1) --- */
+
+        /* Minesweeper Elite Specifics */
+        .ms-menu { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
+        .ms-row { display: flex; gap: 10px; justify-content: center; }
+        .ms-btn { padding: 8px 16px; background: #333; border: 1px solid #555; color: #fff; cursor: pointer; }
+        .ms-btn.selected { background: var(--flagship); color: #000; font-weight: bold; border-color: #fff;}
+        #ms-game-container { margin-top: 15px; display: inline-block; background: #222; padding: 10px; border: 2px solid #555; border-radius: 5px; }
+        #ms-grid { display: grid; gap: 1px; background: #000; }
+        .ms-cell { width: 25px; height: 25px; background: #888; display: flex; justify-content: center; align-items: center; font-weight: bold; font-family: monospace; cursor: pointer; user-select: none; border: 1px solid #aaa; }
+        .ms-cell.revealed { background: #333; border: 1px solid #222; color: #eee; }
+        .ms-cell.flag { background: #333; color: #ff0000; }
+        .ms-cell.mine { background: #f00; color: #000; }
+        .ms-c1 { color: #5555ff; } .ms-c2 { color: #00aa00; } .ms-c3 { color: #ff5555; }
+        
+        /* Sentinel Grid TD UI STYLES */
+        #sentinel-ui-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .td-panel {
+            background: #001100;
+            border: 1px solid var(--td-green);
+            padding: 10px;
+            border-radius: 4px;
+            text-align: left;
+        }
+        .tower-select-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+        .tower-btn {
+            background: #002200;
+            border: 1px solid #005500;
+            color: #aaa;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.8em;
+            transition: all 0.2s;
+        }
+        .tower-btn:hover { background: #003300; color: #fff; }
+        .tower-btn.active {
+            border-color: var(--td-green);
+            color: var(--td-green);
+            background: #002a00;
+            box-shadow: inset 0 0 10px rgba(0,255,0,0.2);
+        }
+        .tower-icon {
+            width: 24px; height: 24px; 
+            margin-bottom: 4px;
+            border: 1px solid currentColor;
+        }
+        
+        /* Inspector Styles */
+        .inspector-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 0.9em;
+        }
+        .inspector-title {
+            color: var(--td-green);
+            font-weight: bold;
+            border-bottom: 1px solid #004400;
+            padding-bottom: 4px;
+            margin-bottom: 4px;
+        }
+        .stat-row { display: flex; justify-content: space-between; color: #888; }
+        .stat-val { color: #fff; font-weight: bold; }
+        
+        .td-btn {
+            background: var(--td-green);
+            color: #000;
+            border: none;
+            padding: 6px 12px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            text-transform: uppercase;
+            font-size: 0.8em;
+        }
+        .td-btn:hover { opacity: 0.9; }
+        .td-btn.secondary { background: #333; color: #fff; border: 1px solid #555; }
+        .td-btn.danger { background: #330000; color: #ff5555; border: 1px solid #550000; }
+        
+        .footer { text-align: center; color: #555; padding: 20px; }
+    </style>
 </head>
 <body>
-    <header>Experimental Demos</header>
-    <div class="top" role="navigation">
-        <div class="links">
-            <a class="btn" href="loggedIn.html">Dashboard</a>
-            <a class="btn secondary" href="index.html">Home</a>
-        </div>
-        <div style="color:var(--primary);font-weight:700;">Admin Experimentation Area</div>
-    </div>
-    <main class="container">
-        <h1>Experimental</h1>
-        <p class="lead">Upload and test experiments. Only administrators may access this page.</p>
-        <div class="grid" id="experimentalGrid">
-            
-            <section class="card">
-                <h3>Neon Racer++</h3>
-                <div class="meta">A high-speed avoidance game with a retro-neon theme.</div>
-                <div class="actions">
-                    <a class="btn" href="#" id="runRacerBtn">Run</a>
-                </div>
-            </section>
+    <header>Experimental Demos</header>
+    <div class="top" role="navigation">
+        <div class="links">
+            <a class="btn" href="loggedIn.html">Dashboard</a>
+            <a class="btn secondary" href="index.html">Home</a>
+        </div>
+        <div style="color:var(--primary);font-weight:700;">Admin Experimentation Area</div>
+    </div>
+    <main class="container">
+        <h1>Experimental</h1>
+        <p class="lead">Upload and test experiments. Only administrators may access this page.</p>
+        <div class="grid" id="experimentalGrid">
+            
+            <section class="card">
+                <h3>Neon Racer++</h3>
+                <div class="meta">A high-speed avoidance game with a retro-neon theme.</div>
+                <div class="actions">
+                    <a class="btn" href="#" id="runRacerBtn">Run</a>
+                </div>
+            </section>
 
-            <section class="card flagship">
-                <h3>Minesweeper Elite</h3>
-                <div class="meta">The First Flagship. Customizable difficulty, flood-fill, right-click flagging, and smart styling.</div>
-                <div class="actions">
-                    <button class="btn" style="background:var(--flagship); color:#000; border-color: white;" id="runSuperMinesweeperBtn">Play Elite</button>
-                </d>
-            </section>
-            
-            <section class="card flagship" style="border-color: #00FF00; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);">
-                <h3 style="color:#00FF00;">Sentinel Grid (TD)</h3>
-                <div class="meta">Flagship Strategy. Build your own maze using towers to stop waves of enemies. Dynamic pathfinding.</div>
-                <pre class="demo">// Click grid to place walls/towers
+            <section class="card flagship">
+                <h3>Minesweeper Elite</h3>
+                <div class="meta">The First Flagship. Customizable difficulty, flood-fill, right-click flagging, and smart styling.</div>
+                <div class="actions">
+                    <button class="btn" style="background:var(--flagship); color:#000; border-color: white;" id="runSuperMinesweeperBtn">Play Elite</button>
+                </div>
+            </section>
+            
+            <section class="card flagship" style="border-color: #00FF00; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);">
+                <h3 style="color:#00FF00;">Sentinel Grid (TD)</h3>
+                <div class="meta">Flagship Strategy. Build your own maze using towers to stop waves of enemies. Dynamic pathfinding.</div>
+                <pre class="demo">// Click grid to place walls/towers
 // Enemies find shortest path
 // Upgrade towers to survive</pre>
-                <div class="actions">
-                    <button class="btn" style="background:#00FF00; color:#000; border-color: white;" id="runSentinelBtn">Play Sentinel</button>
-                </div>
-            </section>
+                <div class="actions">
+                    <button class="btn" style="background:#00FF00; color:#000; border-color: white;" id="runSentinelBtn">Play Sentinel</button>
+                </div>
+            </section>
 
-             <section class="card flagship" style="border-color: #FF00FF; box-shadow: 0 0 15px rgba(255, 0, 255, 0.2);">
-                <h3 style="color:#FF00FF;">Rogue Dungeon</h3>
-                <div class="meta">Flagship RPG. Procedural dungeon crawler with turn-based combat, leveling, and fog of war.</div>
-                <pre class="demo">// Arrow Keys to Move/Attack
+             <section class="card flagship" style="border-color: #FF00FF; box-shadow: 0 0 15px rgba(255, 0, 255, 0.2);">
+                <h3 style="color:#FF00FF;">Rogue Dungeon</h3>
+                <div class="meta">Flagship RPG. Procedural dungeon crawler with turn-based combat, leveling, and fog of war.</div>
+                <pre class="demo">// Arrow Keys to Move/Attack
 // Explore deeper into the dark
 // Permadeath mechanics</pre>
-                <div class="actions">
-                    <button class="btn" style="background:#FF00FF; color:#000; border-color: white;" id="runRogueBtn">Play Rogue</button>
-                </div>
-            </section>
+                <div class="actions">
+                    <button class="btn" style="background:#FF00FF; color:#000; border-color: white;" id="runRogueBtn">Play Rogue</button>
+                </div>
+            </section>
 
-        </div>
-    </main>
-    <div class="footer">
-        &copy; 2025 Games & Programs
-    </div>
+        </div>
+    </main>
+    <div class="footer">
+        &copy; 2025 Games & Programs
+    </div>
 
-    <div id="racerModal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Neon Racer++</h2>
-                <span class="modal-close" id="racerModalCloseBtn">&times;</span>
-            </div>
-            <canvas id="racer-canvas" width="340" height="520" style="background:#000;"></canvas>
-            <div id="racer-hud">
-                <div id="racer-distance">Distance: 0m</div>
-            </div>
-            <div class="modal-controls" style="margin-top:10px;">
-                <button id="startRacerBtn" class="btn">Start</button>
-                <button id="pauseRacerBtn" class="btn secondary">Pause</button>
-                <button id="resetRacerBtn" class="btn secondary">Reset</button>
-            </div>
-        </div>
-    </div>
+    <div id="racerModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Neon Racer++</h2>
+                <span class="modal-close" id="racerModalCloseBtn">&times;</span>
+            </div>
+            <canvas id="racer-canvas" width="340" height="520" style="background:#000;"></canvas>
+            <div id="racer-hud">
+                <div id="racer-distance">Distance: 0m</div>
+            </div>
+            <div class="modal-controls">
+                <button id="startRacerBtn" class="btn">Start</button>
+                <button id="pauseRacerBtn" class="btn secondary">Pause</button>
+                <button id="resetRacerBtn" class="btn secondary">Reset</button>
+            </div>
+        </div>
+    </div>
 
-    <div id="superMinesweeperModal" class="modal-overlay">
-        <div class="modal-content" style="border-color: var(--flagship); box-shadow: 0 0 30px var(--flagship);">
-            <div class="modal-header">
-                <h2 style="color:var(--flagship);">Minesweeper Elite </h2>
-                <span class="modal-close" id="superMsCloseBtn">&times;</span>
-            </div>
-            <div id="ms-menu" class="ms-menu">
-                <h4 style="margin:0; color:#fff;">Select Difficulty</h4>
-                <div class="ms-row">
-                    <button class="ms-btn selected" onclick="setMsDiff('easy', this)">Easy (10%)</button>
-                    <button class="ms-btn" onclick="setMsDiff('med', this)">Med (15%)</button>
-                    <button class="ms-btn" onclick="setMsDiff('hard', this)">Hard (20%)</button>
-                </div>
-                <h4 style="margin:5px 0 0 0; color:#fff;">Grid Size</h4>
-                <div class="ms-row">
-                    <button class="ms-btn selected" onclick="setMsSize(10, this)">10x10</button>
-                    <button class="ms-btn" onclick="setMsSize(15, this)">15x15</button>
-                    <button class="ms-btn" onclick="setMsSize(20, this)">20x20</button>
-                </div>
-                <button class="btn" style="margin-top:10px; border-color:var(--flagship); color:var(--flagship);" onclick="startEliteMinesweeper()">START GAME</button>
-            </div>
-            <div id="ms-game-area" style="display:none;">
-                <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
-                    <span id="ms-flags-left" style="color:red; font-weight:bold;">Flags: 10</span>
-                    <span id="ms-timer" style="color:var(--flagship); font-weight:bold;">000</span>
-                </div>
-                <div id="ms-game-container">
-                    <div id="ms-grid"></div>
-                </div>
-                <div id="ms-status" style="margin-top:10px; font-weight:bold; min-height:20px; color:#fff;"></div>
-                <button class="btn secondary" style="margin-top:10px;" onclick="showMsMenu()">Back to Menu</button>
-            </div>
-        </div>
-    </div>
+    <div id="superMinesweeperModal" class="modal-overlay">
+        <div class="modal-content" style="border-color: var(--flagship); box-shadow: 0 0 30px var(--flagship);">
+            <div class="modal-header">
+                <h2 style="color:var(--flagship);">Minesweeper Elite</h2>
+                <span class="modal-close" id="superMsCloseBtn">&times;</span>
+            </div>
+            <div id="ms-menu" class="ms-menu">
+                <h4 style="margin:0; color:#fff;">Select Difficulty</h4>
+                <div class="ms-row">
+                    <button class="ms-btn selected" onclick="setMsDiff('easy', this)">Easy (10%)</button>
+                    <button class="ms-btn" onclick="setMsDiff('med', this)">Med (15%)</button>
+                    <button class="ms-btn" onclick="setMsDiff('hard', this)">Hard (20%)</button>
+                </div>
+                <h4 style="margin:5px 0 0 0; color:#fff;">Grid Size</h4>
+                <div class="ms-row">
+                    <button class="ms-btn selected" onclick="setMsSize(10, this)">10x10</button>
+                    <button class="ms-btn" onclick="setMsSize(15, this)">15x15</button>
+                    <button class="ms-btn" onclick="setMsSize(20, this)">20x20</button>
+                </div>
+                <button class="btn" style="margin-top:10px; border-color:var(--flagship); color:var(--flagship);" onclick="startEliteMinesweeper()">START GAME</button>
+            </div>
+            <div id="ms-game-area" style="display:none;">
+                <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
+                    <span id="ms-flags-left" style="color:red; font-weight:bold;">Flags: 10</span>
+                    <span id="ms-timer" style="color:var(--flagship); font-weight:bold;">000</span>
+                </div>
+                <div id="ms-game-container">
+                    <div id="ms-grid"></div>
+                </div>
+                <div id="ms-status" style="margin-top:10px; font-weight:bold; min-height:20px; color:#fff;"></div>
+                <div class="modal-controls">
+                     <button class="btn secondary" onclick="showMsMenu()">Back to Menu</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    <div id="sentinelModal" class="modal-overlay">
-        <div class="modal-content" style="border-color: #00FF00; box-shadow: 0 0 30px #00FF00; min-width: 600px;">
-            <div class="modal-header">
-                <h2 style="color:#00FF00;">Sentinel Grid</h2>
-                <span class="modal-close" id="sentinelCloseBtn">&times;</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; padding:0 20px; font-weight:bold; color:#fff;">
-                <span id="td-wave">Wave: 1</span>
-                <span id="td-money" style="color:#FFD700;">$: 100</span>
-                <span id="td-lives" style="color:#FF0000;">Lives: 20</span>
-            </div>
-            <canvas id="sentinel-canvas" width="600" height="400" style="background:#051505; border: 2px solid #005500; margin-top:10px;"></canvas>
-            <div style="margin-top:15px; display:flex; gap:10px; justify-content:center;">
-                <button id="td-build-basic" class="btn" style="border-color:#00FF00;">Build Turret ($50)</button>
-                <button id="td-start-wave" class="btn" style="background:#00FF00; color:#000;">Start Wave</button>
-                <button id="td-reset" class="btn secondary">Reset Game</button>
-            </div>
-            <p id="td-msg" style="color:#888; margin-top:5px;">Click grid to place towers. Don't block the path.</p>
-        </div>
-    </div>
+    <div id="sentinelModal" class="modal-overlay">
+        <div class="modal-content" style="border-color: var(--td-green); box-shadow: 0 0 30px var(--td-green); min-width: 650px;">
+            <div class="modal-header">
+                <h2 style="color:var(--td-green);">Sentinel Grid: Enhanced</h2>
+                <span class="modal-close" id="sentinelCloseBtn">&times;</span>
+            </div>
+            
+            <div style="display:flex; justify-content:space-between; padding:0 20px; font-weight:bold; color:#fff; margin-bottom: 10px;">
+                <span style="color:var(--td-green);">Wave: <span id="td-wave">1</span></span>
+                <span style="color:#FFD700;">$: <span id="td-money">150</span></span>
+                <span style="color:#FF3333;">Lives: <span id="td-lives">20</span></span>
+            </div>
+            
+            <canvas id="sentinel-canvas" width="600" height="400" style="background:#051505; border: 2px solid #005500; display: block; margin: 0 auto;"></canvas>
+            
+            <p id="td-msg" style="color:#888; margin: 5px 0; min-height: 20px;">System Ready.</p>
 
-   <div id="rogueModal" class="modal-overlay">
-        <div class="modal-content" style="border-color: #FF00FF; box-shadow: 0 0 30px #FF00FF; min-width: 520px;">
-            <div class="modal-header">
-                <h2 style="color:#FF00FF; text-shadow: 0 0 10px #FF00FF;">Rogue Dungeon: Neon Depths</h2>
-                <span class="modal-close" id="rogueCloseBtn">&times;</span>
-            </div>
-            
-            <div style="display:flex; justify-content:space-between; padding: 10px; background: #220022; border: 1px solid #550055; font-family: monospace;">
-                <span id="rl-level" style="color:#fff;">Lvl: 1</span>
-                <span id="rl-hp" style="color:#FF3333;">HP: 100</span>
-                <span id="rl-stats" style="color:#FFFF00;">Atk: 5 | Def: 0</span>
-                <span id="rl-potions" style="color:#00FF00;">Potions: 0 (Space)</span>
-            </div>
+            <div id="sentinel-ui-layout">
+                <div class="tower-select-row">
+                    <button class="tower-btn active" id="btn-blaster" onclick="tdSelectType('blaster')">
+                        <div class="tower-icon" style="background:#0F0;"></div>
+                        Blaster ($50)
+                    </button>
+                    <button class="tower-btn" id="btn-sniper" onclick="tdSelectType('sniper')">
+                        <div class="tower-icon" style="background:#0FF;"></div>
+                        Sniper ($120)
+                    </button>
+                    <button class="tower-btn" id="btn-rapid" onclick="tdSelectType('rapid')">
+                        <div class="tower-icon" style="background:#FF0;"></div>
+                        Rapid ($100)
+                    </button>
+                </div>
 
-            <canvas id="rogue-canvas" width="480" height="480" style="background:#050005; border: 2px solid #550055; margin-top:10px; box-shadow: inset 0 0 20px #220022; cursor: pointer;"></canvas>
-            
-            <div style="margin-top:10px; color:#aaa; font-size:0.85em; display:flex; justify-content:space-between;">
-                <span>ARROWS: Move/Attack</span>
-                <span>SPACE: Drink Potion</span>
-            </div>
-            
-            <div id="rl-log" style="height:50px; overflow:hidden; color:#EE82EE; font-family:monospace; border-top: 1px solid #550055; margin-top:5px; padding-top:5px; font-size: 0.9em;">
-                Welcome to the Neon Depths...
-            </div>
-            
-            <button id="rl-restart" class="btn" style="margin-top:10px; width: 100%; border-color: #FF00FF; color: #FF00FF;">Restart Run</button>
-        </div>
-    </div>
+                <div class="inspector-grid">
+                    <div style="display:flex; gap:10px; justify-content: center; align-items: center;">
+                        <button id="td-start-wave" class="td-btn" onclick="tdStartWave()">Start Wave</button>
+                        <button class="td-btn secondary" onclick="tdReset()">Reset</button>
+                    </div>
+                    
+                    <div class="td-panel" id="td-inspector">
+                        <div class="inspector-title" id="insp-title">Select Unit</div>
+                        <div id="insp-desc" style="color:#aaa; font-style:italic; font-size: 0.85em; margin-bottom: 8px;">
+                            Select a tower to build or click an existing one.
+                        </div>
+                        
+                        <div id="insp-stats" style="display:none;">
+                            <div class="stat-row"><span>Damage:</span> <span class="stat-val" id="insp-dmg">0</span></div>
+                            <div class="stat-row"><span>Range:</span> <span class="stat-val" id="insp-rng">0</span></div>
+                            <div class="stat-row"><span>Level:</span> <span class="stat-val" id="insp-lvl">1</span></div>
+                            <div style="margin-top:8px; display:flex; gap:5px;">
+                                <button class="td-btn" style="flex:1; font-size:0.7em;" onclick="tdUpgrade()">Upgrade ($<span id="insp-cost">0</span>)</button>
+                                <button class="td-btn danger" style="flex:1; font-size:0.7em;" onclick="tdSell()">Sell</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="rogueModal" class="modal-overlay">
+        <div class="modal-content" style="border-color: #FF00FF; box-shadow: 0 0 30px #FF00FF; min-width: 520px;">
+            <div class="modal-header">
+                <h2 style="color:#FF00FF; text-shadow: 0 0 10px #FF00FF;">Rogue Dungeon: Neon Depths</h2>
+                <span class="modal-close" id="rogueModalCloseBtn">&times;</span>
+            </div>
+            
+            <div style="display:flex; justify-content:space-between; padding: 10px; background: #220022; border: 1px solid #550055; font-family: monospace;">
+                <span id="rl-level" style="color:#fff;">Lvl: 1</span>
+                <span id="rl-hp" style="color:#FF3333;">HP: 100</span>
+                <span id="rl-stats" style="color:#FFFF00;">Atk: 5 | Def: 0</span>
+                <span id="rl-potions" style="color:#00FF00;">Potions: 0 (Space)</span>
+            </div>
 
-    <script src="login.js"></script>
-    <script src="neon-racer-plus.js"></script>
-    <script src="minesweeper-elite.js"></script>
-    <script src="sentinel-grid.js"></script>
-    <script src="rogue-dungeon.js"></script>
+            <canvas id="rogue-canvas" width="480" height="480" style="background:#050005; border: 2px solid #550055; margin-top:10px; box-shadow: inset 0 0 20px #220022; cursor: pointer;"></canvas>
+            
+            <div style="margin-top:10px; color:#aaa; font-size:0.85em; display:flex; justify-content:space-between;">
+                <span>ARROWS: Move/Attack</span>
+                <span>SPACE: Drink Potion</span>
+            </div>
+            
+            <div id="rl-log" style="height:50px; overflow:hidden; color:#EE82EE; font-family:monospace; border-top: 1px solid #550055; margin-top:5px; padding-top:5px; font-size: 0.9em;">
+                Welcome to the Neon Depths...
+            </div>
+            
+            <div class="modal-controls">
+                <button id="rl-restart" class="btn" style="border-color: #FF00FF; color: #FF00FF;">Restart Run</button>
+            </div>
+        </div>
+    </div>
 
-    <script>
-        // Racer Hookup
-        document.getElementById('runRacerBtn').addEventListener('click', () => document.getElementById('racerModal').style.display = 'flex');
-        document.getElementById('racerModalCloseBtn').addEventListener('click', () => document.getElementById('racerModal').style.display = 'none');
-        document.getElementById('startRacerBtn').addEventListener('click', () => { if(typeof startRacer === 'function') startRacer(); });
-        document.getElementById('pauseRacerBtn').addEventListener('click', () => { if(typeof pauseRacer === 'function') pauseRacer(); });
-        document.getElementById('resetRacerBtn').addEventListener('click', () => { if(typeof resetRacer === 'function') resetRacer(); });
+    <script src="login.js"></script>
+    <script src="neon-racer-plus.js"></script>
+    <script src="minesweeper-elite.js"></script>
+    <script src="sentinel-grid.js"></script>
+    <script src="rogue-dungeon.js"></script>
 
-        // Minesweeper Hookup
-        document.getElementById('runSuperMinesweeperBtn').addEventListener('click', () => document.getElementById('superMinesweeperModal').style.display = 'flex');
-        document.getElementById('superMsCloseBtn').addEventListener('click', () => {
-             document.getElementById('superMinesweeperModal').style.display = 'none';
-             if(typeof msState !== 'undefined' && msState.interval) clearInterval(msState.interval);
-        });
+    <script>
+        // Racer Hookup
+        document.getElementById('runRacerBtn').addEventListener('click', () => document.getElementById('racerModal').style.display = 'flex');
+        document.getElementById('racerModalCloseBtn').addEventListener('click', () => document.getElementById('racerModal').style.display = 'none');
+        document.getElementById('startRacerBtn').addEventListener('click', () => { if(typeof startRacer === 'function') startRacer(); });
+        document.getElementById('pauseRacerBtn').addEventListener('click', () => { if(typeof pauseRacer === 'function') pauseRacer(); });
+        document.getElementById('resetRacerBtn').addEventListener('click', () => { if(typeof resetRacer === 'function') resetRacer(); });
 
-        // Sentinel Grid Hookup
-        document.getElementById('runSentinelBtn').addEventListener('click', () => {
-            document.getElementById('sentinelModal').style.display = 'flex';
-            if(typeof initSentinel === 'function') initSentinel();
-        });
-        document.getElementById('sentinelCloseBtn').addEventListener('click', () => {
-            document.getElementById('sentinelModal').style.display = 'none';
-            if(typeof stopSentinel === 'function') stopSentinel();
-        });
+        // Minesweeper Hookup
+        document.getElementById('runSuperMinesweeperBtn').addEventListener('click', () => document.getElementById('superMinesweeperModal').style.display = 'flex');
+        document.getElementById('superMsCloseBtn').addEventListener('click', () => {
+             document.getElementById('superMinesweeperModal').style.display = 'none';
+             if(typeof msState !== 'undefined' && msState.interval) clearInterval(msState.interval);
+        });
 
-        // Rogue Dungeon Hookup
-        document.getElementById('runRogueBtn').addEventListener('click', () => {
-            document.getElementById('rogueModal').style.display = 'flex';
-            if(typeof initRogue === 'function') initRogue();
-        });
-        document.getElementById('rogueCloseBtn').addEventListener('click', () => {
-            document.getElementById('rogueModal').style.display = 'none';
-            if(typeof stopRogue === 'function') stopRogue();
-        });
-    </script>
+        // Sentinel Grid Hookup
+        document.getElementById('runSentinelBtn').addEventListener('click', () => {
+            document.getElementById('sentinelModal').style.display = 'flex';
+            if(typeof initSentinel === 'function') initSentinel();
+        });
+        document.getElementById('sentinelCloseBtn').addEventListener('click', () => {
+            document.getElementById('sentinelModal').style.display = 'none';
+            if(typeof stopSentinel === 'function') stopSentinel();
+        });
+
+        // Rogue Dungeon Hookup
+        document.getElementById('runRogueBtn').addEventListener('click', () => {
+            document.getElementById('rogueModal').style.display = 'flex';
+            if(typeof initRogue === 'function') initRogue();
+        });
+        document.getElementById('rogueModalCloseBtn').addEventListener('click', () => {
+            document.getElementById('rogueModal').style.display = 'none';
+            if(typeof stopRogue === 'function') stopRogue();
+        });
+        // Note: The original rogue button was rl-restart, which is kept, but a close button listener for the modal header is added for consistency.
+    </script>
 </body>
 </html>
