@@ -1,11 +1,14 @@
-/* Tetris Grandmaster - Advanced Engine (Fixed Start) */
+/* Tetris Grandmaster - Enhanced Logic with Lock Delay & Visuals */
 
 let gmState = {
     canvas: null,
     ctx: null,
     cols: 10,
     rows: 20,
-    bs: 28,
+    bs: 24, // Block Size adjusted for layout
+    offsetX: 100, // Offset to center the board
+    offsetY: 10,
+    
     board: [],
     piece: null,
     ghost: null,
@@ -13,16 +16,27 @@ let gmState = {
     holdUsed: false,
     queue: [],
     bag: [],
+    
     score: 0,
     lines: 0,
+    level: 0,
+    grade: "9", // 9..1, S1..GM
+    grades: ["9","8","7","6","5","4","3","2","1","S1","S2","S3","S4","M","GM"],
+    
     running: false,
-    dropInterval: 800,
+    gameOver: false,
+    
+    // Timing & Physics
     lastTime: 0,
     dropCounter: 0,
-    gameOver: false,
+    dropInterval: 800, // Gravity
+    lockTimer: 0,      // How long piece has been on ground
+    lockDelay: 500,    // 0.5 seconds to slide
+    isLanded: false,   // Is piece currently touching ground?
+    
     shapes: [
-        [[1,1,1,1]], // I
-        [[1,1],[1,1]], // O
+        [[1,1,1,1]],       // I
+        [[1,1],[1,1]],     // O
         [[0,1,0],[1,1,1]], // T
         [[1,0,0],[1,1,1]], // L
         [[0,0,1],[1,1,1]], // J
@@ -37,13 +51,14 @@ function initGM() {
     if(!gmState.canvas) return;
     gmState.ctx = gmState.canvas.getContext('2d');
     
-    // Explicitly re-bind the start button every time we init
-    const startBtn = document.getElementById('gmStartBtn');
-    if(startBtn) {
-        startBtn.onclick = startGM;
-    }
+    // Bind Start Button Logic safely
+    const btn = document.getElementById('gmStartBtn');
+    if(btn) btn.onclick = startGM;
 
     window.addEventListener('keydown', handleGMInput);
+    
+    // Initial Render (Empty)
+    renderGM();
 }
 
 function stopGM() {
@@ -55,15 +70,24 @@ function startGM() {
     gmState.board = Array(gmState.rows).fill().map(() => Array(gmState.cols).fill(0));
     gmState.score = 0;
     gmState.lines = 0;
+    gmState.level = 0;
+    gmState.grade = "9";
+    
     gmState.queue = [];
+    gmState.bag = [];
     gmState.holdPiece = null;
+    gmState.holdUsed = false;
+    
     gmState.gameOver = false;
     gmState.dropInterval = 800;
+    gmState.lockTimer = 0;
+    gmState.isLanded = false;
+    
     fillQueue();
     spawnPiece();
+    
     gmState.running = true;
     gmState.lastTime = 0;
-    updateScore();
     loopGM();
 }
 
@@ -73,18 +97,31 @@ function loopGM(time = 0) {
     const deltaTime = time - gmState.lastTime;
     gmState.lastTime = time;
 
-    gmState.dropCounter += deltaTime;
-    if(gmState.dropCounter > gmState.dropInterval) {
-        dropPiece();
+    // Normal Gravity
+    if (!gmState.isLanded) {
+        gmState.dropCounter += deltaTime;
+        if(gmState.dropCounter > gmState.dropInterval) {
+            dropPiece();
+        }
+    } else {
+        // LOCK DELAY LOGIC (Sliding)
+        // If landed, we count down lock timer
+        gmState.lockTimer += deltaTime;
+        if (gmState.lockTimer > gmState.lockDelay) {
+            lockPiece();
+        }
     }
 
     renderGM();
     if(!gmState.gameOver) requestAnimationFrame(loopGM);
 }
 
+/* --- Gameplay Logic --- */
+
 function fillQueue() {
     if(gmState.bag.length === 0) {
         gmState.bag = [1,2,3,4,5,6,7];
+        // Fisher-Yates shuffle
         for (let i = gmState.bag.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [gmState.bag[i], gmState.bag[j]] = [gmState.bag[j], gmState.bag[i]];
@@ -98,67 +135,104 @@ function fillQueue() {
 function spawnPiece() {
     if(gmState.queue.length === 0) fillQueue();
     let type = gmState.queue.shift();
+    
     gmState.piece = {
         matrix: gmState.shapes[type-1],
-        x: 3,
+        x: 3, 
         y: 0,
         type: type
     };
-    gmState.holdUsed = false;
     
+    gmState.holdUsed = false;
+    gmState.isLanded = false;
+    gmState.lockTimer = 0;
+    gmState.dropCounter = 0;
+
+    // Game Over Check
     if(collide(gmState.board, gmState.piece)) {
         gmState.gameOver = true;
-        alert("Game Over! Score: " + gmState.score);
+        renderGM(); // Show fail state
     }
     updateGhost();
+    checkLanding(); // Check immediately if we spawned on floor
+}
+
+function checkLanding() {
+    // Check if moving down 1 spot collides
+    gmState.piece.y++;
+    if (collide(gmState.board, gmState.piece)) {
+        gmState.isLanded = true;
+    } else {
+        gmState.isLanded = false;
+    }
+    gmState.piece.y--;
 }
 
 function handleGMInput(e) {
     if(gmState.gameOver || !gmState.running) return;
     
-    if(e.key === "ArrowLeft") { move(-1); }
-    if(e.key === "ArrowRight") { move(1); }
-    if(e.key === "ArrowDown") { dropPiece(); }
-    if(e.key === "ArrowUp") { rotate(); }
-    if(e.code === "Space") { hardDrop(); }
-    if(e.key === "Shift" || e.key === "c") { hold(); }
+    let actionTaken = false;
+
+    if(e.key === "ArrowLeft") { move(-1); actionTaken = true; }
+    if(e.key === "ArrowRight") { move(1); actionTaken = true; }
+    if(e.key === "ArrowDown") { 
+        // Soft drop resets lock timer slightly to allow "plugging"
+        gmState.dropCounter = gmState.dropInterval + 10; 
+        actionTaken = true; 
+    }
+    if(e.key === "ArrowUp") { rotate(); actionTaken = true; }
+    if(e.code === "Space") { hardDrop(); actionTaken = true; }
+    if(e.key === "Shift" || e.key === "c") { hold(); actionTaken = true; }
     
+    // Prevent default scroll
     if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
 }
 
 function move(dir) {
     gmState.piece.x += dir;
     if(collide(gmState.board, gmState.piece)) {
-        gmState.piece.x -= dir;
+        gmState.piece.x -= dir; // Revert
     } else {
+        // Successful move resets lock timer (Sliding Rule)
+        if(gmState.isLanded) gmState.lockTimer = 0;
         updateGhost();
+        checkLanding();
     }
 }
 
 function rotate() {
     let prev = gmState.piece.matrix;
+    // Transpose + Reverse
     let rotated = gmState.piece.matrix[0].map((val, index) => gmState.piece.matrix.map(row => row[index]).reverse());
     
     gmState.piece.matrix = rotated;
     if(collide(gmState.board, gmState.piece)) {
+        // Wall Kick (Try Right, then Left)
         gmState.piece.x += 1;
         if(collide(gmState.board, gmState.piece)) {
             gmState.piece.x -= 2;
             if(collide(gmState.board, gmState.piece)) {
                 gmState.piece.x += 1;
-                gmState.piece.matrix = prev;
+                gmState.piece.matrix = prev; // Fail
+                return;
             }
         }
     }
+    // Successful rotate resets lock timer
+    if(gmState.isLanded) gmState.lockTimer = 0;
     updateGhost();
+    checkLanding();
 }
 
 function dropPiece() {
     gmState.piece.y++;
     if(collide(gmState.board, gmState.piece)) {
         gmState.piece.y--;
-        merge();
-        spawnPiece();
+        // Don't lock immediately in dropPiece. 
+        // The Lock Timer in loopGM handles the actual locking.
+        gmState.isLanded = true; 
+    } else {
+        gmState.isLanded = false;
         gmState.dropCounter = 0;
     }
 }
@@ -168,17 +242,21 @@ function hardDrop() {
         gmState.piece.y++;
     }
     gmState.piece.y--;
-    merge();
-    spawnPiece();
-    gmState.dropCounter = 0;
+    lockPiece(); // Hard drop locks instantly
 }
 
-function updateGhost() {
-    gmState.ghost = { ...gmState.piece };
-    while(!collide(gmState.board, gmState.ghost)) {
-        gmState.ghost.y++;
-    }
-    gmState.ghost.y--;
+function lockPiece() {
+    // Add to board
+    gmState.piece.matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if(value !== 0) {
+                gmState.board[y + gmState.piece.y][x + gmState.piece.x] = gmState.piece.type;
+            }
+        });
+    });
+    
+    sweep();
+    spawnPiece();
 }
 
 function hold() {
@@ -197,9 +275,13 @@ function hold() {
             y: 0,
             type: temp
         };
+        // Reset positioning logic for new piece
+        gmState.isLanded = false;
+        gmState.lockTimer = 0;
+        updateGhost();
+        checkLanding();
     }
     gmState.holdUsed = true;
-    updateGhost();
 }
 
 function collide(board, piece) {
@@ -215,15 +297,12 @@ function collide(board, piece) {
     return false;
 }
 
-function merge() {
-    gmState.piece.matrix.forEach((row, y) => {
-        row.forEach((value, x) => {
-            if(value !== 0) {
-                gmState.board[y + gmState.piece.y][x + gmState.piece.x] = gmState.piece.type;
-            }
-        });
-    });
-    sweep();
+function updateGhost() {
+    gmState.ghost = { ...gmState.piece };
+    while(!collide(gmState.board, gmState.ghost)) {
+        gmState.ghost.y++;
+    }
+    gmState.ghost.y--;
 }
 
 function sweep() {
@@ -237,32 +316,96 @@ function sweep() {
         y++;
         rowCount++;
     }
+    
     if(rowCount > 0) {
         gmState.lines += rowCount;
-        gmState.score += rowCount * 100 * rowCount;
-        gmState.dropInterval = Math.max(100, 800 - (gmState.lines * 10));
-        updateScore();
+        gmState.score += rowCount * 100 * (gmState.level + 1);
+        
+        // Level Up
+        gmState.level += rowCount;
+        
+        // Update Grade based on score thresholds (Simplified)
+        let gradeIdx = Math.min(Math.floor(gmState.score / 2000), gmState.grades.length - 1);
+        gmState.grade = gmState.grades[gradeIdx];
+        
+        // Increase Speed
+        let speed = Math.max(50, 800 - (gmState.level * 10)); 
+        gmState.dropInterval = speed;
     }
 }
 
-function updateScore() {
-    const el = document.getElementById('gm-score');
-    if(el) el.innerText = `Lines: ${gmState.lines} | Score: ${gmState.score}`;
-}
+/* --- Rendering --- */
 
 function renderGM() {
     let ctx = gmState.ctx;
+    let canvas = gmState.canvas;
+    
+    // Background
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, gmState.canvas.width, gmState.canvas.height);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Draw Board Background
+    ctx.fillStyle = '#111';
+    ctx.fillRect(gmState.offsetX, gmState.offsetY, gmState.cols * gmState.bs, gmState.rows * gmState.bs);
+    ctx.strokeStyle = '#333';
+    ctx.strokeRect(gmState.offsetX, gmState.offsetY, gmState.cols * gmState.bs, gmState.rows * gmState.bs);
+
+    // Draw Stack
     drawMatrix(gmState.board, {x:0, y:0});
     
-    if(gmState.ghost) {
+    // Draw Ghost
+    if(gmState.ghost && !gmState.gameOver) {
         ctx.globalAlpha = 0.2;
         drawMatrix(gmState.ghost.matrix, {x:gmState.ghost.x, y:gmState.ghost.y}, gmState.ghost.type);
         ctx.globalAlpha = 1.0;
     }
-    drawMatrix(gmState.piece.matrix, {x:gmState.piece.x, y:gmState.piece.y}, gmState.piece.type);
+    
+    // Draw Active Piece
+    if(gmState.piece && !gmState.gameOver) {
+        drawMatrix(gmState.piece.matrix, {x:gmState.piece.x, y:gmState.piece.y}, gmState.piece.type);
+    }
+
+    // --- Sidebar UI ---
+    ctx.fillStyle = "#fff";
+    ctx.font = "16px Arial";
+    
+    // HOLD (Left Side)
+    ctx.fillText("HOLD", 20, 50);
+    if(gmState.holdPiece) {
+        let shape = gmState.shapes[gmState.holdPiece-1];
+        drawMiniMatrix(shape, 20, 60, gmState.holdPiece);
+    }
+
+    // NEXT (Right Side)
+    let nextX = gmState.offsetX + (gmState.cols * gmState.bs) + 20;
+    ctx.fillText("NEXT", nextX, 50);
+    for(let i=0; i<Math.min(3, gmState.queue.length); i++) {
+        let type = gmState.queue[i];
+        let shape = gmState.shapes[type-1];
+        drawMiniMatrix(shape, nextX, 60 + (i * 60), type);
+    }
+
+    // STATS
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 20px monospace";
+    ctx.fillText("GRADE: " + gmState.grade, nextX, 300);
+    ctx.font = "16px monospace";
+    ctx.fillText("LEVEL: " + gmState.level, nextX, 330);
+    ctx.fillText("LINES: " + gmState.lines, nextX, 350);
+    ctx.fillText("SCORE: " + gmState.score, nextX, 370);
+
+    // GAME OVER OVERLAY
+    if(gmState.gameOver) {
+        ctx.fillStyle = "rgba(0,0,0,0.8)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ff0000";
+        ctx.font = "30px Arial";
+        ctx.fillText("GAME OVER", 140, 200);
+        ctx.fillStyle = "#fff";
+        ctx.font = "20px Arial";
+        ctx.fillText("Final Grade: " + gmState.grade, 160, 240);
+        ctx.fillText("Press Close to Reset", 150, 280);
+    }
 }
 
 function drawMatrix(matrix, offset, typeOverride) {
@@ -270,12 +413,26 @@ function drawMatrix(matrix, offset, typeOverride) {
         row.forEach((value, x) => {
             let val = typeOverride || value;
             if(val !== 0) {
+                let px = (x + offset.x) * gmState.bs + gmState.offsetX;
+                let py = (y + offset.y) * gmState.bs + gmState.offsetY;
+                
                 gmState.ctx.fillStyle = gmState.colors[val];
-                gmState.ctx.fillRect((x + offset.x) * gmState.bs, (y + offset.y) * gmState.bs, gmState.bs-1, gmState.bs-1);
+                gmState.ctx.fillRect(px, py, gmState.bs-1, gmState.bs-1);
                 
                 gmState.ctx.lineWidth = 2;
                 gmState.ctx.strokeStyle = "rgba(255,255,255,0.5)";
-                gmState.ctx.strokeRect((x + offset.x) * gmState.bs, (y + offset.y) * gmState.bs, gmState.bs-1, gmState.bs-1);
+                gmState.ctx.strokeRect(px, py, gmState.bs-1, gmState.bs-1);
+            }
+        });
+    });
+}
+
+function drawMiniMatrix(matrix, startX, startY, type) {
+    matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if(value !== 0) {
+                gmState.ctx.fillStyle = gmState.colors[type];
+                gmState.ctx.fillRect(startX + x*15, startY + y*15, 14, 14);
             }
         });
     });
