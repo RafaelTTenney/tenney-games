@@ -168,53 +168,18 @@
         }
         .modal-close:hover { color: var(--primary); }
         
-        /* Minesweeper Specifics */
+        /* New Minesweeper Specifics */
         .ms-menu { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
         .ms-row { display: flex; gap: 10px; justify-content: center; }
-        .ms-btn {
-            padding: 8px 16px; background: #333; border: 1px solid #555; color: #fff; cursor: pointer;
-        }
+        .ms-btn { padding: 8px 16px; background: #333; border: 1px solid #555; color: #fff; cursor: pointer; }
         .ms-btn.selected { background: var(--flagship); color: #000; font-weight: bold; border-color: #fff;}
-        
-        #ms-game-container {
-            margin-top: 15px;
-            display: inline-block;
-            background: #222;
-            padding: 10px;
-            border: 2px solid #555;
-            border-radius: 5px;
-        }
-        #ms-grid {
-            display: grid;
-            gap: 1px;
-            background: #000;
-        }
-        .ms-cell {
-            width: 25px; height: 25px;
-            background: #888;
-            display: flex; justify-content: center; align-items: center;
-            font-weight: bold; font-family: monospace;
-            cursor: pointer;
-            user-select: none;
-            border: 1px solid #aaa;
-            border-color: #eee #555 #555 #eee; 
-        }
-        .ms-cell:active { border: 1px solid #555; }
-        .ms-cell.revealed {
-            background: #333;
-            border: 1px solid #222;
-            color: #eee;
-        }
+        #ms-game-container { margin-top: 15px; display: inline-block; background: #222; padding: 10px; border: 2px solid #555; border-radius: 5px; }
+        #ms-grid { display: grid; gap: 1px; background: #000; }
+        .ms-cell { width: 25px; height: 25px; background: #888; display: flex; justify-content: center; align-items: center; font-weight: bold; font-family: monospace; cursor: pointer; user-select: none; border: 1px solid #aaa; }
+        .ms-cell.revealed { background: #333; border: 1px solid #222; color: #eee; }
         .ms-cell.flag { background: #333; color: #ff0000; }
         .ms-cell.mine { background: #f00; color: #000; }
-        
-        /* Number colors */
-        .ms-c1 { color: #5555ff; }
-        .ms-c2 { color: #00aa00; }
-        .ms-c3 { color: #ff5555; }
-        .ms-c4 { color: #0000aa; }
-        .ms-c5 { color: #aa0000; }
-        .ms-c6 { color: #00aaaa; }
+        .ms-c1 { color: #5555ff; } .ms-c2 { color: #00aa00; } .ms-c3 { color: #ff5555; }
         
         .footer { text-align: center; color: #555; padding: 20px; }
     </style>
@@ -243,15 +208,34 @@
 
             <section class="card flagship">
                 <h3>Minesweeper Elite</h3>
-                <div class="meta">The Flagship version. Customizable difficulty, flood-fill, right-click flagging, and smart styling.</div>
-                <pre class="demo">// Select Difficulty (Easy, Medium, Hard)
-// Select Grid Size
-// Right Click to Flag
-// Left Click to Reveal</pre>
+                <div class="meta">The First Flagship. Customizable difficulty, flood-fill, right-click flagging, and smart styling.</div>
                 <div class="actions">
-                    <button class="btn" style="background:var(--flagship); color:#000; border-color: white;" id="runSuperMinesweeperBtn">Play Flagship</button>
+                    <button class="btn" style="background:var(--flagship); color:#000; border-color: white;" id="runSuperMinesweeperBtn">Play Elite</button>
                 </div>
             </section>
+            
+            <section class="card flagship" style="border-color: #00FF00; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);">
+                <h3 style="color:#00FF00;">Sentinel Grid (TD)</h3>
+                <div class="meta">Flagship Strategy. Build your own maze using towers to stop waves of enemies. Dynamic pathfinding.</div>
+                <pre class="demo">// Click grid to place walls/towers
+// Enemies find shortest path
+// Upgrade towers to survive</pre>
+                <div class="actions">
+                    <button class="btn" style="background:#00FF00; color:#000; border-color: white;" id="runSentinelBtn">Play Sentinel</button>
+                </div>
+            </section>
+
+             <section class="card flagship" style="border-color: #FF00FF; box-shadow: 0 0 15px rgba(255, 0, 255, 0.2);">
+                <h3 style="color:#FF00FF;">Rogue Dungeon</h3>
+                <div class="meta">Flagship RPG. Procedural dungeon crawler with turn-based combat, leveling, and fog of war.</div>
+                <pre class="demo">// Arrow Keys to Move/Attack
+// Explore deeper into the dark
+// Permadeath mechanics</pre>
+                <div class="actions">
+                    <button class="btn" style="background:#FF00FF; color:#000; border-color: white;" id="runRogueBtn">Play Rogue</button>
+                </div>
+            </section>
+
         </div>
     </main>
     <div class="footer">
@@ -264,14 +248,11 @@
                 <h2>Neon Racer++</h2>
                 <span class="modal-close" id="racerModalCloseBtn">&times;</span>
             </div>
-            <canvas id="racer-canvas" width="340" height="520"></canvas>
-            <div id="racer-hud" style="color:#eee; font-weight:700; margin: 10px 0; min-height: 45px; text-align: left; padding: 0 10px;">
+            <canvas id="racer-canvas" width="340" height="520" style="background:#000;"></canvas>
+            <div id="racer-hud">
                 <div id="racer-distance">Distance: 0m</div>
-                <div id="racer-speed">Speed: 0 mph</div>
-                <div id="racer-obstacles">Gaps cleared: 0</div>
             </div>
-            <p id="racer-message" style="color:var(--primary); min-height: 1.2em; margin: 5px 0 10px 0;">Ready!</p>
-            <div class="modal-controls">
+            <div class="modal-controls" style="margin-top:10px;">
                 <button id="startRacerBtn" class="btn">Start</button>
                 <button id="pauseRacerBtn" class="btn secondary">Pause</button>
                 <button id="resetRacerBtn" class="btn secondary">Reset</button>
@@ -285,7 +266,6 @@
                 <h2 style="color:var(--flagship);">Minesweeper Elite</h2>
                 <span class="modal-close" id="superMsCloseBtn">&times;</span>
             </div>
-            
             <div id="ms-menu" class="ms-menu">
                 <h4 style="margin:0; color:#fff;">Select Difficulty</h4>
                 <div class="ms-row">
@@ -301,7 +281,6 @@
                 </div>
                 <button class="btn" style="margin-top:10px; border-color:var(--flagship); color:var(--flagship);" onclick="startEliteMinesweeper()">START GAME</button>
             </div>
-
             <div id="ms-game-area" style="display:none;">
                 <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
                     <span id="ms-flags-left" style="color:red; font-weight:bold;">Flags: 10</span>
@@ -316,38 +295,84 @@
         </div>
     </div>
 
+    <div id="sentinelModal" class="modal-overlay">
+        <div class="modal-content" style="border-color: #00FF00; box-shadow: 0 0 30px #00FF00; min-width: 600px;">
+            <div class="modal-header">
+                <h2 style="color:#00FF00;">Sentinel Grid</h2>
+                <span class="modal-close" id="sentinelCloseBtn">&times;</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:0 20px; font-weight:bold; color:#fff;">
+                <span id="td-wave">Wave: 1</span>
+                <span id="td-money" style="color:#FFD700;">$: 100</span>
+                <span id="td-lives" style="color:#FF0000;">Lives: 20</span>
+            </div>
+            <canvas id="sentinel-canvas" width="600" height="400" style="background:#051505; border: 2px solid #005500; margin-top:10px;"></canvas>
+            <div style="margin-top:15px; display:flex; gap:10px; justify-content:center;">
+                <button id="td-build-basic" class="btn" style="border-color:#00FF00;">Build Turret ($50)</button>
+                <button id="td-start-wave" class="btn" style="background:#00FF00; color:#000;">Start Wave</button>
+                <button id="td-reset" class="btn secondary">Reset Game</button>
+            </div>
+            <p id="td-msg" style="color:#888; margin-top:5px;">Click grid to place towers. Don't block the path.</p>
+        </div>
+    </div>
+
+    <div id="rogueModal" class="modal-overlay">
+        <div class="modal-content" style="border-color: #FF00FF; box-shadow: 0 0 30px #FF00FF; min-width: 500px;">
+            <div class="modal-header">
+                <h2 style="color:#FF00FF;">Rogue Dungeon</h2>
+                <span class="modal-close" id="rogueCloseBtn">&times;</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:0 20px; font-weight:bold; color:#fff;">
+                <span id="rl-level">Lvl: 1</span>
+                <span id="rl-hp" style="color:#FF0000;">HP: 100/100</span>
+                <span id="rl-xp" style="color:#00FFFF;">XP: 0</span>
+            </div>
+            <canvas id="rogue-canvas" width="480" height="480" style="background:#000; border: 2px solid #550055; margin-top:10px;"></canvas>
+            <div style="margin-top:10px; color:#888; font-size:0.9em;">Use ARROW KEYS to move and attack enemies.</div>
+            <div id="rl-log" style="height:40px; overflow:hidden; color:#fff; font-style:italic; margin-top:5px;">Welcome to the dungeon...</div>
+            <button id="rl-restart" class="btn secondary" style="margin-top:10px;">Restart Run</button>
+        </div>
+    </div>
+
     <script src="login.js"></script>
     <script src="neon-racer-plus.js"></script>
     <script src="minesweeper-elite.js"></script>
+    <script src="sentinel-grid.js"></script>
+    <script src="rogue-dungeon.js"></script>
 
     <script>
-        // Racer Hookup (Added manual listeners for buttons to fix functionality)
-        document.getElementById('runRacerBtn').addEventListener('click', () => {
-             document.getElementById('racerModal').style.display = 'flex';
-        });
-        document.getElementById('racerModalCloseBtn').addEventListener('click', () => {
-             document.getElementById('racerModal').style.display = 'none';
-        });
-        
-        // Explicitly bind the racer buttons in case the external script misses them
-        document.getElementById('startRacerBtn').addEventListener('click', () => {
-            if(typeof startRacer === 'function') startRacer();
-            else if(typeof initRacer === 'function') initRacer();
-        });
-        document.getElementById('pauseRacerBtn').addEventListener('click', () => {
-            if(typeof pauseRacer === 'function') pauseRacer();
-        });
-        document.getElementById('resetRacerBtn').addEventListener('click', () => {
-            if(typeof resetRacer === 'function') resetRacer();
-        });
+        // Racer Hookup
+        document.getElementById('runRacerBtn').addEventListener('click', () => document.getElementById('racerModal').style.display = 'flex');
+        document.getElementById('racerModalCloseBtn').addEventListener('click', () => document.getElementById('racerModal').style.display = 'none');
+        document.getElementById('startRacerBtn').addEventListener('click', () => { if(typeof startRacer === 'function') startRacer(); });
+        document.getElementById('pauseRacerBtn').addEventListener('click', () => { if(typeof pauseRacer === 'function') pauseRacer(); });
+        document.getElementById('resetRacerBtn').addEventListener('click', () => { if(typeof resetRacer === 'function') resetRacer(); });
 
-        // Minesweeper Modal Hookup
-        document.getElementById('runSuperMinesweeperBtn').addEventListener('click', () => {
-             document.getElementById('superMinesweeperModal').style.display = 'flex';
-        });
+        // Minesweeper Hookup
+        document.getElementById('runSuperMinesweeperBtn').addEventListener('click', () => document.getElementById('superMinesweeperModal').style.display = 'flex');
         document.getElementById('superMsCloseBtn').addEventListener('click', () => {
              document.getElementById('superMinesweeperModal').style.display = 'none';
              if(typeof msState !== 'undefined' && msState.interval) clearInterval(msState.interval);
+        });
+
+        // Sentinel Grid Hookup
+        document.getElementById('runSentinelBtn').addEventListener('click', () => {
+            document.getElementById('sentinelModal').style.display = 'flex';
+            if(typeof initSentinel === 'function') initSentinel();
+        });
+        document.getElementById('sentinelCloseBtn').addEventListener('click', () => {
+            document.getElementById('sentinelModal').style.display = 'none';
+            if(typeof stopSentinel === 'function') stopSentinel();
+        });
+
+        // Rogue Dungeon Hookup
+        document.getElementById('runRogueBtn').addEventListener('click', () => {
+            document.getElementById('rogueModal').style.display = 'flex';
+            if(typeof initRogue === 'function') initRogue();
+        });
+        document.getElementById('rogueCloseBtn').addEventListener('click', () => {
+            document.getElementById('rogueModal').style.display = 'none';
+            if(typeof stopRogue === 'function') stopRogue();
         });
     </script>
 </body>
