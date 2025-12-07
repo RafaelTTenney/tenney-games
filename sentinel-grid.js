@@ -1,4 +1,4 @@
-/* Sentinel Grid - Flagship Tower Defense Logic */
+/* Sentinel Grid - Flagship Tower Defense Logic (Enhanced) */
 
 let tdState = {
     canvas: null,
@@ -10,16 +10,17 @@ let tdState = {
     enemies: [],
     projectiles: [],
     wave: 1,
-    money: 100,
+    money: 120,
     lives: 20,
     running: false,
     gameLoopId: null,
     path: [],
-    start: {x: 0, y: 10},
+    startNodes: [{x: 0, y: 10}], // Array of spawn points
     end: {x: 29, y: 10},
     waveActive: false,
     enemiesToSpawn: 0,
-    spawnTimer: 0
+    spawnTimer: 0,
+    difficultyMultiplier: 1.0
 };
 
 function initSentinel() {
@@ -27,10 +28,8 @@ function initSentinel() {
     if(!tdState.canvas) return;
     tdState.ctx = tdState.canvas.getContext('2d');
     
-    // UI Binds
     document.getElementById('td-start-wave').onclick = startWave;
     document.getElementById('td-reset').onclick = resetTD;
-    document.getElementById('td-build-basic').onclick = () => { /* Select mode logic could go here */ };
     tdState.canvas.onclick = handleGridClick;
 
     resetTD();
@@ -51,6 +50,8 @@ function resetTD() {
     tdState.lives = 20;
     tdState.waveActive = false;
     tdState.enemiesToSpawn = 0;
+    tdState.difficultyMultiplier = 1.0;
+    tdState.startNodes = [{x: 0, y: 10}]; // Reset to single spawn
     
     updatePath();
     updateUI();
@@ -62,8 +63,21 @@ function resetTD() {
 function startWave() {
     if(tdState.waveActive) return;
     tdState.waveActive = true;
-    tdState.enemiesToSpawn = 5 + (tdState.wave * 2);
+    // Harder scaling
+    tdState.enemiesToSpawn = 5 + Math.floor(tdState.wave * 2.5);
     tdState.spawnTimer = 0;
+    
+    // Multi-Direction Attack after Wave 5
+    if(tdState.wave === 5) {
+        tdState.startNodes.push({x: 15, y: 0}); // Attack from top
+        updatePath(); // Re-calc paths
+        alert("Warning: Enemies attacking from the North!");
+    }
+    if(tdState.wave === 10) {
+        tdState.startNodes.push({x: 15, y: 19}); // Attack from bottom
+        updatePath();
+        alert("Warning: Enemies attacking from the South!");
+    }
 }
 
 function updateUI() {
@@ -72,32 +86,29 @@ function updateUI() {
     document.getElementById('td-lives').innerText = "Lives: " + tdState.lives;
 }
 
-/* --- Core Loop --- */
 function loopTD() {
     if(!tdState.running) return;
-    
     updateTD();
     renderTD();
     tdState.gameLoopId = requestAnimationFrame(loopTD);
 }
 
 function updateTD() {
-    // Spawning
+    // Spawning logic
     if(tdState.waveActive && tdState.enemiesToSpawn > 0) {
         tdState.spawnTimer++;
-        if(tdState.spawnTimer > 40) { // Spawn rate
+        // Spawn faster in later waves
+        let rate = Math.max(10, 40 - tdState.wave); 
+        if(tdState.spawnTimer > rate) {
             spawnEnemy();
             tdState.enemiesToSpawn--;
             tdState.spawnTimer = 0;
         }
     } else if (tdState.waveActive && tdState.enemiesToSpawn === 0 && tdState.enemies.length === 0) {
-        tdState.waveActive = false;
-        tdState.wave++;
-        tdState.money += 50 + (tdState.wave * 10);
-        updateUI();
+        endWave();
     }
 
-    // Update Enemies
+    // Enemies
     for(let i = tdState.enemies.length - 1; i >= 0; i--) {
         let e = tdState.enemies[i];
         moveEnemy(e);
@@ -106,8 +117,9 @@ function updateTD() {
             tdState.enemies.splice(i, 1);
             updateUI();
             if(tdState.lives <= 0) {
-                alert("Game Over! Wave: " + tdState.wave);
+                alert("Game Over! You reached Wave " + tdState.wave);
                 resetTD();
+                return;
             }
         } else if(e.hp <= 0) {
             tdState.money += e.reward;
@@ -116,7 +128,7 @@ function updateTD() {
         }
     }
 
-    // Towers Fire
+    // Towers
     tdState.towers.forEach(t => {
         if(t.cooldown > 0) t.cooldown--;
         else {
@@ -131,6 +143,10 @@ function updateTD() {
     // Projectiles
     for(let i = tdState.projectiles.length - 1; i >= 0; i--) {
         let p = tdState.projectiles[i];
+        if(!p.target || p.target.hp <= 0) {
+             tdState.projectiles.splice(i, 1);
+             continue;
+        }
         let dx = p.target.x - p.x;
         let dy = p.target.y - p.y;
         let dist = Math.sqrt(dx*dx + dy*dy);
@@ -145,32 +161,47 @@ function updateTD() {
     }
 }
 
-/* --- Entities & Logic --- */
+function endWave() {
+    tdState.waveActive = false;
+    tdState.money += 50 + (tdState.wave * 10);
+    tdState.wave++;
+    tdState.difficultyMultiplier += 0.2;
+    updateUI();
+}
+
 function spawnEnemy() {
-    let hp = 20 + (tdState.wave * 10);
+    // Pick random start node
+    let startNode = tdState.startNodes[Math.floor(Math.random() * tdState.startNodes.length)];
+    
+    // Calculate HP based on wave
+    let hp = Math.floor((20 + (tdState.wave * 15)) * tdState.difficultyMultiplier);
+    
     tdState.enemies.push({
-        x: tdState.start.x * tdState.gridSize + 10,
-        y: tdState.start.y * tdState.gridSize + 10,
-        gridX: tdState.start.x,
-        gridY: tdState.start.y,
+        x: startNode.x * tdState.gridSize + 10,
+        y: startNode.y * tdState.gridSize + 10,
+        gridX: startNode.x,
+        gridY: startNode.y,
         hp: hp,
         maxHp: hp,
-        speed: 2,
+        speed: 2 + (tdState.wave * 0.1), // Gets faster
         pathIndex: 0,
-        reward: 5,
-        reachedEnd: false
+        reward: 5 + Math.floor(tdState.wave/2),
+        reachedEnd: false,
+        origin: startNode // To know which path to follow
     });
 }
 
 function moveEnemy(e) {
-    if(tdState.path.length === 0) return; // Should not happen if path valid
+    // Determine path based on origin
+    let specificPath = tdState.paths.find(p => p.start.x === e.origin.x && p.start.y === e.origin.y);
+    if(!specificPath || !specificPath.nodes) return; 
 
-    let targetNode = tdState.path[e.pathIndex];
+    let pathNodes = specificPath.nodes;
+    let targetNode = pathNodes[e.pathIndex];
     if(!targetNode) { e.reachedEnd = true; return; }
 
     let tx = targetNode.x * tdState.gridSize + 10;
     let ty = targetNode.y * tdState.gridSize + 10;
-
     let dx = tx - e.x;
     let dy = ty - e.y;
     let dist = Math.sqrt(dx*dx + dy*dy);
@@ -179,7 +210,7 @@ function moveEnemy(e) {
         e.x = tx;
         e.y = ty;
         e.pathIndex++;
-        if(e.pathIndex >= tdState.path.length) e.reachedEnd = true;
+        if(e.pathIndex >= pathNodes.length) e.reachedEnd = true;
     } else {
         e.x += (dx/dist) * e.speed;
         e.y += (dy/dist) * e.speed;
@@ -187,12 +218,19 @@ function moveEnemy(e) {
 }
 
 function getTarget(t) {
+    // Simple closest target
+    let closest = null;
+    let minDist = 9999;
     for(let e of tdState.enemies) {
         let dx = e.x - (t.x * tdState.gridSize + 10);
         let dy = e.y - (t.y * tdState.gridSize + 10);
-        if(Math.sqrt(dx*dx + dy*dy) <= t.range) return e;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+        if(dist <= t.range && dist < minDist) {
+            minDist = dist;
+            closest = e;
+        }
     }
-    return null;
+    return closest;
 }
 
 function fireProjectile(t, target) {
@@ -207,7 +245,7 @@ function fireProjectile(t, target) {
 
 function handleGridClick(e) {
     if(tdState.waveActive) {
-        document.getElementById('td-msg').innerText = "Cannot build during wave!";
+        document.getElementById('td-msg').innerText = "Wait for wave to end!";
         return;
     }
 
@@ -215,50 +253,82 @@ function handleGridClick(e) {
     let gx = Math.floor((e.clientX - rect.left) / tdState.gridSize);
     let gy = Math.floor((e.clientY - rect.top) / tdState.gridSize);
 
-    // Check bounds and Start/End
     if(gx < 0 || gx >= tdState.cols || gy < 0 || gy >= tdState.rows) return;
-    if((gx === tdState.start.x && gy === tdState.start.y) || (gx === tdState.end.x && gy === tdState.end.y)) return;
+    
+    // Check if clicked Start/End
+    if(gx === tdState.end.x && gy === tdState.end.y) return;
+    for(let s of tdState.startNodes) { if(gx === s.x && gy === s.y) return; }
 
-    // Check existing
+    // Check existing tower for UPGRADE
     let existing = tdState.towers.find(t => t.x === gx && t.y === gy);
-    if(existing) return; // Could implement sell here
-
-    // Cost
-    if(tdState.money < 50) {
-        document.getElementById('td-msg').innerText = "Not enough money!";
+    if(existing) {
+        let cost = existing.level * 50;
+        if(tdState.money >= cost) {
+            tdState.money -= cost;
+            existing.level++;
+            existing.damage += 5;
+            existing.range += 10;
+            updateUI();
+            document.getElementById('td-msg').innerText = "Upgraded to Lvl " + existing.level;
+        } else {
+            document.getElementById('td-msg').innerText = "Need $" + cost + " to upgrade.";
+        }
         return;
     }
 
-    // Temp placement to check path
-    tdState.towers.push({x: gx, y: gy, range: 80, damage: 10, cooldown: 0, maxCooldown: 20});
+    // Build New
+    if(tdState.money < 50) {
+        document.getElementById('td-msg').innerText = "Need $50 to build.";
+        return;
+    }
+
+    // Place temp and check path
+    tdState.towers.push({x: gx, y: gy, range: 80, damage: 10, cooldown: 0, maxCooldown: 20, level: 1});
     if(!updatePath()) {
-        tdState.towers.pop(); // Revert
-        document.getElementById('td-msg').innerText = "Cannot block the path!";
+        tdState.towers.pop(); // Invalid position
+        document.getElementById('td-msg').innerText = "Cannot block path!";
     } else {
         tdState.money -= 50;
         updateUI();
-        document.getElementById('td-msg').innerText = "Tower placed.";
+        document.getElementById('td-msg').innerText = "Tower built.";
     }
 }
 
-/* --- Pathfinding (BFS) --- */
+// Multi-Path BFS
 function updatePath() {
-    let q = [tdState.start];
-    let cameFrom = {};
-    let startKey = `${tdState.start.x},${tdState.start.y}`;
-    cameFrom[startKey] = null;
-    let found = false;
+    let allPathsValid = true;
+    let newPaths = [];
 
-    // Collision map
+    // Map obstacles
     let grid = Array(tdState.cols).fill().map(() => Array(tdState.rows).fill(false));
     tdState.towers.forEach(t => grid[t.x][t.y] = true);
 
-    while(q.length > 0) {
-        let curr = q.shift();
-        if(curr.x === tdState.end.x && curr.y === tdState.end.y) {
-            found = true;
+    for(let start of tdState.startNodes) {
+        let path = findPath(start, tdState.end, grid);
+        if(!path) {
+            allPathsValid = false;
             break;
         }
+        newPaths.push({start: start, nodes: path});
+    }
+
+    if(allPathsValid) {
+        tdState.paths = newPaths;
+        return true;
+    }
+    return false;
+}
+
+function findPath(start, end, grid) {
+    let q = [start];
+    let cameFrom = {};
+    let startKey = `${start.x},${start.y}`;
+    cameFrom[startKey] = null;
+    let found = false;
+
+    while(q.length > 0) {
+        let curr = q.shift();
+        if(curr.x === end.x && curr.y === end.y) { found = true; break; }
 
         let dirs = [{x:0, y:-1}, {x:0, y:1}, {x:-1, y:0}, {x:1, y:0}];
         for(let d of dirs) {
@@ -275,21 +345,17 @@ function updatePath() {
         }
     }
 
-    if(!found) return false;
-
-    // Reconstruct
+    if(!found) return null;
     let path = [];
-    let curr = tdState.end;
+    let curr = end;
     while(curr) {
         path.push(curr);
         let key = `${curr.x},${curr.y}`;
         curr = cameFrom[key];
     }
-    tdState.path = path.reverse();
-    return true;
+    return path.reverse();
 }
 
-/* --- Rendering --- */
 function renderTD() {
     let ctx = tdState.ctx;
     ctx.fillStyle = "#051505";
@@ -302,20 +368,31 @@ function renderTD() {
     for(let i=0; i<=tdState.rows; i++) { ctx.moveTo(0, i*tdState.gridSize); ctx.lineTo(tdState.canvas.width, i*tdState.gridSize); }
     ctx.stroke();
 
-    // Path Highlight
-    ctx.fillStyle = "rgba(0, 255, 0, 0.1)";
-    tdState.path.forEach(p => {
-        ctx.fillRect(p.x * tdState.gridSize, p.y * tdState.gridSize, tdState.gridSize, tdState.gridSize);
-    });
+    // Paths
+    if(tdState.paths) {
+        ctx.fillStyle = "rgba(0, 255, 0, 0.1)";
+        tdState.paths.forEach(pObj => {
+            pObj.nodes.forEach(p => {
+                ctx.fillRect(p.x * tdState.gridSize, p.y * tdState.gridSize, tdState.gridSize, tdState.gridSize);
+            });
+        });
+    }
 
     // Start/End
-    ctx.fillStyle = "#00F"; ctx.fillRect(tdState.start.x * tdState.gridSize, tdState.start.y * tdState.gridSize, tdState.gridSize, tdState.gridSize);
+    ctx.fillStyle = "#00F"; 
+    tdState.startNodes.forEach(s => ctx.fillRect(s.x * tdState.gridSize, s.y * tdState.gridSize, tdState.gridSize, tdState.gridSize));
     ctx.fillStyle = "#F00"; ctx.fillRect(tdState.end.x * tdState.gridSize, tdState.end.y * tdState.gridSize, tdState.gridSize, tdState.gridSize);
 
     // Towers
-    ctx.fillStyle = "#0F0";
     tdState.towers.forEach(t => {
+        // Color changes with level
+        ctx.fillStyle = t.level === 1 ? "#0F0" : (t.level === 2 ? "#FF0" : "#F0F");
         ctx.fillRect(t.x * tdState.gridSize + 2, t.y * tdState.gridSize + 2, tdState.gridSize - 4, tdState.gridSize - 4);
+        
+        // Level Indicator
+        ctx.fillStyle = "black";
+        ctx.font = "10px Arial";
+        ctx.fillText(t.level, t.x*tdState.gridSize + 6, t.y*tdState.gridSize + 14);
     });
 
     // Enemies
