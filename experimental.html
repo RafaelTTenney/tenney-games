@@ -13,8 +13,6 @@
             --muted: #888;
             --glow: 0 0 5px var(--primary), 0 0 10px var(--primary);
             --flagship: #ffcc00;
-            /* Added TD Green for Sentinel Grid */
-            --td-green: #00FF00;
         }
         body {
             margin: 0;
@@ -150,7 +148,6 @@
             width: auto;
             box-shadow: 0 0 20px var(--primary);
             text-align: center;
-            position: relative; /* Keep this for absolute positioning within modals */
         }
         .modal-header {
             display: flex;
@@ -171,7 +168,7 @@
         }
         .modal-close:hover { color: var(--primary); }
         
-        /* Minesweeper Elite Specifics (From original updated code) */
+        /* New Minesweeper Specifics */
         .ms-menu { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
         .ms-row { display: flex; gap: 10px; justify-content: center; }
         .ms-btn { padding: 8px 16px; background: #333; border: 1px solid #555; color: #fff; cursor: pointer; }
@@ -183,84 +180,6 @@
         .ms-cell.flag { background: #333; color: #ff0000; }
         .ms-cell.mine { background: #f00; color: #000; }
         .ms-c1 { color: #5555ff; } .ms-c2 { color: #00aa00; } .ms-c3 { color: #ff5555; }
-        
-        /* Sentinel Grid TD UI STYLES (Kept for modal) */
-        #sentinel-ui-layout {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .td-panel {
-            background: #001100;
-            border: 1px solid var(--td-green);
-            padding: 10px;
-            border-radius: 4px;
-            text-align: left;
-        }
-        .tower-select-row {
-            display: flex;
-            gap: 8px;
-            justify-content: center;
-            margin-bottom: 10px;
-        }
-        .tower-btn {
-            background: #002200;
-            border: 1px solid #005500;
-            color: #aaa;
-            padding: 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            width: 80px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            font-size: 0.8em;
-            transition: all 0.2s;
-        }
-        .tower-btn:hover { background: #003300; color: #fff; }
-        .tower-btn.active {
-            border-color: var(--td-green);
-            color: var(--td-green);
-            background: #002a00;
-            box-shadow: inset 0 0 10px rgba(0,255,0,0.2);
-        }
-        .tower-icon {
-            width: 24px; height: 24px; 
-            margin-bottom: 4px;
-            border: 1px solid currentColor;
-        }
-        
-        /* Inspector Styles */
-        .inspector-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            font-size: 0.9em;
-        }
-        .inspector-title {
-            color: var(--td-green);
-            font-weight: bold;
-            border-bottom: 1px solid #004400;
-            padding-bottom: 4px;
-            margin-bottom: 4px;
-        }
-        .stat-row { display: flex; justify-content: space-between; color: #888; }
-        .stat-val { color: #fff; font-weight: bold; }
-        
-        .td-btn {
-            background: var(--td-green);
-            color: #000;
-            border: none;
-            padding: 6px 12px;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 4px;
-            text-transform: uppercase;
-            font-size: 0.8em;
-        }
-        .td-btn:hover { opacity: 0.9; }
-        .td-btn.secondary { background: #333; color: #fff; border: 1px solid #555; }
-        .td-btn.danger { background: #330000; color: #ff5555; border: 1px solid #550000; }
         
         .footer { text-align: center; color: #555; padding: 20px; }
     </style>
@@ -292,7 +211,7 @@
                 <div class="meta">The First Flagship. Customizable difficulty, flood-fill, right-click flagging, and smart styling.</div>
                 <div class="actions">
                     <button class="btn" style="background:var(--flagship); color:#000; border-color: white;" id="runSuperMinesweeperBtn">Play Elite</button>
-                </div>
+                </d>
             </section>
             
             <section class="card flagship" style="border-color: #00FF00; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);">
@@ -344,7 +263,7 @@
     <div id="superMinesweeperModal" class="modal-overlay">
         <div class="modal-content" style="border-color: var(--flagship); box-shadow: 0 0 30px var(--flagship);">
             <div class="modal-header">
-                <h2 style="color:var(--flagship);">Minesweeper Elite</h2>
+                <h2 style="color:var(--flagship);">Minesweeper Elite </h2>
                 <span class="modal-close" id="superMsCloseBtn">&times;</span>
             </div>
             <div id="ms-menu" class="ms-menu">
@@ -376,69 +295,32 @@
         </div>
     </div>
 
-        <div id="sentinelModal" class="modal-overlay">
-        <div class="modal-content" style="border-color: var(--td-green); box-shadow: 0 0 30px var(--td-green); min-width: 650px;">
+    <div id="sentinelModal" class="modal-overlay">
+        <div class="modal-content" style="border-color: #00FF00; box-shadow: 0 0 30px #00FF00; min-width: 600px;">
             <div class="modal-header">
-                <h2 style="color:var(--td-green);">Sentinel Grid: Enhanced</h2>
+                <h2 style="color:#00FF00;">Sentinel Grid</h2>
                 <span class="modal-close" id="sentinelCloseBtn">&times;</span>
             </div>
-            
-            <div style="display:flex; justify-content:space-between; padding:0 20px; font-weight:bold; color:#fff; margin-bottom: 10px;">
-                <span style="color:var(--td-green);">Wave: <span id="td-wave">1</span></span>
-                <span style="color:#FFD700;">$: <span id="td-money">150</span></span>
-                <span style="color:#FF3333;">Lives: <span id="td-lives">20</span></span>
+            <div style="display:flex; justify-content:space-between; padding:0 20px; font-weight:bold; color:#fff;">
+                <span id="td-wave">Wave: 1</span>
+                <span id="td-money" style="color:#FFD700;">$: 100</span>
+                <span id="td-lives" style="color:#FF0000;">Lives: 20</span>
             </div>
-            
-            <canvas id="sentinel-canvas" width="600" height="400" style="background:#051505; border: 2px solid #005500; display: block; margin: 0 auto;"></canvas>
-            
-            <p id="td-msg" style="color:#888; margin: 5px 0; min-height: 20px;">System Ready.</p>
-
-            <div id="sentinel-ui-layout">
-                                <div class="tower-select-row">
-                    <button class="tower-btn active" id="btn-blaster" onclick="tdSelectType('blaster')">
-                        <div class="tower-icon" style="background:#0F0;"></div>
-                        Blaster ($50)
-                    </button>
-                    <button class="tower-btn" id="btn-sniper" onclick="tdSelectType('sniper')">
-                        <div class="tower-icon" style="background:#0FF;"></div>
-                        Sniper ($120)
-                    </button>
-                    <button class="tower-btn" id="btn-rapid" onclick="tdSelectType('rapid')">
-                        <div class="tower-icon" style="background:#FF0;"></div>
-                        Rapid ($100)
-                    </button>
-                </div>
-
-                                <div class="inspector-grid">
-                                        <div style="display:flex; gap:10px; justify-content: center; align-items: center;">
-                        <button id="td-start-wave" class="td-btn" onclick="tdStartWave()">Start Wave</button>
-                        <button class="td-btn secondary" onclick="tdReset()">Reset</button>
-                    </div>
-                    
-                                        <div class="td-panel" id="td-inspector">
-                        <div class="inspector-title" id="insp-title">Select Unit</div>
-                        <div id="insp-desc" style="color:#aaa; font-style:italic; font-size: 0.85em; margin-bottom: 8px;">
-                            Select a tower to build or click an existing one.
-                        </div>
-                        
-                                                <div id="insp-stats" style="display:none;">
-                            <div class="stat-row"><span>Damage:</span> <span class="stat-val" id="insp-dmg">0</span></div>
-                            <div class="stat-row"><span>Range:</span> <span class="stat-val" id="insp-rng">0</span></div>
-                            <div class="stat-row"><span>Level:</span> <span class="stat-val" id="insp-lvl">1</span></div>
-                            <div style="margin-top:8px; display:flex; gap:5px;">
-                                <button class="td-btn" style="flex:1; font-size:0.7em;" onclick="tdUpgrade()">Upgrade ($<span id="insp-cost">0</span>)</button>
-                                <button class="td-btn danger" style="flex:1; font-size:0.7em;" onclick="tdSell()">Sell</button>
-                            </div>
-                    </div>
-                    </div>
-                </div>
+            <canvas id="sentinel-canvas" width="600" height="400" style="background:#051505; border: 2px solid #005500; margin-top:10px;"></canvas>
+            <div style="margin-top:15px; display:flex; gap:10px; justify-content:center;">
+                <button id="td-build-basic" class="btn" style="border-color:#00FF00;">Build Turret ($50)</button>
+                <button id="td-start-wave" class="btn" style="background:#00FF00; color:#000;">Start Wave</button>
+                <button id="td-reset" class="btn secondary">Reset Game</button>
             </div>
+            <p id="td-msg" style="color:#888; margin-top:5px;">Click grid to place towers. Don't block the path.</p>
         </div>
     </div>
-     <div id="rogueModal" class="modal-overlay">
+
+   <div id="rogueModal" class="modal-overlay">
         <div class="modal-content" style="border-color: #FF00FF; box-shadow: 0 0 30px #FF00FF; min-width: 520px;">
             <div class="modal-header">
                 <h2 style="color:#FF00FF; text-shadow: 0 0 10px #FF00FF;">Rogue Dungeon: Neon Depths</h2>
+                <span class="modal-close" id="rogueCloseBtn">&times;</span>
             </div>
             
             <div style="display:flex; justify-content:space-between; padding: 10px; background: #220022; border: 1px solid #550055; font-family: monospace;">
