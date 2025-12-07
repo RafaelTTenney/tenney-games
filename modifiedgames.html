@@ -102,8 +102,6 @@
             color: #fff;
             box-shadow: 0 0 20px var(--neon-pink);
         }
-
-        /* Modal Styles matching neon-tetris.js expectations */
         .modal {
             display: none;
             position: fixed;
@@ -145,9 +143,9 @@
 
     <div class="container">
         <div class="game-card">
-            <h2>Neon Tetris</h2>
-            <p>The classic block-stacking game reimagined with a high-contrast neon aesthetic. Experience the flow.</p>
-            <button class="btn" id="runNeonTetrisBtn">Enter the Matrix</button>
+            <h2>Tetris Grandmaster</h2>
+            <p>The ultimate strategic block experience. Featuring Hold, Ghost Pieces, Hard Drops, and intense speed scaling.</p>
+            <button class="btn" id="runGMBtn">Enter the Matrix</button>
         </div>
 
         <div class="game-card" style="border-color: #555; opacity: 0.7;">
@@ -156,51 +154,35 @@
         </div>
     </div>
 
-    <div id="tetrisModal" class="modal" aria-hidden="true">
+    <div id="gmModal" class="modal" aria-hidden="true">
       <div class="modal-content">
-        <h2>Neon Tetris</h2>
-        <canvas id="game" width="240" height="480"></canvas>
-        <p id="score" style="color: white; font-weight: bold; font-family: monospace; font-size: 1.2em; margin-top: 10px;">Score: 0 | High Score: 0</p>
+        <h2>Tetris Grandmaster</h2>
+        <canvas id="gm-canvas" width="300" height="500"></canvas>
+        <div id="gm-score" style="color: white; font-weight: bold; font-family: monospace; font-size: 1.2em; margin-top: 10px;">Lines: 0 | Score: 0</div>
         <div class="btn-group">
-            <button id="startBtn" class="btn" style="border-color:#00FF00; color:#00FF00;">Start</button>
-            <button id="controlsBtn" class="btn" style="border-color:#FFA500; color:#FFA500;">Controls</button>
-            <button id="modalCloseBtn" class="btn" style="border-color:red; color:red;">Close</button>
+            <button id="gmStartBtn" class="btn" style="border-color:#00FF00; color:#00FF00;">Start</button>
+            <button id="gmControlsBtn" class="btn" style="border-color:#FFA500; color:#FFA500;">Controls</button>
+            <button id="gmCloseBtn" class="btn" style="border-color:red; color:red;">Close</button>
         </div>
       </div>
     </div>
 
     <script src="login.js"></script>
-    <script src="neon-tetris.js"></script>
+    <script src="tetris-grandmaster.js"></script>
     <script>
-        // Bind UI actions for Neon Tetris
-        document.getElementById('runNeonTetrisBtn').addEventListener('click', () => {
-          const modal = document.getElementById('tetrisModal');
-          if (modal) modal.style.display = 'flex';
-
-          if (typeof initTetrisGame === 'function') {
-            try { initTetrisGame(); } catch (err) { console.error('initTetrisGame error:', err); }
-          } else if (typeof initPreviewNeonTetris === 'function') {
-            try { initPreviewNeonTetris(); } catch (err) { console.error('initPreviewNeonTetris error:', err); }
-          }
+        document.getElementById('runGMBtn').addEventListener('click', () => {
+          document.getElementById('gmModal').style.display = 'flex';
+          if(typeof initGM === 'function') initGM();
         });
 
-        document.getElementById('modalCloseBtn').addEventListener('click', () => {
-          const modal = document.getElementById('tetrisModal');
-          if (modal) modal.style.display = 'none';
-
-          if (typeof stopPreviewNeonTetris === 'function') {
-            try { stopPreviewNeonTetris(); } catch (err) { }
-          }
-          if (typeof stopTetris === 'function') { try { stopTetris(); } catch (e) {} }
+        document.getElementById('gmCloseBtn').addEventListener('click', () => {
+          document.getElementById('gmModal').style.display = 'none';
+          if(typeof stopGM === 'function') stopGM();
         });
-
-        const controlsBtn = document.getElementById('controlsBtn');
-        if (controlsBtn) {
-          controlsBtn.addEventListener('click', () => {
-            if (typeof initTetrisGame === 'function') return;
-            alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
-          });
-        }
+        
+        document.getElementById('gmControlsBtn').addEventListener('click', () => {
+            alert("Controls:\nLeft/Right: Move\nUp: Rotate\nDown: Soft Drop\nSpace: Hard Drop\nShift/C: Hold Piece");
+        });
     </script>
 </body>
 </html>
