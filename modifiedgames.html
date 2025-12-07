@@ -143,15 +143,29 @@
 
     <div class="container">
         <div class="game-card">
-            <h2>Tetris Grandmaster</h2>
-            <p>The ultimate strategic block experience. Featuring Hold, Ghost Pieces, Hard Drops, and intense speed scaling.</p>
-            <button class="btn" id="runGMBtn">Enter the Matrix</button>
+            <h2>Neon Tetris</h2>
+            <p>The classic block-stacking game reimagined with a high-contrast neon aesthetic. Simple and clean.</p>
+            <button class="btn" id="runNeonTetrisBtn">Enter the Matrix</button>
         </div>
 
-        <div class="game-card" style="border-color: #555; opacity: 0.7;">
-            <h2 style="color: #888;">Coming Soon</h2>
-            <p>More modified experiments are currently being compiled...</p>
+        <div class="game-card">
+            <h2>Tetris Grandmaster</h2>
+            <p>The ultimate strategic block experience. Hold piece, Ghost pieces, and intense speed scaling.</p>
+            <button class="btn" id="runGMBtn">Enter Grandmaster</button>
         </div>
+    </div>
+
+    <div id="tetrisModal" class="modal" aria-hidden="true">
+      <div class="modal-content">
+        <h2>Neon Tetris</h2>
+        <canvas id="game" width="240" height="480"></canvas>
+        <p id="score" style="color: white; font-weight: bold; margin-top: 10px;">Score: 0</p>
+        <div class="btn-group">
+            <button id="startBtn" class="btn" style="border-color:#00FF00; color:#00FF00;">Start</button>
+            <button id="controlsBtn" class="btn" style="border-color:#FFA500; color:#FFA500;">Controls</button>
+            <button id="modalCloseBtn" class="btn" style="border-color:red; color:red;">Close</button>
+        </div>
+      </div>
     </div>
 
     <div id="gmModal" class="modal" aria-hidden="true">
@@ -168,8 +182,31 @@
     </div>
 
     <script src="login.js"></script>
+    <script src="neon-tetris.js"></script>
     <script src="tetris-grandmaster.js"></script>
     <script>
+        // --- Neon Tetris Logic ---
+        document.getElementById('runNeonTetrisBtn').addEventListener('click', () => {
+          document.getElementById('tetrisModal').style.display = 'flex';
+          // Try to init neon tetris logic
+          if (typeof initTetrisGame === 'function') initTetrisGame();
+          else if (typeof initPreviewNeonTetris === 'function') initPreviewNeonTetris();
+        });
+
+        document.getElementById('modalCloseBtn').addEventListener('click', () => {
+          document.getElementById('tetrisModal').style.display = 'none';
+          if (typeof stopPreviewNeonTetris === 'function') stopPreviewNeonTetris();
+          if (typeof stopTetris === 'function') stopTetris();
+        });
+
+        const controlsBtn = document.getElementById('controlsBtn');
+        if (controlsBtn) {
+          controlsBtn.addEventListener('click', () => {
+            alert('Classic Controls:\nArrows: Move/Rotate\nDown: Speed Up');
+          });
+        }
+
+        // --- Grandmaster Logic ---
         document.getElementById('runGMBtn').addEventListener('click', () => {
           document.getElementById('gmModal').style.display = 'flex';
           if(typeof initGM === 'function') initGM();
@@ -181,7 +218,7 @@
         });
         
         document.getElementById('gmControlsBtn').addEventListener('click', () => {
-            alert("Controls:\nLeft/Right: Move\nUp: Rotate\nDown: Soft Drop\nSpace: Hard Drop\nShift/C: Hold Piece");
+            alert("Grandmaster Controls:\nLeft/Right: Move\nUp: Rotate\nDown: Soft Drop\nSpace: Hard Drop\nShift/C: Hold Piece");
         });
     </script>
 </body>
