@@ -204,11 +204,12 @@ function handleRogueInput(e) {
     let tookTurn = false;
 
     if(e.key === "ArrowUp") dy = -1;
-    if(e.key === "ArrowDown") dy = 1;
-    if(e.key === "ArrowLeft") dx = -1;
-    if(e.key === "ArrowRight") dx = 1;
+    else if(e.key === "ArrowDown") dy = 1;
+    else if(e.key === "ArrowLeft") dx = -1;
+    else if(e.key === "ArrowRight") dx = 1;
     
     if(e.key === " " || e.code === "Space") {
+        e.preventDefault(); // <--- ADD THIS LINE HERE
         usePotion();
         tookTurn = true;
     }
