@@ -33,6 +33,7 @@
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: none; flex-direction: column; justify-content: center; align-items: center;
             background: linear-gradient(180deg, rgba(5,5,5,0.95), rgba(0,0,0,0.85)); z-index: 100; backdrop-filter: blur(6px);
+            pointer-events: auto;
         }
         .overlay.active { display: flex; }
 
@@ -64,25 +65,25 @@
             background: linear-gradient(45deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02)); display:flex; align-items:center; justify-content:center; color:#999;
         }
         .card .actions { margin-top: 10px; display:flex; justify-content:flex-end; gap:8px; }
-        .btn { background: #111; border:1px solid rgba(255,255,255,0.04); color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:700; }
+        .btn { background: #111; border:1px solid rgba(255,255,255,0.04); color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:700; pointer-events: auto; }
         .btn:hover { transform: translateY(-2px); }
         .btn.primary { background: linear-gradient(90deg,var(--accent-a), #7fffd4); color:#001; border:none; }
 
         /* HUD */
-        #hud { position: absolute; top: 12px; left: 12px; right: 12px; height: 56px; display:none; z-index:60; pointer-events:none; }
-        #hud .inner { display:flex; justify-content:space-between; align-items:center; background:var(--glass); padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.02); }
-        .stats { display:flex; gap:16px; font-family:monospace; font-size:1.05em; font-weight:700; }
+        #hud { position: absolute; top: 12px; left: 12px; right: 12px; height: 56px; display:none; z-index:60; pointer-events: auto; }
+        #hud .inner { display:flex; justify-content:space-between; align-items:center; background:var(--glass); padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.02); pointer-events: auto; }
+        .stats { display:flex; gap:16px; font-family:monospace; font-size:1.05em; font-weight:700; pointer-events: auto; }
 
-        #controls { position:absolute; bottom:12px; left:12px; right:12px; height:96px; display:none; z-index:60; }
-        .t-btn { width:86px; height:86px; background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.02)); border:1px solid rgba(255,255,255,0.02); color:#ccc; cursor:pointer; border-radius:12px; display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; margin-right:12px; }
+        #controls { position:absolute; bottom:12px; left:12px; right:12px; height:96px; display:none; z-index:60; pointer-events: auto; }
+        .t-btn { width:86px; height:86px; background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.02)); border:1px solid rgba(255,255,255,0.02); color:#ccc; cursor:pointer; border-radius:12px; display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; margin-right:12px; pointer-events: auto; }
         .t-btn .t-icon { width:28px; height:28px; border-radius:6px; }
         .t-btn.active { box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 18px rgba(0,255,204,0.06); transform: translateY(-6px); }
 
-        #inspector { position:absolute; right:12px; bottom:120px; width:220px; background:var(--panel); border-radius:10px; padding:12px; display:none; z-index:60; }
+        #inspector { position:absolute; right:12px; bottom:120px; width:220px; background:var(--panel); border-radius:10px; padding:12px; display:none; z-index:60; pointer-events: auto; }
         .insp-row { display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.9em; color:#aaa; }
         .insp-val { color:#fff; font-family:monospace; }
 
-        #help-modal { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:540px; background:#0b0b12; border-radius:12px; padding:24px; display:none; z-index:200; }
+        #help-modal { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:540px; background:#0b0b12; border-radius:12px; padding:24px; display:none; z-index:200; pointer-events: auto; }
         #help-modal h2 { margin-top:0; color:var(--accent-a); }
 
         /* game over */
@@ -90,7 +91,7 @@
 
         /* DIFF SELECT hidden by default */
         #diff-select { display:none; margin-bottom:10px; }
-        .diff-btn { padding:8px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); background:transparent; color:#9aa; cursor:pointer; }
+        .diff-btn { padding:8px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); background:transparent; color:#9aa; cursor:pointer; pointer-events: auto; }
         .diff-btn.selected { background:linear-gradient(90deg,var(--accent-c), #fff); color:#003; }
 
         /* sentinel compatibility hidden DOM (keeps sentinel-grid.js calls safe) */
@@ -265,7 +266,9 @@
 
         stop: () => {
             if(Engine.loopId) cancelAnimationFrame(Engine.loopId);
-            if(Engine.game && Engine.game.stop) Engine.game.stop();
+            if(Engine.game && Engine.game.stop) {
+                try { Engine.game.stop(); } catch(e){/*ignore*/ }
+            }
             Engine.game = null;
         },
 
@@ -291,7 +294,7 @@
         startWave: () => Engine.game && Engine.game.startWave(),
         setBuild: (k) => {
             if(Engine.game) {
-                Engine.game.setBuild(k);
+                try { Engine.game.setBuild(k); } catch(e){/*ignore*/ }
                 document.querySelectorAll('.t-btn').forEach(b => b.classList.remove('active'));
                 if(k) {
                     const el = document.getElementById('btn-'+k);
@@ -300,8 +303,8 @@
                 Engine.updateInsp();
             }
         },
-        upgrade: () => { Engine.game && Engine.game.upgrade(); Engine.updateInsp(); },
-        sell: () => { Engine.game && Engine.game.sell(); Engine.updateInsp(); },
+        upgrade: () => { if(Engine.game) try { Engine.game.upgrade(); } catch(e){} Engine.updateInsp(); },
+        sell: () => { if(Engine.game) try { Engine.game.sell(); } catch(e){} Engine.updateInsp(); },
         
         // --- UI ---
         buildControls: () => {
@@ -367,7 +370,7 @@
     document.getElementById('c').onclick = (e) => {
         if(!Engine.game) return;
         let r = document.getElementById('c').getBoundingClientRect();
-        Engine.game.click(e.clientX - r.left, e.clientY - r.top);
+        try { Engine.game.click(e.clientX - r.left, e.clientY - r.top); } catch(err){ console.error('click->game error',err); }
         Engine.updateInsp();
         document.querySelectorAll('.t-btn').forEach(b => b.classList.remove('active'));
         if(Engine.game.build) {
