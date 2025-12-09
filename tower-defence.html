@@ -92,6 +92,9 @@
         #diff-select { display:none; margin-bottom:10px; }
         .diff-btn { padding:8px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); background:transparent; color:#9aa; cursor:pointer; }
         .diff-btn.selected { background:linear-gradient(90deg,var(--accent-c), #fff); color:#003; }
+
+        /* sentinel compatibility hidden DOM (keeps sentinel-grid.js calls safe) */
+        #sentinel-dom { display:none; }
     </style>
 </head>
 <body>
@@ -175,9 +178,31 @@
         </div>
     </div>
 
+    <!-- Sentinel compatibility hidden DOM elements (so sentinel-grid.js DOM calls are safe) -->
+    <div id="sentinel-dom" aria-hidden="true">
+        <div id="td-msg"></div>
+        <div id="td-wave"></div>
+        <div id="td-money"></div>
+        <div id="td-lives"></div>
+
+        <div id="insp-title"></div>
+        <div id="insp-desc"></div>
+        <div id="insp-stats" style="display:none;"></div>
+        <div id="insp-dmg"></div>
+        <div id="insp-rng"></div>
+        <div id="insp-lvl"></div>
+        <div id="insp-cost"></div>
+
+        <!-- sentinel expects elements with class 'tower-btn' and ids btn-<type> -->
+        <button class="tower-btn" id="btn-blaster"></button>
+        <button class="tower-btn" id="btn-sniper"></button>
+        <button class="tower-btn" id="btn-rapid"></button>
+    </div>
+
     <script src="vector-valley.js"></script>
     <script src="neon-citadel.js"></script>
     <script src="sentinel-grid.js"></script>
+    <script src="sentinel-adapter.js"></script>
 
     <script>
     const Engine = {
@@ -211,15 +236,16 @@
             document.getElementById('controls').style.display = 'flex';
             Engine.currentId = id;
 
-            // Mapping: id=1 => Vector Valley (fixed-path) uses SentinelGame as base-mode with path presets.
-            // id=2 => NeonGame (flagship), id=3 => VectorGame (classic vector valley script)
-            if(id===1) Engine.game = SentinelGame;
-            if(id===2) Engine.game = NeonGame;
-            if(id===3) Engine.game = VectorGame;
+            // Mapping: 1 -> Vector Valley (VectorGame), 2 -> NeonGame, 3 -> SentinelGame (adapter)
+            if (id === 1) Engine.game = (typeof VectorGame !== 'undefined') ? VectorGame : VectorValley;
+            if (id === 2) Engine.game = (typeof NeonGame !== 'undefined') ? NeonGame : NeonCitadel;
+            if (id === 3) Engine.game = (typeof SentinelGame !== 'undefined') ? SentinelGame : null;
 
             // Only show difficulty selector for Vector Valley (id 1)
             document.getElementById('diff-select').style.display = id===1 ? 'flex' : 'none';
 
+            if (!Engine.game) return;
+            // Provide the same canvas element to each game's init
             Engine.game.init(document.getElementById('c'), Engine.diff);
             Engine.buildControls();
             Engine.loop();
@@ -233,14 +259,19 @@
 
         loop: () => {
             if(!Engine.game) return;
-            Engine.game.update();
-            Engine.game.draw(Engine.ctx);
-            Engine.updateUI();
+            try {
+                Engine.game.update();
+                Engine.game.draw(Engine.ctx);
+                Engine.updateUI();
 
-            if(Engine.game.lives <= 0 && !Engine.game.gameOver) {
-                Engine.game.gameOver = true;
-                document.getElementById('game-over').classList.add('active');
-                document.getElementById('go-msg').innerText = `You reached Wave ${Engine.game.wave}`;
+                if(Engine.game.lives <= 0 && !Engine.game.gameOver) {
+                    Engine.game.gameOver = true;
+                    document.getElementById('game-over').classList.add('active');
+                    document.getElementById('go-msg').innerText = `You reached Wave ${Engine.game.wave}`;
+                }
+            } catch (err) {
+                // keep loop alive even if game throws; useful during debugging
+                console.error('Engine loop error:', err);
             }
             Engine.loopId = requestAnimationFrame(Engine.loop);
         },
@@ -251,7 +282,10 @@
             if(Engine.game) {
                 Engine.game.setBuild(k);
                 document.querySelectorAll('.t-btn').forEach(b => b.classList.remove('active'));
-                if(k) document.getElementById('btn-'+k).classList.add('active');
+                if(k) {
+                    const el = document.getElementById('btn-'+k);
+                    if(el) el.classList.add('active');
+                }
                 Engine.updateInsp();
             }
         },
@@ -262,7 +296,7 @@
         buildControls: () => {
             const div = document.getElementById('controls');
             div.innerHTML = '';
-            const conf = Engine.game.conf.towers;
+            const conf = (Engine.game && Engine.game.conf && Engine.game.conf.towers) ? Engine.game.conf.towers : {};
             for(let k in conf) {
                 let t = conf[k];
                 let b = document.createElement('div');
@@ -289,7 +323,7 @@
             const def = Engine.game.conf.towers[s.type];
             document.getElementById('insp-title').innerText = def.name + (s.lvl>1 ? " MK"+s.lvl : "");
             document.getElementById('insp-title').style.color = def.color;
-            document.getElementById('i-dmg').innerText = Math.floor(s.dmg);
+            document.getElementById('i-dmg').innerText = Math.floor(s.dmg || s.dmg || 0);
             document.getElementById('i-rng').innerText = Math.floor(s.range ?? s.r ?? 0);
             document.getElementById('i-spd').innerText = (s.maxCd ? (60/s.maxCd).toFixed(1) : (s.cd ? (60/s.cd).toFixed(1) : '1.0'));
             let cost = Math.floor(def.cost * 0.6 * (s.lvl+1));
