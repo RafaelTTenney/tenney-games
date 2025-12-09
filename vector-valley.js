@@ -1,176 +1,150 @@
 const VectorGame = {
-    wave: 1, money: 0, lives: 0, waveActive: false,
+    wave: 1, money: 0, lives: 0, active: false, gameOver: false,
     enemies: [], towers: [], projs: [], parts: [],
     path: [], q: [], sel: null, build: null,
     
     conf: {
-        colors: { bg: '#100500', path: '#331100', accent: '#FF8800' },
         towers: {
-            turret: { name:'Turret', cost:60, r:100, dmg:20, cd:30, color:'#FF8800' },
-            sniper: { name:'Sniper', cost:150, r:300, dmg:100, cd:90, color:'#00FFFF' },
-            heavy:  { name:'Heavy', cost:250, r:80, dmg:80, cd:40, color:'#FF0000' }
+            turret: { name:'TURRET', cost:75, r:110, dmg:25, cd:30, color:'#FFAA00' },
+            sniper: { name:'SNIPER', cost:200, r:350, dmg:120, cd:90, color:'#00FFFF' },
+            heavy:  { name:'HEAVY', cost:300, r:90, dmg:100, cd:45, color:'#FF0000' }
         }
     },
     
-    init: function(canvas, diff) {
+    init: function(c) {
         this.reset();
-        this.money = 400;
+        this.money = 450;
         this.lives = 20;
-        this.generatePath(diff, canvas.width, canvas.height);
+        this.genPath();
     },
     
     reset: function() {
-        this.wave = 1; this.waveActive = false;
-        this.enemies = []; this.towers = []; this.projs = []; this.parts = []; this.q = [];
-        this.sel = null; this.build = null;
+        this.wave = 1; this.active = false; this.gameOver = false;
+        this.enemies=[]; this.towers=[]; this.projs=[]; this.parts=[]; this.q=[];
+        this.sel=null; this.build=null;
     },
     
-    generatePath: function(diff, W, H) {
-        this.path = [];
-        let y = H/2;
-        this.path.push({x:0, y:y});
-        
-        if(diff === 'easy') {
-            this.path.push({x:100, y:y}); this.path.push({x:100, y:100});
-            this.path.push({x:300, y:100}); this.path.push({x:300, y:500});
-            this.path.push({x:500, y:500}); this.path.push({x:500, y:200});
-            this.path.push({x:700, y:200}); this.path.push({x:700, y:y});
-        } else if(diff === 'med') {
-            this.path.push({x:200, y:y}); this.path.push({x:200, y:200});
-            this.path.push({x:600, y:200}); this.path.push({x:600, y:400});
-            this.path.push({x:800, y:400});
-        } else {
-            this.path.push({x:800, y:y});
-        }
-        let last = this.path[this.path.length-1];
-        if(last.x < W) this.path.push({x:W, y:last.y});
+    genPath: function() {
+        // Hardcoded winding path
+        this.path = [
+            {x:0,y:100}, {x:200,y:100}, {x:200,y:400},
+            {x:400,y:400}, {x:400,y:200}, {x:600,y:200},
+            {x:600,y:500}, {x:800,y:500}
+        ];
     },
     
     update: function() {
-        // Spawning
-        if(this.waveActive && this.q.length > 0) {
+        if(this.gameOver) return;
+        
+        // Spawn
+        if(this.active && this.q.length) {
             this.q[0].delay--;
-            if(this.q[0].delay <= 0) {
-                this.spawnEnemy(this.q.shift());
-            }
-        } else if(this.waveActive && this.enemies.length === 0 && this.q.length === 0) {
-            this.waveActive = false;
-            this.wave++;
-            this.money += 100 + (this.wave*10);
+            if(this.q[0].delay <= 0) this.enemies.push(this.q.shift());
+        } else if(this.active && !this.enemies.length && !this.q.length) {
+            this.active = false; this.wave++; this.money += 100 + this.wave*20;
         }
         
-        // Logic
-        this.enemies.forEach(e => this.moveEnemy(e));
-        this.enemies = this.enemies.filter(e => e.active);
-        this.towers.forEach(t => this.updateTower(t));
-        this.projs.forEach(p => {
-            p.x += p.vx; p.y += p.vy;
-            let hit = false;
-            for(let e of this.enemies) {
-                if((e.x-p.x)**2 + (e.y-p.y)**2 < (e.r+p.r)**2) {
-                    e.hp -= p.dmg;
-                    hit = true;
-                    if(e.hp <= 0) this.killEnemy(e);
-                    break;
+        // Enemies
+        this.enemies.forEach(e => {
+            let t = this.path[e.idx];
+            let dx = t.x - e.x, dy = t.y - e.y;
+            let d = Math.sqrt(dx*dx+dy*dy);
+            if(d < e.speed) {
+                e.idx++;
+                if(e.idx >= this.path.length) { e.dead = true; this.lives--; }
+            } else {
+                e.x += (dx/d)*e.speed; e.y += (dy/d)*e.speed;
+            }
+        });
+        this.enemies = this.enemies.filter(e => !e.dead);
+        
+        // Towers
+        this.towers.forEach(t => {
+            if(t.cd > 0) t.cd--;
+            else {
+                let target = this.enemies.find(e => (e.x-t.x)**2+(e.y-t.y)**2 <= t.r**2);
+                if(target) {
+                    t.cd = t.maxCd;
+                    this.projs.push({x:t.x,y:t.y, tx:target.x, ty:target.y, color:t.color, dmg:t.dmg, life:10});
+                    target.hp -= t.dmg;
+                    if(target.hp<=0) { target.dead = true; this.money += target.val; this.explode(target.x, target.y, target.color); }
                 }
             }
-            if(hit || p.x<0 || p.x>800 || p.y<0 || p.y>600) p.active = false;
         });
-        this.projs = this.projs.filter(p => p.active);
+        
+        // Particles
         this.parts.forEach(p => { p.x+=p.vx; p.y+=p.vy; p.life--; });
-        this.parts = this.parts.filter(p => p.life > 0);
+        this.parts = this.parts.filter(p => p.life>0);
+        this.projs.forEach(p => p.life--);
+        this.projs = this.projs.filter(p => p.life>0);
     },
     
     draw: function(ctx) {
-        // BG
-        ctx.fillStyle = this.conf.colors.bg; ctx.fillRect(0,0,800,600);
-        
-        // Path
-        ctx.strokeStyle = this.conf.colors.path; ctx.lineWidth = 40; ctx.lineCap='round'; ctx.lineJoin='round';
+        // Grid BG
+        ctx.fillStyle = '#110500'; ctx.fillRect(0,0,800,600);
+        ctx.strokeStyle = '#331100'; ctx.lineWidth = 2;
         ctx.beginPath();
-        if(this.path.length) { ctx.moveTo(this.path[0].x, this.path[0].y); for(let i=1;i<this.path.length;i++) ctx.lineTo(this.path[i].x, this.path[i].y); }
+        for(let i=0;i<800;i+=50) { ctx.moveTo(i,0); ctx.lineTo(i,600); }
         ctx.stroke();
         
-        // Entities
-        this.towers.forEach(t => {
-            ctx.fillStyle = '#222'; ctx.fillRect(t.x-15,t.y-15,30,30);
-            ctx.fillStyle = t.color; ctx.fillRect(t.x-10,t.y-10,20,20);
-            if(this.sel === t) { ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.beginPath(); ctx.arc(t.x,t.y,t.r,0,Math.PI*2); ctx.stroke(); }
-        });
-        this.enemies.forEach(e => {
-            ctx.fillStyle = e.color; ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#0F0'; ctx.fillRect(e.x-10,e.y-15,20*(e.hp/e.maxHp),4);
-        });
-        this.projs.forEach(p => { ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); });
-        this.parts.forEach(p => { ctx.fillStyle=p.color; ctx.globalAlpha=p.life/20; ctx.fillRect(p.x,p.y,2,2); ctx.globalAlpha=1; });
-    },
-    
-    // Helpers
-    startWave: function() {
-        if(this.waveActive) return;
-        this.waveActive = true;
-        let count = 5 + Math.floor(this.wave * 1.5);
-        let hp = 20 + (this.wave * 15);
-        for(let i=0; i<count; i++) this.q.push({
-            hp: hp, maxHp: hp, speed: 2 + (Math.random()*0.5),
-            type: (i%5===0 && this.wave>3) ? 'tank' : 'norm', delay: i * 40
-        });
-    },
-    
-    spawnEnemy: function(d) {
-        let s = this.path[0];
-        this.enemies.push({ x:s.x, y:s.y, hp:d.hp, maxHp:d.maxHp, speed:d.speed, r:10, active:true, pathIdx:1, color:d.type==='tank'?'#F00':'#F0F', val:10 });
-    },
-    
-    moveEnemy: function(e) {
-        if(e.pathIdx >= this.path.length) { e.active = false; this.lives--; return; }
-        let t = this.path[e.pathIdx];
-        let dx = t.x - e.x, dy = t.y - e.y, dist = Math.sqrt(dx*dx+dy*dy);
-        if(dist < e.speed) { e.x = t.x; e.y = t.y; e.pathIdx++; }
-        else { e.x += (dx/dist)*e.speed; e.y += (dy/dist)*e.speed; }
-    },
-    
-    killEnemy: function(e) { e.active = false; this.money += e.val; for(let i=0;i<5;i++) this.parts.push({x:e.x,y:e.y,vx:Math.random()-0.5,vy:Math.random()-0.5,life:20,color:e.color}); },
-    
-    updateTower: function(t) {
-        if(t.cdCur > 0) t.cdCur--;
-        else {
-            let target = this.enemies.find(e => (e.x-t.x)**2 + (e.y-t.y)**2 <= t.r**2);
-            if(target) {
-                t.cdCur = t.cd;
-                let ang = Math.atan2(target.y - t.y, target.x - t.x);
-                this.projs.push({ x:t.x, y:t.y, vx:Math.cos(ang)*10, vy:Math.sin(ang)*10, r:3, color:t.color, dmg:t.dmg, active:true });
-            }
-        }
-    },
-    
-    handleClick: function(mx, my) {
-        // Select
-        let clicked = this.towers.find(t => Math.abs(t.x-mx)<15 && Math.abs(t.y-my)<15);
-        if(clicked) { this.sel = clicked; this.build = null; return; }
+        // Path
+        ctx.strokeStyle = '#FF5500'; ctx.lineWidth = 4;
+        ctx.shadowBlur = 10; ctx.shadowColor = '#FF5500';
+        ctx.beginPath();
+        this.path.forEach((p,i) => i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
+        ctx.stroke();
+        ctx.shadowBlur = 0;
         
-        // Build
-        if(this.build) {
-            let tConf = this.conf.towers[this.build];
-            if(this.money >= tConf.cost) {
-                // Check path proximity
-                for(let i=0; i<this.path.length-1; i++) {
-                     let p1=this.path[i], p2=this.path[i+1];
-                     let l2=(p1.x-p2.x)**2+(p1.y-p2.y)**2, t=((mx-p1.x)*(p2.x-p1.x)+(my-p1.y)*(p2.y-p1.y))/l2;
-                     t=Math.max(0,Math.min(1,t));
-                     let px=p1.x+t*(p2.x-p1.x), py=p1.y+t*(p2.y-p1.y);
-                     if((mx-px)**2+(my-py)**2 < 30**2) return; // Too close
-                }
-                this.money -= tConf.cost;
-                this.towers.push({ x:mx, y:my, type:this.build, r:tConf.r, dmg:tConf.dmg, cd:tConf.cd, cdCur:0, color:tConf.color, lvl:1 });
-                for(let i=0;i<8;i++) this.parts.push({x:mx,y:my,vx:Math.random()*4-2,vy:Math.random()*4-2,life:20,color:'#FFF'});
-            }
-        } else {
-            this.sel = null;
-        }
+        // Towers
+        this.towers.forEach(t => {
+            ctx.fillStyle = t.color; ctx.beginPath();
+            if(t.type === 'turret') { ctx.moveTo(t.x, t.y-10); ctx.lineTo(t.x+10, t.y+10); ctx.lineTo(t.x-10, t.y+10); } // Triangle
+            else ctx.fillRect(t.x-10, t.y-10, 20, 20); // Square
+            ctx.fill();
+            if(this.sel === t) { ctx.strokeStyle='#fff'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(t.x,t.y,t.r,0,6.28); ctx.stroke(); }
+        });
+        
+        // Enemies
+        this.enemies.forEach(e => {
+            ctx.fillStyle = e.color; ctx.fillRect(e.x-8, e.y-8, 16, 16);
+            ctx.fillStyle = '#0F0'; ctx.fillRect(e.x-8, e.y-12, 16*(e.hp/e.maxHp), 2);
+        });
+        
+        // Lasers
+        ctx.lineWidth = 2;
+        this.projs.forEach(p => {
+            ctx.strokeStyle = p.color; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.tx, p.ty); ctx.stroke();
+        });
+        
+        // Parts
+        this.parts.forEach(p => { ctx.fillStyle=p.color; ctx.fillRect(p.x, p.y, 2, 2); });
     },
     
-    setBuild: function(t) { this.build = t; if(t) this.sel = null; },
-    upgrade: function() { if(this.sel && this.money >= Math.floor(this.conf.towers[this.sel.type].cost*0.7*this.sel.lvl)) { this.money-=Math.floor(this.conf.towers[this.sel.type].cost*0.7*this.sel.lvl); this.sel.lvl++; this.sel.dmg*=1.5; this.sel.r+=20; this.sel.cd*=0.9; } },
-    sell: function() { if(this.sel) { this.money+=Math.floor(this.conf.towers[this.sel.type].cost*0.5*this.sel.lvl); this.towers = this.towers.filter(t=>t!==this.sel); this.sel=null; } }
+    // API
+    startWave: function() {
+        if(this.active) return;
+        this.active = true;
+        for(let i=0; i<5+this.wave*2; i++) {
+            this.q.push({
+                x:this.path[0].x, y:this.path[0].y, idx:1,
+                hp:20+this.wave*10, maxHp:20+this.wave*10,
+                speed:2, color:'#F0F', val:15, delay:i*30, dead:false
+            });
+        }
+    },
+    explode: function(x,y,c) { for(let i=0;i<8;i++) this.parts.push({x:x,y:y,vx:Math.random()*4-2,vy:Math.random()*4-2,life:20,color:c}); },
+    handleClick: function(x,y) {
+        let t = this.towers.find(t => (t.x-x)**2+(t.y-y)**2 < 400);
+        if(t) { this.sel=t; this.build=null; return; }
+        if(this.build) {
+            let def = this.conf.towers[this.build];
+            if(this.money >= def.cost) {
+                this.money -= def.cost;
+                this.towers.push({x:x,y:y,type:this.build,r:def.r,dmg:def.dmg,maxCd:def.cd,cd:0,color:def.color,lvl:1});
+            }
+        }
+    },
+    setBuild: function(k) { this.build=k; if(k) this.sel=null; },
+    upgrade: function() { if(this.sel) { this.money-=50; this.sel.lvl++; this.sel.dmg*=1.5; } },
+    sell: function() { if(this.sel) { this.towers = this.towers.filter(x=>x!==this.sel); this.sel=null; this.money+=50; } }
 };
