@@ -143,27 +143,33 @@
             background-color: rgba(0, 0, 0, 0.9);
             justify-content: center;
             align-items: center;
+            padding: 20px;
         }
+        .modal-overlay.active { display:flex; }
         .modal-content {
             background-color: var(--card);
             margin: auto;
-            padding: 20px;
+            padding: 14px;
             border: 1px solid var(--primary);
             border-radius: 8px;
-            width: auto;
+            width: 1100px;
+            max-width: calc(100% - 40px);
             box-shadow: 0 0 20px var(--primary);
             text-align: center;
+            display:flex;
+            flex-direction: column;
+            gap: 12px;
         }
         .modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
         }
         .modal-header h2 {
             color: var(--primary);
             margin: 0;
             text-shadow: var(--glow);
+            font-size: 1.2em;
         }
         .modal-close {
             color: var(--muted);
@@ -176,37 +182,52 @@
             color: var(--primary);
             text-decoration: none;
         }
-        .modal-controls {
+
+        /* TD modal layout */
+        .td-body {
             display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 15px;
+            gap: 12px;
+            align-items: flex-start;
         }
-        
-        #racer-canvas, #rogue-canvas {
-            border: 2px solid var(--primary);
-            box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.5);
+        .td-canvas-wrap {
+            flex: 1 1 auto;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            background: #000;
+            padding: 8px;
+            border-radius:8px;
+            border: 1px solid rgba(255,255,255,0.03);
         }
-        
-        /* Minesweeper Specifics */
-        .ms-menu { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
-        .ms-row { display: flex; gap: 10px; justify-content: center; }
-        .ms-btn { padding: 8px 16px; background: #333; border: 1px solid #555; color: #fff; cursor: pointer; }
-        .ms-btn.selected { background: var(--flagship); color: #000; font-weight: bold; border-color: #fff;}
-        #ms-game-container { margin-top: 15px; display: inline-block; background: #222; padding: 10px; border: 2px solid #555; border-radius: 5px; }
-        #ms-grid { display: grid; gap: 1px; background: #000; }
-        .ms-cell { width: 25px; height: 25px; background: #888; display: flex; justify-content: center; align-items: center; font-weight: bold; font-family: monospace; cursor: pointer; user-select: none; }
-        .ms-cell.revealed { background: #333; border: 1px solid #222; color: #eee; }
-        .ms-cell.flag { background: #333; color: #ff0000; }
-        .ms-cell.mine { background: #f00; color: #000; }
-        .ms-c1 { color: #5555ff; } .ms-c2 { color: #00aa00; } .ms-c3 { color: #ff5555; }
-        
+        .td-canvas {
+            background: transparent;
+            max-width:100%;
+            height: 720px;
+            width: 1000px;
+            border-radius:6px;
+            outline:none;
+        }
+        .td-controls {
+            width: 260px;
+            background: rgba(0,0,0,0.4);
+            padding: 8px;
+            border-radius: 8px;
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+        }
+        .td-controls h3 { margin: 0; color: var(--primary); }
+        .t-btn { padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background:#111; color:#fff; cursor:pointer; text-align:left; }
+        .t-btn.active { box-shadow: 0 8px 20px rgba(0,255,204,0.06); transform: translateY(-2px); }
+        .hud-row { display:flex; justify-content:space-between; font-family:monospace; color:#ddd; }
+
         .footer { text-align: center; color: #555; padding: 20px; }
 
-        /* tower-defence iframe styling inside modal */
-        .td-iframe {
-            width: 1100px; max-width: calc(100% - 48px); height: 80vh; border: none; border-radius: 8px; background: #000;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        @media (max-width: 1180px) {
+            .td-body { flex-direction:column; }
+            .td-controls { width: 100%; order: 2; }
+            .td-canvas { height: 520px; width: 100%; }
+            .modal-content { width: calc(100% - 40px); max-width: 960px; }
         }
     </style>
 </head>
@@ -240,7 +261,6 @@
                 </div>
             </section>
             
-            <!-- Updated Tower Defence Collection Card -->
             <section class="card flagship" style="border-color: #00FF00; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);">
                 <h3 style="color:#00FF00;">Tower Defence Collection</h3>
                 <div class="meta">Three premium strategy games in one. Featuring "Vector Valley" (Classic), "Neon Citadel" (Maze Builder), and "Sentinel Grid" (Original).</div>
@@ -249,7 +269,7 @@
 // Neon Citadel: Open Field
 // Sentinel Grid: Tactical Grid</pre>
                 <div class="actions">
-                    <a class="btn" id="openTdBtn" href="#">Play Collection</a>
+                    <a class="btn" id="openTdBtn" href="#" data-game="hub">Play Collection</a>
                 </div>
             </section>
 
@@ -270,8 +290,66 @@
         &copy; 2025 Games & Programs
     </div>
 
-    <!-- Modals -->
-    <div id="racerModal" class="modal-overlay">
+    <!-- Modals: Tower Defence variants (Vector, Citadel, Sentinel) -->
+    <div id="tdModal" class="modal-overlay" aria-hidden="true">
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="td-title">
+            <div class="modal-header">
+                <h2 id="td-title" style="color:var(--td-green);">Tower Defence</h2>
+                <span class="modal-close" id="tdModalCloseBtn">&times;</span>
+            </div>
+
+            <div class="td-body">
+                <div class="td-canvas-wrap">
+                    <canvas id="td-canvas" class="td-canvas" width="1000" height="720" tabindex="0"></canvas>
+                </div>
+
+                <div class="td-controls" id="td-controls">
+                    <h3 id="td-game-title">Game</h3>
+                    <div class="hud-row"><div>Wave</div><div id="td-wave">1</div></div>
+                    <div class="hud-row"><div>Money</div><div id="td-money">0</div></div>
+                    <div class="hud-row"><div>Lives</div><div id="td-lives">0</div></div>
+
+                    <div style="margin-top:8px;">
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn" id="td-start-wave">Start Wave</button>
+                            <button class="btn secondary" id="td-stop">Reset</button>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:8px;">
+                        <div style="font-weight:700; color:#ccc; margin-bottom:6px;">Build Units</div>
+                        <div id="td-build-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+                    </div>
+
+                    <div style="margin-top:8px;">
+                        <div style="font-weight:700; color:#ccc; margin-bottom:6px;">Inspector</div>
+                        <div id="td-insp" style="font-family:monospace; color:#ddd; font-size:0.9em; min-height:64px;">Select a tower</div>
+                        <div style="display:flex; gap:6px; margin-top:6px;">
+                            <button class="btn" id="td-upgrade">Upgrade</button>
+                            <button class="btn" id="td-sell">Sell</button>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:8px;">
+                        <div style="font-weight:700; color:#ccc; margin-bottom:6px;">Difficulty</div>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn diff" data-diff="easy">Easy</button>
+                            <button class="btn diff active" data-diff="med">Med</button>
+                            <button class="btn diff" data-diff="hard">Hard</button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button class="btn secondary" id="td-close-and-unload">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Other modals for existing games -->
+    <div id="racerModal" class="modal-overlay" aria-hidden="true">
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Neon Racer++</h2>
@@ -288,7 +366,8 @@
             </div>
         </div>
     </div>
-    <div id="superMinesweeperModal" class="modal-overlay">
+
+    <div id="superMinesweeperModal" class="modal-overlay" aria-hidden="true">
         <div class="modal-content" style="border-color: var(--flagship); box-shadow: 0 0 30px var(--flagship);">
             <div class="modal-header">
                 <h2 style="color:var(--flagship);">Minesweeper Elite</h2>
@@ -324,116 +403,248 @@
             </div>
         </div>
     </div>
-    
-    <div id="rogueModal" class="modal-overlay">
-        <div class="modal-content" style="border-color: #FF00FF; box-shadow: 0 0 30px #FF00FF; min-width: 520px;">
-            <div class="modal-header">
-                <h2 style="color:#FF00FF; text-shadow: 0 0 10px #FF00FF;">Rogue Dungeon: Neon Depths</h2>
-                <span class="modal-close" id="rogueModalCloseBtn">&times;</span>
-            </div>
-            
-            <div style="display:flex; justify-content:space-between; padding: 10px; background: #220022; border: 1px solid #550055; font-family: monospace;">
-                <span id="rl-level" style="color:#fff;">Lvl: 1</span>
-                <span id="rl-hp" style="color:#FF3333;">HP: 100</span>
-                <span id="rl-stats" style="color:#FFFF00;">Atk: 5 | Def: 0</span>
-                <span id="rl-potions" style="color:#00FF00;">Potions: 0 (Space)</span>
-            </div>
-
-            <canvas id="rogue-canvas" width="480" height="480" style="background:#050005; border: 2px solid #550055; margin-top:10px; box-shadow: inset 0 0 20px #220022; cursor: pointer;"></canvas>
-            
-            <div style="margin-top:10px; color:#aaa; font-size:0.85em; display:flex; justify-content:space-between;">
-                <span>ARROWS: Move/Attack</span>
-                <span>SPACE: Drink Potion</span>
-            </div>
-            
-            <div id="rl-log" style="height:50px; overflow:hidden; color:#EE82EE; font-family:monospace; border-top: 1px solid #550055; margin-top:5px; padding-top:5px; font-size: 0.9em;">
-                Welcome to the Neon Depths...
-            </div>
-            
-            <div class="modal-controls">
-                <button id="rl-restart" class="btn" style="border-color: #FF00FF; color: #FF00FF;">Restart Run</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Tower Defence Modal (loads tower-defence.html inside an iframe so controls remain intact) -->
-    <div id="tdModal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 1150px; width: calc(100% - 48px);">
-            <div class="modal-header">
-                <h2 style="color:var(--td-green);">Tower Defence Collection</h2>
-                <span class="modal-close" id="tdModalCloseBtn">&times;</span>
-            </div>
-            <iframe id="td-iframe" class="td-iframe" src="" title="Tower Defence Collection"></iframe>
-            <div class="modal-controls">
-                <button class="btn secondary" id="tdReloadBtn">Reload</button>
-                <button class="btn" id="tdOpenNewTabBtn">Open in New Tab</button>
-            </div>
-        </div>
-    </div>
 
     <script src="login.js"></script>
     <script src="neon-racer-plus.js"></script>
     <script src="minesweeper-elite.js"></script>
     <script src="rogue-dungeon.js"></script>
 
+    <!-- Load tower defence engines directly so they can render into the modal canvas -->
+    <script src="vector-valley.js"></script>
+    <script src="neon-citadel.js"></script>
+    <script src="sentinel-grid.js"></script>
+
     <script>
+        // --- Generic modal helpers ---
+        function showModal(id) {
+            const el = document.getElementById(id);
+            if(!el) return;
+            el.classList.add('active');
+            el.setAttribute('aria-hidden','false');
+        }
+        function hideModal(id) {
+            const el = document.getElementById(id);
+            if(!el) return;
+            el.classList.remove('active');
+            el.setAttribute('aria-hidden','true');
+        }
+
         // Racer Hookup
-        document.getElementById('runRacerBtn').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('racerModal').style.display = 'flex'; });
-        document.getElementById('racerModalCloseBtn').addEventListener('click', () => document.getElementById('racerModal').style.display = 'none');
+        document.getElementById('runRacerBtn').addEventListener('click', (e) => { e.preventDefault(); showModal('racerModal'); });
+        document.getElementById('racerModalCloseBtn').addEventListener('click', () => hideModal('racerModal'));
         document.getElementById('startRacerBtn').addEventListener('click', () => { if(typeof startRacer === 'function') startRacer(); });
         document.getElementById('pauseRacerBtn').addEventListener('click', () => { if(typeof pauseRacer === 'function') pauseRacer(); });
         document.getElementById('resetRacerBtn').addEventListener('click', () => { if(typeof resetRacer === 'function') resetRacer(); });
 
         // Minesweeper Hookup
-        document.getElementById('runSuperMinesweeperBtn').addEventListener('click', () => document.getElementById('superMinesweeperModal').style.display = 'flex');
+        document.getElementById('runSuperMinesweeperBtn').addEventListener('click', () => showModal('superMinesweeperModal'));
         document.getElementById('superMsCloseBtn').addEventListener('click', () => {
-             document.getElementById('superMinesweeperModal').style.display = 'none';
+             hideModal('superMinesweeperModal');
              if(typeof msState !== 'undefined' && msState.interval) clearInterval(msState.interval);
         });
 
         // Rogue Dungeon Hookup
         document.getElementById('runRogueBtn').addEventListener('click', () => {
-            document.getElementById('rogueModal').style.display = 'flex';
+            showModal('rogueModal');
             if(typeof initRogue === 'function') initRogue();
         });
         document.getElementById('rogueModalCloseBtn').addEventListener('click', () => {
-            document.getElementById('rogueModal').style.display = 'none';
+            hideModal('rogueModal');
             if(typeof stopRogue === 'function') stopRogue();
         });
 
-        // Tower Defence modal hookup
+        // Tower Defence modal logic
+        const TD = {
+            canvas: document.getElementById('td-canvas'),
+            ctx: document.getElementById('td-canvas').getContext('2d'),
+            loopId: null,
+            game: null,
+            diff: 'med',
+            current: null, // 'vector'|'citadel'|'sentinel'
+            buildSelection: null,
+            persistentPlacement: true,
+        };
+
+        // Hook up open button: present a mini hub inside modal to choose game
         document.getElementById('openTdBtn').addEventListener('click', (e) => {
             e.preventDefault();
-            const m = document.getElementById('tdModal');
-            const iframe = document.getElementById('td-iframe');
-            iframe.src = 'tower-defence.html';
-            m.style.display = 'flex';
-        });
-        document.getElementById('tdModalCloseBtn').addEventListener('click', () => {
-            const m = document.getElementById('tdModal');
-            const iframe = document.getElementById('td-iframe');
-            m.style.display = 'none';
-            // unload iframe to stop running scripts inside it
-            iframe.src = 'about:blank';
-        });
-        document.getElementById('tdReloadBtn').addEventListener('click', () => {
-            const iframe = document.getElementById('td-iframe');
-            iframe.contentWindow.location.reload();
-        });
-        document.getElementById('tdOpenNewTabBtn').addEventListener('click', () => {
-            window.open('tower-defence.html', '_blank');
+            // Show modal and default to hub view (choose game)
+            TD.current = null;
+            document.getElementById('td-game-title').innerText = 'DEFENCE HUB';
+            // Populate build list empty until a game selected
+            document.getElementById('td-build-list').innerHTML = `
+                <button class="t-btn" data-game="vector">Vector Valley</button>
+                <button class="t-btn" data-game="citadel">Neon Citadel</button>
+                <button class="t-btn" data-game="sentinel">Sentinel Grid</button>
+                <div style="margin-top:8px; color:#aaa; font-size:0.9em;">Choose a game above to load into this window.</div>
+            `;
+            document.querySelectorAll('#td-build-list .t-btn').forEach(b => b.addEventListener('click', () => {
+                const g = b.getAttribute('data-game');
+                TD.openGame(g);
+            }));
+            showModal('tdModal');
         });
 
-        // Close modal on ESC
-        document.addEventListener('keydown', (e) => {
-            if(e.key === 'Escape') {
-                ['racerModal','superMinesweeperModal','rogueModal','tdModal'].forEach(id => {
-                    const el = document.getElementById(id);
-                    if(el && el.style.display === 'flex') {
-                        el.style.display = 'none';
-                        if(id === 'tdModal') document.getElementById('td-iframe').src = 'about:blank';
-                    }
-                });
+        // Difficulty buttons
+        document.querySelectorAll('.diff').forEach(b => {
+            b.addEventListener('click', (e) => {
+                document.querySelectorAll('.diff').forEach(x=>x.classList.remove('active'));
+                b.classList.add('active');
+                TD.diff = b.getAttribute('data-diff');
+            });
+        });
+
+        // Close modal
+        document.getElementById('tdModalCloseBtn').addEventListener('click', () => {
+            TD.unload();
+            hideModal('tdModal');
+        });
+        document.getElementById('td-close-and-unload').addEventListener('click', () => {
+            TD.unload();
+            hideModal('tdModal');
+        });
+
+        document.getElementById('td-stop').addEventListener('click', () => {
+            TD.resetGame();
+        });
+
+        document.getElementById('td-start-wave').addEventListener('click', () => {
+            if(TD.game && typeof TD.game.startWave === 'function') TD.game.startWave();
+        });
+
+        document.getElementById('td-upgrade').addEventListener('click', () => {
+            if(TD.game && typeof TD.game.upgrade === 'function') TD.game.upgrade();
+        });
+        document.getElementById('td-sell').addEventListener('click', () => {
+            if(TD.game && typeof TD.game.sell === 'function') TD.game.sell();
+        });
+
+        // Core: open a specific game in the modal and initialize
+        TD.openGame = function(key) {
+            TD.unload(); // cleanup previous
+            TD.current = key;
+            document.getElementById('td-game-title').innerText = key === 'vector' ? 'Vector Valley' : (key === 'citadel' ? 'Neon Citadel' : 'Sentinel Grid');
+            // Map to global game object names
+            if (key === 'vector') TD.game = window.VectorGame || window.VectorValley || null;
+            if (key === 'citadel') TD.game = window.NeonGame || window.NeonCitadel || null;
+            if (key === 'sentinel') TD.game = window.SentinelGame || window.td || window.Sentinel || null;
+
+            if (!TD.game) {
+                document.getElementById('td-build-list').innerHTML = '<div style="color:#faa;">Game not available</div>';
+                return;
+            }
+
+            // Prepare build list from game.conf if available
+            const conf = TD.game.conf && TD.game.conf.towers ? TD.game.conf.towers : null;
+            const buildList = document.getElementById('td-build-list');
+            buildList.innerHTML = '';
+            if (conf) {
+                for (let k in conf) {
+                    const t = conf[k];
+                    const btn = document.createElement('button');
+                    btn.className = 't-btn';
+                    btn.id = 'btn-'+k;
+                    btn.innerText = `${t.name}  — $${t.cost || t.cost || 0}`;
+                    btn.dataset.key = k;
+                    btn.addEventListener('click', () => {
+                        TD.setBuild(k);
+                    });
+                    buildList.appendChild(btn);
+                }
+            } else {
+                buildList.innerHTML = '<div style="color:#aaa;">No build data available.</div>';
+            }
+
+            // Initialize the game with the modal canvas & chosen difficulty
+            try {
+                if (typeof TD.game.init === 'function') {
+                    TD.game.init(TD.canvas, TD.diff);
+                } else if (typeof TD.game.setupPath === 'function' && typeof TD.game.reset === 'function') {
+                    // fallback for engines that expect direct globals
+                    if (TD.game.init) TD.game.init(TD.canvas, TD.diff);
+                }
+            } catch (err) {
+                console.error('Game init error', err);
+            }
+
+            // Start loop
+            TD.loop();
+        };
+
+        TD.setBuild = function(k) {
+            TD.buildSelection = k;
+            // Visual toggle
+            document.querySelectorAll('.t-btn').forEach(b => b.classList.remove('active'));
+            const el = document.getElementById('btn-'+k);
+            if (el) el.classList.add('active');
+            if (TD.game && typeof TD.game.setBuild === 'function') {
+                TD.game.setBuild(k);
+            }
+        };
+
+        // Animation/update loop - calls into the game's update/draw
+        TD.loop = function() {
+            if (!TD.game) return;
+            // If the underlying game provides update/draw API, call them
+            try {
+                if (typeof TD.game.update === 'function') TD.game.update();
+                if (typeof TD.game.draw === 'function') TD.game.draw(TD.ctx);
+                // Update HUD if available
+                document.getElementById('td-wave').innerText = TD.game.wave || 0;
+                document.getElementById('td-money').innerText = Math.floor(TD.game.money || 0);
+                document.getElementById('td-lives').innerText = TD.game.lives || 0;
+                // Inspector info if available
+                if (TD.game.sel) {
+                    const s = TD.game.sel;
+                    const info = `Type: ${s.type || s.name || 'n/a'}\nLevel: ${s.level || s.lvl || 1}\nDmg: ${Math.round(s.dmg||0)}\nRng: ${Math.round(s.r||s.range||0)}`;
+                    document.getElementById('td-insp').innerText = info;
+                } else {
+                    document.getElementById('td-insp').innerText = 'Select a tower';
+                }
+            } catch (err) {
+                console.error('TD game loop error', err);
+            }
+            TD.loopId = requestAnimationFrame(TD.loop);
+        };
+
+        TD.resetGame = function() {
+            if (!TD.game) return;
+            try {
+                if (typeof TD.game.reset === 'function') TD.game.reset();
+                if (typeof TD.game.init === 'function') TD.game.init(TD.canvas, TD.diff);
+            } catch (err) { console.warn('reset failed', err); }
+        };
+
+        TD.unload = function() {
+            if (TD.loopId) cancelAnimationFrame(TD.loopId);
+            TD.loopId = null;
+            if (TD.game && typeof TD.game.stop === 'function') {
+                try { TD.game.stop(); } catch(e) { console.warn(e); }
+            }
+            TD.game = null;
+            TD.current = null;
+            // clear canvas
+            TD.ctx.clearRect(0,0,TD.canvas.width, TD.canvas.height);
+            document.getElementById('td-build-list').innerHTML = '';
+            document.getElementById('td-insp').innerText = 'Select a tower';
+        };
+
+        // Handle canvas clicks and translate to game click API
+        TD.canvas.addEventListener('click', (e) => {
+            if (!TD.game) return;
+            const r = TD.canvas.getBoundingClientRect();
+            const x = e.clientX - r.left;
+            const y = e.clientY - r.top;
+            try {
+                if (typeof TD.game.click === 'function') TD.game.click(x, y);
+            } catch (err) { console.error('TD click->game error', err); }
+        });
+
+        // Close modals on ESC
+        document.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape') {
+                ['racerModal','superMinesweeperModal','rogueModal','tdModal'].forEach(id => hideModal(id));
+                TD.unload();
             }
         });
     </script>
