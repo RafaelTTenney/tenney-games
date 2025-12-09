@@ -236,17 +236,29 @@
             document.getElementById('controls').style.display = 'flex';
             Engine.currentId = id;
 
-            // Mapping: 1 -> Vector Valley (VectorGame), 2 -> NeonGame, 3 -> SentinelGame (adapter)
-            if (id === 1) Engine.game = (typeof VectorGame !== 'undefined') ? VectorGame : VectorValley;
-            if (id === 2) Engine.game = (typeof NeonGame !== 'undefined') ? NeonGame : NeonCitadel;
-            if (id === 3) Engine.game = (typeof SentinelGame !== 'undefined') ? SentinelGame : null;
+            // Safe mapping: prefer a global Game object, fall back to other possible names
+            if (id === 1) {
+                Engine.game = window.VectorGame || window.VectorValley || null;
+            } else if (id === 2) {
+                Engine.game = window.NeonGame || window.NeonCitadel || null;
+            } else if (id === 3) {
+                Engine.game = window.SentinelGame || null;
+            } else {
+                Engine.game = null;
+            }
 
             // Only show difficulty selector for Vector Valley (id 1)
             document.getElementById('diff-select').style.display = id===1 ? 'flex' : 'none';
 
-            if (!Engine.game) return;
-            // Provide the same canvas element to each game's init
-            Engine.game.init(document.getElementById('c'), Engine.diff);
+            if (!Engine.game) {
+                console.warn('Selected game not available:', id);
+                return;
+            }
+            try {
+                Engine.game.init(document.getElementById('c'), Engine.diff);
+            } catch (err) {
+                console.error('Error initializing game:', err);
+            }
             Engine.buildControls();
             Engine.loop();
         },
@@ -270,7 +282,6 @@
                     document.getElementById('go-msg').innerText = `You reached Wave ${Engine.game.wave}`;
                 }
             } catch (err) {
-                // keep loop alive even if game throws; useful during debugging
                 console.error('Engine loop error:', err);
             }
             Engine.loopId = requestAnimationFrame(Engine.loop);
@@ -336,11 +347,11 @@
             const l = document.getElementById('help-list');
             const t = document.getElementById('help-title');
             m.style.display = 'block'; l.innerHTML = '';
-            if(Engine.game === VectorGame) {
+            if(Engine.game === window.VectorGame || Engine.game === window.VectorValley) {
                 t.innerText = "VECTOR VALLEY GUIDE";
                 l.innerHTML += `<li><b>Objective:</b> Enemies follow a fixed scenic path. Place towers where curves concentrate enemy movement.</li>`;
                 l.innerHTML += `<li><b>Strategy:</b> Upgrades are powerful — a single upgrade can be worth multiple base towers.</li>`;
-            } else if(Engine.game === NeonGame) {
+            } else if(Engine.game === window.NeonGame || Engine.game === window.NeonCitadel) {
                 t.innerText = "NEON CITADEL GUIDE";
                 l.innerHTML += `<li><b>Objective:</b> Build mazes and experiment with elemental towers and synergies.</li>`;
                 l.innerHTML += `<li><b>Design:</b> Use boosters, conduits and elemental combos to amplify damage.</li>`;
@@ -359,7 +370,10 @@
         Engine.game.click(e.clientX - r.left, e.clientY - r.top);
         Engine.updateInsp();
         document.querySelectorAll('.t-btn').forEach(b => b.classList.remove('active'));
-        if(Engine.game.build) document.getElementById('btn-'+Engine.game.build).classList.add('active');
+        if(Engine.game.build) {
+            const btn = document.getElementById('btn-'+Engine.game.build);
+            if (btn) btn.classList.add('active');
+        }
     }
     </script>
 </body>
