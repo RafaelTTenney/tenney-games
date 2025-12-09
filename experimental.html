@@ -195,13 +195,19 @@
         .ms-btn.selected { background: var(--flagship); color: #000; font-weight: bold; border-color: #fff;}
         #ms-game-container { margin-top: 15px; display: inline-block; background: #222; padding: 10px; border: 2px solid #555; border-radius: 5px; }
         #ms-grid { display: grid; gap: 1px; background: #000; }
-        .ms-cell { width: 25px; height: 25px; background: #888; display: flex; justify-content: center; align-items: center; font-weight: bold; font-family: monospace; cursor: pointer; user-select: none; border: 1px solid #aaa; }
+        .ms-cell { width: 25px; height: 25px; background: #888; display: flex; justify-content: center; align-items: center; font-weight: bold; font-family: monospace; cursor: pointer; user-select: none; }
         .ms-cell.revealed { background: #333; border: 1px solid #222; color: #eee; }
         .ms-cell.flag { background: #333; color: #ff0000; }
         .ms-cell.mine { background: #f00; color: #000; }
         .ms-c1 { color: #5555ff; } .ms-c2 { color: #00aa00; } .ms-c3 { color: #ff5555; }
         
         .footer { text-align: center; color: #555; padding: 20px; }
+
+        /* tower-defence iframe styling inside modal */
+        .td-iframe {
+            width: 1100px; max-width: calc(100% - 48px); height: 80vh; border: none; border-radius: 8px; background: #000;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        }
     </style>
 </head>
 <body>
@@ -243,7 +249,7 @@
 // Neon Citadel: Open Field
 // Sentinel Grid: Tactical Grid</pre>
                 <div class="actions">
-                    <a class="btn" style="background:#00FF00; color:#000; border-color: white; text-decoration: none;" href="tower-defence.html">Play Collection</a>
+                    <a class="btn" id="openTdBtn" href="#">Play Collection</a>
                 </div>
             </section>
 
@@ -350,6 +356,21 @@
         </div>
     </div>
 
+    <!-- Tower Defence Modal (loads tower-defence.html inside an iframe so controls remain intact) -->
+    <div id="tdModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 1150px; width: calc(100% - 48px);">
+            <div class="modal-header">
+                <h2 style="color:var(--td-green);">Tower Defence Collection</h2>
+                <span class="modal-close" id="tdModalCloseBtn">&times;</span>
+            </div>
+            <iframe id="td-iframe" class="td-iframe" src="" title="Tower Defence Collection"></iframe>
+            <div class="modal-controls">
+                <button class="btn secondary" id="tdReloadBtn">Reload</button>
+                <button class="btn" id="tdOpenNewTabBtn">Open in New Tab</button>
+            </div>
+        </div>
+    </div>
+
     <script src="login.js"></script>
     <script src="neon-racer-plus.js"></script>
     <script src="minesweeper-elite.js"></script>
@@ -378,6 +399,42 @@
         document.getElementById('rogueModalCloseBtn').addEventListener('click', () => {
             document.getElementById('rogueModal').style.display = 'none';
             if(typeof stopRogue === 'function') stopRogue();
+        });
+
+        // Tower Defence modal hookup
+        document.getElementById('openTdBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            const m = document.getElementById('tdModal');
+            const iframe = document.getElementById('td-iframe');
+            iframe.src = 'tower-defence.html';
+            m.style.display = 'flex';
+        });
+        document.getElementById('tdModalCloseBtn').addEventListener('click', () => {
+            const m = document.getElementById('tdModal');
+            const iframe = document.getElementById('td-iframe');
+            m.style.display = 'none';
+            // unload iframe to stop running scripts inside it
+            iframe.src = 'about:blank';
+        });
+        document.getElementById('tdReloadBtn').addEventListener('click', () => {
+            const iframe = document.getElementById('td-iframe');
+            iframe.contentWindow.location.reload();
+        });
+        document.getElementById('tdOpenNewTabBtn').addEventListener('click', () => {
+            window.open('tower-defence.html', '_blank');
+        });
+
+        // Close modal on ESC
+        document.addEventListener('keydown', (e) => {
+            if(e.key === 'Escape') {
+                ['racerModal','superMinesweeperModal','rogueModal','tdModal'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el && el.style.display === 'flex') {
+                        el.style.display = 'none';
+                        if(id === 'tdModal') document.getElementById('td-iframe').src = 'about:blank';
+                    }
+                });
+            }
         });
     </script>
 </body>
