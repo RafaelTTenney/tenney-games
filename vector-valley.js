@@ -3,7 +3,7 @@
    - Fixed scenic paths; easy = more winding (slower enemy progress), hard = straighter (faster)
    - Richer tower set, upgrade branches, meaningful upgrade economy
    - Improved visuals: gradients, scanlines, particle feedback
-   - API: init(canvas, difficultyString), update(), draw(ctx), click(x,y), startWave(), setBuild(k), upgrade(), sell()
+   - API: init(canvas, difficultyStringOrNumber), update(), draw(ctx), click(x,y), startWave(), setBuild(k), upgrade(), sell()
 */
 
 const VectorValley = {
@@ -26,13 +26,14 @@ const VectorValley = {
   init: function(canvas, difficulty) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.difficulty = (typeof difficulty === 'string') ? difficulty : (difficulty===0.8?'easy': difficulty===1.5?'hard':'med');
-    // support both numeric or string difficulty (Engine passes numeric sometimes)
-    if (this.difficulty === 'easy' || this.difficulty === 0.8) { this.difficulty = 'easy'; this.diffMult = 0.8; }
-    else if (this.difficulty === 'hard' || this.difficulty === 1.5) { this.difficulty = 'hard'; this.diffMult = 1.5; }
-    else { this.difficulty = 'med'; this.diffMult = 1.0; }
+    // support numeric or string difficulty
+    if (typeof difficulty === 'string') this.difficulty = difficulty;
+    else if (difficulty === 0.8) this.difficulty = 'easy';
+    else if (difficulty === 1.5) this.difficulty = 'hard';
+    else this.difficulty = 'med';
 
-    // initial economy scales slightly with difficulty
+    this.diffMult = (this.difficulty === 'easy') ? 0.8 : (this.difficulty === 'hard') ? 1.5 : 1.0;
+
     this.money = 500;
     this.lives = 20;
     this.reset();
@@ -49,7 +50,6 @@ const VectorValley = {
   // Different preset paths; easy = winding, med = balanced, hard = straighter
   setupPath: function() {
     if (!this.canvas) return;
-    const W = this.canvas.width, H = this.canvas.height;
     if (this.difficulty === 'easy') {
       // Very winding scenic path
       this.path = [
@@ -65,12 +65,11 @@ const VectorValley = {
     } else {
       // Hard: straighter, faster route to exit
       this.path = [
-        {x:0,y:200},{x:220,y:200},{x:220,y:200},{x:420,y:200},{x:640,y:200},{x:800,y:200}
+        {x:0,y:200},{x:220,y:200},{x:420,y:200},{x:640,y:200},{x:800,y:200}
       ];
     }
   },
 
-  // Core update loop
   update: function() {
     if (this.gameOver) return;
 
@@ -174,7 +173,6 @@ const VectorValley = {
     }
   },
 
-  // nicer visuals: background, scanlines, rails etc
   draw: function(ctx) {
     const W = this.canvas.width, H = this.canvas.height;
     // background gradient
@@ -199,7 +197,6 @@ const VectorValley = {
 
     // towers
     this.towers.forEach(t => {
-      // base shadow
       ctx.save();
       ctx.shadowBlur = 12; ctx.shadowColor = t.color;
       ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(t.x, t.y, 12, 0, Math.PI*2); ctx.fill();
@@ -246,7 +243,6 @@ const VectorValley = {
     ctx.fillStyle = '#ffd700'; ctx.fillText(`$${Math.floor(this.money)}`,100,32);
   },
 
-  // start wave: spawn varied enemy types; enemy spd/hp scale with difficulty and path straightness
   startWave: function() {
     if (this.active) return;
     this.active = true;
@@ -261,9 +257,8 @@ const VectorValley = {
     }
   },
 
-  // click to place towers (free placement, but not on rail)
   click: function(x,y) {
-    // cannot place on path area — simple check: distance to any path node < 20 prohibits placement
+    // cannot place on path area — disallow placement near path nodes
     for (let p of this.path) if ((p.x-x)**2 + (p.y-y)**2 < 25*25) return;
     let clicked = this.towers.find(t => (t.x-x)**2 + (t.y-y)**2 < 16*16);
     if (clicked) { this.sel = clicked; this.build = null; return; }
@@ -272,12 +267,10 @@ const VectorValley = {
     if (this.build) {
       let def = this.conf.towers[this.build];
       if (this.money < def.cost) return;
-      // create tower object
       let T = {
         x: x, y: y, type: this.build, name: def.name, color: def.color, r: def.r, dmg: def.dmg,
         maxCd: def.cd, cd: 0, level: 1, aoe: def.aoe || false, boost: def.boost || false, val: Math.floor(def.cost*0.6)
       };
-      // slightly jitter to avoid exact overlaps
       this.towers.push(T);
       this.money -= def.cost;
       this.spawnParticles(x,y,'#fff',10);
@@ -296,7 +289,6 @@ const VectorValley = {
     if (this.money < cost) return;
     this.money -= cost;
     this.sel.level++;
-    // meaningful upgrade: big damage/range multipliers and cd improvements
     this.sel.dmg = Math.floor(this.sel.dmg * 1.6);
     this.sel.r = Math.floor(this.sel.r * 1.12);
     this.sel.maxCd = Math.max(2, Math.floor(this.sel.maxCd * 0.88));
@@ -310,11 +302,17 @@ const VectorValley = {
     this.sel = null;
   },
 
-  // small particle generator
   spawnParticles: function(x,y,color,n) {
     for (let i=0;i<n;i++) this.parts.push({x:x+Math.random()*8-4, y:y+Math.random()*8-4, vx:(Math.random()-0.5)*2, vy:(Math.random()-0.5)*2, life:10+Math.floor(Math.random()*8), color:color});
   }
 };
 
-// Export default name compatibility
+// Export a global name Engine expects
+if (typeof window !== 'undefined') window.VectorGame = VectorValley;
+const VectorGame = VectorValley;
+if (typeof module !== 'undefined') module.exports = VectorValley;
+// Add this to the end of vector-valley.js (or replace the module.exports line).
+// This creates the global name the page's Engine expects.
+if (typeof window !== 'undefined') window.VectorGame = VectorValley;
+const VectorGame = VectorValley; // safe alias for environments that check VectorGame
 if (typeof module !== 'undefined') module.exports = VectorValley;
