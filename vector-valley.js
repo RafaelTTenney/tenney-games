@@ -99,7 +99,7 @@ const VectorValley = {
       }
       let dx = targetPoint.x - e.x, dy = targetPoint.y - e.y;
       let d = Math.hypot(dx,dy);
-      let spd = e.spd;
+      let spd = e.spd || (1.2 + (this.wave*0.05));
       if (d < spd) {
         e.idx++;
       } else {
@@ -122,7 +122,7 @@ const VectorValley = {
 
         let target = this.enemies.find(e => (e.x - t.x)**2 + (e.y - t.y)**2 < (t.r**2));
         if (target) {
-          t.cd = Math.max(1, Math.floor((t.maxCd||t.cdBase) * boostFactor));
+          t.cd = Math.max(1, Math.floor((t.maxCd||t.cdBase||t.maxCd) * boostFactor));
           if (t.aoe) {
             // mortar: create an AOE hit
             this.projs.push({type:'aoe', x:target.x, y:target.y, r:28, dmg:t.dmg, color:t.color, life:12});
@@ -307,12 +307,6 @@ const VectorValley = {
   }
 };
 
-// Export a global name Engine expects
+// Expose a global name the page expects without redeclaring consts (avoid duplicate 'const' issues)
 if (typeof window !== 'undefined') window.VectorGame = VectorValley;
-const VectorGame = VectorValley;
-if (typeof module !== 'undefined') module.exports = VectorValley;
-// Add this to the end of vector-valley.js (or replace the module.exports line).
-// This creates the global name the page's Engine expects.
-if (typeof window !== 'undefined') window.VectorGame = VectorValley;
-const VectorGame = VectorValley; // safe alias for environments that check VectorGame
 if (typeof module !== 'undefined') module.exports = VectorValley;
