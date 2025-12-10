@@ -1,0 +1,40 @@
+ok, there are some weird artifacts, and please make sure there are no problems with the games, you changed the basic functions of the sentinel-grid. which i didnt want changed. i will again give you the list of changes. please make sure all are acconmplished and all the games function smoothly:
+the following changes will be to the tower defence games:
+- all games
+1. move to the same pop up window style as the rest of the site while keeping the controls where they  are
+- citadel-grid.js
+1. the game is fully functioning
+2. needs a larger play area and making sure the controls are well organized and the towwer purchase selectors need to be in the window
+- vector-valley.js
+1. need to add easy, medium, and hard mode menu with the path having more twists and turns for easier game modes
+2. again, larger play area
+3. tower placing should allow user to place multiple towers of the same type without having to select the tower again betweeen each placement
+4. needs better visuals, should surprise users * enemies should look better
+- neon-citadel.js
+1. much more stunning visuals and game flow
+2. enemies that arent just circles and squares
+3. it should have more than just basic graphics 
+* towers and enemies should look cooler/ moer real
+4. smaller grid square size while enlaging the game area
+5. complex game mechanichs and strategy
+6. this will be the flagship, and since the basic game citadel-grid is almost 600 lines i expect this to be well over 1000 lines to accomodate the advanced graphics and game mechanics
+* i dont want anything to be simplified, this is the flagship and should be advanced
+7. this should have visuals surperior to any other game
+8. enemies have different rout calculations based on type
+* more powerful take route of least damage/resistance
+* others shortest
+* others accumulate and mob rush
+* ect.
+9.enmies maybe are resistent to differnt defence towers based on type
+10. enmies are able to attack and destroy defence towers
+11. at the end of each wave there should be a "boss"
+* very powerful
+* incredible graphics
+* large reward for defeating
+12. different enemy types have different amounts/rewards based on types
+13. tower abilities(eg. range, health, range, etc.) are upgraded seperately
+14. possible enemy dodging
+15. dfence towers able to be placed during the wave
+16. conitnue to add creative and innovative changes, and return to me alist of all the changes like i gave you
+
+*** please double check all that all the changes are there and that everthing works with the standard card system of the site and the pop up windows. 
