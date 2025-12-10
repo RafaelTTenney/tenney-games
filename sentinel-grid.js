@@ -2,120 +2,117 @@
 type: uploaded file
 fileName: sentinel-grid.js
 fullContent:
-/* Sentinel Grid - Classic Maze Building 
-   - Functionality: Users place towers on a grid. Enemies pathfind using BFS.
-   - Mechanics: Blocking path logic (must keep one path open).
-*/
-
+/* SENTINEL GRID - Corrected & Enhanced */
 (function(global){
   const Sentinel = (function(){
-    // Config
-    const GRID = 30; // Larger grid cells for visibility
-    const COLS = 30;
-    const ROWS = 20;
-    const BG_COLOR = '#051005';
+    // --- CONSTANTS ---
+    const GRID = 40; // Size of grid cells
+    let COLS, ROWS;
     
-    // Tower Defs
+    const COLORS = {
+        bg: '#050a05',
+        grid: '#112211',
+        wall: '#00ffaa',
+        enemy: '#ff3366'
+    };
+    
     const TOWERS = {
-      blaster: { name:'BLASTER', cost:50, color:'#00FF00', range:3.5, dmg:12, rate:30 },
-      sniper:  { name:'SNIPER', cost:120, color:'#00FFFF', range:8, dmg:60, rate:90 },
-      rapid:   { name:'RAPID', cost:100, color:'#FFFF00', range:3, dmg:4, rate:8 }
+      blaster: { name:'BLASTER', cost:50, color:'#00FF99', range:120, dmg:15, rate:30, glow:true },
+      sniper:  { name:'SNIPER', cost:150, color:'#00FFFF', range:300, dmg:80, rate:90, glow:true },
+      rapid:   { name:'RAPID', cost:120, color:'#FFFF00', range:100, dmg:5, rate:8, glow:true }
     };
 
-    // State
-    let canvas, ctx, width, height;
+    // --- STATE ---
+    let canvas, ctx;
     let towers=[], enemies=[], projs=[], particles=[];
-    let map=[], flowMap={};
-    let wave=1, money=300, lives=20, active=false;
+    let flowMap = {}; 
+    let wave=1, money=350, lives=20, active=false;
     let buildType=null, selected=null;
     
-    // Pathing
-    const start = {x:0, y:Math.floor(ROWS/2)};
-    const end = {x:COLS-1, y:Math.floor(ROWS/2)};
+    // Pathfinding
+    let start, end;
 
     function init(c) {
-      canvas = c; ctx = c.getContext('2d');
-      width = COLS * GRID; height = ROWS * GRID;
-      canvas.width = width; canvas.height = height;
-      reset();
+        canvas = c; ctx = c.getContext('2d');
+        // Fit grid to canvas size
+        COLS = Math.floor(canvas.width / GRID);
+        ROWS = Math.floor(canvas.height / GRID);
+        start = {x:0, y:Math.floor(ROWS/2)};
+        end = {x:COLS-1, y:Math.floor(ROWS/2)};
+        reset();
     }
 
     function reset() {
-      towers = []; enemies = []; projs = []; particles = [];
-      wave = 1; money = 300; lives = 20; active = false;
-      buildType = null; selected = null;
-      calcPath();
+        towers=[]; enemies=[]; projs=[]; particles=[];
+        wave=1; money=350; lives=20; active=false;
+        buildType=null; selected=null;
+        calcPath();
     }
 
     function calcPath() {
-        // BFS for Flow Map
+        // BFS Flood Fill
         let q = [];
         let cameFrom = {};
-        let targetKey = `${end.x},${end.y}`;
         
-        // Initialize Map
-        for(let x=0; x<COLS; x++) {
-            map[x] = [];
-            for(let y=0; y<ROWS; y++) {
-                map[x][y] = 0; // 0 empty, 1 tower
-            }
-        }
-        towers.forEach(t => map[t.gx][t.gy] = 1);
+        // Block map
+        let blocks = new Array(COLS).fill(0).map(()=>new Array(ROWS).fill(0));
+        towers.forEach(t => blocks[t.gx][t.gy] = 1);
 
-        // BFS from END backwards
         q.push(end);
-        cameFrom[targetKey] = null;
-        
-        let foundStart = false;
-        flowMap = {}; // Reset flow
+        let endKey = `${end.x},${end.y}`;
+        cameFrom[endKey] = null;
+        flowMap = {};
 
         while(q.length > 0) {
             let curr = q.shift();
-            if (curr.x === start.x && curr.y === start.y) foundStart = true;
-
             let dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+            
             for(let d of dirs) {
                 let nx = curr.x + d[0];
                 let ny = curr.y + d[1];
                 let key = `${nx},${ny}`;
                 
-                if (nx >=0 && nx < COLS && ny >= 0 && ny < ROWS && map[nx][ny] === 0) {
-                    if (!(key in cameFrom)) {
-                        cameFrom[key] = curr; // Point to where we came from (towards end)
-                        flowMap[key] = {x: curr.x, y: curr.y}; // Store vector to next step
+                if(nx >=0 && nx < COLS && ny >= 0 && ny < ROWS && blocks[nx][ny] === 0) {
+                    if(!(key in cameFrom)) {
+                        cameFrom[key] = curr;
+                        flowMap[key] = {x:curr.x, y:curr.y}; // Vector to next
                         q.push({x:nx, y:ny});
                     }
                 }
             }
         }
-        return foundStart;
+        // Check if start is reachable
+        return (`${start.x},${start.y}` in cameFrom);
     }
 
     function startWave() {
         if(active) return;
         active = true;
-        let count = 8 + wave*2;
+        let count = 6 + wave*2;
         let sent = 0;
         let int = setInterval(() => {
-            spawnEnemy(wave);
+            spawnEnemy();
             sent++;
-            if(sent >= count) clearInterval(int);
+            if(sent>=count) clearInterval(int);
         }, 800);
     }
 
-    function spawnEnemy(lvl) {
-        let hp = 20 + (lvl*15);
-        let speed = 2 + (lvl*0.1);
+    function spawnEnemy() {
+        let hp = 30 + (wave*15);
+        let type = wave % 5 === 0 ? 'tank' : 'norm';
+        if(type === 'tank') hp *= 3;
+        
         enemies.push({
-            x: start.x*GRID, y: start.y*GRID + GRID/2,
-            hp: hp, maxHp: hp, spd: speed,
-            color: lvl%5===0 ? '#ff3333' : '#ff66ff',
-            r: 8
+            x: start.x*GRID + GRID/2, y: start.y*GRID + GRID/2,
+            hp, maxHp: hp, 
+            spd: type==='tank'?1.5:2.5,
+            color: type==='tank'?'#ff0000':'#ff3366',
+            r: type==='tank'?12:8
         });
     }
 
     function update() {
-        if (lives <= 0) return;
+        if(lives <= 0) return;
 
         // Enemies
         for(let i=enemies.length-1; i>=0; i--) {
@@ -123,97 +120,91 @@ fullContent:
             let gx = Math.floor(e.x/GRID);
             let gy = Math.floor(e.y/GRID);
             
-            // Movement
+            // Flow Movement
             let next = flowMap[`${gx},${gy}`];
-            if (next) {
+            if(next) {
                 let tx = next.x*GRID + GRID/2;
                 let ty = next.y*GRID + GRID/2;
-                let dx = tx - e.x;
-                let dy = ty - e.y;
+                let dx = tx - e.x, dy = ty - e.y;
                 let dist = Math.hypot(dx,dy);
                 
-                if (dist > e.spd) {
-                    e.x += (dx/dist) * e.spd;
-                    e.y += (dy/dist) * e.spd;
-                } else {
-                    e.x = tx; e.y = ty;
-                }
+                if(dist < e.spd) { e.x = tx; e.y = ty; }
+                else { e.x += (dx/dist)*e.spd; e.y += (dy/dist)*e.spd; }
             } else if (gx === end.x && gy === end.y) {
-                enemies.splice(i, 1);
-                lives--;
-                continue;
+                enemies.splice(i,1); lives--; continue;
             }
 
-            // Death
-            if (e.hp <= 0) {
-                money += 15;
-                enemies.splice(i, 1);
-                // Particle boom
-                for(let k=0; k<5; k++) particles.push({x:e.x, y:e.y, vx:(Math.random()-0.5)*4, vy:(Math.random()-0.5)*4, life:10});
+            if(e.hp <= 0) {
+                enemies.splice(i,1); money+=15;
+                for(let k=0;k<6;k++) particles.push({x:e.x, y:e.y, vx:Math.random()*4-2, vy:Math.random()*4-2, life:20, color:e.color});
             }
         }
 
-        if (active && enemies.length === 0) {
-            active = false;
-            wave++;
-        }
+        if(active && enemies.length === 0) { active = false; wave++; }
 
         // Towers
         towers.forEach(t => {
-            if (t.cd > 0) t.cd--;
+            if(t.cd > 0) t.cd--;
             else {
-                let target = enemies.find(e => Math.hypot(e.x - t.x, e.y - t.y) < t.range);
-                if (target) {
-                    projs.push({x:t.x, y:t.y, tx:target.x, ty:target.y, speed:12, dmg:t.dmg, color:t.color, target:target});
+                let target = enemies.find(e => Math.hypot(e.x-t.x, e.y-t.y) < t.range);
+                if(target) {
+                    projs.push({x:t.x, y:t.y, tx:target.x, ty:target.y, speed:15, dmg:t.dmg, color:t.color, target:target});
                     t.cd = t.rate;
                 }
             }
         });
 
-        // Projectiles
+        // Projs
         for(let i=projs.length-1; i>=0; i--) {
             let p = projs[i];
             if(p.target && enemies.includes(p.target)) {
-                // homing
-                let dx = p.target.x - p.x;
-                let dy = p.target.y - p.y;
+                let dx = p.target.x - p.x, dy = p.target.y - p.y;
                 let d = Math.hypot(dx,dy);
-                if (d < p.speed) {
+                if(d < p.speed) {
                     p.target.hp -= p.dmg;
                     projs.splice(i,1);
+                    particles.push({x:p.x,y:p.y, vx:0, vy:0, life:5, color:p.color});
                 } else {
                     p.x += (dx/d)*p.speed;
                     p.y += (dy/d)*p.speed;
                 }
-            } else {
-                projs.splice(i,1);
-            }
+            } else projs.splice(i,1);
         }
 
         // Particles
-        particles.forEach(p => { p.x+=p.vx; p.y+=p.vy; p.life--; });
-        particles = particles.filter(p => p.life > 0);
+        for(let i=particles.length-1;i>=0;i--) {
+            let p = particles[i];
+            p.x+=p.vx; p.y+=p.vy; p.life--;
+            if(p.life<=0) particles.splice(i,1);
+        }
     }
 
     function draw(ctx) {
-        // Clear
-        ctx.fillStyle = BG_COLOR;
-        ctx.fillRect(0,0,width,height);
+        ctx.fillStyle = COLORS.bg; ctx.fillRect(0,0,canvas.width,canvas.height);
 
-        // Grid Lines
-        ctx.strokeStyle = '#0a2a0a';
-        ctx.lineWidth = 1;
+        // Draw Grid
+        ctx.strokeStyle = COLORS.grid; ctx.lineWidth = 1;
         ctx.beginPath();
-        for(let x=0; x<=width; x+=GRID) { ctx.moveTo(x,0); ctx.lineTo(x,height); }
-        for(let y=0; y<=height; y+=GRID) { ctx.moveTo(0,y); ctx.lineTo(width,y); }
+        for(let x=0; x<=canvas.width; x+=GRID) { ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); }
+        for(let y=0; y<=canvas.height; y+=GRID) { ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); }
         ctx.stroke();
 
-        // Path hint
-        ctx.fillStyle = 'rgba(0, 255, 0, 0.05)';
+        // DRAW FLOW MAP (The Path)
+        ctx.strokeStyle = 'rgba(0,255,100,0.15)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
         for(let key in flowMap) {
-            let [x,y] = key.split(',').map(Number);
-            ctx.fillRect(x*GRID, y*GRID, GRID, GRID);
+            let [gx, gy] = key.split(',').map(Number);
+            let next = flowMap[key];
+            let cx = gx*GRID + GRID/2;
+            let cy = gy*GRID + GRID/2;
+            let nx = next.x*GRID + GRID/2;
+            let ny = next.y*GRID + GRID/2;
+            ctx.moveTo(cx, cy); ctx.lineTo(nx, ny);
+            // Draw small dot
+            ctx.fillStyle = 'rgba(0,255,100,0.1)'; ctx.fillRect(gx*GRID+2, gy*GRID+2, GRID-4, GRID-4);
         }
+        ctx.stroke();
 
         // Start/End
         ctx.fillStyle = '#0f0'; ctx.fillRect(start.x*GRID, start.y*GRID, GRID, GRID);
@@ -221,11 +212,14 @@ fullContent:
 
         // Towers
         towers.forEach(t => {
-            ctx.fillStyle = t.color;
-            ctx.fillRect(t.x-10, t.y-10, 20, 20);
-            if (selected === t) {
-                ctx.strokeStyle = '#fff';
-                ctx.strokeRect(t.x-12, t.y-12, 24, 24);
+            ctx.shadowBlur = 10; ctx.shadowColor = t.color;
+            ctx.fillStyle = t.color; ctx.fillRect(t.x-15, t.y-15, 30, 30);
+            ctx.shadowBlur = 0;
+            // Level Badge
+            ctx.fillStyle = '#000'; ctx.font='10px Arial'; ctx.fillText(t.level, t.x-3, t.y+3);
+            
+            if(selected===t) {
+                ctx.strokeStyle='#fff'; ctx.strokeRect(t.x-18, t.y-18, 36, 36);
                 ctx.beginPath(); ctx.arc(t.x,t.y,t.range,0,Math.PI*2); ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.stroke();
             }
         });
@@ -234,87 +228,52 @@ fullContent:
         enemies.forEach(e => {
             ctx.fillStyle = e.color;
             ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.fill();
-            // HP Bar
-            ctx.fillStyle = 'red'; ctx.fillRect(e.x-8, e.y-12, 16, 3);
-            ctx.fillStyle = '#0f0'; ctx.fillRect(e.x-8, e.y-12, 16*(e.hp/e.maxHp), 3);
+            // HP
+            ctx.fillStyle = 'red'; ctx.fillRect(e.x-10, e.y-15, 20, 3);
+            ctx.fillStyle = '#0f0'; ctx.fillRect(e.x-10, e.y-15, 20*(e.hp/e.maxHp), 3);
         });
 
-        // Projectiles
-        projs.forEach(p => {
-            ctx.fillStyle = p.color;
-            ctx.fillRect(p.x-2, p.y-2, 4, 4);
-        });
+        // Projs
+        projs.forEach(p => { ctx.fillStyle = p.color; ctx.fillRect(p.x-3,p.y-3,6,6); });
         
         // Particles
-        ctx.fillStyle = '#fff';
-        particles.forEach(p => ctx.fillRect(p.x, p.y, 2, 2));
-
-        // Placement Preview
-        if(buildType) {
-            let def = TOWERS[buildType];
-            // We need current mouse position, but we only have click. 
-            // In a real sophisticated engine we'd track mousemove. 
-            // For now, no ghost preview to save complexity, just standard click-to-build.
-        }
+        particles.forEach(p => { ctx.fillStyle = p.color; ctx.fillRect(p.x,p.y,2,2); });
     }
 
     function click(x, y) {
         let gx = Math.floor(x/GRID);
         let gy = Math.floor(y/GRID);
-        
-        if (gx < 0 || gx >= COLS || gy < 0 || gy >= ROWS) return;
+        if(gx<0||gx>=COLS||gy<0||gy>=ROWS) return;
 
-        // Select existing
-        let existing = towers.find(t => t.gx === gx && t.gy === gy);
-        if (existing) {
-            selected = existing;
-            buildType = null;
-            return;
-        }
+        let existing = towers.find(t=>t.gx===gx && t.gy===gy);
+        if(existing) { selected = existing; buildType=null; return; }
 
-        // Build
-        if (buildType && money >= TOWERS[buildType].cost) {
-            // Tentative placement
+        if(buildType && money >= TOWERS[buildType].cost) {
             let def = TOWERS[buildType];
             let t = {gx, gy, x:gx*GRID+GRID/2, y:gy*GRID+GRID/2, ...def, level:1, cd:0};
             towers.push(t);
-            
-            // Check Path
-            if (calcPath()) {
+            if(calcPath()) {
                 money -= def.cost;
-                // Particle POOF
-                for(let i=0;i<8;i++) particles.push({x:t.x,y:t.y,vx:(Math.random()-0.5)*5,vy:(Math.random()-0.5)*5,life:15});
+                for(let i=0;i<10;i++) particles.push({x:t.x,y:t.y,vx:Math.random()*4-2,vy:Math.random()*4-2,life:20,color:'#fff'});
             } else {
-                towers.pop(); // Blocked path, revert
-                calcPath(); // recalculate old valid path
+                towers.pop(); calcPath(); // Undo
             }
         }
         selected = null;
     }
 
-    function setBuild(k) { buildType = k; selected = null; }
-    function upgrade() {
-        if(!selected || money < selected.cost) return;
-        money -= Math.floor(selected.cost * 0.8);
-        selected.level++;
-        selected.dmg *= 1.3;
-        selected.range *= 1.1;
-    }
-    function sell() {
-        if(!selected) return;
-        money += Math.floor(selected.cost * 0.5);
-        towers = towers.filter(t => t !== selected);
-        selected = null;
-        calcPath();
-    }
-
     return {
-        init, update, draw, click, startWave, setBuild, upgrade, sell, stop: ()=>{},
+        init, update, draw, click, startWave, 
+        setBuild: (k)=>{buildType=k; selected=null;}, 
+        upgrade: ()=>{ if(selected && money>=selected.cost*0.8){money-=Math.floor(selected.cost*0.8); selected.level++; selected.dmg*=1.3;}}, 
+        sell: ()=>{ if(selected){ money+=Math.floor(selected.cost*0.5); towers=towers.filter(t=>t!==selected); selected=null; calcPath();} },
+        stop: ()=>{}, 
         conf: {towers: TOWERS},
-        get wave(){return wave}, get money(){return money}, get lives(){return lives}, get sel(){return selected}, get buildMode(){return buildType}
+        // EXPOSE PROPERTIES CORRECTLY
+        get wave(){return wave}, get money(){return money}, get lives(){return lives}, 
+        get sel(){return selected}, get buildMode(){return buildType}
     };
   })();
-  
-  if(typeof window !== 'undefined') window.SentinelGame = Sentinel;
+  window.SentinelGame = Sentinel;
 })(window);
 }
