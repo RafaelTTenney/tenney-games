@@ -2,550 +2,381 @@
 type: uploaded file
 fileName: neon-citadel.js
 fullContent:
-/* NEON CITADEL - Flagship Tower Defence
-   Features:
-   - Dijkstra Maps for Smart AI (Avoids high damage zones)
-   - Destructible Towers & Breaker Enemies
-   - Complex Particles & Glow Effects
-   - 3-Way Upgrade System per Tower
-   - Boss Mechanics
-*/
-
+/* NEON CITADEL - Flagship | Corrected & Polished */
 (function(global){
   const Neon = (function(){
     
-    // --- CONFIGURATION ---
-    const CELL = 20;
-    const COLS = 45; 
-    const ROWS = 30; 
-    const GRID_W = COLS * CELL;
-    const GRID_H = ROWS * CELL;
+    // Config
+    const CELL = 30; // Grid Size
+    let COLS, ROWS;
     
-    // Tech Tree / Defs
     const TOWER_TYPES = {
-        'gatling': { name:'VULCAN', cost:150, color:'#ff00ff', dmg:5, rng: 120, rate: 5, hp: 200 },
-        'cannon':  { name:'HEAVY',  cost:350, color:'#00ffff', dmg:80, rng: 180, rate: 60, hp: 400, aoe: 40 },
-        'tesla':   { name:'TESLA',  cost:500, color:'#ffff00', dmg:15, rng: 100, rate: 30, hp: 300, chain: 3 },
-        'buffer':  { name:'AEGIS',  cost:400, color:'#00ff00', dmg:0,  rng: 80,  rate: 0,  hp: 800, buff: true }
+        'gatling': { name:'VULCAN', cost:150, color:'#ff00ff', dmg:6, rng:150, rate:5, hp:200 },
+        'cannon':  { name:'HEAVY',  cost:400, color:'#00ffff', dmg:100, rng:200, rate:60, hp:500, aoe:50 },
+        'tesla':   { name:'TESLA',  cost:550, color:'#ffff00', dmg:18, rng:120, rate:30, hp:350, chain:true },
+        'buffer':  { name:'AEGIS',  cost:450, color:'#00ff00', dmg:0, rng:90, rate:0, hp:1000, buff:true }
     };
 
-    // --- GAME STATE ---
+    // State
     let canvas, ctx;
-    let grid = []; // 2D array for occupancy/tower refs
-    let costMap = []; // Dijkstra map for smart enemies
-    let towers = [];
-    let enemies = [];
-    let projectiles = [];
-    let particles = [];
-    let floatingTexts = [];
-    
-    let state = {
-        wave: 1,
-        money: 800,
-        lives: 50,
-        active: false,
-        gameOver: false,
-        frame: 0
-    };
-    
-    let selection = null;
-    let buildMode = null;
-    let bossActive = null;
+    let grid=[], towers=[], enemies=[], projectiles=[], particles=[], floatingText=[];
+    let costMap=[]; // Dijkstra Flow Field
+    let state = { wave:1, money:800, lives:50, active:false, frame:0 };
+    let selection=null, buildMode=null, boss=null;
 
-    // --- INITIALIZATION ---
     function init(c) {
         canvas = c; ctx = c.getContext('2d');
-        canvas.width = GRID_W;
-        canvas.height = GRID_H;
+        COLS = Math.floor(canvas.width / CELL);
+        ROWS = Math.floor(canvas.height / CELL);
         reset();
     }
 
     function reset() {
-        state = { wave: 1, money: 800, lives: 50, active: false, gameOver: false, frame: 0 };
-        towers = []; enemies = []; projectiles = []; particles = [];
-        selection = null; buildMode = null; bossActive = null;
-        
-        // Init Grid
-        grid = new Array(COLS).fill(0).map(() => new Array(ROWS).fill(null));
-        recalcPaths();
+        state = { wave:1, money:800, lives:50, active:false, frame:0 };
+        towers=[]; enemies=[]; projectiles=[]; particles=[]; floatingText=[];
+        grid = new Array(COLS).fill(0).map(()=>new Array(ROWS).fill(null));
+        recalcPath();
     }
 
-    // --- AI & PATHFINDING (Dijkstra) ---
-    function recalcPaths() {
-        // Create Cost Map based on Tower DPS zones
-        // Normal floor = 1. High Damage zone = 5+. Towers = Infinity (unless blocking)
+    // --- AI ---
+    function recalcPath() {
+        // Dijkstra Map
+        let map = new Array(COLS).fill(0).map(()=>new Array(ROWS).fill(99999));
+        let weights = new Array(COLS).fill(0).map(()=>new Array(ROWS).fill(1));
         
-        let dMap = new Array(COLS).fill(0).map(() => new Array(ROWS).fill(9999));
-        let weightMap = new Array(COLS).fill(0).map(() => new Array(ROWS).fill(1));
-
-        // Mark dangerous zones
+        // Towers add weight (Danger zones)
         towers.forEach(t => {
             let cx = t.gx, cy = t.gy;
-            let rangeCells = Math.ceil(t.rng / CELL);
-            for(let xx = -rangeCells; xx <= rangeCells; xx++) {
-                for(let yy = -rangeCells; yy <= rangeCells; yy++) {
-                    let tx = cx+xx, ty = cy+yy;
-                    if(tx>=0 && tx<COLS && ty>=0 && ty<ROWS) {
-                        weightMap[tx][ty] += (t.dmg / t.rate) * 2; // Higher DPS = Higher Weight
-                    }
+            let r = Math.ceil(t.rng/CELL);
+            for(let xx=-r; xx<=r; xx++) {
+                for(let yy=-r; yy<=r; yy++) {
+                    let tx=cx+xx, ty=cy+yy;
+                    if(tx>=0 && tx<COLS && ty>=0 && ty<ROWS) weights[tx][ty] += 5; // Danger
                 }
             }
-            grid[t.gx][t.gy] = t; // Mark occupancy
+            grid[t.gx][t.gy] = t; // Occupied
         });
 
-        // Target is middle right
-        let target = {x: COLS-1, y: Math.floor(ROWS/2)};
-        let q = [target];
-        dMap[target.x][target.y] = 0;
+        let q = [];
+        let target = {x:COLS-1, y:Math.floor(ROWS/2)};
+        map[target.x][target.y] = 0;
+        q.push(target);
 
-        // Dijkstra Flood Fill
         while(q.length) {
-            let curr = q.shift(); // Get node with lowest dist (simplified queue)
-            
+            let u = q.shift();
             [[0,1],[0,-1],[1,0],[-1,0]].forEach(d => {
-                let nx = curr.x + d[0], ny = curr.y + d[1];
-                if(nx >=0 && nx < COLS && ny >=0 && ny < ROWS && !grid[nx][ny]) {
-                    let newCost = dMap[curr.x][curr.y] + weightMap[nx][ny];
-                    if(newCost < dMap[nx][ny]) {
-                        dMap[nx][ny] = newCost;
-                        // Determine insertion index for priority queue (simple sort for now)
+                let nx = u.x + d[0], ny = u.y + d[1];
+                if(nx>=0 && nx<COLS && ny>=0 && ny<ROWS && !grid[nx][ny]) {
+                    let alt = map[u.x][u.y] + weights[nx][ny];
+                    if(alt < map[nx][ny]) {
+                        map[nx][ny] = alt;
                         q.push({x:nx, y:ny});
-                        q.sort((a,b) => dMap[a.x][a.y] - dMap[b.x][b.y]);
+                        // Simple sort for Priority Queue simulation
+                        q.sort((a,b) => map[a.x][a.y] - map[b.x][b.y]);
                     }
                 }
             });
         }
-        costMap = dMap;
+        costMap = map;
     }
 
     function getNextMove(gx, gy, type) {
-        // "Breakers" might attack walls, others follow flow
-        let best = {x:gx, y:gy, val: 99999};
-        
-        // If Breaker and near tower, return null (stay to attack)
-        if(type === 'breaker') {
-            let neighbors = [[0,1],[0,-1],[1,0],[-1,0]];
-            for(let d of neighbors) {
-                let nx=gx+d[0], ny=gy+d[1];
-                if(grid[nx] && grid[nx][ny] && grid[nx][ny].hp) return 'attack'; // Special flag
-            }
-        }
+        // Breakers attack towers if stuck
+        let bestVal = 99999;
+        let bestMove = null;
 
-        // Standard gradient descent on CostMap
         [[0,1],[0,-1],[1,0],[-1,0]].forEach(d => {
-            let nx = gx + d[0], ny = gy + d[1];
+            let nx=gx+d[0], ny=gy+d[1];
             if(nx>=0 && nx<COLS && ny>=0 && ny<ROWS) {
-                if(costMap[nx][ny] < best.val) {
-                    best = {x:nx, y:ny, val:costMap[nx][ny]};
+                // If blocked by tower
+                if(grid[nx][ny]) {
+                    if(type === 'breaker') return 'attack'; 
+                } else {
+                    if(costMap[nx][ny] < bestVal) {
+                        bestVal = costMap[nx][ny];
+                        bestMove = {x:nx, y:ny};
+                    }
                 }
             }
         });
-        return best;
+        return bestMove;
     }
 
-    // --- GAME LOOP ---
+    function startWave() {
+        if(state.active) return;
+        state.active = true;
+        let count = 8 + state.wave*2;
+        let sent = 0;
+        let int = setInterval(() => {
+            let type = 'norm';
+            if(state.wave > 2 && Math.random()>0.7) type = 'breaker';
+            if(state.wave > 4 && Math.random()>0.8) type = 'fast';
+            spawnEnemy(type);
+            sent++;
+            if(sent>=count) {
+                clearInterval(int);
+                if(state.wave % 5 === 0) spawnEnemy('boss');
+            }
+        }, 600);
+    }
+
+    function spawnEnemy(type) {
+        let hp = 50 * (1 + state.wave*0.2);
+        let spd = 1.5;
+        let color = '#f0f';
+        let isBoss = false;
+
+        if(type==='breaker') { color='#ff8800'; hp*=1.5; spd=1.0; }
+        if(type==='fast') { color='#ffff00'; hp*=0.6; spd=2.5; }
+        if(type==='boss') { color='#ff0000'; hp*=15; spd=0.8; isBoss=true; }
+
+        let e = {
+            x:0, y:Math.floor(ROWS/2)*CELL + CELL/2,
+            hp, maxHp:hp, spd, color, type, isBoss, 
+            val:20
+        };
+        enemies.push(e);
+        if(isBoss) boss = e;
+    }
+
     function update() {
-        if(state.gameOver) return;
+        if(state.lives<=0) return;
         state.frame++;
 
-        // --- ENEMY LOGIC ---
+        // Enemies
         for(let i=enemies.length-1; i>=0; i--) {
             let e = enemies[i];
-            
-            // Movement Logic
             let gx = Math.floor(e.x/CELL);
             let gy = Math.floor(e.y/CELL);
-            
-            if (gx === COLS-1) { // Reached End
-                state.lives--;
-                enemies.splice(i,1);
-                if(state.lives<=0) state.gameOver = true;
-                continue;
-            }
 
-            if(e.freeze > 0) e.freeze--;
-            else {
-                let move = getNextMove(gx, gy, e.type);
-                
-                if(move === 'attack') {
-                    // Attack adjacent tower
-                    if(state.frame % 30 === 0) {
-                        // Find tower
-                        let neighbors = [[0,1],[0,-1],[1,0],[-1,0]];
-                        for(let d of neighbors) {
-                            let t = grid[gx+d[0]][gy+d[1]];
-                            if(t && t.hp) {
-                                t.hp -= e.dmg;
-                                addParticle(t.x, t.y, '#ff0000', 5);
-                                if(t.hp <= 0) destroyTower(t);
-                                break;
-                            }
+            if(gx === COLS-1) { enemies.splice(i,1); state.lives--; continue; }
+
+            let move = getNextMove(gx, gy, e.type);
+            
+            if(move === 'attack') {
+                if(state.frame % 30 === 0) {
+                    // Attack nearest tower
+                    [[0,1],[0,-1],[1,0],[-1,0]].forEach(d => {
+                        let t = grid[gx+d[0]]?.[gy+d[1]];
+                        if(t) {
+                            t.hp -= 10;
+                            addPart(t.x, t.y, '#f00', 3);
+                            if(t.hp<=0) destroyTower(t);
                         }
-                    }
-                } else {
-                    let tx = move.x * CELL + CELL/2;
-                    let ty = move.y * CELL + CELL/2;
-                    let angle = Math.atan2(ty - e.y, tx - e.x);
-                    e.x += Math.cos(angle) * e.spd;
-                    e.y += Math.sin(angle) * e.spd;
+                    });
                 }
+            } else if(move && move.x !== undefined) {
+                let tx = move.x*CELL + CELL/2;
+                let ty = move.y*CELL + CELL/2;
+                let angle = Math.atan2(ty-e.y, tx-e.x);
+                e.x += Math.cos(angle)*e.spd;
+                e.y += Math.sin(angle)*e.spd;
             }
 
             if(e.hp <= 0) {
                 state.money += e.val;
-                addFloatingText(e.x, e.y, `+$${e.val}`, '#ffff00');
-                if(e.isBoss) bossActive = null;
+                addText(e.x, e.y, `+$${e.val}`, '#ff0');
+                addPart(e.x, e.y, e.color, 15);
+                if(e.isBoss) boss = null;
                 enemies.splice(i,1);
-                // Big Explosion
-                for(let k=0;k<15;k++) addParticle(e.x, e.y, e.color, 20);
             }
         }
+        
+        if(state.active && enemies.length===0) { state.active=false; state.wave++; }
 
-        // --- TOWER LOGIC ---
+        // Towers
         towers.forEach(t => {
             if(t.cd > 0) t.cd--;
             else {
-                // Find Target
-                let target = null;
-                // Simple distance check (optimization: limit check to nearby cells)
-                let rangeSq = t.rng * t.rng;
-                for(let e of enemies) {
-                    let dSq = (e.x-t.x)**2 + (e.y-t.y)**2;
-                    if(dSq <= rangeSq) {
-                        target = e;
-                        break; // First target
-                    }
-                }
-
+                let target = enemies.find(e => (e.x-t.x)**2 + (e.y-t.y)**2 < t.rng**2);
                 if(target) {
                     if(t.type === 'tesla') {
-                        // Chain Lightning
-                        fireTesla(t, target);
+                        // Chain
+                        let curr = target;
+                        let chain = [curr];
+                        curr.hp -= t.dmg;
+                        for(let k=0; k<3; k++) {
+                            let next = enemies.find(e => !chain.includes(e) && (e.x-curr.x)**2 + (e.y-curr.y)**2 < 100**2);
+                            if(next) { chain.push(next); next.hp -= t.dmg*0.8; curr=next; }
+                        }
+                        particles.push({type:'lightning', chain, color:t.color, life:5});
                     } else {
-                        // Projectile
-                        projectiles.push({
-                            x:t.x, y:t.y, target:target, 
-                            type: t.type, dmg: t.dmg, speed: 12, 
-                            color: t.color, aoe: t.aoe
-                        });
+                        projectiles.push({x:t.x, y:t.y, tx:target.x, ty:target.y, speed:12, dmg:t.dmg, aoe:t.aoe, color:t.color, target});
                     }
                     t.cd = t.rate;
                 }
             }
         });
 
-        // --- PROJECTILES ---
+        // Projectiles
         for(let i=projectiles.length-1; i>=0; i--) {
             let p = projectiles[i];
             if(!p.target) { projectiles.splice(i,1); continue; }
-            
-            let dx = p.target.x - p.x;
-            let dy = p.target.y - p.y;
-            let dist = Math.hypot(dx,dy);
-            
-            if(dist < p.speed) {
-                // Hit
+            let dx = p.target.x - p.x, dy = p.target.y - p.y;
+            let d = Math.hypot(dx,dy);
+
+            if(d < p.speed) {
                 if(p.aoe) {
-                    // Explosion
-                    enemies.forEach(e => {
-                        if(Math.hypot(e.x-p.target.x, e.y-p.target.y) < p.aoe) {
-                            e.hp -= p.dmg;
-                        }
-                    });
-                    addParticle(p.target.x, p.target.y, 'orange', 10);
+                    enemies.forEach(e => { if((e.x-p.target.x)**2+(e.y-p.target.y)**2 < p.aoe**2) e.hp-=p.dmg; });
+                    addPart(p.target.x, p.target.y, 'orange', 10);
                 } else {
                     p.target.hp -= p.dmg;
                 }
                 projectiles.splice(i,1);
             } else {
-                p.x += (dx/dist)*p.speed;
-                p.y += (dy/dist)*p.speed;
+                p.x += (dx/d)*p.speed;
+                p.y += (dy/d)*p.speed;
             }
         }
-        
-        // --- PARTICLES ---
-        updateParticles();
-    }
 
-    function fireTesla(source, firstTarget) {
-        let chain = [firstTarget];
-        let curr = firstTarget;
-        curr.hp -= source.dmg;
-        
-        let max = source.attrLevels.special ? 5 : 3; // Upgrade check
-        
-        for(let i=0; i<max; i++) {
-            let next = enemies.find(e => e!==curr && !chain.includes(e) && Math.hypot(e.x-curr.x, e.y-curr.y) < 100);
-            if(next) {
-                next.hp -= source.dmg * 0.8;
-                chain.push(next);
-                curr = next;
-            } else break;
+        // Particles
+        for(let i=particles.length-1; i>=0; i--) {
+            let p = particles[i];
+            p.life--;
+            if(p.type !== 'lightning') { p.x+=p.vx; p.y+=p.vy; }
+            if(p.life<=0) particles.splice(i,1);
         }
         
-        // Visual
-        particles.push({type:'lightning', chain: chain, start:{x:source.x, y:source.y}, life:5, color:'#ffff00'});
+        // Text
+        for(let i=floatingText.length-1; i>=0; i--) {
+            let t = floatingText[i];
+            t.y -= 0.5; t.life--;
+            if(t.life<=0) floatingText.splice(i,1);
+        }
     }
 
     function destroyTower(t) {
         grid[t.gx][t.gy] = null;
         towers = towers.filter(tw => tw !== t);
         if(selection === t) selection = null;
-        recalcPaths();
-        // Debris particles
-        for(let i=0; i<20; i++) addParticle(t.x, t.y, '#555', 30);
+        recalcPath();
     }
 
-    // --- RENDER ---
     function draw(ctx) {
-        // BG
         ctx.fillStyle = '#020205'; ctx.fillRect(0,0,canvas.width,canvas.height);
         
-        // Grid (Faint)
-        ctx.strokeStyle = '#111'; ctx.beginPath();
-        for(let x=0;x<=GRID_W;x+=CELL) { ctx.moveTo(x,0); ctx.lineTo(x,GRID_H); }
-        for(let y=0;y<=GRID_H;y+=CELL) { ctx.moveTo(0,y); ctx.lineTo(GRID_W,y); }
-        ctx.stroke();
-
-        // High Quality Glow
-        ctx.globalCompositeOperation = 'lighter';
-
+        // High Fidelity Glow
+        ctx.shadowBlur = 15;
+        
         // Towers
         towers.forEach(t => {
-            ctx.shadowBlur = 15; ctx.shadowColor = t.color;
+            ctx.shadowColor = t.color;
             ctx.fillStyle = t.color;
-            ctx.fillRect(t.x-8, t.y-8, 16, 16);
+            ctx.fillRect(t.x-12, t.y-12, 24, 24);
             
-            // Health Bar for Tower
+            // HP Bar (if damaged)
             if(t.hp < t.maxHp) {
-                ctx.fillStyle = 'red'; ctx.fillRect(t.x-10, t.y-15, 20, 2);
-                ctx.fillStyle = '#0f0'; ctx.fillRect(t.x-10, t.y-15, 20*(t.hp/t.maxHp), 2);
+                ctx.fillStyle = 'red'; ctx.fillRect(t.x-12, t.y-18, 24, 3);
+                ctx.fillStyle = '#0f0'; ctx.fillRect(t.x-12, t.y-18, 24*(t.hp/t.maxHp), 3);
             }
-
-            // Selection Ring
-            if(selection === t) {
-                ctx.strokeStyle = '#fff'; ctx.lineWidth=2;
-                ctx.strokeRect(t.x-10, t.y-10, 20, 20);
-                ctx.beginPath(); ctx.arc(t.x, t.y, t.rng, 0, Math.PI*2); 
-                ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.stroke();
+            if(selected === t) {
+                ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.strokeRect(t.x-14, t.y-14, 28, 28);
+                ctx.beginPath(); ctx.arc(t.x,t.y,t.rng,0,Math.PI*2); ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.stroke();
             }
         });
 
         // Enemies
         enemies.forEach(e => {
-            ctx.shadowBlur = 10; ctx.shadowColor = e.color;
+            ctx.shadowColor = e.color;
             ctx.fillStyle = e.color;
-            
-            // Draw Complex Enemy Shape
-            ctx.save();
-            ctx.translate(e.x, e.y);
-            if(e.type === 'breaker') {
-                ctx.rotate(state.frame * 0.1);
-                ctx.fillRect(-6,-6, 12, 12);
-            } else if (e.isBoss) {
-                ctx.scale(2,2);
-                ctx.beginPath(); ctx.arc(0,0,8,0,Math.PI*2); ctx.fill();
-            } else {
-                ctx.beginPath(); ctx.moveTo(5,0); ctx.lineTo(-5, 4); ctx.lineTo(-5,-4); ctx.fill();
-            }
+            ctx.save(); ctx.translate(e.x, e.y);
+            if(e.type==='breaker') { ctx.rotate(state.frame*0.1); ctx.fillRect(-8,-8,16,16); }
+            else if(e.isBoss) { ctx.scale(2,2); ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill(); }
+            else { ctx.beginPath(); ctx.moveTo(8,0); ctx.lineTo(-6,6); ctx.lineTo(-6,-6); ctx.fill(); }
             ctx.restore();
         });
 
         // Projectiles
         projectiles.forEach(p => {
-            ctx.shadowBlur = 5; ctx.shadowColor = p.color;
-            ctx.fillStyle = p.color;
-            ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill();
+            ctx.shadowColor = p.color; ctx.fillStyle = p.color;
+            ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
         });
 
         // Particles
         particles.forEach(p => {
             if(p.type === 'lightning') {
-                ctx.strokeStyle = p.color; ctx.lineWidth = 2; ctx.beginPath();
-                ctx.moveTo(p.start.x, p.start.y);
-                p.chain.forEach(node => ctx.lineTo(node.x, node.y));
+                ctx.shadowColor = p.color; ctx.strokeStyle = p.color; ctx.lineWidth=2;
+                ctx.beginPath(); ctx.moveTo(p.chain[0].x, p.chain[0].y);
+                for(let i=1; i<p.chain.length; i++) ctx.lineTo(p.chain[i].x, p.chain[i].y);
                 ctx.stroke();
             } else {
-                ctx.globalAlpha = p.life/10;
-                ctx.fillStyle = p.color;
-                ctx.fillRect(p.x, p.y, 2, 2);
+                ctx.globalAlpha = p.life/15; ctx.fillStyle = p.color; ctx.fillRect(p.x,p.y,2,2);
             }
+            ctx.globalAlpha = 1;
         });
-
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.shadowBlur = 0;
-        ctx.globalAlpha = 1;
+        
+        ctx.shadowBlur = 0; // Reset
 
         // Floating Text
-        updateFloatingText(ctx);
+        ctx.font = '12px monospace';
+        floatingText.forEach(t => {
+            ctx.fillStyle = t.color; ctx.fillText(t.text, t.x, t.y);
+        });
 
         // Boss Bar
-        if(bossActive) {
-            ctx.fillStyle = '#330000'; ctx.fillRect(200, 20, GRID_W-400, 20);
-            ctx.fillStyle = '#ff0000'; ctx.fillRect(200, 20, (GRID_W-400)*(bossActive.hp/bossActive.maxHp), 20);
-            ctx.fillStyle = '#fff'; ctx.font = '12px Arial'; ctx.fillText("MEGA BOSS", 210, 35);
+        if(boss) {
+            ctx.fillStyle = '#400'; ctx.fillRect(300, 30, 600, 20);
+            ctx.fillStyle = '#f00'; ctx.fillRect(300, 30, 600*(boss.hp/boss.maxHp), 20);
+            ctx.fillStyle = '#fff'; ctx.fillText("MEGA BOSS", 580, 45);
         }
     }
 
-    // --- UTILS ---
-    function addParticle(x, y, color, count) {
-        for(let i=0; i<count; i++) {
-            particles.push({
-                x:x, y:y, color:color, 
-                vx:(Math.random()-0.5)*3, vy:(Math.random()-0.5)*3, 
-                life: 20 + Math.random()*20 
-            });
-        }
-    }
-
-    function updateParticles() {
-        for(let i=particles.length-1; i>=0; i--) {
-            let p = particles[i];
-            if(p.type !== 'lightning') {
-                p.x += p.vx; p.y += p.vy;
-            }
-            p.life--;
-            if(p.life <= 0) particles.splice(i,1);
-        }
-    }
-
-    function addFloatingText(x, y, text, color) {
-        floatingTexts.push({x, y, text, color, life: 40});
-    }
-    
-    function updateFloatingText(ctx) {
-        ctx.font = '10px monospace';
-        for(let i=floatingTexts.length-1; i>=0; i--) {
-            let t = floatingTexts[i];
-            t.y -= 0.5; t.life--;
-            ctx.fillStyle = t.color;
-            ctx.fillText(t.text, t.x, t.y);
-            if(t.life<=0) floatingTexts.splice(i,1);
-        }
-    }
-
-    // --- CONTROLS API ---
     function click(x, y) {
-        let gx = Math.floor(x/CELL), gy = Math.floor(y/CELL);
-        
-        // Select Tower
-        let t = grid[gx] ? grid[gx][gy] : null;
+        let gx = Math.floor(x/CELL);
+        let gy = Math.floor(y/CELL);
+        if(gx<0||gx>=COLS||gy<0||gy>=ROWS) return;
+
+        let t = grid[gx][gy];
         if(t) { selection = t; buildMode = null; return; }
 
-        // Build
         if(buildMode && state.money >= TOWER_TYPES[buildMode].cost) {
-            // Can build mid-wave but costs 50% more?
-            let cost = TOWER_TYPES[buildMode].cost;
-            if(state.active) cost = Math.floor(cost * 1.5);
-            
-            if(state.money < cost) {
-                addFloatingText(x, y, "Insufficient Funds", 'red');
-                return;
-            }
-
-            // Create
             let def = TOWER_TYPES[buildMode];
-            let newT = {
-                gx, gy, x:gx*CELL+CELL/2, y:gy*CELL+CELL/2,
-                type: buildMode, name: def.name, color: def.color,
-                dmg: def.dmg, rng: def.rng, rate: def.rate, 
-                hp: def.hp, maxHp: def.hp,
-                cd: 0, aoe: def.aoe,
-                attrLevels: { dmg:0, rng:0, rate:0 }
-            };
-            
-            towers.push(newT);
-            state.money -= cost;
-            addParticle(newT.x, newT.y, '#fff', 10);
-            
-            // Recalc path to ensure not blocking start
-            recalcPaths();
-            // If path blocked? (Implementation detail: complex for open grid, usually we allow maze block or check path existence)
-            // For Flagship complexity, we assume blocking is allowed but enemies attack walls.
-        } else {
-            selection = null;
-        }
-    }
+            let cost = def.cost;
+            if(state.active) cost = Math.floor(cost*1.5); // Building during wave penalty
 
-    function startWave() {
-        if(state.active) return;
-        state.active = true;
-        
-        // Wave config
-        let count = 10 + state.wave * 2;
-        let hpMult = 1 + (state.wave * 0.2);
-        
-        let sent = 0;
-        let int = setInterval(() => {
-            let type = 'norm';
-            // Logic for types
-            if(state.wave > 2 && Math.random()>0.7) type = 'breaker';
-            if(state.wave > 4 && Math.random()>0.8) type = 'fast';
-
-            spawnEnemy(type, hpMult);
-            sent++;
-            if(sent >= count) {
-                clearInterval(int);
-                // Check Boss
-                if(state.wave % 5 === 0) spawnEnemy('boss', hpMult*5);
-                else spawnEnemy('miniboss', hpMult*2);
+            if(state.money >= cost) {
+                let newT = {
+                    gx, gy, x:gx*CELL+CELL/2, y:gy*CELL+CELL/2,
+                    ...def, maxHp:def.hp, cd:0, attrLevels:{dmg:0,rng:0,rate:0}
+                };
+                grid[gx][gy] = newT;
+                towers.push(newT);
+                state.money -= cost;
+                recalcPath();
+                addPart(newT.x, newT.y, '#fff', 10);
+            } else {
+                addText(x, y, "NO FUNDS", 'red');
             }
-        }, 800);
+        }
+        selection = null;
     }
 
-    function spawnEnemy(type, mult) {
-        let hp = 40 * mult;
-        let spd = 1.5;
-        let color = '#f0f';
-        let isBoss = false;
-
-        if(type === 'breaker') { color = '#ff8800'; hp *= 1.5; spd = 1.0; } // Attacks walls
-        if(type === 'fast') { color = '#ffff00'; hp *= 0.6; spd = 2.5; }
-        if(type === 'miniboss') { color = '#aa00aa'; hp *= 3; spd = 1.2; }
-        if(type === 'boss') { color = '#ff0000'; hp *= 10; spd = 0.8; isBoss = true; }
-
-        let e = {
-            x: 0, y: Math.floor(ROWS/2)*CELL + CELL/2,
-            hp, maxHp: hp, spd, color, type, val: 20,
-            isBoss: isBoss, dmg: 10, freeze: 0
-        };
-        enemies.push(e);
-        if(isBoss) bossActive = e;
-    }
-
-    function upgrade(attr) {
-        if(!selection) return;
-        let baseCost = TOWER_TYPES[selection.type].cost;
-        
-        // Custom upgrade logic
-        if(attr === 'dmg') {
-            let cost = Math.floor(baseCost * 0.5 * ((selection.attrLevels.dmg||0)+1));
-            if(state.money >= cost) { state.money-=cost; selection.dmg *= 1.4; selection.attrLevels.dmg++; }
-        }
-        if(attr === 'rng') {
-             let cost = Math.floor(baseCost * 0.4 * ((selection.attrLevels.rng||0)+1));
-             if(state.money >= cost) { state.money-=cost; selection.rng *= 1.2; selection.attrLevels.rng++; }
-        }
-        if(attr === 'rate') {
-             let cost = Math.floor(baseCost * 0.6 * ((selection.attrLevels.rate||0)+1));
-             if(state.money >= cost) { state.money-=cost; selection.rate *= 0.85; selection.attrLevels.rate++; }
-        }
-        // Recalc paths because threat level changed
-        recalcPaths();
-    }
-    
-    function setBuild(k) { buildMode = k; selection = null; }
+    // Utils
+    function addPart(x,y,c,n) { for(let i=0;i<n;i++) particles.push({x,y,color:c,vx:Math.random()*4-2,vy:Math.random()*4-2,life:20}); }
+    function addText(x,y,t,c) { floatingText.push({x,y,text:t,color:c,life:40}); }
 
     return {
-        init, update, draw, click, startWave, setBuild, upgrade, 
-        sell: () => { if(selection) { state.money += Math.floor(TOWER_TYPES[selection.type].cost*0.5); destroyTower(selection); } }, 
-        stop: () => {},
-        conf: { towers: TOWER_TYPES },
-        get wave(){return state.wave}, get money(){return state.money}, get lives(){return state.lives}, 
-        get sel(){return selection}, get buildMode(){return buildMode}
+        init, update, draw, click, startWave, 
+        setBuild: (k)=>{buildMode=k; selection=null;},
+        upgrade: (attr)=>{
+            if(!selection) return;
+            let base = TOWER_TYPES[selection.type].cost;
+            let cost = Math.floor(base * 0.5 * ((selection.attrLevels[attr]||0)+1));
+            if(state.money >= cost) {
+                state.money -= cost;
+                selection.attrLevels[attr]++;
+                if(attr==='dmg') selection.dmg *= 1.4;
+                if(attr==='rng') selection.rng *= 1.2;
+                if(attr==='rate') selection.rate *= 0.85;
+                recalcPath(); // threat changed
+            }
+        },
+        sell: ()=>{ if(selection){ state.money+=Math.floor(TOWER_TYPES[selection.type].cost*0.5); destroyTower(selection); }},
+        stop: ()=>{},
+        conf: {towers: TOWER_TYPES},
+        get state(){return state}, get sel(){return selection}, get buildMode(){return buildMode}
     };
   })();
-
-  if(typeof window !== 'undefined') window.NeonGame = Neon;
+  window.NeonGame = Neon;
 })(window);
 }
