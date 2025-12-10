@@ -1,267 +1,320 @@
-/* Vector Valley — upgraded and modal-friendly
-   - API: init(canvas, optionsOrDiff), update(), draw(ctx), click(x,y), startWave(), setBuild(k), upgrade(), sell(), reset(), stop(), setPlacementMode(single)
-   - Features: difficulty presets with path differences, larger play area, persistent placement by default, improved enemy visuals, particle effects, quality settings.
+{
+type: uploaded file
+fileName: vector-valley.js
+fullContent:
+/* Vector Valley - Visual & Pathing Update 
+   - Difficulty: Easy/Med/Hard generate different paths.
+   - Persistence: Holding shift or default behavior keeps tower selected.
+   - Visuals: Neon lines, particles, surprising enemy shapes.
 */
 
 (function(global){
-  const VectorValley = (function(){
-    // ---- Config ----
-    const DEFAULT = {
-      canvasW: 1100,
-      canvasH: 720,
-      quality: 'high'
+  const Vector = (function(){
+    
+    const TOWERS = {
+      turret: { name:'TURRET', cost:60, color:'#ffaa00', range:100, dmg:20, rate:25 },
+      missile:{ name:'MISSILE',cost:140,color:'#ff4444', range:200, dmg:50, rate:70, aoe:50 },
+      laser:  { name:'LASER',  cost:250, color:'#44ffff', range:150, dmg:5,  rate:4 }, // Fast rate
+      stasis: { name:'STASIS', cost:200, color:'#aa66ff', range:120, dmg:0,  rate:60, slow:0.5 }
     };
 
-    // tower definitions
-    const conf = {
-      towers: {
-        turret:  { name:'TURRET',  cost:70,  r:120, dmg:26, cd:28, color:'#FFAA00', hp:100 },
-        rapid:   { name:'RAPID',   cost:140, r:90,  dmg:7,  cd:6,  color:'#00FF66', hp:90 },
-        sniper:  { name:'SNIPER',  cost:360, r:420, dmg:160,cd:100,color:'#00FFFF', hp:60 },
-        mortar:  { name:'MORTAR',  cost:200, r:200, dmg:60, cd:80, color:'#FF8844', aoe:true, hp:90 },
-        beacon:  { name:'BEACON',  cost:240, r:140, dmg:0,  cd:0,  color:'#AA66FF', boost:true, hp:80 }
-      }
-    };
+    let canvas, ctx;
+    let path = [];
+    let towers=[], enemies=[], projs=[], particles=[];
+    let wave=1, money=600, lives=20, active=false;
+    let buildType=null, selected=null;
+    
+    function init(c, opts) {
+      canvas = c; ctx = c.getContext('2d');
+      reset(opts ? opts.difficulty : 'med');
+    }
 
-    // ---- State ----
-    let canvas=null, ctx=null;
-    let width=DEFAULT.canvasW, height=DEFAULT.canvasH;
-    let wave=1, money=500, lives=20, active=false, gameOver=false;
-    let enemies = [], towers = [], projs = [], particles = [], queue = [];
-    let path = [], difficulty = 'med', diffMult = 1.0;
-    let build = null, sel = null;
-    let placementSingle = false;
-    let quality = DEFAULT.quality;
+    function reset(diff) {
+        wave = 1; money = 600; lives = 20; active = false;
+        towers=[]; enemies=[]; projs=[]; particles=[];
+        generatePath(diff);
+    }
 
-    // expose conf
-    function getConf(){ return conf; }
-
-    // ---- Path generators ----
-    function generatePathFor(d){
-      difficulty = d || 'med';
-      if (canvas){
-        const w = canvas.width, h = canvas.height;
-        if (difficulty === 'easy'){
-          return [
-            {x:20, y: Math.floor(h*0.35)},
-            {x: Math.floor(w*0.15), y: Math.floor(h*0.35)},
-            {x: Math.floor(w*0.15), y: Math.floor(h*0.12)},
-            {x: Math.floor(w*0.33), y: Math.floor(h*0.12)},
-            {x: Math.floor(w*0.33), y: Math.floor(h*0.28)},
-            {x: Math.floor(w*0.49), y: Math.floor(h*0.28)},
-            {x: Math.floor(w*0.49), y: Math.floor(h*0.5)},
-            {x: Math.floor(w*0.66), y: Math.floor(h*0.5)},
-            {x: Math.floor(w*0.66), y: Math.floor(h*0.72)},
-            {x: Math.floor(w-20), y: Math.floor(h*0.72)}
-          ];
-        } else if (difficulty === 'hard'){
-          return [
-            {x:0, y: Math.floor(h*0.5)},
-            {x: Math.floor(w*0.35), y: Math.floor(h*0.5)},
-            {x: Math.floor(w*0.7), y: Math.floor(h*0.5)},
-            {x: Math.floor(w-10), y: Math.floor(h*0.5)}
-          ];
+    function generatePath(diff) {
+        let w = canvas.width, h = canvas.height;
+        path = [{x:0, y:h/2}];
+        
+        if (diff === 'easy') {
+            path.push({x:w*0.2, y:h/2});
+            path.push({x:w*0.5, y:h*0.2});
+            path.push({x:w*0.8, y:h*0.8});
+            path.push({x:w, y:h*0.8});
+        } else if (diff === 'hard') {
+            // Zig zag madness
+            for(let i=1; i<8; i++) {
+                path.push({
+                    x: (w/8)*i,
+                    y: i%2===0 ? h*0.2 : h*0.8
+                });
+            }
+            path.push({x:w, y:h*0.5});
         } else {
-          return [
-            {x:10, y: Math.floor(h*0.4)},
-            {x: Math.floor(w*0.2), y: Math.floor(h*0.4)},
-            {x: Math.floor(w*0.2), y: Math.floor(h*0.62)},
-            {x: Math.floor(w*0.42), y: Math.floor(h*0.62)},
-            {x: Math.floor(w*0.42), y: Math.floor(h*0.32)},
-            {x: Math.floor(w*0.62), y: Math.floor(h*0.32)},
-            {x: Math.floor(w*0.62), y: Math.floor(h*0.66)},
-            {x: Math.floor(w*0.86), y: Math.floor(h*0.66)}
-          ];
+            // Medium
+            path.push({x:w*0.3, y:h*0.3});
+            path.push({x:w*0.3, y:h*0.7});
+            path.push({x:w*0.7, y:h*0.7});
+            path.push({x:w*0.7, y:h*0.3});
+            path.push({x:w, y:h*0.3});
         }
-      }
-      return [];
     }
 
-    // ---- Initialization ----
-    function init(c, opt){
-      canvas = c; ctx = canvas.getContext('2d');
-      if (!canvas) return;
-      // options can be difficulty string or object
-      if (typeof opt === 'string') { setDifficulty(opt); }
-      else if (typeof opt === 'object' && opt !== null){
-        if (opt.difficulty) setDifficulty(opt.difficulty);
-        if (opt.placementSingle !== undefined) placementSingle = !!opt.placementSingle;
-        if (opt.quality) quality = opt.quality;
-      }
-      canvas.width = canvas.width || DEFAULT.canvasW;
-      canvas.height = canvas.height || DEFAULT.canvasH;
-      width = canvas.width; height = canvas.height;
-      money = 500; lives = 20; wave = 1; active = false;
-      enemies.length = 0; towers.length = 0; projs.length = 0; particles.length = 0; queue.length = 0;
-      path = generatePathFor(difficulty);
+    function startWave() {
+        if(active) return;
+        active = true;
+        let count = 6 + Math.floor(wave*1.5);
+        let i = 0;
+        let int = setInterval(() => {
+            spawnEnemy(wave);
+            i++;
+            if(i >= count) clearInterval(int);
+        }, 1000 - Math.min(600, wave*20));
     }
 
-    function stop(){ /* stop timers if any */ }
-
-    function reset(){ init(canvas, {difficulty: difficulty, placementSingle: !placementSingle, quality}); }
-
-    // ---- Gameplay ----
-    function startWave(){
-      if (active) return;
-      active = true;
-      const base = 6 + Math.floor(wave * 2 * diffMult);
-      for (let i=0;i<base;i++){
+    function spawnEnemy(lvl) {
         let type = 'norm';
-        if (wave > 3 && i % 4 === 0) type = 'shield';
-        if (wave > 5 && i % 6 === 0) type = 'fast';
-        queue.push({ d: i * 26, type });
-      }
-      // miniboss and boss schedule
-      queue.push({ d: base*26 + 40, type: 'miniboss' });
-      if (wave % 5 === 0) queue.push({ d: base*26 + 160, type: 'boss' });
+        if (lvl > 3 && Math.random()>0.7) type = 'fast';
+        if (lvl > 5 && Math.random()>0.8) type = 'tank';
+        
+        let hp = 30 + (lvl * 10);
+        let speed = 2;
+        if(type==='fast') { speed=4; hp*=0.6; }
+        if(type==='tank') { speed=1; hp*=2.5; }
+
+        enemies.push({
+            x: path[0].x, y: path[0].y,
+            idx: 0,
+            hp: hp, maxHp: hp, speed: speed, originalSpeed: speed,
+            type: type,
+            angle: 0
+        });
     }
 
-    function spawnQueued(){
-      if (!active) return;
-      for (let i = queue.length -1; i>=0; i--){
-        queue[i].d -= 16;
-        if (queue[i].d <= 0){ spawnEnemy(queue[i].type); queue.splice(i,1); }
-      }
-    }
+    function update() {
+        if(lives<=0) return;
+        
+        // Enemies
+        for(let i=enemies.length-1; i>=0; i--) {
+            let e = enemies[i];
+            let target = path[e.idx+1];
+            if(!target) {
+                lives--; enemies.splice(i,1); continue;
+            }
 
-    function spawnEnemy(type){
-      const e = {
-        x: path[0].x, y: path[0].y,
-        idx: 1, hp: 18 + wave*12,
-        maxHp: 18 + wave*12, spd: 1.2 + Math.random()*0.6,
-        type, color: '#ff66ff', val: 10, dead:false
-      };
-      if (type === 'fast'){ e.spd *= 1.9; e.hp *= 0.7; e.color = '#ffd100'; }
-      if (type === 'shield'){ e.hp *= 1.6; e.color = '#66aaff'; }
-      if (type === 'boss'){ e.hp *= 8 + wave*2; e.spd *= 0.6; e.color = '#ffd700'; e.val *= 10; }
-      enemies.push(e);
-    }
-
-    function update(){
-      if (gameOver) return;
-      spawnQueued();
-
-      // move enemies
-      for (let i=enemies.length-1;i>=0;i--){
-        const e = enemies[i];
-        const target = path[e.idx];
-        if (!target){ lives--; enemies.splice(i,1); if (lives<=0) gameOver=true; continue; }
-        const dx = target.x - e.x, dy = target.y - e.y;
-        const d = Math.hypot(dx,dy)||1;
-        if (d < e.spd) e.idx++; else { e.x += (dx/d)*e.spd; e.y += (dy/d)*e.spd; }
-      }
-
-      // towers actions
-      for (let t of towers){
-        if (t.cd > 0) t.cd--;
-        else {
-          let target = enemies.find(ev => (ev.x - t.x)**2 + (ev.y - t.y)**2 < (t.r**2));
-          if (target){
-            projs.push({ x: t.x, y: t.y, t: target, spd: 12, dmg: t.dmg, color: t.color });
-            t.cd = t.maxCd;
-          }
+            let dx = target.x - e.x;
+            let dy = target.y - e.y;
+            let d = Math.hypot(dx,dy);
+            
+            // Move
+            if(d < e.speed) {
+                e.idx++;
+                e.x = target.x; e.y = target.y;
+            } else {
+                e.x += (dx/d)*e.speed;
+                e.y += (dy/d)*e.speed;
+            }
+            e.angle += 0.1; // Rotate visual
+            
+            if(e.hp <= 0) {
+                money += (e.type==='tank'?30:15);
+                // Particle Explosion
+                for(let p=0; p<10; p++) {
+                    particles.push({x:e.x, y:e.y, vx:Math.random()*4-2, vy:Math.random()*4-2, life:20, color:'#fff'});
+                }
+                enemies.splice(i,1);
+            }
+            
+            // Reset status effects
+            e.speed = e.originalSpeed; 
         }
-      }
 
-      // projectiles
-      for (let i = projs.length-1; i>=0; i--){
-        const p = projs[i];
-        if (!p.t || p.t.dead){ projs.splice(i,1); continue; }
-        const dx = p.t.x - p.x, dy = p.t.y - p.y;
-        const d = Math.hypot(dx,dy)||1;
-        if (d < p.spd){ p.t.hp -= p.dmg; spawnParticles(p.t.x,p.t.y,p.color,6); if (p.t.hp <= 0){ p.t.dead=true; money += p.t.val || 12; } projs.splice(i,1); }
-        else { p.x += (dx/d)*p.spd; p.y += (dy/d)*p.spd; }
-      }
+        if(active && enemies.length === 0) { active = false; wave++; }
 
-      // particles
-      for (let i = particles.length-1;i>=0;i--){ const P = particles[i]; P.x += P.vx; P.y += P.vy; P.life--; if (P.life <= 0) particles.splice(i,1); }
+        // Towers
+        towers.forEach(t => {
+            if(t.cd > 0) t.cd--;
+            else {
+                let target = enemies.find(e => Math.hypot(e.x-t.x, e.y-t.y) < t.range);
+                if(target) {
+                    if(t.name === 'STASIS') {
+                        // AoE Slow instant
+                        enemies.forEach(e => {
+                            if(Math.hypot(e.x-t.x, e.y-t.y) < t.range) e.speed *= t.slow;
+                        });
+                        // Visual ripple
+                        particles.push({x:t.x, y:t.y, life:10, type:'ripple', r:10, maxR:t.range, color:t.color});
+                        t.cd = t.rate;
+                    } else if (t.name === 'LASER') {
+                         // Beam logic
+                         target.hp -= t.dmg;
+                         t.cd = t.rate;
+                         particles.push({x:t.x, y:t.y, tx:target.x, ty:target.y, life:3, type:'beam', color:t.color});
+                    } else {
+                        // Projectile
+                        projs.push({x:t.x, y:t.y, tx:target.x, ty:target.y, speed:10, dmg:t.dmg, aoe:t.aoe, color:t.color});
+                        t.cd = t.rate;
+                    }
+                }
+            }
+        });
 
-      // end wave check
-      if (active && enemies.length === 0 && queue.length === 0){ active=false; wave++; money += 120 + wave*30; }
+        // Projectiles
+        for(let i=projs.length-1; i>=0; i--) {
+            let p = projs[i];
+            let dx = p.tx - p.x;
+            let dy = p.ty - p.y;
+            let d = Math.hypot(dx, dy);
+            
+            if(d < p.speed) {
+                // Impact
+                if(p.aoe) {
+                    enemies.forEach(e => {
+                        if(Math.hypot(e.x - p.tx, e.y - p.ty) < p.aoe) e.hp -= p.dmg;
+                    });
+                    particles.push({x:p.tx, y:p.ty, life:10, type:'ripple', r:5, maxR:p.aoe, color:p.color});
+                } else {
+                    // We need to find the enemy actually at this location roughly
+                    let hit = enemies.find(e => Math.hypot(e.x - p.tx, e.y - p.ty) < 20);
+                    if(hit) hit.hp -= p.dmg;
+                }
+                projs.splice(i,1);
+            } else {
+                p.x += (dx/d)*p.speed;
+                p.y += (dy/d)*p.speed;
+            }
+        }
+
+        // Particles
+        for(let i=particles.length-1; i>=0; i--) {
+            let p = particles[i];
+            p.life--;
+            if(p.type !== 'ripple' && p.type !== 'beam') {
+                p.x += p.vx; p.y += p.vy;
+            }
+            if(p.life <= 0) particles.splice(i,1);
+        }
     }
 
-    function draw(ctx){
-      if (!ctx) return;
-      const W = canvas.width, H = canvas.height;
-      // background
-      const g = ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#02050a'); g.addColorStop(1,'#031217');
-      ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+    function draw(ctx) {
+        ctx.fillStyle = '#050a15';
+        ctx.fillRect(0,0,canvas.width,canvas.height);
 
-      // rails
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = '#102a10'; ctx.lineWidth = 26; ctx.beginPath();
-      path.forEach((p,i)=> i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
-      ctx.stroke();
-      ctx.strokeStyle = '#44ffaa'; ctx.lineWidth = 2; ctx.stroke();
+        // Path (Neon Glow)
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#00ffcc';
+        ctx.strokeStyle = '#00ffcc';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        if(path.length) {
+            ctx.moveTo(path[0].x, path[0].y);
+            for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+            ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
 
-      // towers
-      for (let t of towers){
-        ctx.save(); ctx.shadowBlur = 12; ctx.shadowColor = t.color; ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(t.x,t.y,12,0,Math.PI*2); ctx.fill(); ctx.restore();
-        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(t.x,t.y,7,0,Math.PI*2); ctx.fill();
-      }
+        // Towers
+        towers.forEach(t => {
+            ctx.fillStyle = t.color;
+            ctx.beginPath();
+            if(t.name==='TURRET') { ctx.fillRect(t.x-10, t.y-10, 20, 20); }
+            else if(t.name==='LASER') { ctx.moveTo(t.x, t.y-10); ctx.lineTo(t.x+10, t.y+10); ctx.lineTo(t.x-10, t.y+10); ctx.fill(); }
+            else { ctx.arc(t.x, t.y, 10, 0, Math.PI*2); ctx.fill(); }
+            
+            if(selected===t) {
+                ctx.strokeStyle='white'; ctx.beginPath(); ctx.arc(t.x,t.y, t.range, 0, Math.PI*2); ctx.stroke();
+            }
+        });
 
-      // enemies
-      for (let e of enemies){
-        drawEnemy(ctx, e);
-      }
+        // Enemies (More complex shapes)
+        enemies.forEach(e => {
+            ctx.save();
+            ctx.translate(e.x, e.y);
+            ctx.rotate(e.angle);
+            ctx.fillStyle = (e.type==='tank') ? '#4488ff' : '#ff4444';
+            if(e.type==='fast') ctx.fillStyle = '#ffff00';
+            
+            // Shape
+            ctx.fillRect(-8,-8, 16, 16);
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(-4,-4, 8, 8); // Core
+            
+            ctx.restore();
+            
+            // Health Bar
+            ctx.fillStyle = '#333'; ctx.fillRect(e.x-10, e.y-15, 20, 4);
+            ctx.fillStyle = '#0f0'; ctx.fillRect(e.x-10, e.y-15, 20*(e.hp/e.maxHp), 4);
+        });
 
-      // projectiles and particles
-      for (let p of projs){ ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill(); }
-      for (let P of particles){ ctx.fillStyle = P.color; ctx.fillRect(P.x,P.y,2,2); }
+        // Particles & Projs
+        projs.forEach(p => {
+            ctx.fillStyle = p.color;
+            ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2); ctx.fill();
+        });
 
-      // HUD
-      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(10,10,180,44);
-      ctx.fillStyle = '#fff'; ctx.font = '14px monospace'; ctx.fillText(`Wave ${wave}`,20,32);
-      ctx.fillStyle = '#ffd700'; ctx.fillText(`$${Math.floor(money)}`,100,32);
+        particles.forEach(p => {
+            ctx.globalAlpha = p.life / 20;
+            if(p.type === 'ripple') {
+                ctx.strokeStyle = p.color;
+                ctx.beginPath();
+                let r = p.r + (p.maxR - p.r) * (1 - p.life/10);
+                ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+                ctx.stroke();
+            } else if (p.type === 'beam') {
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.tx, p.ty); ctx.stroke();
+            } else {
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, 3, 3);
+            }
+            ctx.globalAlpha = 1;
+        });
     }
 
-    function drawEnemy(ctx, e){
-      ctx.save();
-      if (quality === 'high') ctx.shadowBlur = 14, ctx.shadowColor = e.color;
-      const g = ctx.createRadialGradient(e.x-4,e.y-4,2,e.x,e.y,12); g.addColorStop(0,e.color); g.addColorStop(1,'rgba(0,0,0,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(e.x,e.y,9,0,Math.PI*2); ctx.fill();
-      ctx.restore();
-      ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(e.x,e.y,5,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#111'; ctx.fillRect(e.x-10,e.y-14,20,3);
-      ctx.fillStyle = '#0f0'; ctx.fillRect(e.x-10,e.y-14,20*(e.hp/e.maxHp),3);
+    function click(x, y) {
+        // Check selection
+        let t = towers.find(t => Math.hypot(t.x-x, t.y-y) < 15);
+        if(t) { selected = t; buildType = null; return; }
+
+        if(buildType && money >= TOWERS[buildType].cost) {
+            let def = TOWERS[buildType];
+            towers.push({
+                x, y, ...def,
+                level: 1, cd: 0
+            });
+            money -= def.cost;
+            // Persistence: Do NOT clear buildType
+        } else {
+            selected = null;
+        }
     }
 
-    function click(x,y){
-      // disallow placing too close to path nodes
-      for (let p of path) if ((p.x - x)**2 + (p.y - y)**2 < 30*30) return;
-      const clicked = towers.find(t => (t.x - x)**2 + (t.y - y)**2 < 16*16);
-      if (clicked){ sel = clicked; build = null; return; }
-      if (build){
-        const def = conf.towers[build];
-        if (!def || money < def.cost) return;
-        const T = { x, y, type: build, name: def.name, color: def.color, r: def.r, dmg: def.dmg, maxCd: def.cd, cd:0, level:1, val: Math.floor(def.cost*0.6) };
-        // store towers coordinates as pixel positions
-        towers.push(T);
-        money -= def.cost;
-        spawnParticles(x,y,'#fff',10);
-        if (placementSingle) setBuild(null);
-      } else sel = null;
+    function setBuild(k) { buildType = k; selected = null; }
+    function upgrade() {
+        if(!selected || money < Math.floor(selected.cost*0.8)) return;
+        money -= Math.floor(selected.cost*0.8);
+        selected.level++;
+        selected.dmg *= 1.4;
+    }
+    function sell() {
+        if(!selected) return;
+        money += Math.floor(selected.cost * 0.5);
+        towers = towers.filter(t=>t!==selected);
+        selected = null;
     }
 
-    function setBuild(k){ build = k; sel = null; }
-    function setPlacementMode(single){ placementSingle = !!single; }
-    function upgrade(){ if (!sel) return; const def = conf.towers[sel.type]; const cost = Math.floor(def.cost * 0.9 * (sel.level||1)); if (money < cost) return; money -= cost; sel.level++; sel.dmg = Math.floor(sel.dmg*1.6); sel.r = Math.floor(sel.r*1.12); sel.maxCd = Math.max(2, Math.floor(sel.maxCd*0.88)); spawnParticles(sel.x, sel.y, '#0F0', 14); }
-    function sell(){ if (!sel) return; money += sel.val || 20; towers = towers.filter(t=>t!==sel); sel = null; }
-
-    function spawnParticles(x,y,color,n){ for (let i=0;i<n;i++) particles.push({ x: x + rand(-6,6), y: y + rand(-6,6), vx: rand(-1,1), vy: rand(-1,1), life: 8 + Math.floor(Math.random()*8), color }); }
-
-    function setDifficulty(d){ difficulty = d; diffMult = (d==='easy'?0.8: d==='hard'?1.6:1.0); path = generatePathFor(d); }
-    function setQuality(q){ quality = q; }
-
-    // expose API
     return {
-      init, update: update, draw, click, startWave, setBuild, upgrade, sell, reset, stop,
-      conf: conf, setPlacementMode, setQuality, setDifficulty,
-      get wave(){ return wave; }, get money(){ return money; }, get lives(){ return lives; }, get sel(){ return sel; }
+        init, update, draw, click, startWave, setBuild, upgrade, sell, stop: ()=>{},
+        conf: {towers: TOWERS},
+        get wave(){return wave}, get money(){return money}, get lives(){return lives}, get sel(){return selected}, get buildMode(){return buildType}
     };
+
   })();
 
-  // attach to window/module
-  if (typeof window !== 'undefined') window.VectorGame = VectorValley;
-  if (typeof module !== 'undefined') module.exports = VectorValley;
-})(typeof window !== 'undefined' ? window : global);
+  if(typeof window !== 'undefined') window.VectorGame = Vector;
+})(window);
+}
