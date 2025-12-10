@@ -1,24 +1,15 @@
-{
-type: uploaded file
-fileName: neon-citadel.js
-fullContent:
-/* NEON CITADEL - Flagship Edition
-   - Dynamic Grid (Scales to canvas, default 1200x800)
-   - Dijkstra Flow Field Pathfinding
-   - Destructible Towers & Breaker AI
-   - Particle Light System
-*/
+/* NEON CITADEL - Flagship Edition */
 (function(global){
   const Neon = (function(){
     
     // CONFIG: High Density Grid
-    const CELL = 20; 
+    const CELL = 25; // Good balance for 1200px width
     let COLS, ROWS;
     
     const TOWER_TYPES = {
-        'gatling': { name:'VULCAN', cost:150, color:'#ff00ff', dmg:4, rng:140, rate:5, hp:200 },
-        'cannon':  { name:'HEAVY',  cost:400, color:'#00ffff', dmg:120, rng:220, rate:70, hp:600, aoe:50 },
-        'tesla':   { name:'TESLA',  cost:600, color:'#ffff00', dmg:25, rng:130, rate:35, hp:400, chain:true },
+        'gatling': { name:'VULCAN', cost:150, color:'#ff00ff', dmg:5, rng:150, rate:5, hp:200 },
+        'cannon':  { name:'HEAVY',  cost:400, color:'#00ffff', dmg:120, rng:240, rate:60, hp:600, aoe:60 },
+        'tesla':   { name:'TESLA',  cost:600, color:'#ffff00', dmg:20, rng:140, rate:30, hp:400, chain:true },
         'buffer':  { name:'AEGIS',  cost:500, color:'#00ff00', dmg:0, rng:100, rate:0, hp:1200, buff:true }
     };
 
@@ -448,4 +439,3 @@ fullContent:
   })();
   window.NeonGame = Neon;
 })(window);
-}
