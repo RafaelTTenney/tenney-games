@@ -1,7 +1,3 @@
-{
-type: uploaded file
-fileName: vector-valley.js
-fullContent:
 /* VECTOR VALLEY - Fixed Loop & Graphics */
 (function(global){
   const Vector = (function(){
@@ -226,4 +222,3 @@ fullContent:
   })();
   window.VectorGame = Vector;
 })(window);
-}
