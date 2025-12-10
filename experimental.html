@@ -8,12 +8,11 @@
         /* --- CORE STYLES --- */
         :root {
             --primary: #00FFFF;
-            --dark: #00AAAA;
             --bg: #050505;
             --card: #111;
             --muted: #888;
             --glow: 0 0 5px var(--primary), 0 0 10px var(--primary);
-            --flagship: #ffcc00; /* Minesweeper Flagship Color */
+            --flagship: #ffcc00;
             --td-green: #00FF00;
         }
         body {
@@ -41,10 +40,7 @@
             gap: 8px;
             flex-wrap: wrap;
         }
-        .top .links {
-            display: flex;
-            gap: 10px;
-        }
+        .top .links { display:flex; gap:10px; }
         .btn {
             background: transparent;
             color: var(--primary);
@@ -54,20 +50,12 @@
             font-weight: 700;
             border: 1px solid var(--primary);
             transition: all 0.2s ease;
-            box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.4);
             cursor: pointer;
             display: inline-block;
         }
-        .btn.secondary {
-            background: var(--card);
-            color: var(--primary);
-            border: 1px solid var(--primary);
-        }
-        .btn:hover {
-            background: var(--primary);
-            color: var(--bg);
-            box-shadow: var(--glow);
-        }
+        .btn.secondary { background: var(--card); }
+        .btn:hover { background: var(--primary); color: var(--bg); box-shadow: var(--glow); }
+
         .container {
             max-width: 900px;
             margin: 28px auto;
@@ -76,159 +64,54 @@
             border-radius: 12px;
             border: 1px solid #222;
         }
-        h1 {
-            color: var(--primary);
-            margin: 0 0 8px 0;
-            text-shadow: var(--glow);
-        }
-        p.lead {
-            color: var(--muted);
-            margin: 6px 0 16px 0;
-        }
+        h1 { color: var(--primary); margin: 0 0 8px 0; text-shadow: var(--glow); }
+        p.lead { color: var(--muted); margin: 6px 0 16px 0; }
+
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
             gap: 12px;
         }
-        .card {
-            background: var(--card);
-            padding: 12px;
-            border-radius: 10px;
-            border: 1px solid #333;
-            min-height: 120px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .card.flagship {
-            border: 2px solid var(--flagship);
-            box-shadow: 0 0 15px rgba(255, 204, 0, 0.2);
-        }
-        .card h3 {
-            margin: 0;
-            color: var(--primary);
-        }
-        .card.flagship h3 { color: var(--flagship); }
-
-        .card .meta {
-            color: var(--muted);
-            font-size: 0.95em;
-        }
-        .card .actions {
-            margin-top: auto;
-            display: flex;
-            gap: 8px;
-            justify-content: flex-end;
-        }
-        pre.demo {
-            background: var(--bg);
-            padding: 8px;
-            border-radius: 6px;
-            border: 1px solid #333;
-            overflow: auto;
-            max-height: 160px;
-            color: #ccc;
-        }
+        .card { padding:12px; border-radius:10px; background:var(--card); border:1px solid #333; min-height:120px; display:flex; flex-direction:column; gap:8px; }
+        .card.flagship { border:2px solid var(--flagship); box-shadow: 0 0 15px rgba(255,204,0,0.2); }
+        .card h3 { margin:0; color:var(--primary); }
+        pre.demo { background: var(--bg); padding:8px; border-radius:6px; color:#ccc; }
 
         /* --- MODAL STYLES --- */
         .modal-overlay {
             display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.9);
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
+            position: fixed; z-index: 1200;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            justify-content: center; align-items: center; padding: 18px;
         }
         .modal-overlay.active { display:flex; }
         .modal-content {
-            background-color: var(--card);
-            margin: auto;
-            padding: 14px;
+            background: var(--card);
             border: 1px solid var(--primary);
-            border-radius: 8px;
-            width: 1100px;
-            max-width: calc(100% - 40px);
-            box-shadow: 0 0 20px var(--primary);
-            text-align: center;
-            display:flex;
-            flex-direction: column;
-            gap: 12px;
+            border-radius: 10px;
+            width: 1100px; max-width: calc(100% - 40px);
+            box-shadow: 0 0 30px rgba(0,255,255,0.04);
+            padding: 12px;
+            display:flex; flex-direction:column; gap:12px;
         }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .modal-header h2 {
-            color: var(--primary);
-            margin: 0;
-            text-shadow: var(--glow);
-            font-size: 1.2em;
-        }
-        .modal-close {
-            color: var(--muted);
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .modal-close:hover,
-        .modal-close:focus {
-            color: var(--primary);
-            text-decoration: none;
-        }
+        .modal-header { display:flex; justify-content:space-between; align-items:center; }
+        .modal-header h2 { color:var(--primary); margin:0; text-shadow: var(--glow); font-size:1.2em; }
+        .modal-close { color:var(--muted); font-size:28px; cursor:pointer; }
+        .modal-close:hover { color:var(--primary); }
 
-        /* TD modal layout */
-        .td-body {
-            display: flex;
-            gap: 12px;
-            align-items: flex-start;
-        }
-        .td-canvas-wrap {
-            flex: 1 1 auto;
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            background: #000;
-            padding: 8px;
-            border-radius:8px;
-            border: 1px solid rgba(255,255,255,0.03);
-        }
-        .td-canvas {
-            background: transparent;
-            max-width:100%;
-            height: 720px;
-            width: 1000px;
-            border-radius:6px;
-            outline:none;
-        }
-        .td-controls {
-            width: 260px;
-            background: rgba(0,0,0,0.4);
-            padding: 8px;
-            border-radius: 8px;
-            display:flex;
-            flex-direction:column;
-            gap:8px;
-        }
-        .td-controls h3 { margin: 0; color: var(--primary); }
-        .t-btn { padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background:#111; color:#fff; cursor:pointer; text-align:left; }
-        .t-btn.active { box-shadow: 0 8px 20px rgba(0,255,204,0.06); transform: translateY(-2px); }
+        /* Tower Defence modal layout */
+        .td-body { display:flex; gap:12px; align-items:flex-start; }
+        .td-canvas-wrap { flex:1 1 auto; display:flex; justify-content:center; align-items:center; background:#000; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); }
+        .td-canvas { background: transparent; width:100%; height:720px; border-radius:6px; outline:none; display:block; }
+        .td-controls { width: 300px; background: rgba(255,255,255,0.02); padding:10px; border-radius:8px; display:flex; flex-direction:column; gap:8px; }
+        .td-controls h3 { margin:0; color:var(--primary); }
         .hud-row { display:flex; justify-content:space-between; font-family:monospace; color:#ddd; }
-
-        .footer { text-align: center; color: #555; padding: 20px; }
-
-        @media (max-width: 1180px) {
-            .td-body { flex-direction:column; }
-            .td-controls { width: 100%; order: 2; }
-            .td-canvas { height: 520px; width: 100%; }
-            .modal-content { width: calc(100% - 40px); max-width: 960px; }
-        }
+        .t-btn { padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background:#111; color:#fff; cursor:pointer; text-align:left; }
+        .t-btn.active { box-shadow: 0 8px 24px rgba(0,255,204,0.06); transform: translateY(-2px); }
+        .diff { padding:8px; border-radius:6px; border:1px solid rgba(255,255,255,0.03); background:transparent; color:#9aa; cursor:pointer; }
+        .diff.active { background:linear-gradient(90deg,#FFD166,#fff); color:#003; }
+        @media (max-width:1180px){ .td-body { flex-direction:column; } .td-controls{ width:100%; } .td-canvas{ height:520px; } }
     </style>
 </head>
 <body>
@@ -240,57 +123,43 @@
         </div>
         <div style="color:var(--primary);font-weight:700;">Admin Experimentation Area</div>
     </div>
+
     <main class="container">
         <h1>Experimental</h1>
         <p class="lead">Upload and test experiments. Only administrators may access this page.</p>
         <div class="grid" id="experimentalGrid">
-            
             <section class="card">
                 <h3>Neon Racer++</h3>
                 <div class="meta">A high-speed avoidance game with a retro-neon theme.</div>
-                <div class="actions">
-                    <a class="btn" href="#" id="runRacerBtn">Run</a>
-                </div>
+                <div class="actions"><a class="btn" href="#" id="runRacerBtn">Run</a></div>
             </section>
 
             <section class="card flagship">
                 <h3>Minesweeper Elite</h3>
-                <div class="meta">The First Flagship. Customizable difficulty, flood-fill, right-click flagging, and smart styling.</div>
-                <div class="actions">
-                    <button class="btn" style="background:var(--flagship); color:#000; border-color: white;" id="runSuperMinesweeperBtn">Play Elite</button>
-                </div>
+                <div class="meta">The First Flagship. Customizable difficulty and smart styling.</div>
+                <div class="actions"><button class="btn" style="background:var(--flagship); color:#000;" id="runSuperMinesweeperBtn">Play Elite</button></div>
             </section>
-            
-            <section class="card flagship" style="border-color: #00FF00; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);">
+
+            <section class="card flagship" style="border-color:#00FF00;">
                 <h3 style="color:#00FF00;">Tower Defence Collection</h3>
-                <div class="meta">Three premium strategy games in one. Featuring "Vector Valley" (Classic), "Neon Citadel" (Maze Builder), and "Sentinel Grid" (Original).</div>
-                <pre class="demo">// 3 Unique Game Engines
-// Vector Valley: Path Defense
-// Neon Citadel: Open Field
-// Sentinel Grid: Tactical Grid</pre>
-                <div class="actions">
-                    <a class="btn" id="openTdBtn" href="#" data-game="hub">Play Collection</a>
-                </div>
+                <div class="meta">Vector Valley, Neon Citadel (flagship), Sentinel Grid.</div>
+                <pre class="demo">// Vector Valley: Classic path defense
+// Neon Citadel: Flagship, advanced
+// Sentinel Grid: Tactical grid</pre>
+                <div class="actions"><a class="btn" id="openTdBtn" href="#">Play Collection</a></div>
             </section>
 
-             <section class="card flagship" style="border-color: #FF00FF; box-shadow: 0 0 15px rgba(255, 0, 255, 0.2);">
+            <section class="card flagship" style="border-color:#FF00FF;">
                 <h3 style="color:#FF00FF;">Rogue Dungeon</h3>
-                <div class="meta">Flagship RPG. Procedural dungeon crawler with turn-based combat, leveling, and fog of war.</div>
-                <pre class="demo">// Arrow Keys to Move/Attack
-// Explore deeper into the dark
-// Permadeath mechanics</pre>
-                <div class="actions">
-                    <button class="btn" style="background:#FF00FF; color:#000; border-color: white;" id="runRogueBtn">Play Rogue</button>
-                </div>
+                <div class="meta">Procedural dungeon crawler with turn-based combat.</div>
+                <div class="actions"><button class="btn" style="background:#FF00FF; color:#000;" id="runRogueBtn">Play Rogue</button></div>
             </section>
-
         </div>
     </main>
-    <div class="footer">
-        &copy; 2025 Games & Programs
-    </div>
 
-    <!-- Modals: Tower Defence variants (Vector, Citadel, Sentinel) -->
+    <div class="footer">&copy; 2025 Games & Programs</div>
+
+    <!-- Tower Defence Modal -->
     <div id="tdModal" class="modal-overlay" aria-hidden="true">
         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="td-title">
             <div class="modal-header">
@@ -300,350 +169,256 @@
 
             <div class="td-body">
                 <div class="td-canvas-wrap">
-                    <canvas id="td-canvas" class="td-canvas" width="1000" height="720" tabindex="0"></canvas>
+                    <canvas id="td-canvas" class="td-canvas" width="1100" height="720" tabindex="0"></canvas>
                 </div>
 
                 <div class="td-controls" id="td-controls">
-                    <h3 id="td-game-title">Game</h3>
-                    <div class="hud-row"><div>Wave</div><div id="td-wave">1</div></div>
+                    <h3 id="td-game-title">DEFENCE HUB</h3>
+
+                    <div class="hud-row"><div>Wave</div><div id="td-wave">0</div></div>
                     <div class="hud-row"><div>Money</div><div id="td-money">0</div></div>
                     <div class="hud-row"><div>Lives</div><div id="td-lives">0</div></div>
 
-                    <div style="margin-top:8px;">
-                        <div style="display:flex; gap:8px;">
-                            <button class="btn" id="td-start-wave">Start Wave</button>
-                            <button class="btn secondary" id="td-stop">Reset</button>
+                    <div style="display:flex;gap:8px;"><button class="btn" id="td-start-wave">Start Wave</button><button class="btn secondary" id="td-reset">Reset</button></div>
+
+                    <div style="margin-top:10px;">
+                        <div style="font-weight:700;color:#ccc;margin-bottom:6px;">Build Units</div>
+                        <div id="td-build-list" style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto;"></div>
+                        <div style="display:flex;gap:6px;margin-top:8px;">
+                            <button class="btn" id="td-placement-toggle">Persistent: ON</button>
                         </div>
                     </div>
 
                     <div style="margin-top:8px;">
-                        <div style="font-weight:700; color:#ccc; margin-bottom:6px;">Build Units</div>
-                        <div id="td-build-list" style="display:flex;flex-direction:column;gap:6px;"></div>
-                    </div>
-
-                    <div style="margin-top:8px;">
-                        <div style="font-weight:700; color:#ccc; margin-bottom:6px;">Inspector</div>
-                        <div id="td-insp" style="font-family:monospace; color:#ddd; font-size:0.9em; min-height:64px;">Select a tower</div>
-                        <div style="display:flex; gap:6px; margin-top:6px;">
+                        <div style="font-weight:700;color:#ccc;margin-bottom:6px;">Inspector</div>
+                        <div id="td-insp" style="font-family:monospace;color:#ddd;font-size:0.9em;min-height:72px;">Select a tower</div>
+                        <div style="display:flex;gap:6px;margin-top:6px;">
                             <button class="btn" id="td-upgrade">Upgrade</button>
                             <button class="btn" id="td-sell">Sell</button>
                         </div>
                     </div>
 
+                    <div style="margin-top:10px;">
+                        <div style="font-weight:700;color:#ccc;margin-bottom:6px;">Difficulty</div>
+                        <div style="display:flex;gap:6px;">
+                            <button class="diff" data-diff="easy">EASY</button>
+                            <button class="diff active" data-diff="med">MED</button>
+                            <button class="diff" data-diff="hard">HARD</button>
+                        </div>
+                    </div>
+
                     <div style="margin-top:8px;">
-                        <div style="font-weight:700; color:#ccc; margin-bottom:6px;">Difficulty</div>
-                        <div style="display:flex; gap:6px;">
-                            <button class="btn diff" data-diff="easy">Easy</button>
-                            <button class="btn diff active" data-diff="med">Med</button>
-                            <button class="btn diff" data-diff="hard">Hard</button>
+                        <div style="font-weight:700;color:#ccc;margin-bottom:6px;">Quality</div>
+                        <div style="display:flex;gap:6px;">
+                            <button class="btn" id="ql-high">High</button>
+                            <button class="btn" id="ql-med">Med</button>
+                            <button class="btn" id="ql-low">Low</button>
                         </div>
                     </div>
 
                 </div>
             </div>
 
-            <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
                 <button class="btn secondary" id="td-close-and-unload">Close</button>
             </div>
         </div>
     </div>
 
-    <!-- Other modals for existing games -->
-    <div id="racerModal" class="modal-overlay" aria-hidden="true">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Neon Racer++</h2>
-                <span class="modal-close" id="racerModalCloseBtn">&times;</span>
-            </div>
-            <canvas id="racer-canvas" width="340" height="520" style="background:#000;"></canvas>
-            <div id="racer-hud">
-                <div id="racer-distance">Distance: 0m</div>
-            </div>
-            <div class="modal-controls">
-                <button id="startRacerBtn" class="btn">Start</button>
-                <button id="pauseRacerBtn" class="btn secondary">Pause</button>
-                <button id="resetRacerBtn" class="btn secondary">Reset</button>
-            </div>
-        </div>
-    </div>
+    <!-- Other modals -->
+    <div id="racerModal" class="modal-overlay" aria-hidden="true"><div class="modal-content"><div class="modal-header"><h2>Neon Racer++</h2><span class="modal-close" id="racerModalCloseBtn">&times;</span></div><canvas id="racer-canvas" width="340" height="520" style="background:#000;"></canvas><div class="modal-controls"><button id="startRacerBtn" class="btn">Start</button><button id="pauseRacerBtn" class="btn secondary">Pause</button><button id="resetRacerBtn" class="btn secondary">Reset</button></div></div></div>
 
-    <div id="superMinesweeperModal" class="modal-overlay" aria-hidden="true">
-        <div class="modal-content" style="border-color: var(--flagship); box-shadow: 0 0 30px var(--flagship);">
-            <div class="modal-header">
-                <h2 style="color:var(--flagship);">Minesweeper Elite</h2>
-                <span class="modal-close" id="superMsCloseBtn">&times;</span>
-            </div>
-            <div id="ms-menu" class="ms-menu">
-                <h4 style="margin:0; color:#fff;">Select Difficulty</h4>
-                <div class="ms-row">
-                    <button class="ms-btn selected" onclick="setMsDiff('easy', this)">Easy (10%)</button>
-                    <button class="ms-btn" onclick="setMsDiff('med', this)">Med (15%)</button>
-                    <button class="ms-btn" onclick="setMsDiff('hard', this)">Hard (20%)</button>
-                </div>
-                <h4 style="margin:5px 0 0 0; color:#fff;">Grid Size</h4>
-                <div class="ms-row">
-                    <button class="ms-btn selected" onclick="setMsSize(10, this)">10x10</button>
-                    <button class="ms-btn" onclick="setMsSize(15, this)">15x15</button>
-                    <button class="ms-btn" onclick="setMsSize(20, this)">20x20</button>
-                </div>
-                <button class="btn" style="margin-top:10px; border-color:var(--flagship); color:var(--flagship);" onclick="startEliteMinesweeper()">START GAME</button>
-            </div>
-            <div id="ms-game-area" style="display:none;">
-                <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
-                    <span id="ms-flags-left" style="color:red; font-weight:bold;">Flags: 10</span>
-                    <span id="ms-timer" style="color:var(--flagship); font-weight:bold;">000</span>
-                </div>
-                <div id="ms-game-container">
-                    <div id="ms-grid"></div>
-                </div>
-                <div id="ms-status" style="margin-top:10px; font-weight:bold; min-height:20px; color:#fff;"></div>
-                <div class="modal-controls">
-                     <button class="btn secondary" onclick="showMsMenu()">Back to Menu</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <div id="superMinesweeperModal" class="modal-overlay" aria-hidden="true"><div class="modal-content" style="border-color:var(--flagship);box-shadow:0 0 30px var(--flagship);"><div class="modal-header"><h2 style="color:var(--flagship);">Minesweeper Elite</h2><span class="modal-close" id="superMsCloseBtn">&times;</span></div><div id="ms-menu"></div></div></div>
 
     <script src="login.js"></script>
-    <script src="neon-racer-plus.js"></script>
-    <script src="minesweeper-elite.js"></script>
-    <script src="rogue-dungeon.js"></script>
 
-    <!-- Load tower defence engines directly so they can render into the modal canvas -->
+    <!-- Load engines (these must expose the expected API) -->
     <script src="vector-valley.js"></script>
     <script src="neon-citadel.js"></script>
     <script src="sentinel-grid.js"></script>
 
     <script>
-        // --- Generic modal helpers ---
-        function showModal(id) {
-            const el = document.getElementById(id);
-            if(!el) return;
-            el.classList.add('active');
-            el.setAttribute('aria-hidden','false');
-        }
-        function hideModal(id) {
-            const el = document.getElementById(id);
-            if(!el) return;
-            el.classList.remove('active');
-            el.setAttribute('aria-hidden','true');
-        }
+        // Generic modal helpers
+        function showModal(id){ const el=document.getElementById(id); if(!el) return; el.classList.add('active'); el.setAttribute('aria-hidden','false'); }
+        function hideModal(id){ const el=document.getElementById(id); if(!el) return; el.classList.remove('active'); el.setAttribute('aria-hidden','true'); }
 
-        // Racer Hookup
-        document.getElementById('runRacerBtn').addEventListener('click', (e) => { e.preventDefault(); showModal('racerModal'); });
-        document.getElementById('racerModalCloseBtn').addEventListener('click', () => hideModal('racerModal'));
-        document.getElementById('startRacerBtn').addEventListener('click', () => { if(typeof startRacer === 'function') startRacer(); });
-        document.getElementById('pauseRacerBtn').addEventListener('click', () => { if(typeof pauseRacer === 'function') pauseRacer(); });
-        document.getElementById('resetRacerBtn').addEventListener('click', () => { if(typeof resetRacer === 'function') resetRacer(); });
+        // Small utility
+        function qs(sel){ return document.querySelector(sel); }
 
-        // Minesweeper Hookup
-        document.getElementById('runSuperMinesweeperBtn').addEventListener('click', () => showModal('superMinesweeperModal'));
-        document.getElementById('superMsCloseBtn').addEventListener('click', () => {
-             hideModal('superMinesweeperModal');
-             if(typeof msState !== 'undefined' && msState.interval) clearInterval(msState.interval);
-        });
+        // Racer hooks (existing)
+        document.getElementById('runRacerBtn').addEventListener('click',(e)=>{e.preventDefault(); showModal('racerModal');});
+        document.getElementById('racerModalCloseBtn').addEventListener('click',()=>hideModal('racerModal'));
 
-        // Rogue Dungeon Hookup
-        document.getElementById('runRogueBtn').addEventListener('click', () => {
-            showModal('rogueModal');
-            if(typeof initRogue === 'function') initRogue();
-        });
-        document.getElementById('rogueModalCloseBtn').addEventListener('click', () => {
-            hideModal('rogueModal');
-            if(typeof stopRogue === 'function') stopRogue();
-        });
+        // Minesweeper hooks (existing)
+        document.getElementById('runSuperMinesweeperBtn').addEventListener('click',()=>showModal('superMinesweeperModal'));
+        document.getElementById('superMsCloseBtn').addEventListener('click',()=>hideModal('superMinesweeperModal'));
 
-        // Tower Defence modal logic
+        // Rogue
+        document.getElementById('runRogueBtn').addEventListener('click',()=>{ showModal('racerModal'); }); // placeholder
+
+        // Tower Defence integration
         const TD = {
             canvas: document.getElementById('td-canvas'),
             ctx: document.getElementById('td-canvas').getContext('2d'),
-            loopId: null,
             game: null,
+            current: null,
             diff: 'med',
-            current: null, // 'vector'|'citadel'|'sentinel'
-            buildSelection: null,
-            persistentPlacement: true,
+            placementPersistent: true,
+            quality: 'high'
         };
 
-        // Hook up open button: present a mini hub inside modal to choose game
+        // Open hub modal
         document.getElementById('openTdBtn').addEventListener('click', (e) => {
             e.preventDefault();
-            // Show modal and default to hub view (choose game)
             TD.current = null;
             document.getElementById('td-game-title').innerText = 'DEFENCE HUB';
-            // Populate build list empty until a game selected
-            document.getElementById('td-build-list').innerHTML = `
+            const buildList = document.getElementById('td-build-list');
+            buildList.innerHTML = `
                 <button class="t-btn" data-game="vector">Vector Valley</button>
                 <button class="t-btn" data-game="citadel">Neon Citadel</button>
                 <button class="t-btn" data-game="sentinel">Sentinel Grid</button>
-                <div style="margin-top:8px; color:#aaa; font-size:0.9em;">Choose a game above to load into this window.</div>
+                <div style="margin-top:8px;color:#aaa;font-size:0.9em;">Choose a game to load into this window.</div>
             `;
-            document.querySelectorAll('#td-build-list .t-btn').forEach(b => b.addEventListener('click', () => {
-                const g = b.getAttribute('data-game');
+            buildList.querySelectorAll('.t-btn').forEach(b => b.addEventListener('click', () => {
+                const g = b.dataset.game;
                 TD.openGame(g);
             }));
             showModal('tdModal');
         });
 
         // Difficulty buttons
-        document.querySelectorAll('.diff').forEach(b => {
-            b.addEventListener('click', (e) => {
+        document.querySelectorAll('.diff').forEach(b=>{
+            b.addEventListener('click', ()=> {
                 document.querySelectorAll('.diff').forEach(x=>x.classList.remove('active'));
                 b.classList.add('active');
-                TD.diff = b.getAttribute('data-diff');
+                TD.diff = b.dataset.diff;
             });
         });
 
-        // Close modal
-        document.getElementById('tdModalCloseBtn').addEventListener('click', () => {
+        // Placement toggle
+        document.getElementById('td-placement-toggle').addEventListener('click', ()=>{
+            TD.placementPersistent = !TD.placementPersistent;
+            document.getElementById('td-placement-toggle').innerText = `Persistent: ${TD.placementPersistent ? 'ON' : 'OFF'}`;
+        });
+
+        // Quality buttons
+        document.getElementById('ql-high').addEventListener('click', ()=>TD.setQuality && TD.setQuality('high'));
+        document.getElementById('ql-med').addEventListener('click', ()=>TD.setQuality && TD.setQuality('med'));
+        document.getElementById('ql-low').addEventListener('click', ()=>TD.setQuality && TD.setQuality('low'));
+
+        // Modal close/unload
+        document.getElementById('tdModalCloseBtn').addEventListener('click', ()=>{ TD.unload(); hideModal('tdModal'); });
+        document.getElementById('td-close-and-unload').addEventListener('click', ()=>{ TD.unload(); hideModal('tdModal'); });
+
+        // Start wave / reset / upgrade / sell handlers
+        document.getElementById('td-start-wave').addEventListener('click', ()=> { if (TD.game && TD.game.startWave) TD.game.startWave(); });
+        document.getElementById('td-reset').addEventListener('click', ()=> { if (TD.game && TD.game.reset) TD.game.reset(); });
+        document.getElementById('td-upgrade').addEventListener('click', ()=> { if (TD.game && TD.game.upgrade) TD.game.upgrade(); });
+        document.getElementById('td-sell').addEventListener('click', ()=> { if (TD.game && TD.game.sell) TD.game.sell(); });
+
+        // Core openGame: initializes a game into the modal canvas and builds controls
+        TD.openGame = function(key){
             TD.unload();
-            hideModal('tdModal');
-        });
-        document.getElementById('td-close-and-unload').addEventListener('click', () => {
-            TD.unload();
-            hideModal('tdModal');
-        });
-
-        document.getElementById('td-stop').addEventListener('click', () => {
-            TD.resetGame();
-        });
-
-        document.getElementById('td-start-wave').addEventListener('click', () => {
-            if(TD.game && typeof TD.game.startWave === 'function') TD.game.startWave();
-        });
-
-        document.getElementById('td-upgrade').addEventListener('click', () => {
-            if(TD.game && typeof TD.game.upgrade === 'function') TD.game.upgrade();
-        });
-        document.getElementById('td-sell').addEventListener('click', () => {
-            if(TD.game && typeof TD.game.sell === 'function') TD.game.sell();
-        });
-
-        // Core: open a specific game in the modal and initialize
-        TD.openGame = function(key) {
-            TD.unload(); // cleanup previous
             TD.current = key;
-            document.getElementById('td-game-title').innerText = key === 'vector' ? 'Vector Valley' : (key === 'citadel' ? 'Neon Citadel' : 'Sentinel Grid');
-            // Map to global game object names
-            if (key === 'vector') TD.game = window.VectorGame || window.VectorValley || null;
-            if (key === 'citadel') TD.game = window.NeonGame || window.NeonCitadel || null;
-            if (key === 'sentinel') TD.game = window.SentinelGame || window.td || window.Sentinel || null;
-
-            if (!TD.game) {
-                document.getElementById('td-build-list').innerHTML = '<div style="color:#faa;">Game not available</div>';
+            let gameObj = null;
+            if (key === 'vector') gameObj = window.VectorGame || window.VectorValley || null;
+            if (key === 'citadel') gameObj = window.NeonGame || window.NeonCitadel || null;
+            if (key === 'sentinel') gameObj = window.SentinelGame || null;
+            if (!gameObj) {
+                document.getElementById('td-build-list').innerHTML = `<div style="color:#faa;">Game not available</div>`;
                 return;
             }
+            TD.game = gameObj;
+            document.getElementById('td-game-title').innerText = key === 'vector' ? 'Vector Valley' : (key==='citadel' ? 'Neon Citadel' : 'Sentinel Grid');
 
-            // Prepare build list from game.conf if available
-            const conf = TD.game.conf && TD.game.conf.towers ? TD.game.conf.towers : null;
-            const buildList = document.getElementById('td-build-list');
-            buildList.innerHTML = '';
+            // populate build list from game.conf
+            const conf = (gameObj.conf && gameObj.conf.towers) ? gameObj.conf.towers : null;
+            const bl = document.getElementById('td-build-list');
+            bl.innerHTML = '';
             if (conf) {
                 for (let k in conf) {
                     const t = conf[k];
                     const btn = document.createElement('button');
                     btn.className = 't-btn';
                     btn.id = 'btn-'+k;
-                    btn.innerText = `${t.name}  — $${t.cost || t.cost || 0}`;
+                    btn.innerText = `${t.name} — $${t.cost || (t.cost||0)}`;
                     btn.dataset.key = k;
                     btn.addEventListener('click', () => {
                         TD.setBuild(k);
                     });
-                    buildList.appendChild(btn);
+                    bl.appendChild(btn);
                 }
             } else {
-                buildList.innerHTML = '<div style="color:#aaa;">No build data available.</div>';
+                bl.innerHTML = '<div style="color:#aaa;">No build data</div>';
             }
 
-            // Initialize the game with the modal canvas & chosen difficulty
+            // initialize the engine
             try {
-                if (typeof TD.game.init === 'function') {
-                    TD.game.init(TD.canvas, TD.diff);
-                } else if (typeof TD.game.setupPath === 'function' && typeof TD.game.reset === 'function') {
-                    // fallback for engines that expect direct globals
-                    if (TD.game.init) TD.game.init(TD.canvas, TD.diff);
+                if (typeof gameObj.init === 'function') {
+                    // pass options: difficulty, placement mode, quality
+                    const opts = { difficulty: TD.diff, placementSingle: !TD.placementPersistent, quality: TD.quality };
+                    gameObj.init(TD.canvas, opts);
                 }
-            } catch (err) {
-                console.error('Game init error', err);
-            }
+            } catch (err) { console.error('Game init error:', err); }
 
-            // Start loop
+            // start a per-frame update loop that reads game.update/draw if present
             TD.loop();
         };
 
-        TD.setBuild = function(k) {
-            TD.buildSelection = k;
-            // Visual toggle
+        TD.setBuild = function(k){
+            if (!TD.game) return;
+            // visually toggle buttons
             document.querySelectorAll('.t-btn').forEach(b => b.classList.remove('active'));
             const el = document.getElementById('btn-'+k);
             if (el) el.classList.add('active');
-            if (TD.game && typeof TD.game.setBuild === 'function') {
-                TD.game.setBuild(k);
-            }
+            if (TD.game.setBuild) TD.game.setBuild(k);
         };
 
-        // Animation/update loop - calls into the game's update/draw
-        TD.loop = function() {
+        TD.loop = function(){
             if (!TD.game) return;
-            // If the underlying game provides update/draw API, call them
             try {
-                if (typeof TD.game.update === 'function') TD.game.update();
-                if (typeof TD.game.draw === 'function') TD.game.draw(TD.ctx);
-                // Update HUD if available
-                document.getElementById('td-wave').innerText = TD.game.wave || 0;
-                document.getElementById('td-money').innerText = Math.floor(TD.game.money || 0);
-                document.getElementById('td-lives').innerText = TD.game.lives || 0;
-                // Inspector info if available
-                if (TD.game.sel) {
-                    const s = TD.game.sel;
-                    const info = `Type: ${s.type || s.name || 'n/a'}\nLevel: ${s.level || s.lvl || 1}\nDmg: ${Math.round(s.dmg||0)}\nRng: ${Math.round(s.r||s.range||0)}`;
-                    document.getElementById('td-insp').innerText = info;
+                if (TD.game.update) TD.game.update();
+                if (TD.game.draw) TD.game.draw(TD.ctx);
+                // HUD update
+                document.getElementById('td-wave').innerText = TD.game.wave || TD.game.state && TD.game.state.wave || 0;
+                document.getElementById('td-money').innerText = Math.floor(TD.game.money || (TD.game.state && TD.game.state.money) || 0);
+                document.getElementById('td-lives').innerText = TD.game.lives || (TD.game.state && TD.game.state.lives) || 0;
+
+                // inspector content
+                const sel = TD.game.sel || (TD.game.state && TD.game.state.sel) || null;
+                if (sel) {
+                    document.getElementById('td-insp').innerText = `Type: ${sel.type || sel.name || 'N/A'}\nLvl: ${sel.level||sel.lvl||1}\nDmg: ${Math.round(sel.dmg||0)}\nRng: ${Math.round(sel.r||sel.range||0)}`;
                 } else {
                     document.getElementById('td-insp').innerText = 'Select a tower';
                 }
-            } catch (err) {
-                console.error('TD game loop error', err);
-            }
-            TD.loopId = requestAnimationFrame(TD.loop);
+            } catch (err) { console.error('TD loop error', err); }
+            TD.raf = requestAnimationFrame(TD.loop);
         };
 
-        TD.resetGame = function() {
-            if (!TD.game) return;
-            try {
-                if (typeof TD.game.reset === 'function') TD.game.reset();
-                if (typeof TD.game.init === 'function') TD.game.init(TD.canvas, TD.diff);
-            } catch (err) { console.warn('reset failed', err); }
-        };
-
-        TD.unload = function() {
-            if (TD.loopId) cancelAnimationFrame(TD.loopId);
-            TD.loopId = null;
+        TD.unload = function(){
+            if (TD.raf) cancelAnimationFrame(TD.raf);
+            TD.raf = null;
             if (TD.game && typeof TD.game.stop === 'function') {
                 try { TD.game.stop(); } catch(e) { console.warn(e); }
             }
             TD.game = null;
-            TD.current = null;
-            // clear canvas
-            TD.ctx.clearRect(0,0,TD.canvas.width, TD.canvas.height);
             document.getElementById('td-build-list').innerHTML = '';
-            document.getElementById('td-insp').innerText = 'Select a tower';
         };
 
-        // Handle canvas clicks and translate to game click API
+        // Canvas click mapping into current game click handler
         TD.canvas.addEventListener('click', (e) => {
             if (!TD.game) return;
             const r = TD.canvas.getBoundingClientRect();
-            const x = e.clientX - r.left;
-            const y = e.clientY - r.top;
+            const x = e.clientX - r.left, y = e.clientY - r.top;
             try {
-                if (typeof TD.game.click === 'function') TD.game.click(x, y);
-            } catch (err) { console.error('TD click->game error', err); }
+                if (TD.game.click) TD.game.click(x, y);
+            } catch (err) { console.error('game click error', err); }
         });
 
-        // Close modals on ESC
+        // Keyboard: ESC closes modal
         document.addEventListener('keydown', (ev) => {
             if (ev.key === 'Escape') {
-                ['racerModal','superMinesweeperModal','rogueModal','tdModal'].forEach(id => hideModal(id));
+                hideModal('tdModal');
                 TD.unload();
             }
         });
