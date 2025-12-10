@@ -3,372 +3,394 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <title>Tower Defence Collection</title>
+    <title>Defense Protocols | Experimental</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <style>
         :root {
-            --bg: #0b0f19;
-            --card: #151a26;
-            --accent: #3366cc;
-            --neon: #00ffff;
-            --danger: #ff3366;
-            --text: #e0e6ed;
+            --bg: #050505;
+            --panel: #111;
+            --border: #333;
+            --primary: #00ffcc; /* Sentinel Green/Cyan */
+            --secondary: #ffaa00; /* Vector Orange */
+            --tertiary: #ff00ff; /* Neon Pink */
+            --text: #eee;
         }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow-x: hidden; }
         
-        /* Header & Layout */
-        header { background: #050810; padding: 20px; text-align: center; border-bottom: 1px solid #223; }
-        header h1 { margin: 0; font-weight: 300; letter-spacing: 2px; text-transform: uppercase; color: var(--neon); text-shadow: 0 0 10px rgba(0,255,255,0.3); }
-        
-        .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; }
-        
-        /* Game Cards */
-        .card { background: var(--card); border: 1px solid #2a3040; border-radius: 12px; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }
-        .card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); border-color: var(--accent); }
-        .card-header { height: 140px; background: linear-gradient(45deg, #1a202e, #252b3d); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-        .card-header h2 { font-size: 1.5em; z-index: 2; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
-        .card-body { padding: 20px; flex: 1; display: flex; flex-direction: column; }
-        .card p { color: #8b9bb4; line-height: 1.5; font-size: 0.95em; flex: 1; }
-        .tags { display: flex; gap: 8px; margin-bottom: 15px; }
-        .tag { font-size: 0.75em; padding: 4px 8px; border-radius: 4px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
-        
-        .btn { border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; width: 100%; transition: 0.2s; }
-        .btn-play { background: linear-gradient(90deg, var(--accent), #4d88ff); color: white; }
-        .btn-play:hover { box-shadow: 0 0 15px rgba(51,102,204,0.4); }
+        /* HEADER */
+        header {
+            padding: 20px; text-align: center; border-bottom: 1px solid var(--border);
+            background: linear-gradient(180deg, #101010 0%, #050505 100%);
+        }
+        h1 { margin: 0; font-weight: 300; letter-spacing: 4px; text-transform: uppercase; color: #fff; }
+        h1 span { color: var(--tertiary); font-weight: 700; text-shadow: 0 0 15px rgba(255,0,255,0.4); }
 
-        /* MODAL SYSTEM */
+        /* CARD GRID */
+        .container { max-width: 1100px; margin: 40px auto; padding: 0 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 30px; }
+        
+        .card {
+            background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; position: relative;
+        }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 10px 40px rgba(0,0,0,0.6); border-color: #555; }
+        
+        .card-header { height: 160px; display: flex; align-items: center; justify-content: center; background: #000; position: relative; overflow: hidden; }
+        .card-header::after { content:''; position: absolute; top:0; left:0; width:100%; height:100%; background: linear-gradient(0deg, var(--panel), transparent); }
+        .card h2 { position: relative; z-index: 2; margin: 0; font-size: 1.8em; text-transform: uppercase; letter-spacing: 2px; }
+        
+        .card-body { padding: 25px; flex: 1; display: flex; flex-direction: column; }
+        .badge { display: inline-block; padding: 4px 8px; font-size: 0.75em; background: rgba(255,255,255,0.1); border-radius: 4px; margin-bottom: 12px; width: fit-content; }
+        .card p { color: #999; line-height: 1.6; margin-bottom: 20px; flex: 1; font-size: 0.95em; }
+        
+        .play-btn {
+            width: 100%; padding: 12px; border: none; border-radius: 6px; 
+            font-weight: 700; font-size: 1em; text-transform: uppercase; cursor: pointer;
+            transition: 0.2s; color: #000;
+        }
+        .play-btn:hover { filter: brightness(1.2); box-shadow: 0 0 20px currentColor; }
+
+        /* MODAL (GAME WINDOW) */
         .modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center;
-            backdrop-filter: blur(5px);
+            display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.95); z-index: 9999;
+            align-items: center; justify-content: center; backdrop-filter: blur(8px);
         }
         .modal.active { display: flex; }
         
-        .game-window {
-            background: #111; border: 1px solid #333; border-radius: 8px;
-            box-shadow: 0 0 50px rgba(0,0,0,0.8);
-            position: relative; display: flex; flex-direction: column;
-            max-width: 95vw; max-height: 95vh;
+        .game-frame {
+            width: 95vw; height: 90vh; max-width: 1400px;
+            background: #080808; border: 1px solid #333; border-radius: 8px;
+            display: flex; flex-direction: column; position: relative;
+            box-shadow: 0 0 100px rgba(0,0,0,1);
         }
 
-        /* Top Bar inside Modal */
-        .gw-header {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 10px 20px; background: #1a1a1a; border-bottom: 1px solid #333;
+        /* HUD */
+        .gf-header {
+            height: 60px; background: #111; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
         }
-        .gw-stats { display: flex; gap: 20px; font-family: monospace; font-size: 1.1em; color: #fff; }
-        .stat-item span { color: var(--neon); }
-        .gw-close { background: #333; border: none; color: #fff; width: 30px; height: 30px; border-radius: 4px; cursor: pointer; }
-        .gw-close:hover { background: var(--danger); }
+        .stats-bar { display: flex; gap: 30px; font-family: monospace; font-size: 1.2em; color: #fff; }
+        .stat span { color: #888; margin-right: 5px; font-size: 0.8em; }
+        .stat b { color: var(--primary); }
+        .close-btn { background: #222; border: 1px solid #444; color: #fff; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+        .close-btn:hover { background: #f33; border-color: #f00; }
 
-        /* Canvas Area */
-        .canvas-wrapper { position: relative; background: #000; overflow: hidden; margin: 0 auto; }
-        canvas { display: block; cursor: crosshair; }
+        /* CANVAS AREA */
+        .canvas-container { flex: 1; position: relative; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        canvas { box-shadow: 0 0 30px rgba(0,0,0,0.5); }
 
-        /* Controls Area (Bottom) */
-        .gw-controls {
-            padding: 15px; background: #151515; border-top: 1px solid #333;
-            display: flex; gap: 15px; align-items: center; justify-content: space-between;
+        /* CONTROLS (BOTTOM) */
+        .gf-controls {
+            height: 100px; background: #111; border-top: 1px solid #333;
+            display: flex; align-items: center; padding: 0 20px; gap: 20px;
         }
-        .tower-selector { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px; }
-        .t-btn {
-            background: #222; border: 1px solid #444; color: #ccc;
-            padding: 8px 12px; border-radius: 6px; cursor: pointer;
-            display: flex; flex-direction: column; align-items: center; min-width: 70px;
-        }
-        .t-btn:hover { background: #2a2a2a; border-color: #666; }
-        .t-btn.selected { border-color: var(--neon); background: rgba(0,255,255,0.05); box-shadow: 0 0 10px rgba(0,255,255,0.1); }
-        .t-name { font-size: 0.8em; font-weight: bold; margin-bottom: 2px; }
-        .t-cost { font-size: 0.75em; color: #ffd700; }
-
-        .game-actions { display: flex; gap: 10px; }
-        .btn-action { padding: 10px 20px; background: #333; color: white; border: 1px solid #555; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .btn-action.glow { border-color: var(--neon); color: var(--neon); }
-        .btn-action.glow:hover { background: var(--neon); color: #000; }
-
-        /* Inspector (Side or Overlay) */
-        .inspector-overlay {
-            position: absolute; bottom: 80px; right: 20px; width: 220px;
-            background: rgba(15, 20, 30, 0.95); border: 1px solid #444; border-radius: 8px;
-            padding: 15px; display: none; pointer-events: auto; backdrop-filter: blur(4px);
-        }
-        .insp-header { color: var(--neon); font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;}
-        .insp-stat { display: flex; justify-content: space-between; font-size: 0.9em; color: #aaa; margin-bottom: 4px; }
-        .insp-stat b { color: #fff; }
-        .insp-actions { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .btn-upg { background: #003300; border: 1px solid #006600; color: #afa; padding: 6px; border-radius: 4px; cursor: pointer; font-size: 0.8em; }
-        .btn-sell { background: #330000; border: 1px solid #660000; color: #faa; padding: 6px; border-radius: 4px; cursor: pointer; font-size: 0.8em; }
         
-        /* Specific Styles for Neon Citadel Upgrades */
-        .neon-upgrades { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
-        .btn-neon-up { display: flex; justify-content: space-between; background: #222; border: 1px solid #444; color: #eee; padding: 6px; cursor: pointer; font-size: 0.8em; border-radius: 4px; }
-        .btn-neon-up:hover { border-color: var(--neon); }
+        .tower-dock { display: flex; gap: 10px; overflow-x: auto; flex: 1; padding-bottom: 5px; }
+        .t-card {
+            min-width: 80px; height: 70px; background: #1a1a1a; border: 1px solid #333; border-radius: 6px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; transition: 0.2s; position: relative;
+        }
+        .t-card:hover { background: #222; transform: translateY(-2px); }
+        .t-card.active { border-color: var(--primary); background: rgba(0,255,204,0.05); box-shadow: 0 0 15px rgba(0,255,204,0.1); }
+        .t-name { font-size: 0.75em; font-weight: 700; margin-bottom: 4px; color: #eee; }
+        .t-cost { font-size: 0.7em; color: #ffd700; }
+        
+        .action-dock { display: flex; gap: 10px; }
+        .act-btn { height: 70px; padding: 0 20px; font-weight: 700; cursor: pointer; background: #222; border: 1px solid #333; color: #fff; border-radius: 6px; }
+        .act-btn.primary { background: linear-gradient(180deg, #222, #111); border-color: var(--primary); color: var(--primary); }
+        .act-btn.primary:hover { background: var(--primary); color: #000; }
 
-        /* Menu Overlay inside Game */
-        .game-menu {
-            position: absolute; top:0; left:0; width:100%; height:100%;
-            background: rgba(0,0,0,0.85); z-index: 10;
+        /* OVERLAYS (MENU, INSPECTOR) */
+        .ingame-menu {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 100;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
-        .diff-selector { display: flex; gap: 10px; margin-bottom: 20px; }
-        .diff-btn { padding: 10px 20px; background: transparent; border: 1px solid #555; color: #888; cursor: pointer; border-radius: 4px; }
-        .diff-btn.active { border-color: var(--neon); color: var(--neon); background: rgba(0,255,255,0.1); }
+        .diff-select { display: flex; gap: 15px; margin: 20px 0; }
+        .d-btn { padding: 10px 20px; background: transparent; border: 1px solid #555; color: #888; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        .d-btn.selected { border-color: #fff; color: #fff; background: rgba(255,255,255,0.1); }
+
+        .inspector {
+            position: absolute; right: 20px; top: 20px; width: 220px;
+            background: rgba(15,20,25,0.9); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+            padding: 15px; backdrop-filter: blur(10px); display: none; pointer-events: none; /* Let clicks pass through, buttons enable pointer-events */
+        }
+        .inspector * { pointer-events: auto; }
+        .insp-title { font-weight: bold; color: #fff; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px; }
+        .insp-row { display: flex; justify-content: space-between; font-size: 0.9em; color: #aaa; margin-bottom: 5px; }
+        .insp-row b { color: #fff; }
+        
+        .insp-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 15px; }
+        .i-btn { padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; }
+        .upg { background: #004400; color: #0f0; border: 1px solid #006600; }
+        .sell { background: #440000; color: #f00; border: 1px solid #660000; }
 
     </style>
 </head>
 <body>
 
-<header>
-    <h1>Defence <span style="color:white">Collection</span></h1>
-</header>
+    <header>
+        <h1>DEFENSE <span>PROTOCOLS</span></h1>
+    </header>
 
-<div class="container">
-    <div class="grid">
-        <div class="card">
-            <div class="card-header" style="border-bottom: 4px solid #00ff00;">
-                <h2 style="color:#00ff00">SENTINEL GRID</h2>
+    <div class="container">
+        <div class="grid">
+            <div class="card" style="border-top: 4px solid var(--primary);">
+                <div class="card-header">
+                    <h2 style="color:var(--primary)">SENTINEL GRID</h2>
+                </div>
+                <div class="card-body">
+                    <span class="badge" style="color:var(--primary)">STRATEGY</span>
+                    <p>Classic maze-building defense. Enemies find the shortest path. You must build the maze to slow them down. Features a tactical grid view.</p>
+                    <button class="play-btn" style="background:var(--primary)" onclick="App.launch('sentinel')">INITIALIZE</button>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="tags"><span class="tag">Classic</span><span class="tag">Maze Building</span></div>
-                <p>The classic strategy game. Build your own maze. Enemies find the shortest path—block them effectively but keep a route open.</p>
-                <button class="btn btn-play" onclick="App.openGame('sentinel')">PLAY NOW</button>
-            </div>
-        </div>
 
-        <div class="card">
-            <div class="card-header" style="border-bottom: 4px solid #ffaa00;">
-                <h2 style="color:#ffaa00">VECTOR VALLEY</h2>
+            <div class="card" style="border-top: 4px solid var(--secondary);">
+                <div class="card-header">
+                    <h2 style="color:var(--secondary)">VECTOR VALLEY</h2>
+                </div>
+                <div class="card-body">
+                    <span class="badge" style="color:var(--secondary)">ARCADE</span>
+                    <p>Fast-paced fixed-path defense. Select your difficulty to change the path layout. Includes distinct enemy types and vector graphics.</p>
+                    <button class="play-btn" style="background:var(--secondary)" onclick="App.launch('vector')">INITIALIZE</button>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="tags"><span class="tag">Fixed Path</span><span class="tag">Casual</span></div>
-                <p>A vibrant fixed-path defense. Choose your difficulty. Features persistent building and upgraded particle visuals.</p>
-                <button class="btn btn-play" onclick="App.openGame('vector')">PLAY NOW</button>
-            </div>
-        </div>
 
-        <div class="card">
-            <div class="card-header" style="border-bottom: 4px solid #00ffff;">
-                <h2 style="color:#00ffff">NEON CITADEL</h2>
-            </div>
-            <div class="card-body">
-                <div class="tags"><span class="tag">Flagship</span><span class="tag">Hardcore</span><span class="tag">Complex</span></div>
-                <p>The ultimate experience. Smart AI, destructible towers, complex upgrade trees, elementals, and massive bosses.</p>
-                <button class="btn btn-play" onclick="App.openGame('neon')">PLAY NOW</button>
+            <div class="card" style="border-top: 4px solid var(--tertiary);">
+                <div class="card-header">
+                    <h2 style="color:var(--tertiary)">NEON CITADEL</h2>
+                </div>
+                <div class="card-body">
+                    <span class="badge" style="color:var(--tertiary)">FLAGSHIP</span>
+                    <p>The ultimate challenge. Complex AI, destructible towers, massive bosses, and a deep upgrade system. High-fidelity visual effects.</p>
+                    <button class="play-btn" style="background:var(--tertiary)" onclick="App.launch('neon')">INITIALIZE</button>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<div id="game-modal" class="modal">
-    <div class="game-window">
-        <div class="gw-header">
-            <div class="gw-stats">
-                <div class="stat-item">WAVE <span id="ui-wave">1</span></div>
-                <div class="stat-item">$<span id="ui-money">0</span></div>
-                <div class="stat-item">♥ <span id="ui-lives">20</span></div>
-            </div>
-            <button class="gw-close" onclick="App.closeGame()">×</button>
-        </div>
-
-        <div class="canvas-wrapper">
-            <canvas id="game-canvas" width="900" height="600"></canvas>
-            
-            <div id="ingame-menu" class="game-menu" style="display:none;">
-                <h2 id="menu-title" style="color:var(--neon); letter-spacing:4px;">PREPARE DEFENCE</h2>
-                <div id="diff-container" class="diff-selector" style="display:none;">
-                    <button class="diff-btn" onclick="App.setDiff('easy', this)">EASY</button>
-                    <button class="diff-btn active" onclick="App.setDiff('med', this)">NORMAL</button>
-                    <button class="diff-btn" onclick="App.setDiff('hard', this)">HARD</button>
+    <div id="modal" class="modal">
+        <div class="game-frame">
+            <div class="gf-header">
+                <div class="stats-bar">
+                    <div class="stat"><span>WAVE</span> <b id="ui-wave">1</b></div>
+                    <div class="stat"><span>CREDITS</span> <b id="ui-money">0</b></div>
+                    <div class="stat"><span>INTEGRITY</span> <b id="ui-lives">100</b></div>
                 </div>
-                <button class="btn btn-play" style="width:200px;" onclick="App.startGame()">START GAME</button>
+                <button class="close-btn" onclick="App.close()">ABORT SIMULATION</button>
             </div>
 
-            <div id="inspector" class="inspector-overlay">
-                <div class="insp-header" id="insp-name">Selected</div>
-                <div id="insp-content">
+            <div class="canvas-container">
+                <canvas id="game-canvas" width="1200" height="700"></canvas>
+                
+                <div id="start-menu" class="ingame-menu">
+                    <h2 style="color:#fff; font-size:2em; letter-spacing:5px;">SYSTEM READY</h2>
+                    
+                    <div id="diff-selector" class="diff-select" style="display:none;">
+                        <button class="d-btn" onclick="App.setDiff('easy', this)">EASY</button>
+                        <button class="d-btn selected" onclick="App.setDiff('med', this)">NORMAL</button>
+                        <button class="d-btn" onclick="App.setDiff('hard', this)">HARD</button>
                     </div>
-                <div class="insp-actions" id="insp-actions-std" style="display:none">
-                    <button class="btn-upg" onclick="App.action('upgrade')">UPGRADE <br><span id="upg-cost">$0</span></button>
-                    <button class="btn-sell" onclick="App.action('sell')">SELL <br><span id="sell-cost">$0</span></button>
+
+                    <button class="play-btn" style="width:200px; background:#fff;" onclick="App.startMatch()">ENGAGE</button>
                 </div>
-                <div class="neon-upgrades" id="insp-actions-neon" style="display:none">
-                    <button class="btn-neon-up" onclick="App.action('upg_dmg')"><span>DMG</span> <span id="nc-cost-dmg">$100</span></button>
-                    <button class="btn-neon-up" onclick="App.action('upg_rng')"><span>RNG</span> <span id="nc-cost-rng">$100</span></button>
-                    <button class="btn-neon-up" onclick="App.action('upg_rate')"><span>SPD</span> <span id="nc-cost-rate">$100</span></button>
-                    <button class="btn-sell" style="width:100%; margin-top:5px;" onclick="App.action('sell')">DISMANTLE <span id="nc-sell">$50</span></button>
+
+                <div id="inspector" class="inspector">
+                    <div class="insp-title" id="i-name">TOWER</div>
+                    <div id="i-stats"></div>
+                    <div class="insp-btns" id="i-controls-std">
+                        <button class="i-btn upg" onclick="App.gameAction('upgrade')">UPGRADE <br><span id="i-cost-up" style="color:#afa; font-size:0.9em">$0</span></button>
+                        <button class="i-btn sell" onclick="App.gameAction('sell')">SELL <br><span id="i-cost-sell" style="color:#faa; font-size:0.9em">$0</span></button>
+                    </div>
+                    <div class="insp-btns" id="i-controls-neon" style="display:none; grid-template-columns:1fr; gap:5px;">
+                        <button class="i-btn" style="background:#222; color:#fff; border:1px solid #444;" onclick="App.gameAction('upg_dmg')">DMG <span id="n-cost-dmg" style="float:right; color:gold">$0</span></button>
+                        <button class="i-btn" style="background:#222; color:#fff; border:1px solid #444;" onclick="App.gameAction('upg_rng')">RNG <span id="n-cost-rng" style="float:right; color:gold">$0</span></button>
+                        <button class="i-btn" style="background:#222; color:#fff; border:1px solid #444;" onclick="App.gameAction('upg_rate')">SPD <span id="n-cost-rate" style="float:right; color:gold">$0</span></button>
+                        <button class="i-btn sell" onclick="App.gameAction('sell')">DISMANTLE <span id="n-cost-sell" style="float:right; color:#faa">$0</span></button>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="gw-controls">
-            <div class="tower-selector" id="tower-row">
+            <div class="gf-controls">
+                <div class="tower-dock" id="tower-dock"></div>
+                <div class="action-dock">
+                    <button class="act-btn primary" onclick="App.gameAction('wave')">NEXT WAVE</button>
                 </div>
-            <div class="game-actions">
-                <button class="btn-action glow" onclick="App.action('next_wave')">NEXT WAVE</button>
             </div>
         </div>
     </div>
-</div>
 
-<script src="sentinel-grid.js"></script>
-<script src="vector-valley.js"></script>
-<script src="neon-citadel.js"></script>
+    <script src="sentinel-grid.js"></script>
+    <script src="vector-valley.js"></script>
+    <script src="neon-citadel.js"></script>
 
-<script>
-const App = {
-    currentGame: null,
-    gameId: null,
-    loopId: null,
-    canvas: document.getElementById('game-canvas'),
-    ctx: document.getElementById('game-canvas').getContext('2d'),
-    
-    // Config state
-    difficulty: 'med',
+    <script>
+    const App = {
+        activeGame: null,
+        gameId: null,
+        loopId: null,
+        diff: 'med',
+        canvas: document.getElementById('game-canvas'),
+        ctx: document.getElementById('game-canvas').getContext('2d', { alpha: false }), // Optimize
 
-    openGame: (id) => {
-        App.gameId = id;
-        document.getElementById('game-modal').classList.add('active');
-        document.getElementById('ingame-menu').style.display = 'flex';
-        
-        // Reset UI
-        document.getElementById('inspector').style.display = 'none';
-        document.getElementById('diff-container').style.display = (id === 'vector') ? 'flex' : 'none';
-        
-        // Initialize appropriate engine wrapper
-        if (id === 'sentinel') App.currentGame = window.SentinelGame;
-        if (id === 'vector') App.currentGame = window.VectorGame;
-        if (id === 'neon') App.currentGame = window.NeonGame;
+        launch: (id) => {
+            App.gameId = id;
+            document.getElementById('modal').classList.add('active');
+            document.getElementById('start-menu').style.display = 'flex';
+            document.getElementById('inspector').style.display = 'none';
+            document.getElementById('diff-selector').style.display = (id === 'vector') ? 'flex' : 'none';
 
-        if (App.currentGame) {
-            // Build UI buttons based on game config
-            App.buildControls();
-            // Init game in background (paused/waiting)
-            App.currentGame.init(App.canvas, { difficulty: App.difficulty });
-            App.loop();
-        }
-    },
+            // Select Engine
+            if(id === 'sentinel') App.activeGame = window.SentinelGame;
+            if(id === 'vector') App.activeGame = window.VectorGame;
+            if(id === 'neon') App.activeGame = window.NeonGame;
 
-    closeGame: () => {
-        if(App.loopId) cancelAnimationFrame(App.loopId);
-        if(App.currentGame && App.currentGame.stop) App.currentGame.stop();
-        App.currentGame = null;
-        document.getElementById('game-modal').classList.remove('active');
-    },
+            if(App.activeGame) {
+                // Build Controls
+                App.buildDock();
+                // Init (Paused)
+                App.activeGame.init(App.canvas, { difficulty: App.diff });
+                App.loop();
+            }
+        },
 
-    setDiff: (d, btn) => {
-        App.difficulty = d;
-        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-    },
+        close: () => {
+            if(App.loopId) cancelAnimationFrame(App.loopId);
+            if(App.activeGame && App.activeGame.stop) App.activeGame.stop();
+            App.activeGame = null;
+            document.getElementById('modal').classList.remove('active');
+        },
 
-    startGame: () => {
-        document.getElementById('ingame-menu').style.display = 'none';
-        // Re-init with selected difficulty for Vector Valley
-        if(App.currentGame) App.currentGame.init(App.canvas, { difficulty: App.difficulty });
-    },
+        setDiff: (d, btn) => {
+            App.diff = d;
+            document.querySelectorAll('.d-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+        },
 
-    buildControls: () => {
-        const row = document.getElementById('tower-row');
-        row.innerHTML = '';
-        const conf = App.currentGame.conf.towers;
-        for (let k in conf) {
-            let t = conf[k];
-            let btn = document.createElement('div');
-            btn.className = 't-btn';
-            btn.id = 'btn-' + k;
-            btn.onclick = () => {
-                App.currentGame.setBuild(k);
-                document.querySelectorAll('.t-btn').forEach(b => b.classList.remove('selected'));
-                btn.classList.add('selected');
-            };
-            btn.innerHTML = `<span class="t-name" style="color:${t.color}">${t.name}</span><span class="t-cost">$${t.cost}</span>`;
-            row.appendChild(btn);
-        }
-    },
+        startMatch: () => {
+            document.getElementById('start-menu').style.display = 'none';
+            // Re-init with confirmed difficulty
+            if(App.activeGame) App.activeGame.init(App.canvas, { difficulty: App.diff });
+        },
 
-    action: (act) => {
-        if (!App.currentGame) return;
-        if (act === 'next_wave') App.currentGame.startWave();
-        else if (act === 'upgrade') App.currentGame.upgrade();
-        else if (act === 'sell') App.currentGame.sell();
-        
-        // Neon specific
-        else if (act.startsWith('upg_')) App.currentGame.upgrade(act.replace('upg_', ''));
-        
-        App.updateUI();
-    },
-
-    loop: () => {
-        if (!App.currentGame) return;
-        App.currentGame.update();
-        App.currentGame.draw(App.ctx);
-        App.updateUI();
-        App.updateInspector();
-        App.loopId = requestAnimationFrame(App.loop);
-    },
-
-    updateUI: () => {
-        const s = App.currentGame;
-        document.getElementById('ui-wave').innerText = s.wave;
-        document.getElementById('ui-money').innerText = Math.floor(s.money);
-        document.getElementById('ui-lives').innerText = s.lives;
-    },
-
-    updateInspector: () => {
-        const sel = App.currentGame.sel;
-        const panel = document.getElementById('inspector');
-        
-        // Clear build selection if user canceled it in game
-        if (!App.currentGame.buildMode) {
-             document.querySelectorAll('.t-btn').forEach(b => b.classList.remove('selected'));
-        }
-
-        if (!sel) {
-            panel.style.display = 'none';
-            return;
-        }
-        panel.style.display = 'block';
-        document.getElementById('insp-name').innerText = sel.name;
-        document.getElementById('insp-name').style.color = sel.color;
-
-        let html = '';
-        if (sel.dmg) html += `<div class="insp-stat"><span>Damage</span><b>${sel.dmg}</b></div>`;
-        if (sel.r) html += `<div class="insp-stat"><span>Range</span><b>${Math.floor(sel.r)}</b></div>`;
-        if (sel.level) html += `<div class="insp-stat"><span>Level</span><b>${sel.level}</b></div>`;
-        if (sel.kills) html += `<div class="insp-stat"><span>Kills</span><b>${sel.kills}</b></div>`;
-        document.getElementById('insp-content').innerHTML = html;
-
-        // Show appropriate buttons
-        if (App.gameId === 'neon') {
-            document.getElementById('insp-actions-std').style.display = 'none';
-            document.getElementById('insp-actions-neon').style.display = 'flex';
-            // Update neon costs
-            const base = App.currentGame.conf.towers[sel.type].cost;
-            document.getElementById('nc-cost-dmg').innerText = '$'+Math.floor(base * 0.5 * ((sel.attrLevels.dmg||0)+1));
-            document.getElementById('nc-cost-rng').innerText = '$'+Math.floor(base * 0.4 * ((sel.attrLevels.rng||0)+1));
-            document.getElementById('nc-cost-rate').innerText = '$'+Math.floor(base * 0.6 * ((sel.attrLevels.rate||0)+1));
-            document.getElementById('nc-sell').innerText = '$'+Math.floor(base * 0.5);
-        } else {
-            document.getElementById('insp-actions-std').style.display = 'grid';
-            document.getElementById('insp-actions-neon').style.display = 'none';
+        buildDock: () => {
+            const dock = document.getElementById('tower-dock');
+            dock.innerHTML = '';
+            const conf = App.activeGame.conf.towers;
             
-            // Standard upgrade cost logic
-            let def = App.currentGame.conf.towers[sel.type];
-            let upCost = Math.floor(def.cost * 0.8 * (sel.level || 1));
-            document.getElementById('upg-cost').innerText = '$' + upCost;
-            document.getElementById('sell-cost').innerText = '$' + Math.floor(def.cost*0.5);
-        }
-    }
-};
+            for(let key in conf) {
+                let t = conf[key];
+                let btn = document.createElement('div');
+                btn.className = 't-card';
+                btn.id = 'btn-' + key; // Store ID for highlighting
+                btn.innerHTML = `<div class="t-name" style="color:${t.color}">${t.name}</div><div class="t-cost">$${t.cost}</div>`;
+                btn.onclick = () => {
+                    App.activeGame.setBuild(key);
+                    // UI Highlight handled in loop/click
+                    document.querySelectorAll('.t-card').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                };
+                dock.appendChild(btn);
+            }
+        },
 
-// Canvas Click Routing
-document.getElementById('game-canvas').addEventListener('mousedown', (e) => {
-    if (!App.currentGame) return;
-    const r = App.canvas.getBoundingClientRect();
-    App.currentGame.click(e.clientX - r.left, e.clientY - r.top);
-});
-</script>
+        gameAction: (act) => {
+            if(!App.activeGame) return;
+            if(act === 'wave') App.activeGame.startWave();
+            else if(act === 'upgrade') App.activeGame.upgrade();
+            else if(act === 'sell') App.activeGame.sell();
+            // Neon specific
+            else if(act.startsWith('upg_')) App.activeGame.upgrade(act.replace('upg_', ''));
+        },
+
+        loop: () => {
+            if(!App.activeGame) return;
+            
+            // 1. Update Game Logic
+            App.activeGame.update();
+            
+            // 2. Draw
+            App.activeGame.draw(App.ctx);
+            
+            // 3. Update HUD (Safe Getter Access)
+            const g = App.activeGame;
+            // Handle different property names or getter styles safely
+            let w = g.wave !== undefined ? g.wave : (g.state ? g.state.wave : 0);
+            let m = g.money !== undefined ? g.money : (g.state ? g.state.money : 0);
+            let l = g.lives !== undefined ? g.lives : (g.state ? g.state.lives : 0);
+            
+            document.getElementById('ui-wave').innerText = w;
+            document.getElementById('ui-money').innerText = Math.floor(m);
+            document.getElementById('ui-lives').innerText = l;
+
+            // 4. Update Inspector
+            App.updateInspector();
+
+            App.loopId = requestAnimationFrame(App.loop);
+        },
+
+        updateInspector: () => {
+            const sel = App.activeGame.sel; // Get selection
+            const panel = document.getElementById('inspector');
+            
+            // Handle clicking off build mode
+            if(!App.activeGame.buildMode) {
+                 document.querySelectorAll('.t-card').forEach(b => b.classList.remove('active'));
+            }
+
+            if(!sel) {
+                panel.style.display = 'none';
+                return;
+            }
+
+            panel.style.display = 'block';
+            document.getElementById('i-name').innerText = sel.name;
+            document.getElementById('i-name').style.color = sel.color;
+            
+            let html = '';
+            if(sel.dmg) html += `<div class="insp-row"><span>Damage</span><b>${Math.floor(sel.dmg)}</b></div>`;
+            if(sel.range || sel.rng) html += `<div class="insp-row"><span>Range</span><b>${Math.floor(sel.range || sel.rng)}</b></div>`;
+            if(sel.rate) html += `<div class="insp-row"><span>Speed</span><b>${sel.rate}</b></div>`;
+            document.getElementById('i-stats').innerHTML = html;
+
+            // Switch layout for Neon vs Others
+            if(App.gameId === 'neon') {
+                document.getElementById('i-controls-std').style.display = 'none';
+                document.getElementById('i-controls-neon').style.display = 'grid';
+                
+                // Calculate Neon Costs
+                const base = App.activeGame.conf.towers[sel.type].cost;
+                const getCost = (lvl) => Math.floor(base * 0.5 * ((lvl||0)+1));
+                
+                document.getElementById('n-cost-dmg').innerText = '$' + getCost(sel.attrLevels.dmg);
+                document.getElementById('n-cost-rng').innerText = '$' + getCost(sel.attrLevels.rng);
+                document.getElementById('n-cost-rate').innerText = '$' + getCost(sel.attrLevels.rate);
+                document.getElementById('n-cost-sell').innerText = '$' + Math.floor(base*0.5);
+
+            } else {
+                document.getElementById('i-controls-std').style.display = 'grid';
+                document.getElementById('i-controls-neon').style.display = 'none';
+                
+                // Std Costs
+                let def = App.activeGame.conf.towers[sel.type];
+                let upCost = Math.floor(def.cost * 0.8 * (sel.level || 1));
+                document.getElementById('i-cost-up').innerText = '$' + upCost;
+                document.getElementById('i-cost-sell').innerText = '$' + Math.floor(def.cost*0.5);
+            }
+        }
+    };
+
+    // Input Routing
+    document.getElementById('game-canvas').addEventListener('mousedown', (e) => {
+        if(!App.activeGame) return;
+        const r = App.canvas.getBoundingClientRect();
+        // Handle canvas scaling
+        const scaleX = App.canvas.width / r.width;
+        const scaleY = App.canvas.height / r.height;
+        App.activeGame.click((e.clientX - r.left) * scaleX, (e.clientY - r.top) * scaleY);
+    });
+    </script>
 </body>
 </html>
-
