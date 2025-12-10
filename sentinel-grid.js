@@ -1,7 +1,3 @@
-{
-type: uploaded file
-fileName: sentinel-grid.js
-fullContent:
 /* SENTINEL GRID - Fixed UI Stats */
 (function(global){
   const Sentinel = (function(){
@@ -171,4 +167,3 @@ fullContent:
   })();
   window.SentinelGame = Sentinel;
 })(window);
-}
