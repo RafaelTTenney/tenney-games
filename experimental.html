@@ -1,300 +1,441 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Experimental Games Hub</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    :root { 
-        /* Neon Theme Colors (Restored) */
-        --bg: #050505; 
-        --card-bg: rgba(15, 15, 15, 0.9);
-        --text-light: #eee;
-        --neon-main: #00FFFF;       /* General neon color (Cyan) */
+    <meta charset="utf-8" />
+    <title>Experimental | Games & Programs</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        /* --- CORE STYLES --- */
+        :root {
+            --primary: #00FFFF;
+            --dark: #00AAAA;
+            --bg: #050505;
+            --card: #111;
+            --muted: #888;
+            --glow: 0 0 5px var(--primary), 0 0 10px var(--primary);
+            --flagship: #ffcc00; /* Minesweeper Flagship Color */
+            --td-green: #00FF00;
+        }
+        body {
+            margin: 0;
+            font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+            background: var(--bg);
+            color: #eee;
+            min-height: 100vh;
+        }
+        header {
+            background: var(--card);
+            color: var(--primary);
+            padding: 14px 18px;
+            text-align: center;
+            font-weight: 700;
+            border-bottom: 2px solid var(--primary);
+            text-shadow: var(--glow);
+        }
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 18px;
+            background: #0a0a0a;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .top .links {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            background: transparent;
+            color: var(--primary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 700;
+            border: 1px solid var(--primary);
+            transition: all 0.2s ease;
+            box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.4);
+            cursor: pointer;
+            display: inline-block;
+        }
+        .btn.secondary {
+            background: var(--card);
+            color: var(--primary);
+            border: 1px solid var(--primary);
+        }
+        .btn:hover {
+            background: var(--primary);
+            color: var(--bg);
+            box-shadow: var(--glow);
+        }
+        .container {
+            max-width: 900px;
+            margin: 28px auto;
+            padding: 18px;
+            background: var(--card);
+            border-radius: 12px;
+            border: 1px solid #222;
+        }
+        h1 {
+            color: var(--primary);
+            margin: 0 0 8px 0;
+            text-shadow: var(--glow);
+        }
+        p.lead {
+            color: var(--muted);
+            margin: 6px 0 16px 0;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 12px;
+        }
+        .card {
+            background: var(--card);
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .card.flagship {
+            border: 2px solid var(--flagship);
+            box-shadow: 0 0 15px rgba(255, 204, 0, 0.2);
+        }
+        .card h3 {
+            margin: 0;
+            color: var(--primary);
+        }
+        .card.flagship h3 { color: var(--flagship); }
+
+        .card .meta {
+            color: var(--muted);
+            font-size: 0.95em;
+        }
+        .card .actions {
+            margin-top: auto;
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+        pre.demo {
+            background: var(--bg);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #333;
+            overflow: auto;
+            max-height: 160px;
+            color: #ccc;
+        }
+
+        /* --- MODAL STYLES --- */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.9);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: var(--card);
+            margin: auto;
+            padding: 20px;
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            width: auto;
+            box-shadow: 0 0 20px var(--primary);
+            text-align: center;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .modal-header h2 {
+            color: var(--primary);
+            margin: 0;
+            text-shadow: var(--glow);
+        }
+        .modal-close {
+            color: var(--muted);
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .modal-close:hover,
+        .modal-close:focus {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        .modal-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
         
-        /* Card-Specific Accent Colors */
-        --accent-a: #00FFCC;        /* Green/Cyan for Tower Defence */
-        --minesweeper-accent: #FFD700; /* Yellow/Gold for Minesweeper */
-        --rogue-accent: #FF55FF;     /* Magenta/Pink for Rogue Dungeon */
-        --racer-accent: #FF8844;     /* Orange/Red for Neon Racer++ */
-    }
-    /* Main Page Styling (Dark/Neon Theme) */
-    body { 
-        background: var(--bg); 
-        font-family: 'Inter', 'Segoe UI', Arial, sans-serif; 
-        margin:0; 
-        color: var(--text-light); 
-    }
-    header { 
-        background: rgba(0,0,0,0.4); 
-        color: var(--neon-main); 
-        padding: 16px; 
-        text-align:center; 
-        font-weight:900; 
-        font-size: 1.5em; 
-        letter-spacing: 3px; 
-        border-bottom: 2px solid var(--neon-main); 
-        box-shadow: 0 0 10px rgba(0,255,255,0.4);
-    }
-    .container { 
-        max-width:900px; 
-        margin:24px auto; 
-        background:transparent; 
-        padding:16px; 
-    }
-    .game-grid {
-        display:grid; 
-        grid-template-columns:repeat(auto-fit, minmax(240px,1fr)); 
-        gap:20px;
-    }
-    .card {
-        background: var(--card-bg); 
-        padding:18px; 
-        border-radius:12px; 
-        border:1px solid rgba(255,255,255,0.08); 
-        display:flex; 
-        flex-direction:column; 
-        justify-content:space-between;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .card:hover { 
-        transform: translateY(-5px); 
-        box-shadow: 0 10px 30px rgba(0,0,0,0.6); 
-    }
+        #racer-canvas, #rogue-canvas {
+            border: 2px solid var(--primary);
+            box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+        
+        /* Minesweeper Specifics */
+        .ms-menu { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
+        .ms-row { display: flex; gap: 10px; justify-content: center; }
+        .ms-btn { padding: 8px 16px; background: #333; border: 1px solid #555; color: #fff; cursor: pointer; }
+        .ms-btn.selected { background: var(--flagship); color: #000; font-weight: bold; border-color: #fff;}
+        #ms-game-container { margin-top: 15px; display: inline-block; background: #222; padding: 10px; border: 2px solid #555; border-radius: 5px; }
+        #ms-grid { display: grid; gap: 1px; background: #000; }
+        .ms-cell { width: 25px; height: 25px; background: #888; display: flex; justify-content: center; align-items: center; font-weight: bold; font-family: monospace; cursor: pointer; user-select: none; }
+        .ms-cell.revealed { background: #333; border: 1px solid #222; color: #eee; }
+        .ms-cell.flag { background: #333; color: #ff0000; }
+        .ms-cell.mine { background: #f00; color: #000; }
+        .ms-c1 { color: #5555ff; } .ms-c2 { color: #00aa00; } .ms-c3 { color: #ff5555; }
+        
+        .footer { text-align: center; color: #555; padding: 20px; }
 
-    .card h3 {
-        margin:0 0 10px 0; 
-        font-size: 1.2em; 
-        letter-spacing: 1px; 
-        text-shadow: 0 0 5px currentColor; 
-    }
-    .card p {
-        color:#aaa; 
-        margin:0 0 15px 0; 
-        flex:1; 
-        font-size: 0.9em;
-    }
-    
-    /* Card Accent Styling */
-    .td-card { border-left: 4px solid var(--accent-a); box-shadow: 0 0 10px rgba(0,255,204,0.1); }
-    .td-card h3 { color: var(--accent-a); }
-    .ms-card { border-left: 4px solid var(--minesweeper-accent); box-shadow: 0 0 10px rgba(255,215,0,0.1); }
-    .ms-card h3 { color: var(--minesweeper-accent); }
-    .rd-card { border-left: 4px solid var(--rogue-accent); box-shadow: 0 0 10px rgba(255,85,255,0.1); }
-    .rd-card h3 { color: var(--rogue-accent); }
-    .nr-card { border-left: 4px solid var(--racer-accent); box-shadow: 0 0 10px rgba(255,136,68,0.1); }
-    .nr-card h3 { color: var(--racer-accent); }
-
-
-    /* Buttons (Neon Style) */
-    .btn {
-        background: rgba(255,255,255,0.1); 
-        color: var(--text-light); 
-        padding:10px 12px; 
-        border-radius:6px; 
-        text-decoration:none; 
-        font-weight:700; 
-        border:none; 
-        cursor:pointer; 
-        text-align: center;
-        display: block; 
-        width: 100%;
-        box-sizing: border-box;
-        transition: background 0.2s ease, transform 0.1s ease;
-    }
-    .btn:hover { background: rgba(255,255,255,0.2); }
-    
-    /* TD Link Button Style (Highlighted) */
-    .btn-td { 
-        background: var(--accent-a); 
-        color: #000; 
-        text-shadow: 0 0 2px #fff;
-        border: 1px solid var(--accent-a);
-        box-shadow: 0 0 15px rgba(0,255,204,0.4);
-    }
-    .btn-td:hover { background: #66FFD6; }
-
-    /* --- MODAL STYLING (The full, exact neon modals requested) --- */
-    .modal {
-        display:none; 
-        position:fixed; 
-        z-index:1000; 
-        left:0; 
-        top:0; 
-        width:100%; 
-        height:100%; 
-        background:rgba(0,0,0,0.9); 
-        justify-content:center; 
-        align-items:center; 
-        backdrop-filter: blur(5px);
-    }
-    .modal-content {
-        background: #0b0b12; 
-        padding:28px 24px; 
-        border-radius:15px; 
-        border:3px solid var(--neon-main); 
-        box-shadow:0 0 35px var(--neon-main), inset 0 0 5px var(--neon-main); 
-        text-align:center;
-        max-width: 80%;
-        min-width: 300px;
-        max-height: 90vh;
-        overflow-y: auto;
-    }
-    .modal h2 { 
-        color: var(--neon-main); 
-        margin-top:0; 
-        text-transform: uppercase; 
-        letter-spacing: 2px;
-        text-shadow: 0 0 8px currentColor; 
-    }
-    .modal-game-area { 
-        background: #000; 
-        width: 100%; 
-        min-height: 250px; 
-        margin-bottom: 20px; 
-        border: 2px solid var(--neon-main);
-        box-shadow: inset 0 0 10px var(--neon-main);
-    }
-    .modal .btn { 
-        margin:4px; 
-        border: 1px solid rgba(255,255,255,0.1); 
-        background: rgba(0,0,0,0.5);
-        width: auto;
-        display: inline-block;
-        padding: 8px 20px;
-    }
-
-    /* Specific modal adjustments to match card colors */
-    #minesweeperModal .modal-content { border-color: var(--minesweeper-accent); box-shadow:0 0 35px var(--minesweeper-accent), inset 0 0 5px var(--minesweeper-accent); }
-    #minesweeperModal h2 { color: var(--minesweeper-accent); }
-    #minesweeperModal .modal-game-area { border-color: var(--minesweeper-accent); box-shadow: inset 0 0 10px var(--minesweeper-accent); }
-
-    #rogueModal .modal-content { border-color: var(--rogue-accent); box-shadow:0 0 35px var(--rogue-accent), inset 0 0 5px var(--rogue-accent); }
-    #rogueModal h2 { color: var(--rogue-accent); }
-    #rogueModal .modal-game-area { border-color: var(--rogue-accent); box-shadow: inset 0 0 10px var(--rogue-accent); }
-
-    #racerModal .modal-content { border-color: var(--racer-accent); box-shadow:0 0 35px var(--racer-accent), inset 0 0 5px var(--racer-accent); }
-    #racerModal h2 { color: var(--racer-accent); }
-    #racerModal .modal-game-area { border-color: var(--racer-accent); box-shadow: inset 0 0 10px var(--racer-accent); }
-
-    /* Footer Centering */
-    footer { text-align: center; padding: 16px; }
-
-    @media (max-width:700px) {
-      .container {padding:6px;}
-      .card {padding:10px;}
-      .game-grid {gap:10px;}
-      .modal-content {padding:15px 10px;}
-      header { font-size: 1.2em; padding: 10px; }
-    }
-  </style>
+        /* tower-defence iframe styling inside modal */
+        .td-iframe {
+            width: 1100px; max-width: calc(100% - 48px); height: 80vh; border: none; border-radius: 8px; background: #000;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        }
+    </style>
 </head>
 <body>
-  <header>EXPERIMENTAL GAMES HUB</header>
-  <div class="container">
-    <p style="color:#aaa;font-weight:600; text-align:center; text-shadow: 0 0 3px rgba(255,255,255,0.1);">Core collection and experimental previews.</p>
-    <div class="game-grid" id="previewGrid">
-        
-      <div class="card nr-card">
-          <h3>Neon Racer++</h3>
-          <p>High-speed, neon-drenched futuristic racing with custom tracks.</p>
-          <button class="btn" id="runRacerBtn">Launch Game</button>
-      </div>
+    <header>Experimental Demos</header>
+    <div class="top" role="navigation">
+        <div class="links">
+            <a class="btn" href="loggedIn.html">Dashboard</a>
+            <a class="btn secondary" href="index.html">Home</a>
+        </div>
+        <div style="color:var(--primary);font-weight:700;">Admin Experimentation Area</div>
+    </div>
+    <main class="container">
+        <h1>Experimental</h1>
+        <p class="lead">Upload and test experiments. Only administrators may access this page.</p>
+        <div class="grid" id="experimentalGrid">
+            
+            <section class="card">
+                <h3>Neon Racer++</h3>
+                <div class="meta">A high-speed avoidance game with a retro-neon theme.</div>
+                <div class="actions">
+                    <a class="btn" href="#" id="runRacerBtn">Run</a>
+                </div>
+            </section>
 
-      <div class="card ms-card">
-          <h3>Minesweeper Elite</h3>
-          <p>Advanced Minesweeper with new difficulty settings and themes.</p>
-          <button class="btn" id="runMinesweeperBtn">Launch Game</button>
-      </div>
+            <section class="card flagship">
+                <h3>Minesweeper Elite</h3>
+                <div class="meta">The First Flagship. Customizable difficulty, flood-fill, right-click flagging, and smart styling.</div>
+                <div class="actions">
+                    <button class="btn" style="background:var(--flagship); color:#000; border-color: white;" id="runSuperMinesweeperBtn">Play Elite</button>
+                </div>
+            </section>
+            
+            <!-- Updated Tower Defence Collection Card -->
+            <section class="card flagship" style="border-color: #00FF00; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);">
+                <h3 style="color:#00FF00;">Tower Defence Collection</h3>
+                <div class="meta">Three premium strategy games in one. Featuring "Vector Valley" (Classic), "Neon Citadel" (Maze Builder), and "Sentinel Grid" (Original).</div>
+                <pre class="demo">// 3 Unique Game Engines
+// Vector Valley: Path Defense
+// Neon Citadel: Open Field
+// Sentinel Grid: Tactical Grid</pre>
+                <div class="actions">
+                    <a class="btn" id="openTdBtn" href="#">Play Collection</a>
+                </div>
+            </section>
 
-      <div class="card rd-card">
-          <h3>Rogue Dungeon</h3>
-          <p>A fast-paced, turn-based dungeon crawler with permadeath and procedural levels.</p>
-          <button class="btn" id="runRogueBtn">Launch Game</button>
-      </div>
+             <section class="card flagship" style="border-color: #FF00FF; box-shadow: 0 0 15px rgba(255, 0, 255, 0.2);">
+                <h3 style="color:#FF00FF;">Rogue Dungeon</h3>
+                <div class="meta">Flagship RPG. Procedural dungeon crawler with turn-based combat, leveling, and fog of war.</div>
+                <pre class="demo">// Arrow Keys to Move/Attack
+// Explore deeper into the dark
+// Permadeath mechanics</pre>
+                <div class="actions">
+                    <button class="btn" style="background:#FF00FF; color:#000; border-color: white;" id="runRogueBtn">Play Rogue</button>
+                </div>
+            </section>
 
-      <div class="card td-card">
-          <h3>Tower Defence Hub</h3>
-          <p>Access the core collection of Vector Valley, Neon Citadel, and Sentinel Grid. (Opens new page)</p>
-          <a href="tower-defence.html" class="btn btn-td">Go To Hub Page</a>
-      </div>
+        </div>
+    </main>
+    <div class="footer">
+        &copy; 2025 Games & Programs
     </div>
 
-    <div id="racerModal" class="modal">
+    <!-- Modals -->
+    <div id="racerModal" class="modal-overlay">
         <div class="modal-content">
-            <h2>Neon Racer++</h2>
-            <div class="modal-game-area">
-                <p style="color:#aaa; padding-top:100px;">[Racer Game Canvas/UI will load here]</p>
+            <div class="modal-header">
+                <h2>Neon Racer++</h2>
+                <span class="modal-close" id="racerModalCloseBtn">&times;</span>
             </div>
-            <p style="color:#ccc; font-size: 0.85em;">Use Arrow Keys to Steer and Accelerate.</p>
-            <button class="btn" id="racerModalCloseBtn" style="background:red;">Close Game</button>
+            <canvas id="racer-canvas" width="340" height="520" style="background:#000;"></canvas>
+            <div id="racer-hud">
+                <div id="racer-distance">Distance: 0m</div>
+            </div>
+            <div class="modal-controls">
+                <button id="startRacerBtn" class="btn">Start</button>
+                <button id="pauseRacerBtn" class="btn secondary">Pause</button>
+                <button id="resetRacerBtn" class="btn secondary">Reset</button>
+            </div>
         </div>
     </div>
-
-    <div id="minesweeperModal" class="modal">
-        <div class="modal-content">
-            <h2>Minesweeper Elite</h2>
-            <div class="modal-game-area">
-                <p style="color:#aaa; padding-top:100px;">[Minesweeper Game Canvas/UI will load here]</p>
+    <div id="superMinesweeperModal" class="modal-overlay">
+        <div class="modal-content" style="border-color: var(--flagship); box-shadow: 0 0 30px var(--flagship);">
+            <div class="modal-header">
+                <h2 style="color:var(--flagship);">Minesweeper Elite</h2>
+                <span class="modal-close" id="superMsCloseBtn">&times;</span>
             </div>
-            <p style="color:#ccc; font-size: 0.85em;">Click to reveal, Right-Click to flag.</p>
-            <button class="btn" id="msModalCloseBtn" style="background:red;">Close Game</button>
-        </div>
-    </div>
-
-    <div id="rogueModal" class="modal">
-        <div class="modal-content">
-            <h2>Rogue Dungeon</h2>
-            <div class="modal-game-area">
-                <p style="color:#aaa; padding-top:100px;">[Rogue Dungeon Game Canvas/UI will load here]</p>
+            <div id="ms-menu" class="ms-menu">
+                <h4 style="margin:0; color:#fff;">Select Difficulty</h4>
+                <div class="ms-row">
+                    <button class="ms-btn selected" onclick="setMsDiff('easy', this)">Easy (10%)</button>
+                    <button class="ms-btn" onclick="setMsDiff('med', this)">Med (15%)</button>
+                    <button class="ms-btn" onclick="setMsDiff('hard', this)">Hard (20%)</button>
+                </div>
+                <h4 style="margin:5px 0 0 0; color:#fff;">Grid Size</h4>
+                <div class="ms-row">
+                    <button class="ms-btn selected" onclick="setMsSize(10, this)">10x10</button>
+                    <button class="ms-btn" onclick="setMsSize(15, this)">15x15</button>
+                    <button class="ms-btn" onclick="setMsSize(20, this)">20x20</button>
+                </div>
+                <button class="btn" style="margin-top:10px; border-color:var(--flagship); color:var(--flagship);" onclick="startEliteMinesweeper()">START GAME</button>
             </div>
-            <p style="color:#ccc; font-size: 0.85em;">Use WASD or Arrow Keys for movement.</p>
-            <button class="btn" id="rogueModalCloseBtn" style="background:red;">Close Game</button>
+            <div id="ms-game-area" style="display:none;">
+                <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
+                    <span id="ms-flags-left" style="color:red; font-weight:bold;">Flags: 10</span>
+                    <span id="ms-timer" style="color:var(--flagship); font-weight:bold;">000</span>
+                </div>
+                <div id="ms-game-container">
+                    <div id="ms-grid"></div>
+                </div>
+                <div id="ms-status" style="margin-top:10px; font-weight:bold; min-height:20px; color:#fff;"></div>
+                <div class="modal-controls">
+                     <button class="btn secondary" onclick="showMsMenu()">Back to Menu</button>
+                </div>
+            </div>
         </div>
     </div>
     
-  </div>
-  <footer>
-    <p style="color:#333; margin-top: 40px;">&copy; 2025 Games & Programs</p>
-  </footer>
+    <div id="rogueModal" class="modal-overlay">
+        <div class="modal-content" style="border-color: #FF00FF; box-shadow: 0 0 30px #FF00FF; min-width: 520px;">
+            <div class="modal-header">
+                <h2 style="color:#FF00FF; text-shadow: 0 0 10px #FF00FF;">Rogue Dungeon: Neon Depths</h2>
+                <span class="modal-close" id="rogueModalCloseBtn">&times;</span>
+            </div>
+            
+            <div style="display:flex; justify-content:space-between; padding: 10px; background: #220022; border: 1px solid #550055; font-family: monospace;">
+                <span id="rl-level" style="color:#fff;">Lvl: 1</span>
+                <span id="rl-hp" style="color:#FF3333;">HP: 100</span>
+                <span id="rl-stats" style="color:#FFFF00;">Atk: 5 | Def: 0</span>
+                <span id="rl-potions" style="color:#00FF00;">Potions: 0 (Space)</span>
+            </div>
 
-  <script src="racer.js"></script>
-  <script src="minesweeper-elite.js"></script>
-  <script src="rogue-dungeon.js"></script>
+            <canvas id="rogue-canvas" width="480" height="480" style="background:#050005; border: 2px solid #550055; margin-top:10px; box-shadow: inset 0 0 20px #220022; cursor: pointer;"></canvas>
+            
+            <div style="margin-top:10px; color:#aaa; font-size:0.85em; display:flex; justify-content:space-between;">
+                <span>ARROWS: Move/Attack</span>
+                <span>SPACE: Drink Potion</span>
+            </div>
+            
+            <div id="rl-log" style="height:50px; overflow:hidden; color:#EE82EE; font-family:monospace; border-top: 1px solid #550055; margin-top:5px; padding-top:5px; font-size: 0.9em;">
+                Welcome to the Neon Depths...
+            </div>
+            
+            <div class="modal-controls">
+                <button id="rl-restart" class="btn" style="border-color: #FF00FF; color: #FF00FF;">Restart Run</button>
+            </div>
+        </div>
+    </div>
 
-  <script>
-    // Helper function to bind modal behavior
-    function setupModal(runBtnId, modalId, stopFnName) {
-        const runBtn = document.getElementById(runBtnId);
-        const modal = document.getElementById(modalId);
-        const closeBtn = modal ? modal.querySelector('.btn[style*="background:red"]') : null;
+    <!-- Tower Defence Modal (loads tower-defence.html inside an iframe so controls remain intact) -->
+    <div id="tdModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 1150px; width: calc(100% - 48px);">
+            <div class="modal-header">
+                <h2 style="color:var(--td-green);">Tower Defence Collection</h2>
+                <span class="modal-close" id="tdModalCloseBtn">&times;</span>
+            </div>
+            <iframe id="td-iframe" class="td-iframe" src="" title="Tower Defence Collection"></iframe>
+            <div class="modal-controls">
+                <button class="btn secondary" id="tdReloadBtn">Reload</button>
+                <button class="btn" id="tdOpenNewTabBtn">Open in New Tab</button>
+            </div>
+        </div>
+    </div>
 
-        if (runBtn) {
-            runBtn.addEventListener('click', () => {
-                if (modal) modal.style.display = 'flex';
-                // Placeholder for game init logic if function exists
-                const initFn = window['init' + runBtnId.replace('run', '')];
-                if (typeof initFn === 'function') {
-                    try { initFn(); } catch (err) { console.error('Init error for ' + runBtnId, err); }
-                }
-            });
-        }
+    <script src="login.js"></script>
+    <script src="neon-racer-plus.js"></script>
+    <script src="minesweeper-elite.js"></script>
+    <script src="rogue-dungeon.js"></script>
 
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                // Placeholder for game stop logic (e.g., stopNeonRacer)
-                if (stopFnName && typeof window[stopFnName] === 'function') {
-                    try { window[stopFnName](); } catch (e) {}
-                }
-                if (modal) modal.style.display = 'none';
-            });
-        }
-    }
+    <script>
+        // Racer Hookup
+        document.getElementById('runRacerBtn').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('racerModal').style.display = 'flex'; });
+        document.getElementById('racerModalCloseBtn').addEventListener('click', () => document.getElementById('racerModal').style.display = 'none');
+        document.getElementById('startRacerBtn').addEventListener('click', () => { if(typeof startRacer === 'function') startRacer(); });
+        document.getElementById('pauseRacerBtn').addEventListener('click', () => { if(typeof pauseRacer === 'function') pauseRacer(); });
+        document.getElementById('resetRacerBtn').addEventListener('click', () => { if(typeof resetRacer === 'function') resetRacer(); });
 
-    // Bind games that use modals
-    setupModal('runRacerBtn', 'racerModal', 'stopNeonRacer');
-    setupModal('runMinesweeperBtn', 'minesweeperModal', 'stopMinesweeperElite');
-    setupModal('runRogueBtn', 'rogueModal', 'stopRogueDungeon');
-  </script>
+        // Minesweeper Hookup
+        document.getElementById('runSuperMinesweeperBtn').addEventListener('click', () => document.getElementById('superMinesweeperModal').style.display = 'flex');
+        document.getElementById('superMsCloseBtn').addEventListener('click', () => {
+             document.getElementById('superMinesweeperModal').style.display = 'none';
+             if(typeof msState !== 'undefined' && msState.interval) clearInterval(msState.interval);
+        });
+
+        // Rogue Dungeon Hookup
+        document.getElementById('runRogueBtn').addEventListener('click', () => {
+            document.getElementById('rogueModal').style.display = 'flex';
+            if(typeof initRogue === 'function') initRogue();
+        });
+        document.getElementById('rogueModalCloseBtn').addEventListener('click', () => {
+            document.getElementById('rogueModal').style.display = 'none';
+            if(typeof stopRogue === 'function') stopRogue();
+        });
+
+        // Tower Defence modal hookup
+        document.getElementById('openTdBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            const m = document.getElementById('tdModal');
+            const iframe = document.getElementById('td-iframe');
+            iframe.src = 'tower-defence.html';
+            m.style.display = 'flex';
+        });
+        document.getElementById('tdModalCloseBtn').addEventListener('click', () => {
+            const m = document.getElementById('tdModal');
+            const iframe = document.getElementById('td-iframe');
+            m.style.display = 'none';
+            // unload iframe to stop running scripts inside it
+            iframe.src = 'about:blank';
+        });
+        document.getElementById('tdReloadBtn').addEventListener('click', () => {
+            const iframe = document.getElementById('td-iframe');
+            iframe.contentWindow.location.reload();
+        });
+        document.getElementById('tdOpenNewTabBtn').addEventListener('click', () => {
+            window.open('tower-defence.html', '_blank');
+        });
+
+        // Close modal on ESC
+        document.addEventListener('keydown', (e) => {
+            if(e.key === 'Escape') {
+                ['racerModal','superMinesweeperModal','rogueModal','tdModal'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el && el.style.display === 'flex') {
+                        el.style.display = 'none';
+                        if(id === 'tdModal') document.getElementById('td-iframe').src = 'about:blank';
+                    }
+                });
+            }
+        });
+    </script>
 </body>
 </html>
