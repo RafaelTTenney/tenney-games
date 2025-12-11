@@ -224,7 +224,7 @@
         <p class="lead">Upload and test experiments. Only administrators may access this page.</p>
         <div class="grid" id="experimentalGrid">
             
-            <section class="card">
+            <section class="card" style="border-color: var(--primary); box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);">
                 <h3>Neon Racer++</h3>
                 <div class="meta">A high-speed avoidance game with a retro-neon theme.</div>
                 <div class="actions">
@@ -240,7 +240,6 @@
                 </div>
             </section>
             
-            <!-- Updated Tower Defence Collection Card -->
             <section class="card flagship" style="border-color: #00FF00; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);">
                 <h3 style="color:#00FF00;">Tower Defence Collection</h3>
                 <div class="meta">Three premium strategy games in one. Featuring "Vector Valley" (Classic), "Neon Citadel" (Maze Builder), and "Sentinel Grid" (Original).</div>
@@ -249,7 +248,7 @@
 // Neon Citadel: Open Field
 // Sentinel Grid: Tactical Grid</pre>
                 <div class="actions">
-                    <a class="btn" id="openTdBtn" href="#">Play Collection</a>
+                    <a class="btn" href="tower-defence.html" style="background:var(--td-green); color:#000; border-color: white;" id="openTdBtn">Play Collection</a>
                 </div>
             </section>
 
@@ -270,7 +269,6 @@
         &copy; 2025 Games & Programs
     </div>
 
-    <!-- Modals -->
     <div id="racerModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
@@ -319,7 +317,7 @@
                 </div>
                 <div id="ms-status" style="margin-top:10px; font-weight:bold; min-height:20px; color:#fff;"></div>
                 <div class="modal-controls">
-                     <button class="btn secondary" onclick="showMsMenu()">Back to Menu</button>
+                    <button class="btn secondary" onclick="showMsMenu()">Back to Menu</button>
                 </div>
             </div>
         </div>
@@ -356,7 +354,6 @@
         </div>
     </div>
 
-    <!-- Tower Defence Modal (loads tower-defence.html inside an iframe so controls remain intact) -->
     <div id="tdModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 1150px; width: calc(100% - 48px);">
             <div class="modal-header">
@@ -401,7 +398,13 @@
             if(typeof stopRogue === 'function') stopRogue();
         });
 
-        // Tower Defence modal hookup
+        // Tower Defence modal hookup (Modal code remains, but anchor tag now goes directly to the page)
+        // Note: Since the anchor tag <a id="openTdBtn" href="tower-defence.html"> is changed to route directly,
+        // the original JS to open the modal (document.getElementById('openTdBtn').addEventListener('click', (e) => { e.preventDefault(); ... }))
+        // is no longer needed, but we keep the modal-related functions for completeness in case other parts of the app use them.
+        
+        // Old TD button handler is commented out/removed because the HTML anchor tag now links directly:
+        /*
         document.getElementById('openTdBtn').addEventListener('click', (e) => {
             e.preventDefault();
             const m = document.getElementById('tdModal');
@@ -409,6 +412,8 @@
             iframe.src = 'tower-defence.html';
             m.style.display = 'flex';
         });
+        */
+        
         document.getElementById('tdModalCloseBtn').addEventListener('click', () => {
             const m = document.getElementById('tdModal');
             const iframe = document.getElementById('td-iframe');
