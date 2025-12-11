@@ -45,7 +45,6 @@
             height: 180px; display: flex; align-items: center; justify-content: center; 
             background: #000; position: relative; border-bottom: 1px solid #222;
         }
-        /* Dynamic card backgrounds */
         .card.sentinel .card-header { background: radial-gradient(circle at center, #003311 0%, #000 100%); }
         .card.vector .card-header { background: radial-gradient(circle at center, #332200 0%, #000 100%); }
         .card.neon .card-header { background: radial-gradient(circle at center, #220033 0%, #000 100%); }
@@ -101,7 +100,6 @@
         .canvas-container { flex: 1; position: relative; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
         canvas { display: block; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
         
-        /* CRT Effect Overlay */
         .scanlines {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
@@ -113,7 +111,6 @@
             height: 100px; background: #080808; border-top: 1px solid #222;
             display: flex; align-items: center; padding: 0 30px; gap: 30px;
         }
-        
         .tower-dock { display: flex; gap: 15px; overflow-x: auto; flex: 1; height: 100%; align-items: center; }
         .t-card {
             min-width: 90px; height: 70px; background: #111; border: 1px solid #333; border-radius: 4px;
@@ -130,7 +127,28 @@
         .act-btn.primary { background: linear-gradient(180deg, #222, #111); border-color: var(--primary); color: var(--primary); }
         .act-btn.primary:hover { background: var(--primary); color: #000; box-shadow: 0 0 20px rgba(0,255,204,0.3); }
 
-        /* OVERLAYS */
+        /* INSPECTOR */
+        .inspector {
+            position: absolute; right: 30px; top: 30px; width: 240px;
+            background: rgba(10,12,14,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px;
+            padding: 20px; backdrop-filter: blur(12px); display: none;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5); z-index: 60;
+        }
+        .insp-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 15px; }
+        .insp-title { font-weight: 800; color: #fff; letter-spacing: 1px; text-transform: uppercase; margin:0; }
+        .insp-close { background: none; border: none; color: #666; font-size: 1.2em; cursor: pointer; font-weight: bold; }
+        .insp-close:hover { color: #fff; }
+
+        .insp-row { display: flex; justify-content: space-between; font-size: 0.85em; color: #999; margin-bottom: 8px; font-family: 'Courier New', monospace; }
+        .insp-row b { color: #fff; }
+        .insp-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+        .i-btn { padding: 10px; border: none; border-radius: 2px; cursor: pointer; font-size: 0.75em; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+        .upg { background: #003311; color: #00ff66; border: 1px solid #005522; }
+        .upg:hover { background: #005522; }
+        .sell { background: #330000; color: #ff5555; border: 1px solid #550000; }
+        .sell:hover { background: #550000; }
+        
+        /* START MENU */
         .ingame-menu {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); z-index: 100;
@@ -142,30 +160,11 @@
             cursor: pointer; border-radius: 4px; font-weight: 700; letter-spacing: 2px; transition: 0.2s; 
         }
         .d-btn.selected { border-color: #fff; color: #fff; background: rgba(255,255,255,0.1); box-shadow: 0 0 15px rgba(255,255,255,0.1); }
-
-        .inspector {
-            position: absolute; right: 30px; top: 30px; width: 240px;
-            background: rgba(10,12,14,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px;
-            padding: 20px; backdrop-filter: blur(12px); display: none; pointer-events: none;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-        }
-        .inspector * { pointer-events: auto; }
-        .insp-title { font-weight: 800; color: #fff; border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 15px; letter-spacing: 1px; text-transform: uppercase;}
-        .insp-row { display: flex; justify-content: space-between; font-size: 0.85em; color: #999; margin-bottom: 8px; font-family: 'Courier New', monospace; }
-        .insp-row b { color: #fff; }
-        .insp-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
-        .i-btn { padding: 10px; border: none; border-radius: 2px; cursor: pointer; font-size: 0.75em; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
-        .upg { background: #003311; color: #00ff66; border: 1px solid #005522; }
-        .upg:hover { background: #005522; }
-        .sell { background: #330000; color: #ff5555; border: 1px solid #550000; }
-        .sell:hover { background: #550000; }
-
         .neon-control-btn {
             background: #151515; color: #ccc; border: 1px solid #333; padding: 10px; cursor: pointer;
             display: flex; justify-content: space-between; align-items: center; font-family: 'Courier New', monospace; font-size: 0.8em;
         }
         .neon-control-btn:hover { border-color: #fff; color: #fff; }
-
     </style>
 </head>
 <body>
@@ -237,8 +236,13 @@
                 </div>
 
                 <div id="inspector" class="inspector">
-                    <div class="insp-title" id="i-name">TOWER</div>
+                    <div class="insp-header">
+                        <h3 class="insp-title" id="i-name">TOWER</h3>
+                        <button class="insp-close" onclick="App.deselect()">×</button>
+                    </div>
+                    
                     <div id="i-stats"></div>
+                    
                     <div class="insp-btns" id="i-controls-std">
                         <button class="i-btn upg" onclick="App.gameAction('upgrade')">UPGRADE <span id="i-cost-up"></span></button>
                         <button class="i-btn sell" onclick="App.gameAction('sell')">SELL <span id="i-cost-sell"></span></button>
@@ -311,8 +315,12 @@
 
         startMatch: () => {
             document.getElementById('start-menu').style.display = 'none';
-            // Re-init with confirmed settings
             if(App.activeGame) App.activeGame.init(App.canvas, { difficulty: App.diff });
+        },
+
+        deselect: () => {
+             if(App.activeGame && App.activeGame.deselect) App.activeGame.deselect();
+             document.getElementById('inspector').style.display = 'none';
         },
 
         buildDock: () => {
@@ -336,31 +344,40 @@
 
         gameAction: (act) => {
             if(!App.activeGame) return;
-            if(act === 'wave') App.activeGame.startWave();
-            else if(act === 'upgrade') App.activeGame.upgrade();
-            else if(act === 'sell') App.activeGame.sell();
-            else if(act.startsWith('upg_')) App.activeGame.upgrade(act.replace('upg_', ''));
+            // Prevent loop pause by wrapping in try/catch for safety during interactions
+            try {
+                if(act === 'wave') App.activeGame.startWave();
+                else if(act === 'upgrade') App.activeGame.upgrade();
+                else if(act === 'sell') App.activeGame.sell();
+                else if(act.startsWith('upg_')) App.activeGame.upgrade(act.replace('upg_', ''));
+            } catch(e) {
+                console.error("Game Action Error:", e);
+            }
         },
 
         loop: () => {
             if(!App.activeGame) return;
             
-            // Logic & Draw
-            App.activeGame.update();
-            App.activeGame.draw(App.ctx);
-            
-            // UI Sync (Safe Access)
-            const g = App.activeGame;
-            // Check for various ways game state might be exposed
-            const w = (g.wave !== undefined) ? g.wave : (g.state ? g.state.wave : 0);
-            const m = (g.money !== undefined) ? g.money : (g.state ? g.state.money : 0);
-            const l = (g.lives !== undefined) ? g.lives : (g.state ? g.state.lives : 0);
-            
-            document.getElementById('ui-wave').innerText = w;
-            document.getElementById('ui-money').innerText = Math.floor(m);
-            document.getElementById('ui-lives').innerText = l;
+            try {
+                // Logic & Draw
+                App.activeGame.update();
+                App.activeGame.draw(App.ctx);
+                
+                // UI Sync
+                const g = App.activeGame;
+                const w = (g.wave !== undefined) ? g.wave : (g.state ? g.state.wave : 0);
+                const m = (g.money !== undefined) ? g.money : (g.state ? g.state.money : 0);
+                const l = (g.lives !== undefined) ? g.lives : (g.state ? g.state.lives : 0);
+                
+                document.getElementById('ui-wave').innerText = w;
+                document.getElementById('ui-money').innerText = Math.floor(m);
+                document.getElementById('ui-lives').innerText = l;
 
-            App.updateInspector();
+                App.updateInspector();
+            } catch(err) {
+                console.error("Game Loop Crashed:", err);
+                // Don't stop the loop, just log error so game continues if it was a minor glitch
+            }
             App.loopId = requestAnimationFrame(App.loop);
         },
 
@@ -368,7 +385,6 @@
             const sel = App.activeGame.sel;
             const panel = document.getElementById('inspector');
             
-            // Clear selection visual if build mode cancelled
             if(!App.activeGame.buildMode) document.querySelectorAll('.t-card').forEach(b => b.classList.remove('active'));
 
             if(!sel) { panel.style.display = 'none'; return; }
@@ -377,19 +393,16 @@
             document.getElementById('i-name').innerText = sel.name;
             document.getElementById('i-name').style.color = sel.color;
             
-            // Stats HTML
             let html = '';
             if(sel.dmg) html += `<div class="insp-row"><span>Damage</span><b>${Math.floor(sel.dmg)}</b></div>`;
             if(sel.rng || sel.range) html += `<div class="insp-row"><span>Range</span><b>${Math.floor(sel.rng || sel.range)}</b></div>`;
             if(sel.rate) html += `<div class="insp-row"><span>Rate</span><b>${sel.rate}</b></div>`;
             document.getElementById('i-stats').innerHTML = html;
 
-            // Mode Switching
             if(App.gameId === 'neon') {
                 document.getElementById('i-controls-std').style.display = 'none';
                 document.getElementById('i-controls-neon').style.display = 'grid';
                 
-                // Neon Costs
                 const base = App.activeGame.conf.towers[sel.type].cost;
                 const costCalc = (lvl) => Math.floor(base * 0.5 * ((lvl||0)+1));
                 document.getElementById('n-cost-dmg').innerText = '$'+costCalc(sel.attrLevels.dmg);
@@ -401,7 +414,6 @@
                 document.getElementById('i-controls-std').style.display = 'grid';
                 document.getElementById('i-controls-neon').style.display = 'none';
                 
-                // Std Costs
                 let def = App.activeGame.conf.towers[sel.type];
                 let upCost = Math.floor(def.cost * 0.8 * (sel.level || 1));
                 document.getElementById('i-cost-up').innerText = '$'+upCost;
@@ -410,11 +422,9 @@
         }
     };
 
-    // Global Click Router
     document.getElementById('game-canvas').addEventListener('mousedown', (e) => {
         if(!App.activeGame) return;
         const r = App.canvas.getBoundingClientRect();
-        // Handle scaling
         const sx = App.canvas.width / r.width;
         const sy = App.canvas.height / r.height;
         App.activeGame.click((e.clientX - r.left)*sx, (e.clientY - r.top)*sy);
