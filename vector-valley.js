@@ -1,4 +1,4 @@
-/* VECTOR VALLEY - Fixed Loop & Graphics */
+/* VECTOR VALLEY */
 (function(global){
   const Vector = (function(){
     
@@ -70,7 +70,6 @@
     function update() {
         if(lives <= 0) return;
 
-        // Enemies
         for(let i=enemies.length-1; i>=0; i--) {
             let e = enemies[i];
             let target = path[e.idx+1];
@@ -85,7 +84,7 @@
                 e.x += (dx/d)*e.speed; e.y += (dy/d)*e.speed;
             }
             e.angle += 0.1;
-            e.speed = e.baseSpeed; // Reset slow
+            e.speed = e.baseSpeed; 
 
             if(e.hp <= 0) {
                 money += 15; enemies.splice(i,1);
@@ -95,7 +94,6 @@
         
         if(active && enemies.length===0) { active=false; wave++; }
 
-        // Towers
         towers.forEach(t => {
             if(t.cd > 0) t.cd--;
             else {
@@ -116,7 +114,6 @@
             }
         });
 
-        // Projectiles
         for(let i=projs.length-1; i>=0; i--) {
             let p = projs[i];
             let dx = p.tx - p.x, dy = p.ty - p.y;
@@ -136,7 +133,6 @@
             }
         }
         
-        // Particles
         for(let i=particles.length-1; i>=0; i--) {
             let p = particles[i];
             p.life--;
@@ -148,7 +144,6 @@
     function draw(ctx) {
         ctx.fillStyle = '#050a15'; ctx.fillRect(0,0,canvas.width,canvas.height);
         
-        // Path
         ctx.shadowBlur = 20; ctx.shadowColor = '#00ffcc';
         ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 3;
         ctx.beginPath();
@@ -159,7 +154,6 @@
         }
         ctx.shadowBlur = 0;
 
-        // Towers
         towers.forEach(t => {
             ctx.fillStyle = t.color;
             ctx.beginPath();
@@ -172,17 +166,14 @@
             }
         });
 
-        // Enemies
         enemies.forEach(e => {
             ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle);
             ctx.fillStyle = e.type==='tank'?'#4488ff':(e.type==='fast'?'#ffff00':'#ff4444');
             ctx.fillRect(-8,-8,16,16);
             ctx.restore();
-            // HP
             ctx.fillStyle = '#0f0'; ctx.fillRect(e.x-10, e.y-15, 20*(e.hp/e.maxHp), 3);
         });
 
-        // Projs/Particles
         projs.forEach(p => { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x,p.y,4,0,Math.PI*2); ctx.fill(); });
         particles.forEach(p => {
             ctx.globalAlpha = p.life/20;
@@ -212,6 +203,7 @@
     return {
         init, update, draw, click, startWave,
         setBuild: (k)=>{buildType=k; selected=null;},
+        deselect: ()=>{selected=null; buildType=null;},
         upgrade: ()=>{if(selected && money>=Math.floor(selected.cost*0.8)){ money-=Math.floor(selected.cost*0.8); selected.level++; selected.dmg*=1.4; }},
         sell: ()=>{if(selected){ money+=Math.floor(selected.cost*0.5); towers=towers.filter(t=>t!==selected); selected=null; }},
         stop: ()=>{},
