@@ -1,4 +1,4 @@
-/* SENTINEL GRID - Fixed UI Stats */
+/* SENTINEL GRID */
 (function(global){
   const Sentinel = (function(){
     const GRID = 40; 
@@ -110,13 +110,11 @@
     function draw(ctx) {
         ctx.fillStyle = '#050a05'; ctx.fillRect(0,0,canvas.width,canvas.height);
         
-        // Grid
         ctx.strokeStyle = '#112211'; ctx.beginPath();
         for(let x=0;x<=canvas.width;x+=GRID) { ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); }
         for(let y=0;y<=canvas.height;y+=GRID) { ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); }
         ctx.stroke();
 
-        // Path
         ctx.strokeStyle = 'rgba(0,255,100,0.1)'; ctx.lineWidth=2; ctx.beginPath();
         for(let key in flowMap) {
             let [gx,gy] = key.split(',').map(Number);
@@ -126,7 +124,6 @@
         }
         ctx.stroke();
 
-        // Objects
         ctx.fillStyle = '#0f0'; ctx.fillRect(start.x*GRID, start.y*GRID, GRID, GRID);
         ctx.fillStyle = '#f00'; ctx.fillRect(end.x*GRID, end.y*GRID, GRID, GRID);
 
@@ -157,6 +154,7 @@
     return {
         init, update, draw, click, startWave,
         setBuild: (k)=>{buildType=k; selected=null;},
+        deselect: ()=>{selected=null; buildType=null;},
         upgrade: ()=>{if(selected&&money>=selected.cost){money-=selected.cost; selected.level++; selected.dmg*=1.3;}},
         sell: ()=>{if(selected){money+=selected.cost/2; towers=towers.filter(t=>t!==selected); selected=null; calcPath();}},
         stop: ()=>{},
