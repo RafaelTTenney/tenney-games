@@ -22,50 +22,23 @@
             background: linear-gradient(180deg, #101010 0%, #050505 100%);
             box-shadow: 0 0 20px rgba(0,0,0,0.8);
             position: relative; z-index: 10;
-            /* Removed flex properties to center h1 */
         }
         h1 { margin: 0; font-weight: 300; letter-spacing: 6px; text-transform: uppercase; color: #fff; font-size: 1.4rem; }
         h1 span { color: var(--primary); font-weight: 700; text-shadow: 0 0 15px rgba(0,255,204,0.3); }
 
-        /* NEW NAVIGATION BAR FOR THE BUTTON */
-        .system-nav {
-            background: #000;
-            padding: 10px 0;
-            text-align: center;
-            border-bottom: 1px solid #111;
-        }
-
-        /* Custom Back Button Style */
+        .system-nav { background: #000; padding: 10px 0; text-align: center; border-bottom: 1px solid #111; }
         .back-btn {
-            /* Cooler Style: Teal Gradient/Glow */
-            background: linear-gradient(180deg, var(--primary), var(--primary));
-            color: #000;
-            padding: 10px 25px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: 800;
-            border: none;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 15px rgba(0, 255, 204, 0.5);
-            cursor: pointer;
-            display: inline-block;
-            font-size: 1em;
-            letter-spacing: 2px;
-            text-transform: uppercase;
+            background: linear-gradient(180deg, var(--primary), var(--primary)); color: #000;
+            padding: 10px 25px; border-radius: 6px; text-decoration: none; font-weight: 800;
+            border: none; transition: all 0.3s ease; box-shadow: 0 0 15px rgba(0, 255, 204, 0.5);
+            cursor: pointer; display: inline-block; font-size: 1em; letter-spacing: 2px; text-transform: uppercase;
         }
-        .back-btn:hover {
-            background: var(--bg);
-            color: var(--primary);
-            border: 1px solid var(--primary);
-            box-shadow: 0 0 25px var(--primary);
-        }
+        .back-btn:hover { background: var(--bg); color: var(--primary); border: 1px solid var(--primary); box-shadow: 0 0 25px var(--primary); }
 
         /* CARD GRID */
         .container { 
             max-width: 1400px; margin: 0 auto; padding: 40px 20px; 
-            /* Adjusted height calculation due to new navigation bar */
-            height: calc(100vh - 120px); 
-            overflow-y: auto; 
+            height: calc(100vh - 120px); overflow-y: auto; 
             display: flex; align-items: center; justify-content: center;
         }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 40px; width: 100%; }
@@ -77,16 +50,12 @@
         }
         .card:hover { transform: translateY(-10px); box-shadow: 0 20px 50px rgba(0,0,0,0.7); border-color: #555; }
         
-        .card-header { 
-            height: 180px; display: flex; align-items: center; justify-content: center; 
-            background: #000; position: relative; border-bottom: 1px solid #222;
-        }
+        .card-header { height: 180px; display: flex; align-items: center; justify-content: center; background: #000; position: relative; border-bottom: 1px solid #222; }
         .card.sentinel .card-header { background: radial-gradient(circle at center, #003311 0%, #000 100%); }
         .card.vector .card-header { background: radial-gradient(circle at center, #332200 0%, #000 100%); }
         .card.neon .card-header { background: radial-gradient(circle at center, #220033 0%, #000 100%); }
 
         .card h2 { z-index: 2; margin: 0; font-size: 2em; text-transform: uppercase; letter-spacing: 4px; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
-        
         .card-body { padding: 30px; flex: 1; display: flex; flex-direction: column; }
         .badge { 
             padding: 6px 10px; font-size: 0.7em; font-weight: 700; letter-spacing: 1px;
@@ -184,7 +153,6 @@
         .sell { background: #330000; color: #ff5555; border: 1px solid #550000; }
         .sell:hover { background: #550000; }
         
-        /* START MENU */
         .ingame-menu {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); z-index: 100;
@@ -323,18 +291,15 @@
             const modal = document.getElementById('modal');
             modal.classList.add('active');
             
-            // UI Reset
             document.getElementById('start-menu').style.display = 'flex';
             document.getElementById('inspector').style.display = 'none';
             document.getElementById('diff-selector').style.display = (id === 'vector') ? 'flex' : 'none';
 
-            // Safe Load
             if(id === 'sentinel' && window.SentinelGame) App.activeGame = window.SentinelGame;
             else if(id === 'vector' && window.VectorGame) App.activeGame = window.VectorGame;
             else if(id === 'neon' && window.NeonGame) App.activeGame = window.NeonGame;
             else { alert('Game Module Error: Script not loaded.'); App.close(); return; }
 
-            // Init Game Wrapper
             App.buildDock();
             App.activeGame.init(App.canvas, { difficulty: App.diff });
             App.loop();
@@ -384,7 +349,6 @@
 
         gameAction: (act) => {
             if(!App.activeGame) return;
-            // Prevent loop pause by wrapping in try/catch for safety during interactions
             try {
                 if(act === 'wave') App.activeGame.startWave();
                 else if(act === 'upgrade') App.activeGame.upgrade();
@@ -399,11 +363,9 @@
             if(!App.activeGame) return;
             
             try {
-                // Logic & Draw
                 App.activeGame.update();
                 App.activeGame.draw(App.ctx);
                 
-                // UI Sync
                 const g = App.activeGame;
                 const w = (g.wave !== undefined) ? g.wave : (g.state ? g.state.wave : 0);
                 const m = (g.money !== undefined) ? g.money : (g.state ? g.state.money : 0);
@@ -416,7 +378,6 @@
                 App.updateInspector();
             } catch(err) {
                 console.error("Game Loop Crashed:", err);
-                // Don't stop the loop, just log error so game continues if it was a minor glitch
             }
             App.loopId = requestAnimationFrame(App.loop);
         },
@@ -445,6 +406,7 @@
                 
                 const base = App.activeGame.conf.towers[sel.type].cost;
                 const costCalc = (lvl) => Math.floor(base * 0.5 * ((lvl||0)+1));
+                
                 document.getElementById('n-cost-dmg').innerText = '$'+costCalc(sel.attrLevels.dmg);
                 document.getElementById('n-cost-rng').innerText = '$'+costCalc(sel.attrLevels.rng);
                 document.getElementById('n-cost-rate').innerText = '$'+costCalc(sel.attrLevels.rate);
