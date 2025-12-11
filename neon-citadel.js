@@ -3,7 +3,7 @@
   const Neon = (function(){
     
     // CONFIG: High Density Grid
-    const CELL = 25; // Good balance for 1200px width
+    const CELL = 25; 
     let COLS, ROWS;
     
     const TOWER_TYPES = {
@@ -13,7 +13,6 @@
         'buffer':  { name:'AEGIS',  cost:500, color:'#00ff00', dmg:0, rng:100, rate:0, hp:1200, buff:true }
     };
 
-    // State
     let canvas, ctx;
     let grid=[], towers=[], enemies=[], projectiles=[], particles=[], floatingText=[];
     let costMap=[], weightMap=[];
@@ -23,13 +22,10 @@
 
     function init(c) {
         canvas = c; ctx = c.getContext('2d');
-        // Dynamic Grid Calculation
         COLS = Math.ceil(canvas.width / CELL);
         ROWS = Math.ceil(canvas.height / CELL);
-        
         startNode = {x:0, y:Math.floor(ROWS/2)};
         endNode = {x:COLS-1, y:Math.floor(ROWS/2)};
-        
         reset();
     }
 
@@ -40,17 +36,12 @@
         recalcPath();
     }
 
-    // --- AI: Dijkstra Flow Field ---
     function recalcPath() {
-        // Init maps
         costMap = new Array(COLS).fill(0).map(()=>new Array(ROWS).fill(999999));
         weightMap = new Array(COLS).fill(0).map(()=>new Array(ROWS).fill(1));
         
-        // 1. Calculate Weights (Danger Zones)
         towers.forEach(t => {
-            // Occupied Cells
             grid[t.gx][t.gy] = t;
-            // Danger Radius adds weight (Enemies prefer avoiding heavy fire)
             let r = Math.ceil(t.rng/CELL);
             for(let xx=-r; xx<=r; xx++) {
                 for(let yy=-r; yy<=r; yy++) {
@@ -60,26 +51,22 @@
             }
         });
 
-        // 2. Flood Fill from End
         let q = [];
         costMap[endNode.x][endNode.y] = 0;
         q.push(endNode);
 
         while(q.length) {
             let u = q.shift();
-            // Check Neighbors
             [[0,1],[0,-1],[1,0],[-1,0]].forEach(d => {
                 let nx = u.x + d[0], ny = u.y + d[1];
                 if(nx>=0 && nx<COLS && ny>=0 && ny<ROWS) {
-                    // Cost = Current + 1 + Weight + (Tower? Infinity unless Breaker)
                     let isTower = (grid[nx][ny] !== null);
                     let moveCost = weightMap[nx][ny];
-                    if(isTower) moveCost += 1000; // Soft block, AI tries to go around
+                    if(isTower) moveCost += 1000;
 
                     if(costMap[nx][ny] > costMap[u.x][u.y] + moveCost) {
                         costMap[nx][ny] = costMap[u.x][u.y] + moveCost;
                         q.push({x:nx, y:ny});
-                        // Optimization: Simple Sort for priority
                         q.sort((a,b) => costMap[a.x][a.y] - costMap[b.x][b.y]);
                     }
                 }
@@ -90,16 +77,12 @@
     function getNextMove(gx, gy, type) {
         let best = { val: 999999, dir: null };
         let moves = [{x:0,y:1}, {x:0,y:-1}, {x:1,y:0}, {x:-1,y:0}];
-        
         moves.forEach(d => {
             let nx=gx+d.x, ny=gy+d.y;
             if(nx>=0 && nx<COLS && ny>=0 && ny<ROWS) {
                 let cost = costMap[nx][ny];
                 let tower = grid[nx][ny];
-
-                // "Breaker" Logic: If cost is huge (meaning path blocked or long detour), attack wall
                 if(tower && type === 'breaker') {
-                   // If adjacent is tower, return special 'attack' command
                    best = { val: -1, dir: 'attack' }; 
                 } 
                 else if (cost < best.val) {
@@ -107,25 +90,21 @@
                 }
             }
         });
-
         if(best.dir === 'attack') return 'attack';
         return best.dir;
     }
 
-    // --- GAME LOOP ---
     function startWave() {
         if(state.active) return;
         state.active = true;
         let count = 10 + Math.floor(state.wave * 2.5);
         let sent = 0;
         let int = setInterval(() => {
-            // Dynamic Spawning
             let r = Math.random();
             let type = 'norm';
             if(state.wave > 2 && r > 0.7) type = 'breaker';
             if(state.wave > 4 && r > 0.85) type = 'fast';
             if(state.wave > 6 && r > 0.92) type = 'heavy';
-            
             spawnEnemy(type);
             sent++;
             if(sent >= count) {
@@ -142,9 +121,9 @@
         let color = '#ff00ff';
         let isBoss = false;
 
-        if(type==='breaker') { color='#ff8800'; hp*=1.2; spd=1.0; } // Orange
-        if(type==='fast') { color='#ffff00'; hp*=0.6; spd=2.8; }    // Yellow
-        if(type==='heavy') { color='#00ffaa'; hp*=4.0; spd=0.7; }   // Cyan
+        if(type==='breaker') { color='#ff8800'; hp*=1.2; spd=1.0; }
+        if(type==='fast') { color='#ffff00'; hp*=0.6; spd=2.8; }
+        if(type==='heavy') { color='#00ffaa'; hp*=4.0; spd=0.7; }
         if(type==='boss') { color='#ff0000'; hp*=25.0; spd=0.6; isBoss=true; }
 
         let e = {
@@ -160,29 +139,24 @@
         if(state.lives <= 0) return;
         state.frame++;
 
-        // Enemies
         for(let i=enemies.length-1; i>=0; i--) {
             let e = enemies[i];
             let gx = Math.floor(e.x/CELL);
             let gy = Math.floor(e.y/CELL);
 
-            // Reached End
             if(gx === COLS-1) {
                 state.lives -= (e.isBoss ? 20 : 1);
                 enemies.splice(i,1);
                 continue;
             }
 
-            // Move Logic
             let move = getNextMove(gx, gy, e.type);
-
             if(move === 'attack') {
-                // Find adjacent tower
                 let moves = [{x:0,y:1}, {x:0,y:-1}, {x:1,y:0}, {x:-1,y:0}];
                 moves.forEach(d => {
                     let t = grid[gx+d.x]?.[gy+d.y];
                     if(t && state.frame % 20 === 0) {
-                        t.hp -= 20; // Attack Damage
+                        t.hp -= 20; 
                         addPart(t.x, t.y, '#f00', 2);
                         if(t.hp <= 0) destroyTower(t);
                     }
@@ -196,7 +170,6 @@
                 e.angle += 0.1;
             }
 
-            // Death
             if(e.hp <= 0) {
                 state.money += e.val;
                 addText(e.x, e.y, `+$${e.val}`, '#fff');
@@ -206,21 +179,17 @@
             }
         }
 
-        // Wave End Check
         if(state.active && enemies.length === 0) {
             state.active = false;
             state.wave++;
         }
 
-        // Towers
         towers.forEach(t => {
             if(t.cd > 0) t.cd--;
             else {
-                // Find Target
                 let target = enemies.find(e => (e.x-t.x)**2 + (e.y-t.y)**2 < t.rng**2);
                 if(target) {
                     if(t.type === 'tesla') {
-                        // Chain Lightning
                         let chain = [target];
                         let curr = target;
                         curr.hp -= t.dmg;
@@ -242,7 +211,6 @@
             }
         });
 
-        // Projectiles
         for(let i=projectiles.length-1; i>=0; i--) {
             let p = projectiles[i];
             if(!p.target) { projectiles.splice(i,1); continue; }
@@ -265,7 +233,6 @@
             }
         }
 
-        // Particles
         for(let i=particles.length-1; i>=0; i--) {
             let p = particles[i];
             p.life--;
@@ -273,7 +240,6 @@
             if(p.life<=0) particles.splice(i,1);
         }
 
-        // Floating Text
         for(let i=floatingText.length-1; i>=0; i--) {
             let t = floatingText[i];
             t.y -= 0.5; t.life--;
@@ -289,12 +255,9 @@
         addPart(t.x, t.y, '#fff', 20);
     }
 
-    // --- RENDER ---
     function draw(ctx) {
-        // BG
         ctx.fillStyle = '#020205'; ctx.fillRect(0,0,canvas.width,canvas.height);
         
-        // Render Flow Field (Subtle Debug Look)
         if(buildMode) {
             ctx.fillStyle = 'rgba(255,255,255,0.02)';
             for(let x=0; x<COLS; x+=2) {
@@ -304,57 +267,43 @@
             }
         }
 
-        // High Quality Glow
         ctx.shadowBlur = 10;
-
-        // Towers
         towers.forEach(t => {
             ctx.shadowColor = t.color;
             ctx.fillStyle = t.color;
             ctx.fillRect(t.x-CELL/2 + 2, t.y-CELL/2 + 2, CELL-4, CELL-4);
-            
-            // HP Bar
             if(t.hp < t.maxHp) {
                 ctx.fillStyle = 'red'; ctx.fillRect(t.x-10, t.y-12, 20, 3);
                 ctx.fillStyle = '#0f0'; ctx.fillRect(t.x-10, t.y-12, 20*(t.hp/t.maxHp), 3);
             }
-            // Selection
             if(selection === t) {
                 ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.arc(t.x,t.y,t.rng,0,Math.PI*2); ctx.stroke();
             }
         });
 
-        // Enemies
         enemies.forEach(e => {
             ctx.shadowColor = e.color;
             ctx.fillStyle = e.color;
             ctx.save(); ctx.translate(e.x, e.y);
-            
-            // Unique Geometry
             if(e.type === 'breaker') {
-                ctx.rotate(state.frame * 0.2);
-                ctx.fillRect(-8,-8, 16, 16);
+                ctx.rotate(state.frame * 0.2); ctx.fillRect(-8,-8, 16, 16);
             } else if (e.isBoss) {
                 let s = 1.5 + Math.sin(state.frame*0.1)*0.2;
-                ctx.scale(s, s);
-                ctx.beginPath(); ctx.arc(0,0,12,0,Math.PI*2); ctx.fill();
+                ctx.scale(s, s); ctx.beginPath(); ctx.arc(0,0,12,0,Math.PI*2); ctx.fill();
             } else if (e.type === 'fast') {
-                ctx.rotate(e.angle);
-                ctx.beginPath(); ctx.moveTo(10,0); ctx.lineTo(-6, 5); ctx.lineTo(-6, -5); ctx.fill();
+                ctx.rotate(e.angle); ctx.beginPath(); ctx.moveTo(10,0); ctx.lineTo(-6, 5); ctx.lineTo(-6, -5); ctx.fill();
             } else {
                 ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.fill();
             }
             ctx.restore();
         });
 
-        // Projs
         projectiles.forEach(p => {
             ctx.shadowColor = p.color; ctx.fillStyle = p.color;
             ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill();
         });
 
-        // Particles
         particles.forEach(p => {
             if(p.type === 'lightning') {
                 ctx.shadowColor = p.color; ctx.strokeStyle = p.color; ctx.lineWidth = 2;
@@ -368,14 +317,11 @@
         });
 
         ctx.shadowBlur = 0;
-        
-        // Text
         ctx.font = '12px monospace';
         floatingText.forEach(t => {
             ctx.fillStyle = t.color; ctx.fillText(t.text, t.x, t.y);
         });
 
-        // Boss Bar
         if(boss) {
             let w = canvas.width/2;
             ctx.fillStyle = '#400'; ctx.fillRect(w-200, 40, 400, 20);
@@ -418,6 +364,7 @@
     return {
         init, update, draw, click, startWave, 
         setBuild: (k)=>{buildMode=k; selection=null;},
+        deselect: ()=>{selection=null; buildMode=null;},
         upgrade: (attr)=>{
             if(!selection) return;
             let base = TOWER_TYPES[selection.type].cost;
