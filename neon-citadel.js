@@ -1,8 +1,8 @@
-/* NEON CITADEL - V7 (FINAL TACTICAL & VISUAL OVERHAUL) */
+/* NEON CITADEL - V8 (FINAL POLISH & FIXES) */
 (function(global){
   const Neon = (function(){
     
-    // CONFIG: 20px Cell = 60x40 Grid on a 1200x800 Canvas
+    // CONFIG
     const CELL = 20; 
     let COLS, ROWS;
     
@@ -26,7 +26,7 @@
         'rail': { 
             name:'RAILGUN', cost:700, color:'#ffffff', type:'phys', 
             dmg:80, rng:320, rate:70, hp:350, pierce:true, 
-            desc:"Hyper-velocity slug. Pierces enemies in a line." 
+            desc:"Hyper-velocity slug. Pierces line of enemies." 
         },
         'tesla': { 
             name:'STORM', cost:850, color:'#ffee00', type:'energy', 
@@ -35,13 +35,18 @@
         },
         'orbit': { 
             name:'ORBIT', cost:1000, color:'#0088ff', type:'energy', 
-            dmg:15, rng:140, rate:8, hp:500, drone:true, 
+            dmg:15, rng:150, rate:8, hp:500, drone:true, 
             desc:"Deploys an autonomous defense drone." 
         },
         'missile': { 
             name:'HYDRA', cost:1300, color:'#00ff88', type:'ex', 
             dmg:180, rng:350, rate:70, hp:450, missile:true, 
             desc:"Long-range smart missiles. Good vs Bosses." 
+        },
+        'poison': { 
+            name:'PLAGUE', cost:550, color:'#00ff00', type:'chem', 
+            dmg:8, rng:140, rate:40, hp:500, gas:true, 
+            desc:"Launches corrosive gas canisters." 
         },
         'laser': { 
             name:'PHASE', cost:2200, color:'#d000ff', type:'energy', 
@@ -55,14 +60,14 @@
         }
     };
 
-    // --- ENEMY DEFINITIONS (For Codex & Spawning) ---
+    // --- ENEMY DEFINITIONS ---
     const ENEMY_INFO = {
-        'drone':   { name: 'DRONE',   hp: 'LOW',  spd: 'FAST', weak: 'NONE',   desc: 'Fast, swarming scout unit. No defenses.' },
-        'grunt':   { name: 'GRUNT',   hp: 'MED',  spd: 'MED',  weak: 'PHYS',   desc: 'Standard infantry. Balanced stats.' },
-        'tank':    { name: 'TANK',    hp: 'HIGH', spd: 'SLOW', weak: 'CHEM/EX',desc: 'Heavily Armored (Yellow Bar). Resists Bullets.' },
-        'shield':  { name: 'AEGIS',   hp: 'MED',  spd: 'MED',  weak: 'ENERGY', desc: 'Energy Shield (Blue Bar). Regenerates if not hit.' },
-        'runner':  { name: 'SPEED',   hp: 'LOW',  spd: 'V.FAST', weak: 'AOE',  desc: 'High velocity breacher. Hard to hit.' },
-        'boss':    { name: 'TITAN',   hp: 'EXTREME', spd: 'SLOW', weak: 'ALL', desc: 'Level Boss. Massive threat. Requires focused fire.' }
+        'drone':   { name: 'DRONE',   hp: 'LOW',  spd: 'FAST', weak: 'NONE',   desc: 'Fast, swarming scout unit.' },
+        'grunt':   { name: 'GRUNT',   hp: 'MED',  spd: 'MED',  weak: 'PHYS',   desc: 'Standard infantry.' },
+        'tank':    { name: 'TANK',    hp: 'HIGH', spd: 'SLOW', weak: 'CHEM/EX',desc: 'Heavily Armored (Yellow). Resists Bullets.' },
+        'shield':  { name: 'AEGIS',   hp: 'MED',  spd: 'MED',  weak: 'ENERGY', desc: 'Energy Shield (Blue). Regenerates.' },
+        'runner':  { name: 'SPEED',   hp: 'LOW',  spd: 'V.FAST', weak: 'AOE',  desc: 'High velocity breacher.' },
+        'boss':    { name: 'TITAN',   hp: 'EXTREME', spd: 'SLOW', weak: 'ALL', desc: 'Level Boss. Massive threat.' }
     };
 
     // GAME STATE
@@ -104,7 +109,7 @@
                     let tx=t.gx+xx, ty=t.gy+yy;
                     if(tx>=0 && tx<COLS && ty>=0 && ty<ROWS) {
                         if((tx*CELL - t.x)**2 + (ty*CELL - t.y)**2 <= t.rng**2) {
-                            dangerWeights[tx][ty] = 50; // Tactical AI Avoidance Cost
+                            dangerWeights[tx][ty] = 50;
                         }
                     }
                 }
@@ -144,12 +149,11 @@
         return cell ? cell.next : null;
     }
 
-    // --- LOGIC ---
+    // --- GAME LOOP ---
     function startWave() {
         if(state.active) return;
         state.active = true;
         
-        // Compound Interest
         if(state.money > 0 && state.wave > 1) {
             let interest = Math.floor(state.money * 0.1);
             if(interest>0) { state.money+=interest; addText(canvas.width/2, canvas.height/2+60, `INTEREST: +$${interest}`, '#0f0', 100); }
@@ -159,12 +163,11 @@
         let budget = 300 * diffMult + (state.wave * 120);
         let queue = [];
 
-        // SPAWN DEFS
         const DEFS = {
             'drone':  { cost:15, hp:40,  spd:3.0, color:'#0ff', ai:'std', armor:0, shield:0 },
             'grunt':  { cost:30, hp:120, spd:1.8, color:'#f0f', ai:'std', armor:0, shield:0 },
-            'shield': { cost:60, hp:100, spd:1.5, color:'#08f', ai:'std', armor:0, shield:150 }, // Shield Unit
-            'tank':   { cost:90, hp:400, spd:0.8, color:'#aa0', ai:'std', armor:1, shield:0 },   // Armor Unit
+            'shield': { cost:60, hp:100, spd:1.5, color:'#08f', ai:'std', armor:0, shield:150 },
+            'tank':   { cost:90, hp:400, spd:0.8, color:'#aa0', ai:'std', armor:1, shield:0 },
             'runner': { cost:50, hp:80,  spd:4.0, color:'#f88', ai:'tactician', armor:0, shield:0 }
         };
 
@@ -251,7 +254,6 @@
                 let rew = e.isBoss ? 5000 : (e.maxHp/5);
                 state.money += Math.floor(rew);
                 addText(e.x, e.y, `+$${Math.floor(rew)}`, '#ff0');
-                // Explosion
                 for(let k=0;k<8;k++) particles.push({type:'spark', x:e.x, y:e.y, color:e.color, life:20, vx:Math.random()*6-3, vy:Math.random()*6-3});
                 enemies.splice(i,1);
                 if(e.isBoss) { boss=null; state.shake=60; }
@@ -262,16 +264,16 @@
         towers.forEach(t => {
             if(t.type === 'block') return;
 
-            // ORBIT DRONE
-            if(t.drone) {
-                t.droneAngle = (t.droneAngle||0) + 0.1;
-                let dx = t.x + Math.cos(t.droneAngle)*25;
-                let dy = t.y + Math.sin(t.droneAngle)*25;
+            // ORBIT TOWER LOGIC - Fixed
+            if(t.type === 'orbit') {
+                t.angle = (t.angle || 0) + 0.1; // Rotate drone
+                let dx = t.x + Math.cos(t.angle)*25;
+                let dy = t.y + Math.sin(t.angle)*25;
                 
-                if(state.frame % 10 === 0) { // Fast fire
+                if(state.frame % 15 === 0) {
                     let target = enemies.find(e => Math.hypot(e.x-dx, e.y-dy) < t.rng);
                     if(target) {
-                        projectiles.push({x:dx, y:dy, target:target, type:'plasma', color:t.color, dmg:t.dmg, spd:12});
+                         projectiles.push({x:dx, y:dy, target:target, type:'plasma', color:t.color, dmg:t.dmg, spd:12});
                     }
                 }
                 return;
@@ -303,11 +305,9 @@
                     let target = enemies.find(e=>Math.hypot(e.x-t.x, e.y-t.y)<t.rng);
                     if(target) {
                         t.angle = Math.atan2(target.y-t.y, target.x-t.x);
-                        // Raycast Line Check
                         enemies.forEach(e => {
                             let dToT = Math.hypot(e.x-t.x, e.y-t.y);
                             let angToE = Math.atan2(e.y-t.y, e.x-t.x);
-                            // If enemy is within range and within a very narrow angle (piercing line)
                             if(dToT < t.rng && Math.abs(angToE - t.angle) < 0.1) {
                                 takeDamage(e, t.dmg, 'phys');
                                 particles.push({type:'spark', x:e.x, y:e.y, color:'#fff', life:10});
@@ -321,7 +321,7 @@
                 return;
             }
 
-            // BEAM (Laser)
+            // BEAM
             if(t.beam) {
                 let target = enemies.find(e => Math.hypot(e.x-t.x, e.y-t.y) < t.rng);
                 if(target) {
@@ -344,9 +344,9 @@
                     t.angle = Math.atan2(target.y-t.y, target.x-t.x);
 
                     if(t.type === 'tesla') fireTesla(t, target, enemies);
-                    else if(t.type === 'missile') projectiles.push({x:t.x, y:t.y, target:target, type:'missile', color:t.color, dmg:t.dmg, spd:4, acc:0.4, aoe:90});
+                    else if(t.type === 'poison') projectiles.push({x:t.x, y:t.y, tx:target.x, ty:target.y, type:'canister', color:t.color, dmg:t.dmg, spd:6});
+                    else if(t.type === 'missile') projectiles.push({x:t.x, y:t.y, target:target, type:'missile', color:t.color, dmg:t.dmg, spd:3, acc:0.3, aoe:90});
                     else {
-                        // Standard Bullet
                         projectiles.push({x:t.x, y:t.y, target:target, type:t.type==='ex'?'shell':'bullet', color:t.color, dmg:t.dmg, spd:15, aoe:t.aoe, vx:Math.cos(t.angle)*15, vy:Math.sin(t.angle)*15});
                         t.muzzle = 4;
                     }
@@ -366,16 +366,32 @@
                 p.x+=p.vx; p.y+=p.vy; p.life--; if(p.life<=0) projectiles.splice(i,1); continue;
             }
 
+            if(p.type === 'canister') {
+                let d = Math.hypot(p.tx-p.x, p.ty-p.y);
+                if(d < p.spd) {
+                    gasClouds.push({x:p.tx, y:p.ty, r:60, life:240, color:p.color, dmg:p.dmg});
+                    projectiles.splice(i,1);
+                } else {
+                    let a = Math.atan2(p.ty-p.y, p.tx-p.x);
+                    p.x+=Math.cos(a)*p.spd; p.y+=Math.sin(a)*p.spd;
+                    particles.push({type:'trail', x:p.x, y:p.y, color:p.color, life:10});
+                }
+                continue;
+            }
+
             if(p.type === 'missile') {
                 if(!p.target || p.target.hp<=0) p.target = enemies[0];
                 if(!p.target) { projectiles.splice(i,1); continue; }
                 
                 let ang = Math.atan2(p.target.y - p.y, p.target.x - p.x);
-                let vx = Math.cos(ang) * p.spd;
-                let vy = Math.sin(ang) * p.spd;
-                p.x += vx; p.y += vy;
+                // Homing smoothing
+                let currAng = Math.atan2(p.vy || 0, p.vx || 0);
+                // Simple turn
+                p.vx = Math.cos(ang) * p.spd;
+                p.vy = Math.sin(ang) * p.spd;
+                p.x += p.vx; p.y += p.vy;
                 p.spd += p.acc;
-                particles.push({type:'smoke', x:p.x, y:p.y, life:8});
+                particles.push({type:'smoke', x:p.x, y:p.y, life:15});
 
                 if(Math.hypot(p.target.x-p.x, p.target.y-p.y) < p.spd) {
                      explode(p.x, p.y, p.aoe, p.dmg, 'ex');
@@ -398,39 +414,39 @@
             } else if(p.x<0||p.x>canvas.width||p.y<0||p.y>canvas.height) projectiles.splice(i,1);
         }
 
+        // GAS
+        gasClouds.forEach((g,i) => {
+            if(state.frame % 20 === 0) {
+                enemies.forEach(e => {
+                    if(Math.hypot(e.x-g.x, e.y-g.y) < g.r) takeDamage(e, g.dmg, 'chem');
+                });
+            }
+            g.life--; if(g.life<=0) gasClouds.splice(i,1);
+        });
+
         particles.forEach((p,i) => { p.life--; p.x+=(p.vx||0); p.y+=(p.vy||0); if(p.life<=0) particles.splice(i,1); });
         floatingText.forEach((t,i) => { t.y-=0.5; t.life--; if(t.life<=0) floatingText.splice(i,1); });
 
         if(state.active && enemies.length===0) { state.active=false; state.wave++; state.money+=400; }
     }
 
-    // --- DAMAGE SYSTEM (TACTICAL) ---
     function takeDamage(e, amt, type) {
-        e.shieldRecharge = 120; // Reset recharge timer
-
-        // SHIELD LOGIC (Blue Health)
+        e.shieldRecharge = 120;
         if(e.shield > 0) {
-            // Energy deals double to shields. Physical deals half.
             let mult = (type === 'energy') ? 2.0 : (type === 'phys') ? 0.5 : 1.0;
             e.shield -= amt * mult;
             if(e.shield < 0) {
-                // Bleed through damage
-                e.hp += e.shield; 
-                e.shield = 0;
+                e.hp += e.shield; e.shield = 0;
                 particles.push({type:'burst', x:e.x, y:e.y, color:'#0088ff', life:10});
             } else {
                 particles.push({type:'spark', x:e.x, y:e.y, color:'#0088ff', life:5});
-                return; // Shield absorbed it completely
+                return;
             }
         }
-
-        // ARMOR LOGIC (Yellow Health - handled via 'armor' flag)
         if(e.armor > 0) {
-            // Physical reduced by 50%. Chem/Ex increased by 50%.
             if(type === 'phys') amt *= 0.5;
             if(type === 'chem' || type === 'ex') amt *= 1.5;
         }
-
         e.hp -= amt;
     }
 
@@ -470,6 +486,15 @@
             for(let x=0;x<COLS;x++) for(let y=0;y<ROWS;y++) if(mapStandard[x][y].cost<999999) ctx.fillRect(x*CELL,y*CELL,CELL,CELL);
         }
 
+        // Gas Clouds
+        gasClouds.forEach(g => {
+            let grad = ctx.createRadialGradient(g.x, g.y, 10, g.x, g.y, g.r);
+            grad.addColorStop(0, `rgba(0,255,50,0.6)`);
+            grad.addColorStop(1, 'rgba(0,255,50,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, Math.PI*2); ctx.fill();
+        });
+
         // Beams
         particles.forEach(p => {
             if(p.type === 'beam') {
@@ -484,10 +509,16 @@
         projectiles.forEach(p => {
             ctx.fillStyle = p.color;
             if(p.type==='fire') {
-                ctx.globalAlpha = p.life/30; ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+                ctx.globalAlpha = p.life/30; ctx.beginPath(); ctx.arc(p.x, p.y, 6 + (30-p.life)/2, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
             } else if (p.type==='missile') {
-                ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x-p.vx*2, p.y-p.vy*2); ctx.strokeStyle=p.color; ctx.stroke();
-                ctx.fillRect(p.x-2, p.y-2, 4, 4);
+                // Draw Rocket
+                ctx.save(); ctx.translate(p.x, p.y); 
+                let ang = Math.atan2(p.vy, p.vx);
+                ctx.rotate(ang);
+                ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.moveTo(6,0); ctx.lineTo(-4, 4); ctx.lineTo(-4, -4); ctx.fill(); // Body
+                ctx.fillStyle = '#fff'; ctx.fillRect(-6,-2,4,4); // Thruster
+                ctx.restore();
             } else {
                 ctx.shadowBlur=5; ctx.shadowColor=p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
             }
@@ -500,7 +531,9 @@
             } else if(p.type === 'spark') {
                 ctx.fillStyle=p.color; ctx.fillRect(p.x, p.y, 2, 2);
             } else if(p.type === 'smoke') {
-                ctx.fillStyle = `rgba(100,100,100,${p.life/10})`; ctx.beginPath(); ctx.arc(p.x,p.y,p.life,0,Math.PI*2); ctx.fill();
+                ctx.fillStyle = `rgba(150,150,150,${p.life/15})`; ctx.beginPath(); ctx.arc(p.x,p.y,p.life/2,0,Math.PI*2); ctx.fill();
+            } else if(p.type === 'trail') {
+                 ctx.fillStyle = p.color; ctx.globalAlpha=p.life/10; ctx.fillRect(p.x,p.y,3,3); ctx.globalAlpha=1;
             }
         });
 
@@ -520,24 +553,37 @@
         ctx.restore();
     }
 
-    // FRACTAL LIGHTNING FOR TESLA
+    // --- RECURSIVE FRACTAL LIGHTNING ---
     function drawFractalLightning(ctx, chain, color) {
         if(chain.length<2) return;
-        ctx.strokeStyle=color; ctx.lineWidth=2; ctx.shadowColor=color; ctx.shadowBlur=10;
-        ctx.beginPath(); ctx.moveTo(chain[0].x, chain[0].y);
+        ctx.strokeStyle=color; ctx.lineWidth=2; ctx.shadowColor=color; ctx.shadowBlur=15;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        
+        // Draw main segments
         for(let i=1; i<chain.length; i++) {
-            let s=chain[i-1], e=chain[i];
-            let dist = Math.hypot(e.x-s.x, e.y-s.y);
-            let steps = Math.floor(dist/15);
-            for(let j=1; j<=steps; j++) {
-                let t = j/steps;
-                let nx = s.x + (e.x-s.x)*t + (Math.random()-0.5)*20; // Chaos
-                let ny = s.y + (e.y-s.y)*t + (Math.random()-0.5)*20;
-                ctx.lineTo(nx, ny);
-            }
-            ctx.lineTo(e.x, e.y);
+            let start = chain[i-1];
+            let end = chain[i];
+            drawBoltSegment(ctx, start.x, start.y, end.x, end.y, 1);
         }
-        ctx.stroke(); ctx.shadowBlur=0;
+        ctx.stroke(); 
+        ctx.shadowBlur=0;
+    }
+
+    function drawBoltSegment(ctx, x1, y1, x2, y2, depth) {
+        let dist = Math.hypot(x2-x1, y2-y1);
+        if(dist < 10 || depth <= 0) {
+            ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+            return;
+        }
+        let midX = (x1+x2)/2; let midY = (y1+y2)/2;
+        // Jitter based on distance
+        let offset = Math.max(5, dist * 0.2); 
+        midX += (Math.random()-0.5) * offset;
+        midY += (Math.random()-0.5) * offset;
+        
+        drawBoltSegment(ctx, x1, y1, midX, midY, depth-1);
+        drawBoltSegment(ctx, midX, midY, x2, y2, depth-1);
     }
 
     function drawTower(ctx, t) {
@@ -550,34 +596,41 @@
         if(selection===t) { ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.beginPath(); ctx.arc(0,0,t.rng,0,Math.PI*2); ctx.stroke(); }
 
         // Drone
-        if(t.drone) {
-             let dx = Math.cos(t.droneAngle)*25, dy = Math.sin(t.droneAngle)*25;
+        if(t.type === 'orbit') {
+             let dx = Math.cos(t.angle)*25, dy = Math.sin(t.angle)*25;
              ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(dx, dy, 4, 0, Math.PI*2); ctx.fill();
-             ctx.strokeStyle = t.color; ctx.beginPath(); ctx.arc(0,0,25,0,Math.PI*2); ctx.stroke();
+             ctx.strokeStyle = t.color; ctx.globalAlpha=0.3; ctx.beginPath(); ctx.arc(0,0,25,0,Math.PI*2); ctx.stroke(); ctx.globalAlpha=1;
         } else {
+            // ROTATING TURRET HEAD
             ctx.rotate(t.angle);
             let off = t.recoil||0;
             ctx.fillStyle = t.color;
 
             if(t.type === 'gatling') {
-                ctx.fillRect(-3, -8+off, 6, 16); // Gun barrel
-                ctx.fillStyle='#444'; ctx.fillRect(-4,-4,8,8); // Pivot
+                ctx.fillRect(-3, -8+off, 6, 16); 
+                ctx.fillStyle='#444'; ctx.fillRect(-4,-4,8,8); 
             } else if (t.type === 'cannon') {
-                ctx.fillRect(-5, -6+off, 10, 14);
-                ctx.fillStyle='#222'; ctx.fillRect(-6,-6,12,6);
+                ctx.fillRect(-6, -6+off, 12, 14);
+                ctx.fillStyle='#222'; ctx.fillRect(-4,-4,8,8);
             } else if (t.type === 'rail') {
-                ctx.fillRect(-2, -10+off, 4, 20); // Long barrel
-                ctx.fillStyle='#fff'; ctx.fillRect(-3,-10+off,6,2); // Caps
+                ctx.fillRect(-2, -10+off, 4, 20); 
+                ctx.fillStyle='#fff'; ctx.fillRect(-2,-12+off,4,4);
+            } else if (t.type === 'missile') {
+                ctx.fillStyle='#222'; ctx.fillRect(-6,-6,12,12); // Pod
+                ctx.fillStyle=t.color; 
+                if(!t.cd || t.cd < 20) { // Show missiles if ready
+                    ctx.fillRect(-4, -8, 2, 6); ctx.fillRect(2, -8, 2, 6);
+                }
             } else if (t.type === 'pyro') {
-                ctx.fillStyle='#f50'; ctx.fillRect(-4,-4,8,12);
-                ctx.fillStyle='#f90'; ctx.beginPath(); ctx.arc(0,8,4,0,Math.PI*2); ctx.fill(); // Tank
+                ctx.fillStyle='#d40'; ctx.fillRect(-5,-8,10,14);
+                ctx.fillStyle='#f90'; ctx.beginPath(); ctx.arc(0,0,5,0,Math.PI*2); ctx.fill();
             } else {
                 ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.fill();
                 if(t.muzzle) { ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0, 10, 4, 0, Math.PI*2); ctx.fill(); }
             }
         }
         ctx.restore();
-        // HP Bar
+        
         if(t.hp < t.maxHp) {
              ctx.fillStyle = 'red'; ctx.fillRect(t.x-8, t.y-12, 16, 2);
              ctx.fillStyle = '#0f0'; ctx.fillRect(t.x-8, t.y-12, 16*(t.hp/t.maxHp), 2);
@@ -587,7 +640,6 @@
     function drawEnemy(ctx, e) {
         ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle);
         
-        // Shield Halo
         if(e.shield > 0) {
             ctx.strokeStyle = `rgba(0, 136, 255, ${Math.min(1, e.shield/e.maxShield + 0.2)})`;
             ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0,0,14,0,Math.PI*2); ctx.stroke();
@@ -595,16 +647,15 @@
 
         ctx.fillStyle = e.color;
         if(e.isBoss) {
-            ctx.scale(4, 4); // MASSIVE BOSS
+            ctx.scale(4, 4); 
             ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill();
             ctx.strokeStyle='#fff'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(0,0,14,0,Math.PI*2); ctx.stroke();
-            // Core Pulse
             ctx.fillStyle = `rgba(255,0,0,${Math.abs(Math.sin(state.frame*0.1))})`; 
             ctx.beginPath(); ctx.arc(0,0,4,0,Math.PI*2); ctx.fill();
         } else if (e.type === 'tank') {
-            ctx.fillRect(-8,-8,16,16); ctx.strokeStyle='#000'; ctx.strokeRect(-8,-8,16,16);
+            ctx.fillRect(-9,-9,18,18); ctx.fillStyle='#000'; ctx.fillRect(-5,-5,10,10);
         } else {
-            ctx.beginPath(); ctx.moveTo(6,0); ctx.lineTo(-5, 5); ctx.lineTo(-5, -5); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(7,0); ctx.lineTo(-6, 6); ctx.lineTo(-6, -6); ctx.fill();
         }
         ctx.restore();
     }
@@ -619,6 +670,7 @@
 
         if(buildMode) {
             let def = TOWER_TYPES[buildMode];
+            if(!def) return;
             grid[gx][gy] = {x:0}; recalcPaths();
             let valid = mapStandard[startNode.x][startNode.y].cost < 999999;
             grid[gx][gy] = null; 
@@ -640,7 +692,7 @@
         deselect: ()=>{ selection=null; buildMode=null; state.paused=false; },
         pause: (b) => { state.paused = b; },
         upgrade: (attr) => {
-             if(selection && TOWER_TYPES[selection.type]) { // Safety check
+             if(selection && TOWER_TYPES[selection.type]) { 
                  let def = TOWER_TYPES[selection.type];
                  let cost = Math.floor(def.cost*0.5*((selection.attrLevels[attr]||0)+1));
                  if(state.money>=cost) {
@@ -658,13 +710,9 @@
                 towers=towers.filter(t=>t!==selection); 
                 selection=null; 
                 recalcPaths(); 
-            } else {
-                // If selection is invalid, just clear it to stop crashes
-                selection = null;
-            }
+            } else { selection = null; }
         },
         getEnemyTypes: () => ENEMY_INFO,
-        // Helper to draw enemy on Codex canvas
         drawPreview: (ctx, type) => {
             let def = ENEMY_INFO[type];
             let dummy = { 
