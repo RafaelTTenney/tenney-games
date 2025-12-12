@@ -1,4 +1,4 @@
-/* NEON CITADEL - V8 (FINAL POLISH & FIXES) */
+/* NEON CITADEL - V9 (VISUAL & LOGIC FIXES) */
 (function(global){
   const Neon = (function(){
     
@@ -264,7 +264,7 @@
         towers.forEach(t => {
             if(t.type === 'block') return;
 
-            // ORBIT TOWER LOGIC - Fixed
+            // ORBIT TOWER LOGIC
             if(t.type === 'orbit') {
                 t.angle = (t.angle || 0) + 0.1; // Rotate drone
                 let dx = t.x + Math.cos(t.angle)*25;
@@ -384,12 +384,10 @@
                 if(!p.target) { projectiles.splice(i,1); continue; }
                 
                 let ang = Math.atan2(p.target.y - p.y, p.target.x - p.x);
-                // Homing smoothing
-                let currAng = Math.atan2(p.vy || 0, p.vx || 0);
-                // Simple turn
-                p.vx = Math.cos(ang) * p.spd;
-                p.vy = Math.sin(ang) * p.spd;
-                p.x += p.vx; p.y += p.vy;
+                // Homing
+                let vx = Math.cos(ang) * p.spd;
+                let vy = Math.sin(ang) * p.spd;
+                p.x += vx; p.y += vy;
                 p.spd += p.acc;
                 particles.push({type:'smoke', x:p.x, y:p.y, life:15});
 
@@ -489,8 +487,8 @@
         // Gas Clouds
         gasClouds.forEach(g => {
             let grad = ctx.createRadialGradient(g.x, g.y, 10, g.x, g.y, g.r);
-            grad.addColorStop(0, `rgba(0,255,50,0.6)`);
-            grad.addColorStop(1, 'rgba(0,255,50,0)');
+            grad.addColorStop(0, `rgba(50,255,50,0.6)`);
+            grad.addColorStop(1, 'rgba(0,255,0,0)');
             ctx.fillStyle = grad;
             ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, Math.PI*2); ctx.fill();
         });
@@ -511,7 +509,7 @@
             if(p.type==='fire') {
                 ctx.globalAlpha = p.life/30; ctx.beginPath(); ctx.arc(p.x, p.y, 6 + (30-p.life)/2, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
             } else if (p.type==='missile') {
-                // Draw Rocket
+                // Rocket
                 ctx.save(); ctx.translate(p.x, p.y); 
                 let ang = Math.atan2(p.vy, p.vx);
                 ctx.rotate(ang);
@@ -519,6 +517,12 @@
                 ctx.beginPath(); ctx.moveTo(6,0); ctx.lineTo(-4, 4); ctx.lineTo(-4, -4); ctx.fill(); // Body
                 ctx.fillStyle = '#fff'; ctx.fillRect(-6,-2,4,4); // Thruster
                 ctx.restore();
+            } else if (p.type==='plasma') {
+                 ctx.shadowBlur=10; ctx.shadowColor=p.color; 
+                 ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI*2); ctx.fill(); 
+                 ctx.shadowBlur=0;
+            } else if (p.type==='canister') {
+                 ctx.fillStyle='#0f0'; ctx.fillRect(p.x-3, p.y-3, 6, 6);
             } else {
                 ctx.shadowBlur=5; ctx.shadowColor=p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
             }
@@ -598,7 +602,7 @@
         // Drone
         if(t.type === 'orbit') {
              let dx = Math.cos(t.angle)*25, dy = Math.sin(t.angle)*25;
-             ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(dx, dy, 4, 0, Math.PI*2); ctx.fill();
+             ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(dx, dy, 5, 0, Math.PI*2); ctx.fill();
              ctx.strokeStyle = t.color; ctx.globalAlpha=0.3; ctx.beginPath(); ctx.arc(0,0,25,0,Math.PI*2); ctx.stroke(); ctx.globalAlpha=1;
         } else {
             // ROTATING TURRET HEAD
@@ -624,6 +628,12 @@
             } else if (t.type === 'pyro') {
                 ctx.fillStyle='#d40'; ctx.fillRect(-5,-8,10,14);
                 ctx.fillStyle='#f90'; ctx.beginPath(); ctx.arc(0,0,5,0,Math.PI*2); ctx.fill();
+            } else if (t.type === 'tesla') {
+                ctx.fillStyle='#aa0'; ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.fill();
+                ctx.fillStyle='#ff0'; ctx.beginPath(); ctx.arc(0,0,3,0,Math.PI*2); ctx.fill(); // Core
+            } else if (t.type === 'poison') {
+                ctx.fillStyle='#060'; ctx.fillRect(-6,-6,12,12); // Vat
+                ctx.fillStyle='#0f0'; ctx.fillRect(-4,-4,8,8); // Sludge
             } else {
                 ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.fill();
                 if(t.muzzle) { ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0, 10, 4, 0, Math.PI*2); ctx.fill(); }
