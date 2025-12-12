@@ -16,7 +16,6 @@
         }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', Tahoma, sans-serif; overflow: hidden; }
         
-        /* HEADER */
         header {
             padding: 15px; text-align: center; border-bottom: 1px solid #222;
             background: linear-gradient(180deg, #101010 0%, #050505 100%);
@@ -35,7 +34,6 @@
         }
         .back-btn:hover { background: var(--bg); color: var(--primary); border: 1px solid var(--primary); box-shadow: 0 0 25px var(--primary); }
 
-        /* CARD GRID */
         .container { 
             max-width: 1400px; margin: 0 auto; padding: 40px 20px; 
             height: calc(100vh - 120px); overflow-y: auto; 
@@ -71,7 +69,6 @@
         }
         .play-btn:hover { filter: brightness(1.2); box-shadow: 0 0 25px currentColor; }
 
-        /* MODAL */
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: rgba(0,0,0,0.95); z-index: 9999;
@@ -86,7 +83,6 @@
             box-shadow: 0 0 100px rgba(0,0,0,0.8); overflow: hidden;
         }
 
-        /* HUD */
         .gf-header {
             height: 60px; background: #080808; border-bottom: 1px solid #222; 
             display: flex; align-items: center; justify-content: space-between; padding: 0 25px;
@@ -101,11 +97,9 @@
         }
         .close-btn:hover { background: #300; border-color: #f00; color: #fcc; }
 
-        /* CANVAS AREA */
         .canvas-container { flex: 1; position: relative; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
         canvas { display: block; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
         
-        /* INFO OVERLAY FOR DESCRIPTIONS */
         .info-overlay {
             position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
             background: rgba(0,0,0,0.8); border: 1px solid #444; padding: 15px;
@@ -115,7 +109,6 @@
         .info-title { color: var(--primary); font-weight: 800; font-size: 1.2em; text-transform: uppercase; margin-bottom: 5px; }
         .info-desc { color: #ccc; font-size: 0.9em; }
 
-        /* CONTROLS */
         .gf-controls {
             height: 100px; background: #080808; border-top: 1px solid #222;
             display: flex; align-items: center; padding: 0 30px; gap: 30px;
@@ -136,7 +129,6 @@
         .act-btn.primary { background: linear-gradient(180deg, #222, #111); border-color: var(--primary); color: var(--primary); }
         .act-btn.primary:hover { background: var(--primary); color: #000; box-shadow: 0 0 20px rgba(0,255,204,0.3); }
 
-        /* INSPECTOR */
         .inspector {
             position: absolute; right: 30px; top: 30px; width: 240px;
             background: rgba(10,12,14,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px;
@@ -342,7 +334,6 @@
                 btn.className = 't-card';
                 btn.innerHTML = `<div class="t-name" style="color:${t.color}">${t.name}</div><div class="t-cost">$${t.cost}</div>`;
                 
-                // HOVER LOGIC FOR DESCRIPTION
                 btn.onmouseenter = () => {
                     if(App.activeGame.pause) App.activeGame.pause(true);
                     let ov = document.getElementById('info-overlay');
@@ -380,7 +371,6 @@
 
         loop: () => {
             if(!App.activeGame) return;
-            
             try {
                 App.activeGame.update();
                 App.activeGame.draw(App.ctx);
@@ -402,7 +392,6 @@
         },
 
         updateInspector: () => {
-            // SAFE CHECK: Ensure game and selection exist
             if (!App.activeGame || !App.activeGame.sel) {
                 document.getElementById('inspector').style.display = 'none';
                 return;
@@ -414,7 +403,6 @@
             if(!App.activeGame.buildMode) document.querySelectorAll('.t-card').forEach(b => b.classList.remove('active'));
 
             panel.style.display = 'block';
-            
             document.getElementById('i-name').innerText = sel.name;
             document.getElementById('i-name').style.color = sel.color;
             
@@ -424,12 +412,10 @@
             if(sel.rate) html += `<div class="insp-row"><span>Rate</span><b>${sel.rate}</b></div>`;
             document.getElementById('i-stats').innerHTML = html;
 
-            // SAFE COST CALCULATION
             if(App.gameId === 'neon') {
                 document.getElementById('i-controls-std').style.display = 'none';
                 document.getElementById('i-controls-neon').style.display = 'grid';
                 
-                // Fetch base def to avoid undefined error if selection is desynced
                 const def = App.activeGame.conf.towers[sel.type];
                 if (!def) return; 
 
