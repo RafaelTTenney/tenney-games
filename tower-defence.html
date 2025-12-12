@@ -117,7 +117,7 @@
         .t-card {
             min-width: 90px; height: 70px; background: #111; border: 1px solid #333; border-radius: 4px;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            cursor: pointer; transition: 0.2s; position: relative;
+            cursor: pointer; transition: 0.2s; position: relative; flex-shrink: 0;
         }
         .t-card:hover { background: #1a1a1a; transform: translateY(-3px); border-color: #666; }
         .t-card.active { border-color: var(--primary); background: rgba(0,255,204,0.05); box-shadow: 0 0 20px rgba(0,255,204,0.15); }
