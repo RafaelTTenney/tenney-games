@@ -109,6 +109,28 @@
         .info-title { color: var(--primary); font-weight: 800; font-size: 1.2em; text-transform: uppercase; margin-bottom: 5px; }
         .info-desc { color: #ccc; font-size: 0.9em; }
 
+        /* CODEX MODAL STYLES */
+        .codex-modal {
+            position: absolute; top:50px; left:50%; transform:translateX(-50%);
+            width: 600px; height: 500px; background: rgba(10,15,20,0.95);
+            border: 1px solid #333; border-radius: 8px; z-index: 200;
+            display: none; padding: 20px; backdrop-filter: blur(10px);
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+        }
+        .codex-grid { display: grid; grid-template-columns: 200px 1fr; gap: 20px; height: 100%; }
+        .codex-list { border-right: 1px solid #333; overflow-y: auto; }
+        .codex-item { 
+            padding: 10px; cursor: pointer; color: #888; font-family: monospace; 
+            border-bottom: 1px solid #222; transition: 0.2s; 
+        }
+        .codex-item:hover, .codex-item.active { color: #fff; background: rgba(255,255,255,0.05); }
+        
+        .codex-view { display: flex; flex-direction: column; align-items: center; }
+        .cx-canvas { background: #000; border: 1px solid #333; margin-bottom: 20px; }
+        .cx-stats { width: 100%; }
+        .cx-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-family: monospace; color: #aaa; border-bottom: 1px solid #222; padding-bottom: 5px; }
+        .cx-row b { color: #fff; }
+
         .gf-controls {
             height: 100px; background: #080808; border-top: 1px solid #222;
             display: flex; align-items: center; padding: 0 30px; gap: 30px;
@@ -227,6 +249,20 @@
                     <div id="info-desc" class="info-desc"></div>
                 </div>
 
+                <div id="codex-modal" class="codex-modal">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                        <h2 style="margin:0; color:#fff;">ENEMY DATABASE</h2>
+                        <button class="insp-close" onclick="App.toggleCodex()">×</button>
+                    </div>
+                    <div class="codex-grid">
+                        <div class="codex-list" id="cx-list"></div>
+                        <div class="codex-view">
+                            <canvas id="cx-preview" width="100" height="100" class="cx-canvas"></canvas>
+                            <div class="cx-stats" id="cx-details"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="start-menu" class="ingame-menu">
                     <h2 style="color:#fff; font-size:3em; letter-spacing:8px; text-shadow: 0 0 20px rgba(255,255,255,0.5);">SYSTEM READY</h2>
                     <div id="diff-selector" class="diff-select" style="display:none;">
@@ -242,9 +278,7 @@
                         <h3 class="insp-title" id="i-name">TOWER</h3>
                         <button class="insp-close" onclick="App.deselect()">×</button>
                     </div>
-                    
                     <div id="i-stats"></div>
-                    
                     <div class="insp-btns" id="i-controls-std">
                         <button class="i-btn upg" onclick="App.gameAction('upgrade')">UPGRADE <span id="i-cost-up"></span></button>
                         <button class="i-btn sell" onclick="App.gameAction('sell')">SELL <span id="i-cost-sell"></span></button>
@@ -261,6 +295,7 @@
             <div class="gf-controls">
                 <div class="tower-dock" id="tower-dock"></div>
                 <div class="action-dock">
+                    <button class="act-btn" onclick="App.toggleCodex()">DATABASE</button>
                     <button class="act-btn primary" onclick="App.gameAction('wave')">NEXT WAVE</button>
                 </div>
             </div>
@@ -279,12 +314,67 @@
         diff: 'med',
         canvas: document.getElementById('game-canvas'),
         ctx: document.getElementById('game-canvas').getContext('2d', { alpha: false }),
+        
+        // CODEX LOGIC
+        toggleCodex: () => {
+            const el = document.getElementById('codex-modal');
+            if(el.style.display === 'block') {
+                el.style.display = 'none';
+                if(App.activeGame && App.activeGame.pause) App.activeGame.pause(false);
+            } else {
+                el.style.display = 'block';
+                if(App.activeGame && App.activeGame.pause) App.activeGame.pause(true);
+                App.populateCodex();
+            }
+        },
+
+        populateCodex: () => {
+            if(!App.activeGame || !App.activeGame.getEnemyTypes) return;
+            const data = App.activeGame.getEnemyTypes();
+            const list = document.getElementById('cx-list');
+            list.innerHTML = '';
+            
+            let first = true;
+            for(let key in data) {
+                let d = data[key];
+                let item = document.createElement('div');
+                item.className = 'codex-item';
+                item.innerText = d.name;
+                item.onclick = () => {
+                    document.querySelectorAll('.codex-item').forEach(x=>x.classList.remove('active'));
+                    item.classList.add('active');
+                    App.showCodexEntry(key, d);
+                };
+                list.appendChild(item);
+                if(first) { item.click(); first=false; }
+            }
+        },
+
+        showCodexEntry: (key, d) => {
+            // Stats
+            let html = `
+                <div class="cx-row"><span>HP Class</span><b>${d.hp}</b></div>
+                <div class="cx-row"><span>Speed</span><b>${d.spd}</b></div>
+                <div class="cx-row"><span style="color:#f55">WEAKNESS</span><b>${d.weak}</b></div>
+                <div style="margin-top:15px; color:#ddd; font-size:0.9em; line-height:1.4;">${d.desc}</div>
+            `;
+            document.getElementById('cx-details').innerHTML = html;
+
+            // Canvas Preview
+            const cvs = document.getElementById('cx-preview');
+            const ctx = cvs.getContext('2d');
+            ctx.fillStyle = '#050508';
+            ctx.fillRect(0,0,100,100);
+            
+            // Invoke Game's drawEnemy on this canvas
+            if(App.activeGame.drawPreview) {
+                App.activeGame.drawPreview(ctx, key);
+            }
+        },
 
         launch: (id) => {
             App.gameId = id;
-            const modal = document.getElementById('modal');
-            modal.classList.add('active');
-            
+            document.getElementById('modal').classList.add('active');
             document.getElementById('start-menu').style.display = 'flex';
             document.getElementById('inspector').style.display = 'none';
             document.getElementById('info-overlay').style.display = 'none';
@@ -293,7 +383,7 @@
             if(id === 'sentinel' && window.SentinelGame) App.activeGame = window.SentinelGame;
             else if(id === 'vector' && window.VectorGame) App.activeGame = window.VectorGame;
             else if(id === 'neon' && window.NeonGame) App.activeGame = window.NeonGame;
-            else { alert('Game Module Error: Script not loaded.'); App.close(); return; }
+            else { alert('Game Module Error.'); App.close(); return; }
 
             App.buildDock();
             App.activeGame.init(App.canvas, { difficulty: App.diff });
@@ -364,9 +454,7 @@
                 else if(act === 'upgrade') App.activeGame.upgrade();
                 else if(act === 'sell') App.activeGame.sell();
                 else if(act.startsWith('upg_')) App.activeGame.upgrade(act.replace('upg_', ''));
-            } catch(e) {
-                console.error("Game Action Error:", e);
-            }
+            } catch(e) { console.error("Game Action Error:", e); }
         },
 
         loop: () => {
@@ -383,54 +471,38 @@
                 document.getElementById('ui-wave').innerText = w;
                 document.getElementById('ui-money').innerText = Math.floor(m);
                 document.getElementById('ui-lives').innerText = l;
-
                 App.updateInspector();
-            } catch(err) {
-                console.error("Game Loop Crashed:", err);
-            }
+            } catch(err) { console.error("Game Loop Crashed:", err); }
             App.loopId = requestAnimationFrame(App.loop);
         },
 
         updateInspector: () => {
-            if (!App.activeGame || !App.activeGame.sel) {
-                document.getElementById('inspector').style.display = 'none';
-                return;
-            }
-
+            if (!App.activeGame || !App.activeGame.sel) { document.getElementById('inspector').style.display = 'none'; return; }
             const sel = App.activeGame.sel;
             const panel = document.getElementById('inspector');
-            
             if(!App.activeGame.buildMode) document.querySelectorAll('.t-card').forEach(b => b.classList.remove('active'));
-
             panel.style.display = 'block';
             document.getElementById('i-name').innerText = sel.name;
             document.getElementById('i-name').style.color = sel.color;
-            
             let html = '';
             if(sel.dmg) html += `<div class="insp-row"><span>Damage</span><b>${Math.floor(sel.dmg)}</b></div>`;
             if(sel.rng || sel.range) html += `<div class="insp-row"><span>Range</span><b>${Math.floor(sel.rng || sel.range)}</b></div>`;
             if(sel.rate) html += `<div class="insp-row"><span>Rate</span><b>${sel.rate}</b></div>`;
             document.getElementById('i-stats').innerHTML = html;
-
             if(App.gameId === 'neon') {
                 document.getElementById('i-controls-std').style.display = 'none';
                 document.getElementById('i-controls-neon').style.display = 'grid';
-                
                 const def = App.activeGame.conf.towers[sel.type];
                 if (!def) return; 
-
                 const base = def.cost;
                 const costCalc = (lvl) => Math.floor(base * 0.5 * ((lvl||0)+1));
-                
                 document.getElementById('n-cost-dmg').innerText = '$'+costCalc(sel.attrLevels.dmg);
                 document.getElementById('n-cost-rng').innerText = '$'+costCalc(sel.attrLevels.rng);
                 document.getElementById('n-cost-rate').innerText = '$'+costCalc(sel.attrLevels.rate);
                 document.getElementById('n-cost-sell').innerText = '$'+Math.floor(base*0.5);
-
             } else {
                 document.getElementById('i-controls-std').style.display = 'grid';
                 document.getElementById('i-controls-neon').style.display = 'none';
-                
                 let def = App.activeGame.conf.towers[sel.type];
                 if(def) {
                     let upCost = Math.floor(def.cost * 0.8 * (sel.level || 1));
