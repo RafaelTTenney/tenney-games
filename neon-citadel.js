@@ -8,6 +8,31 @@
     
     // --- TOWER DEFINITIONS ---
     const TOWER_TYPES = {
+      'gatling': { 
+            name:'VULCAN', cost:100, color:'#00ffff', type:'phys', 
+            dmg:6, rng:140, rate:5, hp:300, 
+            desc:"Rapid-fire kinetic. Cheap and reliable." 
+        },
+        'pyro': {
+            name:'PYRO', cost:350, color:'#ff5500', type:'chem',
+            dmg:4, rng:100, rate:2, hp:400, cone:true,
+            desc:"Flamethrower. Sprays fire in a cone."
+        },
+        'lance': { 
+            name:'LANCE', cost:600, color:'#ff00aa', type:'energy', 
+            dmg:5, rng:180, rate:0, hp:300, beam:true, 
+            desc:"Concentrated plasma beam." 
+        },
+        'missile': { 
+            name:'HYDRA', cost:1200, color:'#00ff88', type:'ex', 
+            dmg:180, rng:300, rate:70, hp:450, missile:true, 
+            desc:"Long-range smart missiles." 
+        },
+        'laser': { 
+            name:'PHASE', cost:2000, color:'#d000ff', type:'energy', 
+            dmg:25, rng:260, rate:0, hp:800, beam:true, 
+            desc:"Capital-class obliterator beam." 
+        },
         'gatling': { 
             name:'VULCAN', cost:120, color:'#00ffff', type:'phys', 
             dmg:5, rng:130, rate:5, hp:300, 
