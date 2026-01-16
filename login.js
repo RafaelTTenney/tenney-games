@@ -55,14 +55,13 @@ async function getProfileByUsername(username) {
   return data && data.length ? data[0] : null;
 }
 
-function withTimeout(promise, ms, label) {
-  let timeoutId;
-  const timeout = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => {
-      reject(new Error(label || 'Request timed out.'));
-    }, ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+function withTimeoutSignal(ms) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ms);
+  return {
+    signal: controller.signal,
+    stop: () => clearTimeout(timeoutId)
+  };
 }
 
 async function checkSupabaseReachable() {
@@ -85,6 +84,7 @@ async function checkSupabaseReachable() {
 }
 
 async function directPasswordLogin(email, password) {
+  const timer = withTimeoutSignal(8000);
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
@@ -93,7 +93,8 @@ async function directPasswordLogin(email, password) {
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password }),
+      signal: timer.signal
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -102,7 +103,12 @@ async function directPasswordLogin(email, password) {
     }
     return json;
   } catch (err) {
+    if (err && err.name === 'AbortError') {
+      throw new Error('Login timed out. Check your connection.');
+    }
     throw err;
+  } finally {
+    timer.stop();
   }
 }
 
@@ -230,11 +236,16 @@ document.addEventListener('DOMContentLoaded', function () {
       if (loginError) loginError.textContent = 'Supabase is not configured.';
       return;
     }
+    let pending = true;
+    const finish = () => {
+      pending = false;
+      if (slowTimer) clearTimeout(slowTimer);
+    };
     if (loginError) loginError.textContent = 'Signing in...';
     let slowTimer = null;
     if (loginError) {
       slowTimer = setTimeout(() => {
-        loginError.textContent = 'Still signing in...';
+        if (pending) loginError.textContent = 'Still signing in...';
       }, 4000);
     }
     const username = document.getElementById('username').value;
@@ -246,10 +257,12 @@ document.addEventListener('DOMContentLoaded', function () {
         profile = await getProfileByUsername(username);
       } catch (err) {
         if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
+        finish();
         return;
       }
       if (!profile) {
         if (loginError) loginError.textContent = 'No account found for that username.';
+        finish();
         return;
       }
     }
@@ -257,14 +270,10 @@ document.addEventListener('DOMContentLoaded', function () {
       const loginEmail = usesEmail ? username.trim() : profile?.email;
       if (!loginEmail) {
         if (loginError) loginError.textContent = 'No email found for that username.';
-        if (slowTimer) clearTimeout(slowTimer);
+        finish();
         return;
       }
-      const direct = await withTimeout(
-        directPasswordLogin(loginEmail, password),
-        8000,
-        'Login timed out. Check your connection.'
-      );
+      const direct = await directPasswordLogin(loginEmail, password);
       const { error: setError } = await supabase.auth.setSession({
         access_token: direct.access_token,
         refresh_token: direct.refresh_token
@@ -276,15 +285,15 @@ document.addEventListener('DOMContentLoaded', function () {
       const session = sessionData.session;
       if (!session) {
         if (loginError) loginError.textContent = 'Login failed. Please try again.';
-        if (slowTimer) clearTimeout(slowTimer);
+        finish();
         return;
       }
       await loadProfileForSession(session);
-      if (slowTimer) clearTimeout(slowTimer);
+      finish();
       window.location.replace('loggedIn.html');
     } catch (err) {
       if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
-      if (slowTimer) clearTimeout(slowTimer);
+      finish();
     }
   });
 });

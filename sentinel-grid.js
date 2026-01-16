@@ -93,6 +93,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
         for(let i=enemies.length-1; i>=0; i--) {
             let e = enemies[i];
             let gx = Math.floor(e.x/GRID), gy = Math.floor(e.y/GRID);
+            if (gx < 0 || gx >= COLS || gy < 0 || gy >= ROWS) {
+                enemies.splice(i,1);
+                lives--;
+                continue;
+            }
             let next = flowMap[`${gx},${gy}`];
             if(next) {
                 let tx = next.x*GRID+GRID/2, ty = next.y*GRID+GRID/2;
@@ -101,6 +106,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
                 else { e.x+=(dx/d)*e.spd; e.y+=(dy/d)*e.spd; }
             } else if (gx===end.x && gy===end.y) {
                 enemies.splice(i,1); lives--; continue;
+            }
+            if (e.x < -10 || e.x > canvas.width + 10 || e.y < -10 || e.y > canvas.height + 10) {
+                enemies.splice(i,1);
+                lives--;
+                continue;
             }
             if(e.hp<=0) { enemies.splice(i,1); money+=15; }
         }
@@ -129,14 +139,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
     }
 
     function draw(ctx) {
-        ctx.fillStyle = '#050a05'; ctx.fillRect(0,0,canvas.width,canvas.height);
-        
+        const bg = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        bg.addColorStop(0, '#050a05');
+        bg.addColorStop(1, '#04090c');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+
         ctx.strokeStyle = '#112211'; ctx.beginPath();
         for(let x=0;x<=canvas.width;x+=GRID) { ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); }
         for(let y=0;y<=canvas.height;y+=GRID) { ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); }
         ctx.stroke();
 
-        ctx.strokeStyle = 'rgba(0,255,100,0.1)'; ctx.lineWidth=2; ctx.beginPath();
+        ctx.strokeStyle = 'rgba(0,255,100,0.15)'; ctx.lineWidth=2; ctx.beginPath();
         for(let key in flowMap) {
             let [gx,gy] = key.split(',').map(Number);
             let next = flowMap[key];
@@ -149,11 +163,17 @@ import { getHighScore, submitHighScore } from './score-store.js';
         ctx.fillStyle = '#f00'; ctx.fillRect(end.x*GRID, end.y*GRID, GRID, GRID);
 
         towers.forEach(t => {
-            ctx.fillStyle = t.color; ctx.fillRect(t.x-15, t.y-15, 30, 30);
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = t.color;
+            ctx.fillStyle = t.color;
+            ctx.fillRect(t.x-15, t.y-15, 30, 30);
+            ctx.shadowBlur = 0;
             if(selected===t) { ctx.strokeStyle='#fff'; ctx.strokeRect(t.x-15,t.y-15,30,30); }
         });
         enemies.forEach(e => {
             ctx.fillStyle = e.color; ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(e.x - 10, e.y - 16, 20 * (e.hp / e.maxHp), 3);
         });
         projs.forEach(p => { ctx.fillStyle = p.color; ctx.fillRect(p.x-3,p.y-3,6,6); });
     }
@@ -165,7 +185,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
         if(t) { selected=t; buildType=null; return; }
         if(buildType && money>=TOWERS[buildType].cost) {
             let def = TOWERS[buildType];
-            towers.push({gx, gy, x:gx*GRID+GRID/2, y:gy*GRID+GRID/2, ...def, level:1, cd:0});
+            towers.push({gx, gy, x:gx*GRID+GRID/2, y:gy*GRID+GRID/2, type: buildType, ...def, level:1, cd:0});
             if(calcPath()) money-=def.cost;
             else { towers.pop(); calcPath(); }
         }
@@ -176,8 +196,17 @@ import { getHighScore, submitHighScore } from './score-store.js';
         init, update, draw, click, startWave,
         setBuild: (k)=>{buildType=k; selected=null;},
         deselect: ()=>{selected=null; buildType=null;},
-        upgrade: ()=>{if(selected&&money>=selected.cost){money-=selected.cost; selected.level++; selected.dmg*=1.3;}},
-        sell: ()=>{if(selected){money+=selected.cost/2; towers=towers.filter(t=>t!==selected); selected=null; calcPath();}},
+        upgrade: ()=>{
+            if(selected){
+                const cost = Math.floor(selected.cost * 0.8 * (selected.level || 1));
+                if(money>=cost){
+                    money-=cost;
+                    selected.level++;
+                    selected.dmg*=1.3;
+                }
+            }
+        },
+        sell: ()=>{if(selected){money+=Math.floor(selected.cost*0.5); towers=towers.filter(t=>t!==selected); selected=null; calcPath();}},
         stop: ()=>{ submitBestWave(); },
         conf: {towers: TOWERS},
         get wave(){return wave}, get money(){return money}, get lives(){return lives}, get bestWave(){return bestWave},

@@ -270,6 +270,13 @@ import { getHighScore, submitHighScore } from './score-store.js';
                 e.vx = Math.cos(ang)*e.spd; e.vy = Math.sin(ang)*e.spd;
                 e.angle = ang; e.x+=e.vx; e.y+=e.vy;
             }
+            if (e.x < -20 || e.x > canvas.width + 20 || e.y < -20 || e.y > canvas.height + 20) {
+                state.lives -= e.isBoss ? 1000 : 1;
+                state.shake = 10;
+                enemies.splice(i,1);
+                if(e.isBoss) boss=null;
+                continue;
+            }
 
             if(e.hp <= 0) {
                 let rew = e.isBoss ? 5000 : (e.maxHp/5);
@@ -491,7 +498,17 @@ import { getHighScore, submitHighScore } from './score-store.js';
         ctx.save();
         if(state.shake>0) ctx.translate((Math.random()-0.5)*state.shake, (Math.random()-0.5)*state.shake);
         
-        ctx.fillStyle = '#050508'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        const bg = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        bg.addColorStop(0, '#050508');
+        bg.addColorStop(1, '#08020c');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+
+        const baseX = (COLS - 1) * CELL;
+        ctx.fillStyle = 'rgba(255,0,120,0.08)';
+        ctx.fillRect(baseX, 0, CELL, canvas.height);
+        ctx.strokeStyle = 'rgba(255,0,120,0.4)';
+        ctx.strokeRect(baseX, 0, CELL, canvas.height);
 
         // Grid
         ctx.strokeStyle = 'rgba(255,255,255,0.02)'; ctx.lineWidth=1;
@@ -707,7 +724,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
             grid[gx][gy] = null; 
             if(valid && state.money >= def.cost) {
                 state.money -= def.cost;
-                let newT = { gx, gy, x:gx*CELL+CELL/2, y:gy*CELL+CELL/2, ...def, maxHp:def.hp, hp:def.hp, cd:0, attrLevels:{dmg:0,rng:0,rate:0}, id:Date.now() };
+                let newT = { gx, gy, key: buildMode, x:gx*CELL+CELL/2, y:gy*CELL+CELL/2, ...def, maxHp:def.hp, hp:def.hp, cd:0, attrLevels:{dmg:0,rng:0,rate:0}, id:Date.now() };
                 grid[gx][gy] = newT; towers.push(newT); recalcPaths();
             }
         }
@@ -723,8 +740,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
         deselect: ()=>{ selection=null; buildMode=null; state.paused=false; },
         pause: (b) => { state.paused = b; },
         upgrade: (attr) => {
-             if(selection && TOWER_TYPES[selection.type]) { 
-                 let def = TOWER_TYPES[selection.type];
+             if(selection && TOWER_TYPES[selection.key]) { 
+                 let def = TOWER_TYPES[selection.key];
                  let cost = Math.floor(def.cost*0.5*((selection.attrLevels[attr]||0)+1));
                  if(state.money>=cost) {
                      state.money-=cost; selection.attrLevels[attr] = (selection.attrLevels[attr]||0)+1;
@@ -735,8 +752,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
              }
         },
         sell: ()=>{ 
-            if(selection && TOWER_TYPES[selection.type]){ 
-                state.money+=Math.floor(TOWER_TYPES[selection.type].cost*0.5); 
+            if(selection && TOWER_TYPES[selection.key]){ 
+                state.money+=Math.floor(TOWER_TYPES[selection.key].cost*0.5); 
                 grid[selection.gx][selection.gy]=null; 
                 towers=towers.filter(t=>t!==selection); 
                 selection=null; 

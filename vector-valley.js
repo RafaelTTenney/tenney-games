@@ -104,6 +104,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
             } else {
                 e.x += (dx/d)*e.speed; e.y += (dy/d)*e.speed;
             }
+            if (e.x < -20 || e.x > canvas.width + 20 || e.y < -20 || e.y > canvas.height + 20) {
+                lives--; enemies.splice(i,1); continue;
+            }
             e.angle += 0.1;
             e.speed = e.baseSpeed; 
 
@@ -163,7 +166,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
     }
 
     function draw(ctx) {
-        ctx.fillStyle = '#050a15'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        const bg = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        bg.addColorStop(0, '#050a15');
+        bg.addColorStop(1, '#080511');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0,0,canvas.width,canvas.height);
         
         ctx.shadowBlur = 20; ctx.shadowColor = '#00ffcc';
         ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 3;
@@ -216,7 +223,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
         if(t) { selected=t; buildType=null; return; }
         if(buildType && money >= TOWERS[buildType].cost) {
             let def = TOWERS[buildType];
-            towers.push({x, y, ...def, level:1, cd:0});
+            towers.push({x, y, type: buildType, ...def, level:1, cd:0});
             money -= def.cost;
         } else selected = null;
     }
@@ -225,7 +232,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
         init, update, draw, click, startWave,
         setBuild: (k)=>{buildType=k; selected=null;},
         deselect: ()=>{selected=null; buildType=null;},
-        upgrade: ()=>{if(selected && money>=Math.floor(selected.cost*0.8)){ money-=Math.floor(selected.cost*0.8); selected.level++; selected.dmg*=1.4; }},
+        upgrade: ()=>{
+            if(selected){
+                const cost = Math.floor(selected.cost * 0.8 * (selected.level || 1));
+                if(money>=cost){ money-=cost; selected.level++; selected.dmg*=1.4; }
+            }
+        },
         sell: ()=>{if(selected){ money+=Math.floor(selected.cost*0.5); towers=towers.filter(t=>t!==selected); selected=null; }},
         stop: ()=>{ submitBestWave(); },
         conf: {towers: TOWERS},

@@ -52,6 +52,7 @@
         .card.sentinel .card-header { background: radial-gradient(circle at center, #003311 0%, #000 100%); }
         .card.vector .card-header { background: radial-gradient(circle at center, #332200 0%, #000 100%); }
         .card.neon .card-header { background: radial-gradient(circle at center, #220033 0%, #000 100%); }
+        .card.reverse .card-header { background: radial-gradient(circle at center, #001f2a 0%, #000 100%); }
 
         .card h2 { z-index: 2; margin: 0; font-size: 2em; text-transform: uppercase; letter-spacing: 4px; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
         .card-body { padding: 30px; flex: 1; display: flex; flex-direction: column; }
@@ -227,6 +228,15 @@
                     <button class="play-btn" style="background:var(--tertiary)" onclick="App.launch('neon')">INITIALIZE</button>
                 </div>
             </div>
+
+            <div class="card reverse" style="border-top: 4px solid #38bdf8;">
+                <div class="card-header"><h2 style="color:#38bdf8">BREACH COMMAND</h2></div>
+                <div class="card-body">
+                    <span class="badge" style="color:#38bdf8">REVERSE ASSAULT</span>
+                    <p>Spend credits to deploy attackers and smash the enemy core.</p>
+                    <button class="play-btn" style="background:#38bdf8" onclick="App.launch('reverse')">INITIALIZE</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -305,6 +315,7 @@
     <script type="module" src="sentinel-grid.js"></script>
     <script type="module" src="vector-valley.js"></script>
     <script type="module" src="neon-citadel.js"></script>
+    <script type="module" src="reverse-siege.js"></script>
 
     <script type="module">
     const App = {
@@ -384,6 +395,7 @@
             if(id === 'sentinel' && window.SentinelGame) App.activeGame = window.SentinelGame;
             else if(id === 'vector' && window.VectorGame) App.activeGame = window.VectorGame;
             else if(id === 'neon' && window.NeonGame) App.activeGame = window.NeonGame;
+            else if(id === 'reverse' && window.ReverseGame) App.activeGame = window.ReverseGame;
             else { alert('Game Module Error.'); App.close(); return; }
 
             App.buildDock();
@@ -495,7 +507,7 @@
             if(App.gameId === 'neon') {
                 document.getElementById('i-controls-std').style.display = 'none';
                 document.getElementById('i-controls-neon').style.display = 'grid';
-                const def = App.activeGame.conf.towers[sel.type];
+                const def = App.activeGame.conf.towers[sel.key || sel.type];
                 if (!def) return; 
                 const base = def.cost;
                 const costCalc = (lvl) => Math.floor(base * 0.5 * ((lvl||0)+1));
