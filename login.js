@@ -103,6 +103,24 @@ async function checkAuthHealth() {
   }
 }
 
+async function directPasswordLogin(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ email, password })
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = json.error_description || json.error || json.message || 'Login failed.';
+    throw new Error(msg);
+  }
+  return json;
+}
+
 function isLoggedIn() {
   return localStorage.getItem('loggedIn') === 'true';
 }
@@ -237,38 +255,71 @@ document.addEventListener('DOMContentLoaded', function () {
     let profile = null;
     if (!usesEmail) {
       try {
-        profile = await withTimeout(getProfileByUsername(username), 8000, 'Login timed out. Check your connection.');
-      } catch (err) {
-        const reachable = await checkSupabaseReachable();
-        if (loginError) {
-          loginError.textContent = reachable
-            ? (err?.message || 'Login failed. Please try again.')
-            : 'Cannot reach Supabase. Disable blockers or check your connection.';
+      profile = await withTimeout(getProfileByUsername(username), 8000, 'Login timed out. Check your connection.');
+    } catch (err) {
+      const reachable = await checkSupabaseReachable();
+      const authHealthy = await checkAuthHealth();
+      if (loginError) {
+        if (!reachable || !authHealthy) {
+          loginError.textContent = 'Cannot reach Supabase. Disable blockers or check your network.';
+        } else {
+          loginError.textContent = err?.message || 'Login failed. Please try again.';
         }
-        return;
       }
+      return;
+    }
       if (!profile) {
         if (loginError) loginError.textContent = 'No account found for that username.';
         return;
       }
     }
     try {
-      const { data, error } = await withTimeout(
-        supabase.auth.signInWithPassword({
-          email: usesEmail ? username.trim() : profile.email,
-          password
-        }),
-        8000,
-        'Login timed out. Check your connection.'
-      );
-      if (error || !data.session) {
-        if (loginError) loginError.textContent = error?.message || 'Invalid username or password.';
+      let session = null;
+      try {
+        const { data, error } = await withTimeout(
+          supabase.auth.signInWithPassword({
+            email: usesEmail ? username.trim() : profile.email,
+            password
+          }),
+          8000,
+          'Login timed out. Check your connection.'
+        );
+        if (error || !data.session) {
+          throw error || new Error('Invalid username or password.');
+        }
+        session = data.session;
+      } catch (err) {
+        const direct = await withTimeout(
+          directPasswordLogin(usesEmail ? username.trim() : profile.email, password),
+          8000,
+          'Login timed out. Check your connection.'
+        );
+        const { error: setError } = await supabase.auth.setSession({
+          access_token: direct.access_token,
+          refresh_token: direct.refresh_token
+        });
+        if (setError) {
+          throw setError;
+        }
+        const { data: sessionData } = await supabase.auth.getSession();
+        session = sessionData.session;
+      }
+      if (!session) {
+        if (loginError) loginError.textContent = 'Login failed. Please try again.';
         return;
       }
-      await loadProfileForSession(data.session);
+      await loadProfileForSession(session);
       window.location.replace('loggedIn.html');
     } catch (err) {
-      if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
+      const reachable = await checkSupabaseReachable();
+      const authHealthy = await checkAuthHealth();
+      if (loginError) {
+        if (!reachable || !authHealthy) {
+          loginError.textContent = 'Cannot reach Supabase. Disable blockers or check your network.';
+        } else {
+          loginError.textContent = err?.message || 'Login failed. Please try again.';
+        }
+      }
     }
   });
 });
