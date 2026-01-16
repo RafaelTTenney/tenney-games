@@ -88,14 +88,17 @@ async function checkAuthHealth() {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
   try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/health`, {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
       headers: {
         apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json'
       },
+      body: JSON.stringify({ email: 'healthcheck@example.com', password: 'invalid' }),
       signal: controller.signal
     });
-    return res.ok;
+    return res.status >= 200 && res.status < 500;
   } catch (err) {
     return false;
   } finally {
