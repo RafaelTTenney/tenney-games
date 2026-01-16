@@ -84,6 +84,25 @@ async function checkSupabaseReachable() {
   }
 }
 
+async function checkAuthHealth() {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/health`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+      },
+      signal: controller.signal
+    });
+    return res.ok;
+  } catch (err) {
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function isLoggedIn() {
   return localStorage.getItem('loggedIn') === 'true';
 }
@@ -193,9 +212,20 @@ document.addEventListener('DOMContentLoaded', function () {
     // Nothing to do here if there's no login form
     return;
   }
+  const loginError = document.getElementById('loginError');
+  if (loginError) {
+    const online = navigator.onLine !== false;
+    const healthy = await checkAuthHealth();
+    if (!online) {
+      loginError.textContent = 'You appear to be offline.';
+    } else if (!healthy) {
+      loginError.textContent = 'Cannot reach Supabase auth. Check blockers or network.';
+    } else {
+      loginError.textContent = '';
+    }
+  }
   loginForm.addEventListener('submit', async function (e) {
     e.preventDefault();
-    const loginError = document.getElementById('loginError');
     if (!hasSupabaseConfig()) {
       if (loginError) loginError.textContent = 'Supabase is not configured.';
       return;
