@@ -45,10 +45,11 @@ async function refreshSessionProfile() {
 }
 
 async function getProfileByUsername(username) {
+  const normalized = (username || '').trim().toLowerCase();
   const { data, error } = await supabase
     .from('profiles')
     .select('id, email, username, first_name, account_status')
-    .eq('username', username)
+    .eq('username', normalized)
     .limit(1);
   if (error) return null;
   return data && data.length ? data[0] : null;
@@ -165,15 +166,17 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   loginForm.addEventListener('submit', async function (e) {
     e.preventDefault();
+    const loginError = document.getElementById('loginError');
     if (!hasSupabaseConfig()) {
-      document.getElementById('loginError').textContent = 'Supabase is not configured.';
+      if (loginError) loginError.textContent = 'Supabase is not configured.';
       return;
     }
+    if (loginError) loginError.textContent = 'Signing in...';
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     const profile = await getProfileByUsername(username);
     if (!profile) {
-      document.getElementById('loginError').textContent = 'Invalid username or password.';
+      if (loginError) loginError.textContent = 'No account found for that username.';
       return;
     }
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -181,7 +184,7 @@ document.addEventListener('DOMContentLoaded', function () {
       password
     });
     if (error || !data.session) {
-      document.getElementById('loginError').textContent = 'Invalid username or password.';
+      if (loginError) loginError.textContent = error?.message || 'Invalid username or password.';
       return;
     }
     setSessionProfile(profile);
