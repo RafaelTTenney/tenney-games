@@ -7,7 +7,14 @@ import { getHighScore, submitHighScore } from './score-store.js';
     const TOWERS = {
       blaster: { name:'BLASTER', cost:50, color:'#00FF99', range:120, dmg:15, rate:30 },
       sniper:  { name:'SNIPER', cost:150, color:'#00FFFF', range:300, dmg:80, rate:90 },
-      rapid:   { name:'RAPID', cost:120, color:'#FFFF00', range:100, dmg:5, rate:8 }
+      rapid:   { name:'RAPID', cost:120, color:'#FFFF00', range:100, dmg:5, rate:8 },
+      pulse:   { name:'PULSE', cost:220, color:'#ff66ff', range:140, dmg:18, rate:50, aoe:70 }
+    };
+
+    const ENEMIES = {
+        basic: { hp: 30, spd: 2.5, color: '#ff3366', r: 8 },
+        scout: { hp: 18, spd: 3.6, color: '#ffcc00', r: 6 },
+        brute: { hp: 90, spd: 1.6, color: '#aa66ff', r: 10 }
     };
 
     let canvas, ctx, COLS, ROWS;
@@ -75,10 +82,16 @@ import { getHighScore, submitHighScore } from './score-store.js';
         let count = 6 + wave*2;
         let sent = 0;
         let int = setInterval(() => {
+            const roll = Math.random();
+            let type = 'basic';
+            if (wave > 4 && roll > 0.7) type = 'brute';
+            else if (roll > 0.5) type = 'scout';
+            const def = ENEMIES[type];
+            const hp = def.hp + wave * (type === 'brute' ? 18 : 10);
             enemies.push({
                 x: start.x*GRID+GRID/2, y: start.y*GRID+GRID/2,
-                hp: 30 + wave*10, maxHp: 30 + wave*10, spd: 2.5,
-                color: '#ff3366', r: 8
+                hp, maxHp: hp, spd: def.spd + (wave * 0.04),
+                color: def.color, r: def.r, type
             });
             sent++;
             if(sent>=count) clearInterval(int);
@@ -122,7 +135,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
                 let target = enemies.find(e => Math.hypot(e.x-t.x, e.y-t.y) < t.range);
                 if(target) {
                     t.angle = Math.atan2(target.y - t.y, target.x - t.x);
-                    projs.push({x:t.x, y:t.y, tx:target.x, ty:target.y, speed:15, dmg:t.dmg, color:t.color});
+                    projs.push({x:t.x, y:t.y, tx:target.x, ty:target.y, speed:15, dmg:t.dmg, color:t.color, aoe: t.aoe || 0});
                     t.cd = t.rate;
                 }
             }
@@ -133,11 +146,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
             let dx = p.tx-p.x, dy = p.ty-p.y, d = Math.hypot(dx,dy);
             if(d < p.speed) {
                 let hit = enemies.find(e => Math.hypot(e.x-p.tx, e.y-p.ty) < 20);
-                if(hit) {
+                if (p.aoe) {
+                    enemies.forEach(e => {
+                        if (Math.hypot(e.x - p.tx, e.y - p.ty) < p.aoe) {
+                            e.hp -= p.dmg;
+                        }
+                    });
+                    particles.push({type:'ring', x:p.tx, y:p.ty, r:p.aoe, life:20, color:p.color});
+                } else if(hit) {
                     hit.hp -= p.dmg;
-                    for(let k=0;k<6;k++) {
-                        particles.push({x:p.tx, y:p.ty, vx:(Math.random()-0.5)*4, vy:(Math.random()-0.5)*4, life:18, color:p.color});
-                    }
+                }
+                for(let k=0;k<6;k++) {
+                    particles.push({x:p.tx, y:p.ty, vx:(Math.random()-0.5)*4, vy:(Math.random()-0.5)*4, life:18, color:p.color});
                 }
                 projs.splice(i,1);
             } else { p.x += (dx/d)*p.speed; p.y += (dy/d)*p.speed; }
@@ -204,8 +224,15 @@ import { getHighScore, submitHighScore } from './score-store.js';
         });
         particles.forEach(p => {
             ctx.globalAlpha = p.life/18;
-            ctx.fillStyle = p.color;
-            ctx.fillRect(p.x, p.y, 2, 2);
+            if(p.type === 'ring') {
+                ctx.strokeStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r * (1 - p.life/20), 0, Math.PI*2);
+                ctx.stroke();
+            } else {
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, 2, 2);
+            }
             ctx.globalAlpha = 1;
         });
     }

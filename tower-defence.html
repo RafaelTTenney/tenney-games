@@ -163,6 +163,17 @@
             padding: 20px; backdrop-filter: blur(12px); display: none;
             box-shadow: 0 10px 40px rgba(0,0,0,0.5); z-index: 60;
         }
+        .command-panel {
+            position: absolute; left: 30px; top: 30px; width: 280px;
+            background: rgba(10,12,14,0.92); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px;
+            padding: 16px; backdrop-filter: blur(10px); display: none;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5); z-index: 60;
+        }
+        .command-title { font-weight: 800; color: #fff; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 10px; }
+        .command-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-family: 'Courier New', monospace; color: #aaa; }
+        .command-row b { color: #fff; }
+        .cmd-btn { width: 100%; padding: 8px 10px; margin-top: 6px; border: 1px solid #333; background: #111; color: #fff; cursor: pointer; font-weight: 700; }
+        .cmd-btn:hover { border-color: var(--primary); color: var(--primary); }
         .insp-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 15px; }
         .insp-title { font-weight: 800; color: #fff; letter-spacing: 1px; text-transform: uppercase; margin:0; }
         .insp-close { background: none; border: none; color: #666; font-size: 1.2em; cursor: pointer; font-weight: bold; }
@@ -313,12 +324,28 @@
                         <button class="i-btn sell" onclick="App.gameAction('sell')">DISMANTLE <span id="n-cost-sell" style="color:#faa"></span></button>
                     </div>
                 </div>
+
+                <div id="command-panel" class="command-panel">
+                    <div class="insp-header">
+                        <h3 class="command-title">COMMAND UPLINK</h3>
+                        <button class="insp-close" onclick="App.toggleCommand()">×</button>
+                    </div>
+                    <div class="command-row"><span>Damage</span><b id="cmd-dmg">0</b></div>
+                    <button class="cmd-btn" onclick="App.gameAction('upg_dmg')">UPGRADE DAMAGE <span id="cmd-dmg-cost"></span></button>
+                    <div class="command-row"><span>Speed</span><b id="cmd-spd">0</b></div>
+                    <button class="cmd-btn" onclick="App.gameAction('upg_spd')">UPGRADE SPEED <span id="cmd-spd-cost"></span></button>
+                    <div class="command-row"><span>Armor</span><b id="cmd-arm">0</b></div>
+                    <button class="cmd-btn" onclick="App.gameAction('upg_armor')">UPGRADE ARMOR <span id="cmd-arm-cost"></span></button>
+                    <div class="command-row"><span>Hull</span><b id="cmd-hp">0</b></div>
+                    <button class="cmd-btn" onclick="App.gameAction('upg_hp')">UPGRADE HULL <span id="cmd-hp-cost"></span></button>
+                </div>
             </div>
 
             <div class="gf-controls">
                 <div class="tower-dock" id="tower-dock"></div>
                 <div class="action-dock">
                     <button class="act-btn" onclick="App.toggleCodex()">DATABASE</button>
+                    <button class="act-btn" id="cmd-btn" onclick="App.toggleCommand()" style="display:none;">COMMAND</button>
                     <button class="act-btn primary" onclick="App.gameAction('wave')">NEXT WAVE</button>
                 </div>
             </div>
@@ -350,6 +377,12 @@
                 if(App.activeGame && App.activeGame.pause) App.activeGame.pause(true);
                 App.populateCodex();
             }
+        },
+        toggleCommand: () => {
+            const el = document.getElementById('command-panel');
+            if (!el) return;
+            el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+            if (el.style.display === 'block') App.updateCommandPanel();
         },
 
         populateCodex: () => {
@@ -403,7 +436,9 @@
             document.getElementById('start-menu').style.display = 'flex';
             document.getElementById('inspector').style.display = 'none';
             document.getElementById('info-overlay').style.display = 'none';
+            document.getElementById('command-panel').style.display = 'none';
             document.getElementById('diff-selector').style.display = (id === 'vector') ? 'flex' : 'none';
+            document.getElementById('cmd-btn').style.display = (id === 'reverse') ? 'inline-flex' : 'none';
 
             if(id === 'sentinel' && window.SentinelGame) App.activeGame = window.SentinelGame;
             else if(id === 'vector' && window.VectorGame) App.activeGame = window.VectorGame;
@@ -500,6 +535,7 @@
                 document.getElementById('ui-money').innerText = Math.floor(m);
                 document.getElementById('ui-lives').innerText = l;
                 App.updateInspector();
+                App.updateCommandPanel();
             } catch(err) { console.error("Game Loop Crashed:", err); }
             App.loopId = requestAnimationFrame(App.loop);
         },
@@ -538,6 +574,21 @@
                     document.getElementById('i-cost-sell').innerText = '$'+Math.floor(def.cost*0.5);
                 }
             }
+        },
+        updateCommandPanel: () => {
+            if (App.gameId !== 'reverse') return;
+            const panel = document.getElementById('command-panel');
+            if (panel.style.display !== 'block') return;
+            if (!App.activeGame || !App.activeGame.getUpgradeState) return;
+            const data = App.activeGame.getUpgradeState();
+            document.getElementById('cmd-dmg').innerText = `L${data.dmg.level}`;
+            document.getElementById('cmd-spd').innerText = `L${data.spd.level}`;
+            document.getElementById('cmd-arm').innerText = `L${data.armor.level}`;
+            document.getElementById('cmd-hp').innerText = `L${data.hp.level}`;
+            document.getElementById('cmd-dmg-cost').innerText = `$${data.dmg.cost}`;
+            document.getElementById('cmd-spd-cost').innerText = `$${data.spd.cost}`;
+            document.getElementById('cmd-arm-cost').innerText = `$${data.armor.cost}`;
+            document.getElementById('cmd-hp-cost').innerText = `$${data.hp.cost}`;
         }
     };
 

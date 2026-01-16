@@ -1,55 +1,67 @@
 import { getHighScore, submitHighScore } from './score-store.js';
 
-/* BREACH COMMAND */
+/* BREACH COMMAND (AI OPPONENT) */
 (function(global){
   const Reverse = (function(){
+    const CELL = 40;
+    let COLS, ROWS;
+
     const UNITS = {
-      raider: { name:'RAIDER', cost:40, color:'#66ff99', hp:70, spd:2.7, dmg:8, range:34, rate:16, breach:8, desc:'Fast skirmisher that shreds weak towers.' },
-      brute:  { name:'BRUTE',  cost:95, color:'#ff9966', hp:220, spd:1.5, dmg:20, range:36, rate:26, breach:18, armor:0.35, desc:'Armored breaker with heavy tower damage.' },
-      swarm:  { name:'SWARM',  cost:110, color:'#66ccff', hp:45, spd:3.2, dmg:6, range:28, rate:10, breach:6, desc:'Fast drones; great for distracting turrets.' },
-      siege:  { name:'SIEGE',  cost:190, color:'#ffd166', hp:320, spd:1.1, dmg:34, range:60, rate:36, breach:32, bonus:1.4, desc:'Siege rig that melts fortified nodes.' },
-      hacker: { name:'HACKER', cost:150, color:'#c77dff', hp:110, spd:2.0, dmg:4, range:80, rate:20, stun:80, breach:10, desc:'Disables towers briefly while attacking.' },
-      bomber: { name:'BOMBER', cost:170, color:'#ff5d5d', hp:140, spd:2.2, dmg:0, range:22, rate:1, breach:14, explode:90, desc:'Explodes on contact, damaging nearby towers.' }
+      runner: { name:'RUNNER', cost:35, color:'#6ee7b7', hp:60, spd:3.2, dmg:6, range:26, rate:12, breach:12, role:'runner', desc:'Fast breach unit focused on core damage.' },
+      raider: { name:'RAIDER', cost:60, color:'#7dd3fc', hp:90, spd:2.6, dmg:10, range:30, rate:16, breach:10, role:'breaker', desc:'Skirmisher that harasses nearby towers.' },
+      brute:  { name:'BRUTE',  cost:95, color:'#fb7185', hp:220, spd:1.5, dmg:22, range:38, rate:26, breach:18, armor:0.3, role:'breaker', desc:'Armored breaker with heavy tower damage.' },
+      siege:  { name:'SIEGE',  cost:170, color:'#fbbf24', hp:320, spd:1.1, dmg:32, range:60, rate:32, breach:30, bonus:1.5, role:'breaker', desc:'Siege rig that melts fortified nodes.' },
+      hacker: { name:'HACKER', cost:140, color:'#c77dff', hp:120, spd:2.0, dmg:4, range:90, rate:22, breach:12, stun:90, role:'breaker', desc:'Disables towers briefly while attacking.' },
+      bomber: { name:'BOMBER', cost:150, color:'#f97316', hp:140, spd:2.1, dmg:0, range:20, rate:1, breach:14, explode:100, role:'breaker', desc:'Explodes on contact, damaging nearby towers.' },
+      ghost:  { name:'GHOST',  cost:120, color:'#d1fae5', hp:75, spd:3.0, dmg:8, range:26, rate:14, breach:16, stealth:0.6, role:'runner', desc:'Harder to target; slips past defenses.' }
     };
 
     const TOWER_TYPES = {
-      laser: { name:'LASER', color:'#ff4d6d', range:200, dmg:6, rate:6, hp:140, beam:true },
-      cannon:{ name:'CANNON',color:'#ffd166', range:180, dmg:22, rate:40, hp:180, aoe:60 },
-      tesla: { name:'TESLA', color:'#ffe95a', range:150, dmg:10, rate:26, hp:160, chain:3 },
-      flak:  { name:'FLAK',  color:'#4d96ff', range:220, dmg:9, rate:14, hp:150, slow:0.5 }
+      laser: { name:'LASER', cost:120, color:'#ff4d6d', range:200, dmg:6, rate:6, hp:140, beam:true },
+      cannon:{ name:'CANNON',cost:160, color:'#ffd166', range:170, dmg:24, rate:42, hp:180, aoe:70 },
+      tesla: { name:'TESLA', cost:180, color:'#ffe95a', range:150, dmg:12, rate:26, hp:160, chain:3 },
+      flak:  { name:'FLAK',  cost:140, color:'#4d96ff', range:230, dmg:9, rate:14, hp:150, slow:0.5 },
+      sniper:{ name:'SNIPER',cost:200, color:'#a855f7', range:280, dmg:34, rate:60, hp:120 },
+      burner:{ name:'BURNER',cost:130, color:'#fb923c', range:120, dmg:4, rate:8, hp:160, cone:true }
     };
 
-    const TOWER_LAYOUT = [
-      { x: 260, y: 180, type:'laser' },
-      { x: 520, y: 580, type:'flak' },
-      { x: 720, y: 320, type:'cannon' },
-      { x: 900, y: 520, type:'tesla' },
-      { x: 400, y: 360, type:'laser' },
-      { x: 840, y: 200, type:'flak' }
-    ];
-
+    const GAME_ID = 'tower-reverse';
     let canvas, ctx;
-    let path = [];
+    let grid = [];
+    let flowMap = {};
     let units = [];
     let towers = [];
     let projs = [];
     let particles = [];
 
-    const GAME_ID = 'tower-reverse';
+    let startNode, endNode;
     let wave = 1;
-    let money = 250;
+    let money = 260;
     let lives = 30;
-    let active = false;
-    let baseMax = 120;
-    let baseHp = 120;
+    let baseMax = 140;
+    let baseHp = 140;
     let bestWave = 0;
     let submitted = false;
     let buildType = null;
     let frame = 0;
 
+    let aiCredits = 0;
+    let aiCooldown = 0;
+
+    const upgradeState = {
+      dmg: 0,
+      spd: 0,
+      hp: 0,
+      armor: 0
+    };
+
     function init(c) {
       canvas = c;
       ctx = c.getContext('2d');
+      COLS = Math.floor(canvas.width / CELL);
+      ROWS = Math.floor(canvas.height / CELL);
+      startNode = { x: 0, y: Math.floor(ROWS / 2) };
+      endNode = { x: COLS - 1, y: Math.floor(ROWS / 2) };
       reset();
     }
 
@@ -68,76 +80,91 @@ import { getHighScore, submitHighScore } from './score-store.js';
       wave = 1;
       money = 260;
       lives = 30;
-      active = false;
-      baseMax = 120;
+      baseMax = 140;
       baseHp = baseMax;
+      aiCredits = 240;
+      aiCooldown = 0;
       units = [];
       projs = [];
       particles = [];
+      towers = [];
       buildType = null;
-      submitted = false;
       frame = 0;
-      buildPath();
-      buildTowers();
+      submitted = false;
+      upgradeState.dmg = 0;
+      upgradeState.spd = 0;
+      upgradeState.hp = 0;
+      upgradeState.armor = 0;
+      grid = new Array(COLS).fill(0).map(() => new Array(ROWS).fill(null));
+      recalcFlow();
       loadBestWave();
     }
 
-    function buildPath() {
-      const w = canvas.width;
-      const h = canvas.height;
-      path = [
-        { x: 30, y: h * 0.5 },
-        { x: w * 0.25, y: h * 0.2 },
-        { x: w * 0.5, y: h * 0.78 },
-        { x: w * 0.7, y: h * 0.3 },
-        { x: w * 0.88, y: h * 0.6 },
-        { x: w - 40, y: h * 0.5 }
-      ];
+    function recalcFlow() {
+      flowMap = {};
+      const q = [endNode];
+      const cameFrom = {};
+      cameFrom[`${endNode.x},${endNode.y}`] = null;
+
+      while (q.length) {
+        const curr = q.shift();
+        const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+        dirs.forEach(d => {
+          const nx = curr.x + d[0];
+          const ny = curr.y + d[1];
+          const key = `${nx},${ny}`;
+          if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return;
+          if (grid[nx][ny]) return;
+          if (key in cameFrom) return;
+          cameFrom[key] = curr;
+          flowMap[key] = { x: curr.x, y: curr.y };
+          q.push({ x: nx, y: ny });
+        });
+      }
+      return (`${startNode.x},${startNode.y}` in cameFrom);
     }
 
-    function buildTowers() {
-      const scale = 1 + wave * 0.18;
-      towers = TOWER_LAYOUT.map((t, i) => {
-        const def = TOWER_TYPES[t.type];
-        return {
-          id: `${t.type}-${i}-${Date.now()}`,
-          x: t.x,
-          y: t.y,
-          type: t.type,
-          name: def.name,
-          color: def.color,
-          range: def.range,
-          dmg: def.dmg * scale,
-          rate: Math.max(6, Math.floor(def.rate * (1 - wave * 0.03))),
-          aoe: def.aoe || 0,
-          chain: def.chain || 0,
-          slow: def.slow || 0,
-          hp: Math.floor(def.hp * scale),
-          maxHp: Math.floor(def.hp * scale),
-          beam: !!def.beam,
-          cd: Math.floor(Math.random() * 12),
-          stun: 0
-        };
-      });
+    function getUpgradeCost(attr) {
+      const lvl = upgradeState[attr] || 0;
+      const base = 120;
+      return Math.floor(base * Math.pow(1.6, lvl));
     }
 
-    function startWave() {
-      if (active) return;
-      active = true;
-      baseMax = 120 + wave * 50;
-      baseHp = baseMax;
-      money += 120 + wave * 70;
-      buildTowers();
+    function applyUpgradeToUnit(unit) {
+      unit.baseSpd *= 1 + (upgradeState.spd * 0.08);
+      unit.spd = unit.baseSpd;
+      unit.dmg *= 1 + (upgradeState.dmg * 0.18);
+      unit.maxHp *= 1 + (upgradeState.hp * 0.22);
+      unit.hp = unit.maxHp;
+      unit.armor = Math.min(0.6, (unit.armor || 0) + upgradeState.armor * 0.06);
+    }
+
+    function upgrade(attr) {
+      if (!upgradeState.hasOwnProperty(attr)) return false;
+      const cost = getUpgradeCost(attr);
+      if (money < cost) return false;
+      money -= cost;
+      upgradeState[attr] += 1;
+      units.forEach(unit => applyUpgradeToUnit(unit));
+      return true;
+    }
+
+    function getUpgradeState() {
+      return {
+        dmg: { level: upgradeState.dmg, cost: getUpgradeCost('dmg') },
+        spd: { level: upgradeState.spd, cost: getUpgradeCost('spd') },
+        hp: { level: upgradeState.hp, cost: getUpgradeCost('hp') },
+        armor: { level: upgradeState.armor, cost: getUpgradeCost('armor') }
+      };
     }
 
     function spawnUnit(type) {
       const def = UNITS[type];
       if (!def) return;
-      const jitter = (Math.random() - 0.5) * 26;
-      units.push({
-        x: path[0].x,
-        y: path[0].y + jitter,
-        idx: 0,
+      const jitter = (Math.random() - 0.5) * 20;
+      const unit = {
+        x: startNode.x * CELL + CELL / 2,
+        y: startNode.y * CELL + CELL / 2 + jitter,
         hp: def.hp,
         maxHp: def.hp,
         spd: def.spd,
@@ -146,15 +173,83 @@ import { getHighScore, submitHighScore } from './score-store.js';
         range: def.range,
         rate: def.rate,
         breach: def.breach,
-        armor: def.armor || 0,
         bonus: def.bonus || 1,
+        armor: def.armor || 0,
         stun: def.stun || 0,
         explode: def.explode || 0,
+        stealth: def.stealth || 1,
+        role: def.role,
         color: def.color,
         type,
         cd: 0,
         slowTimer: 0
-      });
+      };
+      if (upgradeState.dmg || upgradeState.spd || upgradeState.hp || upgradeState.armor) {
+        applyUpgradeToUnit(unit);
+      }
+      units.push(unit);
+    }
+
+    function canPlaceTower(gx, gy) {
+      if (gx <= 1 || gx >= COLS - 2 || gy <= 1 || gy >= ROWS - 2) return false;
+      if (grid[gx][gy]) return false;
+      if (gx === startNode.x && gy === startNode.y) return false;
+      if (gx === endNode.x && gy === endNode.y) return false;
+      return true;
+    }
+
+    function attemptBuildTower() {
+      const types = Object.keys(TOWER_TYPES);
+      const pick = types[Math.floor(Math.random() * types.length)];
+      const def = TOWER_TYPES[pick];
+      if (aiCredits < def.cost) return false;
+
+      for (let attempt = 0; attempt < 16; attempt++) {
+        const gx = Math.floor(Math.random() * COLS);
+        const gy = Math.floor(Math.random() * ROWS);
+        if (!canPlaceTower(gx, gy)) continue;
+        grid[gx][gy] = { temp: true };
+        const valid = recalcFlow();
+        if (!valid) {
+          grid[gx][gy] = null;
+          recalcFlow();
+          continue;
+        }
+        const tower = {
+          gx,
+          gy,
+          x: gx * CELL + CELL / 2,
+          y: gy * CELL + CELL / 2,
+          type: pick,
+          name: def.name,
+          color: def.color,
+          range: def.range,
+          dmg: def.dmg * (1 + wave * 0.15),
+          rate: Math.max(6, Math.floor(def.rate * (1 - wave * 0.02))),
+          aoe: def.aoe || 0,
+          chain: def.chain || 0,
+          slow: def.slow || 0,
+          beam: !!def.beam,
+          cone: !!def.cone,
+          hp: Math.floor(def.hp * (1 + wave * 0.25)),
+          maxHp: Math.floor(def.hp * (1 + wave * 0.25)),
+          cd: Math.floor(Math.random() * 12),
+          stun: 0
+        };
+        grid[gx][gy] = tower;
+        towers.push(tower);
+        aiCredits -= def.cost;
+        return true;
+      }
+      return false;
+    }
+
+    function startWave() {
+      aiCredits += 240 + wave * 140;
+      baseMax = 140 + wave * 70;
+      baseHp = baseMax;
+      money += 140 + wave * 60;
+      aiCooldown = 30;
     }
 
     function findTowerTarget(u) {
@@ -162,13 +257,49 @@ import { getHighScore, submitHighScore } from './score-store.js';
       let bestDist = Infinity;
       towers.forEach(t => {
         if (t.hp <= 0) return;
+        const range = t.range * (u.stealth || 1);
         const d = Math.hypot(t.x - u.x, t.y - u.y);
-        if (d <= u.range && d < bestDist) {
+        if (d <= range && d < bestDist) {
           best = t;
           bestDist = d;
         }
       });
       return best;
+    }
+
+    function applyTowerDamage(unit, dmg) {
+      const final = dmg * (1 - (unit.armor || 0));
+      unit.hp -= final;
+      particles.push({ type:'spark', x:unit.x, y:unit.y, life:10, color:unit.color });
+    }
+
+    function explode(x, y, r, dmg, towerMult) {
+      particles.push({ type:'shock', x, y, life:18, color:'#ff8866', r });
+      towers.forEach(t => {
+        if (Math.hypot(t.x - x, t.y - y) < r) {
+          t.hp -= dmg * (towerMult || 1);
+        }
+      });
+      units.forEach(u => {
+        if (Math.hypot(u.x - x, u.y - y) < r) {
+          u.hp -= dmg * 0.6;
+        }
+      });
+    }
+
+    function chainStrike(t, target) {
+      let chain = [target];
+      let curr = target;
+      applyTowerDamage(curr, t.dmg);
+      for (let k = 0; k < t.chain; k++) {
+        let next = units.find(u => !chain.includes(u) && Math.hypot(u.x - curr.x, u.y - curr.y) < 120);
+        if (next) {
+          chain.push(next);
+          applyTowerDamage(next, t.dmg * 0.8);
+          curr = next;
+        }
+      }
+      particles.push({ type:'bolt', chain, color:'#ffe95a', life:6 });
     }
 
     function update() {
@@ -178,15 +309,21 @@ import { getHighScore, submitHighScore } from './score-store.js';
         return;
       }
 
-      money += 0.05 + wave * 0.004;
+      money += 0.05 + wave * 0.006;
+
+      if (aiCooldown > 0) aiCooldown--;
+      if (aiCooldown === 0 && aiCredits >= 120) {
+        const built = attemptBuildTower();
+        aiCooldown = built ? Math.max(12, 40 - wave * 2) : 20;
+      }
 
       for (let i = units.length - 1; i >= 0; i--) {
         const u = units[i];
-        if (u.slowTimer > 0) { u.slowTimer--; }
+        if (u.slowTimer > 0) u.slowTimer--;
         u.spd = u.slowTimer > 0 ? u.baseSpd * 0.6 : u.baseSpd;
 
-        const targetTower = findTowerTarget(u);
-        if (targetTower) {
+        const towerTarget = (u.role === 'breaker') ? findTowerTarget(u) : null;
+        if (towerTarget) {
           if (u.cd > 0) {
             u.cd--;
           } else {
@@ -194,39 +331,40 @@ import { getHighScore, submitHighScore } from './score-store.js';
               explode(u.x, u.y, u.explode, u.dmg || 0, 1.4);
               u.hp = 0;
             } else {
-              const damage = u.dmg * u.bonus;
-              targetTower.hp -= damage;
-              if (u.stun) targetTower.stun = Math.max(targetTower.stun, u.stun);
-              particles.push({ type:'slash', x: targetTower.x, y: targetTower.y, life: 10, color: u.color });
+              const damage = u.dmg * (u.bonus || 1);
+              towerTarget.hp -= damage;
+              if (u.stun) towerTarget.stun = Math.max(towerTarget.stun, u.stun);
+              particles.push({ type:'slash', x: towerTarget.x, y: towerTarget.y, life: 10, color: u.color });
             }
             u.cd = u.rate;
           }
         } else {
-          const target = path[u.idx + 1];
-          if (!target) {
+          const gx = Math.floor(u.x / CELL);
+          const gy = Math.floor(u.y / CELL);
+          const next = flowMap[`${gx},${gy}`];
+          if (next) {
+            const tx = next.x * CELL + CELL / 2;
+            const ty = next.y * CELL + CELL / 2;
+            const dx = tx - u.x;
+            const dy = ty - u.y;
+            const d = Math.hypot(dx, dy);
+            if (d < u.spd) {
+              u.x = tx;
+              u.y = ty;
+            } else {
+              u.x += (dx / d) * u.spd;
+              u.y += (dy / d) * u.spd;
+            }
+          } else if (gx === endNode.x && gy === endNode.y) {
             baseHp -= u.breach;
             money += 10;
             units.splice(i, 1);
             continue;
           }
-          const dx = target.x - u.x;
-          const dy = target.y - u.y;
-          const d = Math.hypot(dx, dy);
-          if (d < u.spd) {
-            u.idx++;
-            u.x = target.x;
-            u.y = target.y;
-          } else {
-            u.x += (dx / d) * u.spd;
-            u.y += (dy / d) * u.spd;
-          }
         }
 
         if (u.hp <= 0) {
           lives--;
-          if (u.type === 'bomber' && u.explode) {
-            explode(u.x, u.y, u.explode, u.dmg || 0, 1.4);
-          }
           for (let k = 0; k < 8; k++) {
             particles.push({ type:'spark', x:u.x, y:u.y, vx:(Math.random()-0.5)*4, vy:(Math.random()-0.5)*4, life:18, color:u.color });
           }
@@ -242,7 +380,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
       for (let i = towers.length - 1; i >= 0; i--) {
         const t = towers[i];
         if (t.hp <= 0) {
-          money += 30 + wave * 5;
+          money += 35 + wave * 5;
+          grid[t.gx][t.gy] = null;
+          recalcFlow();
           for (let k = 0; k < 10; k++) {
             particles.push({ type:'debris', x:t.x, y:t.y, vx:(Math.random()-0.5)*6, vy:(Math.random()-0.5)*6, life:22, color:t.color });
           }
@@ -253,27 +393,25 @@ import { getHighScore, submitHighScore } from './score-store.js';
         if (t.stun > 0) { t.stun--; continue; }
         if (t.cd > 0) { t.cd--; continue; }
 
-        const target = units.find(u => Math.hypot(u.x - t.x, u.y - t.y) < t.range);
+        const target = units.find(u => Math.hypot(u.x - t.x, u.y - t.y) < t.range * (u.stealth || 1));
         if (target) {
           if (t.beam) {
-            target.hp -= t.dmg;
+            applyTowerDamage(target, t.dmg);
             particles.push({ type:'beam', sx:t.x, sy:t.y, ex:target.x, ey:target.y, color:t.color, life:6 });
             t.cd = t.rate;
           } else if (t.chain) {
             chainStrike(t, target);
             t.cd = t.rate;
-          } else {
-            projs.push({
-              x: t.x,
-              y: t.y,
-              tx: target.x,
-              ty: target.y,
-              dmg: t.dmg,
-              spd: 9,
-              aoe: t.aoe,
-              slow: t.slow,
-              color: t.color
+          } else if (t.cone) {
+            units.forEach(u => {
+              if (Math.hypot(u.x - t.x, u.y - t.y) < t.range) {
+                applyTowerDamage(u, t.dmg);
+              }
             });
+            particles.push({ type:'ring', x:t.x, y:t.y, life:12, color:t.color, r:t.range });
+            t.cd = t.rate;
+          } else {
+            projs.push({ x:t.x, y:t.y, tx:target.x, ty:target.y, dmg:t.dmg, spd:9, aoe:t.aoe, slow:t.slow, color:t.color });
             t.cd = t.rate;
           }
         }
@@ -315,44 +453,16 @@ import { getHighScore, submitHighScore } from './score-store.js';
       });
 
       if (baseHp <= 0) {
-        active = false;
         wave++;
-        money += 150 + wave * 30;
+        money += 150 + wave * 40;
         lives += 5;
+        aiCredits += 160 + wave * 60;
+        baseMax = 140 + wave * 70;
+        baseHp = baseMax;
         units = [];
         projs = [];
         if (wave > bestWave) bestWave = wave;
       }
-    }
-
-    function applyTowerDamage(unit, dmg) {
-      const final = dmg * (1 - (unit.armor || 0));
-      unit.hp -= final;
-      particles.push({ type:'spark', x:unit.x, y:unit.y, life:10, color:unit.color });
-    }
-
-    function explode(x, y, r, dmg, towerMult) {
-      particles.push({ type:'shock', x, y, life:18, color:'#ff8866', r });
-      towers.forEach(t => {
-        if (Math.hypot(t.x - x, t.y - y) < r) {
-          t.hp -= dmg * (towerMult || 1);
-        }
-      });
-    }
-
-    function chainStrike(t, target) {
-      let chain = [target];
-      let curr = target;
-      applyTowerDamage(curr, t.dmg);
-      for (let k = 0; k < t.chain; k++) {
-        let next = units.find(u => !chain.includes(u) && Math.hypot(u.x - curr.x, u.y - curr.y) < 120);
-        if (next) {
-          chain.push(next);
-          applyTowerDamage(next, t.dmg * 0.8);
-          curr = next;
-        }
-      }
-      particles.push({ type:'bolt', chain, color:'#ffe95a', life:6 });
     }
 
     function draw(ctx) {
@@ -362,19 +472,33 @@ import { getHighScore, submitHighScore } from './score-store.js';
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      ctx.beginPath();
+      for (let x = 0; x <= COLS; x++) { ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, canvas.height); }
+      for (let y = 0; y <= ROWS; y++) { ctx.moveTo(0, y * CELL); ctx.lineTo(canvas.width, y * CELL); }
+      ctx.stroke();
+
       ctx.strokeStyle = 'rgba(0,255,204,0.45)';
       ctx.lineWidth = 5;
       ctx.beginPath();
-      ctx.moveTo(path[0].x, path[0].y);
-      for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+      let cursor = { x: startNode.x, y: startNode.y };
+      ctx.moveTo(cursor.x * CELL + CELL / 2, cursor.y * CELL + CELL / 2);
+      const maxSteps = COLS * ROWS;
+      let steps = 0;
+      while (steps++ < maxSteps) {
+        const next = flowMap[`${cursor.x},${cursor.y}`];
+        ctx.lineTo(cursor.x * CELL + CELL / 2, cursor.y * CELL + CELL / 2);
+        if (!next) break;
+        cursor = next;
+      }
       ctx.stroke();
       ctx.lineWidth = 1;
 
-      const baseX = canvas.width - 55;
-      ctx.fillStyle = 'rgba(255,0,120,0.15)';
-      ctx.fillRect(baseX, 0, 45, canvas.height);
+      const baseX = (COLS - 1) * CELL;
+      ctx.fillStyle = 'rgba(255,0,120,0.18)';
+      ctx.fillRect(baseX, 0, CELL, canvas.height);
       ctx.strokeStyle = 'rgba(255,0,120,0.6)';
-      ctx.strokeRect(baseX, 0, 45, canvas.height);
+      ctx.strokeRect(baseX, 0, CELL, canvas.height);
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 14px monospace';
       ctx.fillText(`CORE ${Math.max(0, Math.floor(baseHp))}/${baseMax}`, canvas.width - 210, 30);
@@ -406,11 +530,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
         ctx.save();
         ctx.translate(u.x, u.y);
         ctx.fillStyle = u.color;
-        if (u.type === 'swarm') {
+        if (u.type === 'runner' || u.type === 'ghost') {
           ctx.beginPath();
-          ctx.moveTo(8, 0);
-          ctx.lineTo(-8, 6);
-          ctx.lineTo(-8, -6);
+          ctx.moveTo(10, 0);
+          ctx.lineTo(-8, 7);
+          ctx.lineTo(-8, -7);
           ctx.fill();
         } else if (u.type === 'siege') {
           ctx.fillRect(-10, -10, 20, 20);
@@ -434,15 +558,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
         if (p.type === 'trail') {
           ctx.fillStyle = p.color;
           ctx.fillRect(p.x, p.y, 3, 3);
-        } else if (p.type === 'ring') {
+        } else if (p.type === 'ring' || p.type === 'shock') {
           ctx.strokeStyle = p.color;
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.r * (1 - p.life / 14), 0, Math.PI * 2);
-          ctx.stroke();
-        } else if (p.type === 'shock') {
-          ctx.strokeStyle = p.color;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r * (1 - p.life / 18), 0, Math.PI * 2);
           ctx.stroke();
         } else if (p.type === 'bolt') {
           drawBolt(ctx, p.chain, p.color);
@@ -493,8 +612,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
     }
 
     function click(x, y) {
-      if (!active || !buildType) return;
-      if (x > 120) return;
+      if (!buildType) return;
+      if (x > 140) return;
       const def = UNITS[buildType];
       if (!def || money < def.cost) return;
       money -= def.cost;
@@ -509,6 +628,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
       startWave,
       setBuild: (k) => { buildType = k; },
       deselect: () => { buildType = null; },
+      upgrade,
+      getUpgradeState,
       stop: () => { submitBestWave(); },
       conf: { towers: UNITS },
       get wave(){return wave;},
