@@ -121,6 +121,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
             else {
                 let target = enemies.find(e => Math.hypot(e.x-t.x, e.y-t.y) < t.range);
                 if(target) {
+                    t.angle = Math.atan2(target.y - t.y, target.x - t.x);
                     projs.push({x:t.x, y:t.y, tx:target.x, ty:target.y, speed:15, dmg:t.dmg, color:t.color});
                     t.cd = t.rate;
                 }
@@ -132,9 +133,21 @@ import { getHighScore, submitHighScore } from './score-store.js';
             let dx = p.tx-p.x, dy = p.ty-p.y, d = Math.hypot(dx,dy);
             if(d < p.speed) {
                 let hit = enemies.find(e => Math.hypot(e.x-p.tx, e.y-p.ty) < 20);
-                if(hit) hit.hp -= p.dmg;
+                if(hit) {
+                    hit.hp -= p.dmg;
+                    for(let k=0;k<6;k++) {
+                        particles.push({x:p.tx, y:p.ty, vx:(Math.random()-0.5)*4, vy:(Math.random()-0.5)*4, life:18, color:p.color});
+                    }
+                }
                 projs.splice(i,1);
             } else { p.x += (dx/d)*p.speed; p.y += (dy/d)*p.speed; }
+        }
+
+        for(let i=particles.length-1; i>=0; i--) {
+            let p = particles[i];
+            p.life--;
+            p.x += p.vx; p.y += p.vy;
+            if(p.life<=0) particles.splice(i,1);
         }
     }
 
@@ -163,11 +176,19 @@ import { getHighScore, submitHighScore } from './score-store.js';
         ctx.fillStyle = '#f00'; ctx.fillRect(end.x*GRID, end.y*GRID, GRID, GRID);
 
         towers.forEach(t => {
-            ctx.shadowBlur = 12;
+            ctx.save();
+            ctx.translate(t.x, t.y);
+            ctx.shadowBlur = 14;
             ctx.shadowColor = t.color;
             ctx.fillStyle = t.color;
-            ctx.fillRect(t.x-15, t.y-15, 30, 30);
+            ctx.fillRect(-15, -15, 30, 30);
             ctx.shadowBlur = 0;
+            if(t.angle !== undefined) {
+                ctx.rotate(t.angle);
+                ctx.fillStyle = '#111';
+                ctx.fillRect(-3, -18, 6, 18);
+            }
+            ctx.restore();
             if(selected===t) { ctx.strokeStyle='#fff'; ctx.strokeRect(t.x-15,t.y-15,30,30); }
         });
         enemies.forEach(e => {
@@ -175,7 +196,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
             ctx.fillStyle = '#0f0';
             ctx.fillRect(e.x - 10, e.y - 16, 20 * (e.hp / e.maxHp), 3);
         });
-        projs.forEach(p => { ctx.fillStyle = p.color; ctx.fillRect(p.x-3,p.y-3,6,6); });
+        projs.forEach(p => {
+            ctx.fillStyle = p.color; ctx.fillRect(p.x-3,p.y-3,6,6);
+            ctx.globalAlpha = 0.35;
+            ctx.fillRect(p.x-8, p.y-8, 3, 3);
+            ctx.globalAlpha = 1;
+        });
+        particles.forEach(p => {
+            ctx.globalAlpha = p.life/18;
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, 2, 2);
+            ctx.globalAlpha = 1;
+        });
     }
 
     function click(x, y) {
@@ -185,7 +217,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
         if(t) { selected=t; buildType=null; return; }
         if(buildType && money>=TOWERS[buildType].cost) {
             let def = TOWERS[buildType];
-            towers.push({gx, gy, x:gx*GRID+GRID/2, y:gy*GRID+GRID/2, type: buildType, ...def, level:1, cd:0});
+            towers.push({gx, gy, x:gx*GRID+GRID/2, y:gy*GRID+GRID/2, type: buildType, ...def, level:1, cd:0, angle: 0});
             if(calcPath()) money-=def.cost;
             else { towers.pop(); calcPath(); }
         }

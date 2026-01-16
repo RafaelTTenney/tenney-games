@@ -35,11 +35,16 @@
         .back-btn:hover { background: var(--bg); color: var(--primary); border: 1px solid var(--primary); box-shadow: 0 0 25px var(--primary); }
 
         .container { 
-            max-width: 1400px; margin: 0 auto; padding: 40px 20px; 
-            height: calc(100vh - 120px); overflow-y: auto; 
-            display: flex; align-items: center; justify-content: center;
+            max-width: 1400px; margin: 0 auto; padding: 30px 20px 50px;
+            height: calc(100vh - 120px); overflow-y: auto;
+            display: flex; flex-direction: column; gap: 30px;
         }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 40px; width: 100%; }
+        .section { display: flex; flex-direction: column; gap: 18px; }
+        .section-title {
+            font-size: 0.9rem; letter-spacing: 4px; text-transform: uppercase;
+            color: #777; font-weight: 700; margin: 0 0 6px;
+        }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 30px; width: 100%; }
         
         .card {
             background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
@@ -201,40 +206,48 @@
     </div>
 
     <div class="container">
-        <div class="grid">
-            <div class="card sentinel" style="border-top: 4px solid var(--primary);">
-                <div class="card-header"><h2 style="color:var(--primary)">SENTINEL GRID</h2></div>
-                <div class="card-body">
-                    <span class="badge" style="color:var(--primary)">TACTICAL MAZE</span>
-                    <p>Construct a labyrinth of death. Enemies dynamically pathfind to the exit.</p>
-                    <button class="play-btn" style="background:var(--primary)" onclick="App.launch('sentinel')">INITIALIZE</button>
+        <div class="section">
+            <p class="section-title">Defense Simulations</p>
+            <div class="grid">
+                <div class="card sentinel" style="border-top: 4px solid var(--primary);">
+                    <div class="card-header"><h2 style="color:var(--primary)">SENTINEL GRID</h2></div>
+                    <div class="card-body">
+                        <span class="badge" style="color:var(--primary)">TACTICAL MAZE</span>
+                        <p>Construct a labyrinth of death. Enemies dynamically pathfind to the exit.</p>
+                        <button class="play-btn" style="background:var(--primary)" onclick="App.launch('sentinel')">INITIALIZE</button>
+                    </div>
+                </div>
+
+                <div class="card vector" style="border-top: 4px solid var(--secondary);">
+                    <div class="card-header"><h2 style="color:var(--secondary)">VECTOR VALLEY</h2></div>
+                    <div class="card-body">
+                        <span class="badge" style="color:var(--secondary)">HIGH VELOCITY</span>
+                        <p>Fast-paced, fixed-path arcade defense with beam weapons and stasis fields.</p>
+                        <button class="play-btn" style="background:var(--secondary)" onclick="App.launch('vector')">INITIALIZE</button>
+                    </div>
+                </div>
+
+                <div class="card neon" style="border-top: 4px solid var(--tertiary);">
+                    <div class="card-header"><h2 style="color:var(--tertiary)">NEON CITADEL</h2></div>
+                    <div class="card-body">
+                        <span class="badge" style="color:var(--tertiary)">FLAGSHIP SIMULATION</span>
+                        <p>The ultimate test. Procedural bosses, deep upgrades, and massive destruction.</p>
+                        <button class="play-btn" style="background:var(--tertiary)" onclick="App.launch('neon')">INITIALIZE</button>
+                    </div>
                 </div>
             </div>
+        </div>
 
-            <div class="card vector" style="border-top: 4px solid var(--secondary);">
-                <div class="card-header"><h2 style="color:var(--secondary)">VECTOR VALLEY</h2></div>
-                <div class="card-body">
-                    <span class="badge" style="color:var(--secondary)">HIGH VELOCITY</span>
-                    <p>Fast-paced, fixed-path arcade defense.</p>
-                    <button class="play-btn" style="background:var(--secondary)" onclick="App.launch('vector')">INITIALIZE</button>
-                </div>
-            </div>
-
-            <div class="card neon" style="border-top: 4px solid var(--tertiary);">
-                <div class="card-header"><h2 style="color:var(--tertiary)">NEON CITADEL</h2></div>
-                <div class="card-body">
-                    <span class="badge" style="color:var(--tertiary)">FLAGSHIP SIMULATION</span>
-                    <p>The ultimate test. Procedural bosses, deep upgrades, and massive destruction.</p>
-                    <button class="play-btn" style="background:var(--tertiary)" onclick="App.launch('neon')">INITIALIZE</button>
-                </div>
-            </div>
-
-            <div class="card reverse" style="border-top: 4px solid #38bdf8;">
-                <div class="card-header"><h2 style="color:#38bdf8">BREACH COMMAND</h2></div>
-                <div class="card-body">
-                    <span class="badge" style="color:#38bdf8">REVERSE ASSAULT</span>
-                    <p>Spend credits to deploy attackers and smash the enemy core.</p>
-                    <button class="play-btn" style="background:#38bdf8" onclick="App.launch('reverse')">INITIALIZE</button>
+        <div class="section">
+            <p class="section-title">Reverse Assault</p>
+            <div class="grid">
+                <div class="card reverse" style="border-top: 4px solid #38bdf8;">
+                    <div class="card-header"><h2 style="color:#38bdf8">BREACH COMMAND</h2></div>
+                    <div class="card-body">
+                        <span class="badge" style="color:#38bdf8">REVERSE ASSAULT</span>
+                        <p>Deploy attackers, disable towers, and shatter the enemy core.</p>
+                        <button class="play-btn" style="background:#38bdf8" onclick="App.launch('reverse')">INITIALIZE</button>
+                    </div>
                 </div>
             </div>
         </div>

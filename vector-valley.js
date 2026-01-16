@@ -154,6 +154,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
                 projs.splice(i,1);
             } else {
                 p.x += (dx/d)*p.speed; p.y += (dy/d)*p.speed;
+                particles.push({type:'trail', x:p.x, y:p.y, color:p.color, life:10});
             }
         }
         
@@ -183,11 +184,14 @@ import { getHighScore, submitHighScore } from './score-store.js';
         ctx.shadowBlur = 0;
 
         towers.forEach(t => {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = t.color;
             ctx.fillStyle = t.color;
             ctx.beginPath();
             if(t.name === 'TURRET') ctx.fillRect(t.x-10, t.y-10, 20, 20);
             else ctx.arc(t.x, t.y, 10, 0, Math.PI*2);
             ctx.fill();
+            ctx.shadowBlur = 0;
             if(selected === t) {
                 ctx.strokeStyle = '#fff'; ctx.lineWidth=1;
                 ctx.beginPath(); ctx.arc(t.x,t.y,t.range,0,Math.PI*2); ctx.stroke();
@@ -210,7 +214,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
                 ctx.arc(p.x, p.y, p.maxR * (1 - p.life/15), 0, Math.PI*2); ctx.stroke();
             } else if (p.type === 'beam') {
                 ctx.strokeStyle = p.color; ctx.lineWidth = p.width || 3;
+                ctx.shadowBlur = 12; ctx.shadowColor = p.color;
                 ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.tx, p.ty); ctx.stroke();
+                ctx.shadowBlur = 0;
             } else {
                 ctx.fillStyle = p.color; ctx.fillRect(p.x,p.y,3,3);
             }

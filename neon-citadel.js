@@ -549,8 +549,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
         // Beams
         particles.forEach(p => {
             if(p.type === 'beam') {
-                ctx.strokeStyle = p.color; ctx.lineWidth = p.life/2; 
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 4;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = p.color;
                 ctx.beginPath(); ctx.moveTo(p.sx, p.sy); ctx.lineTo(p.ex, p.ey); ctx.stroke();
+                ctx.shadowBlur = 0;
             }
         });
 
