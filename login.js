@@ -208,7 +208,7 @@ async function adminSetAccountStatus(username, newStatus) {
   return true;
 }
 
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
   if (hasSupabaseConfig()) {
     supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
@@ -255,19 +255,19 @@ document.addEventListener('DOMContentLoaded', function () {
     let profile = null;
     if (!usesEmail) {
       try {
-      profile = await withTimeout(getProfileByUsername(username), 8000, 'Login timed out. Check your connection.');
-    } catch (err) {
-      const reachable = await checkSupabaseReachable();
-      const authHealthy = await checkAuthHealth();
-      if (loginError) {
-        if (!reachable || !authHealthy) {
-          loginError.textContent = 'Cannot reach Supabase. Disable blockers or check your network.';
-        } else {
-          loginError.textContent = err?.message || 'Login failed. Please try again.';
+        profile = await withTimeout(getProfileByUsername(username), 8000, 'Login timed out. Check your connection.');
+      } catch (err) {
+        const reachable = await checkSupabaseReachable();
+        const authHealthy = await checkAuthHealth();
+        if (loginError) {
+          if (!reachable || !authHealthy) {
+            loginError.textContent = 'Cannot reach Supabase. Disable blockers or check your network.';
+          } else {
+            loginError.textContent = err?.message || 'Login failed. Please try again.';
+          }
         }
+        return;
       }
-      return;
-    }
       if (!profile) {
         if (loginError) loginError.textContent = 'No account found for that username.';
         return;
