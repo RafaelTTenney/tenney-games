@@ -208,7 +208,7 @@ async function adminSetAccountStatus(username, newStatus) {
   return true;
 }
 
-document.addEventListener('DOMContentLoaded', async function () {
+document.addEventListener('DOMContentLoaded', function () {
   if (hasSupabaseConfig()) {
     supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
@@ -233,13 +233,16 @@ document.addEventListener('DOMContentLoaded', async function () {
   const loginError = document.getElementById('loginError');
   if (loginError) {
     const online = navigator.onLine !== false;
-    const healthy = await checkAuthHealth();
     if (!online) {
       loginError.textContent = 'You appear to be offline.';
-    } else if (!healthy) {
-      loginError.textContent = 'Cannot reach Supabase auth. Check blockers or network.';
     } else {
-      loginError.textContent = '';
+      checkAuthHealth()
+        .then((healthy) => {
+          loginError.textContent = healthy ? '' : 'Cannot reach Supabase auth. Check blockers or network.';
+        })
+        .catch(() => {
+          loginError.textContent = 'Cannot reach Supabase auth. Check blockers or network.';
+        });
     }
   }
   loginForm.addEventListener('submit', async function (e) {
