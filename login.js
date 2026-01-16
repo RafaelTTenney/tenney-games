@@ -179,16 +179,20 @@ document.addEventListener('DOMContentLoaded', function () {
       if (loginError) loginError.textContent = 'No account found for that username.';
       return;
     }
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: profile.email,
-      password
-    });
-    if (error || !data.session) {
-      if (loginError) loginError.textContent = error?.message || 'Invalid username or password.';
-      return;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password
+      });
+      if (error || !data.session) {
+        if (loginError) loginError.textContent = error?.message || 'Invalid username or password.';
+        return;
+      }
+      setSessionProfile(profile);
+      window.location.replace('loggedIn.html');
+    } catch (err) {
+      if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
     }
-    setSessionProfile(profile);
-    window.location.replace('loggedIn.html');
   });
 });
 

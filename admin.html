@@ -40,7 +40,18 @@
     <div style="margin-top:12px;color:var(--muted);">Note: This admin panel updates the <code>profiles</code> table in Supabase.</div>
   </div>
 
-  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="admin.html">Admin Panel</a></footer>
+  <div class="container" style="margin-top:18px;">
+    <h2 style="margin:0;color:var(--primary);">Questions & Comments</h2>
+    <div class="help">Latest messages sent from the Questions & Comments page.</div>
+    <table id="supportTable" aria-live="polite">
+      <thead>
+        <tr><th>When</th><th>Name</th><th>Email</th><th>Message</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="questions.html">Questions & Comments</a></footer>
 
   <script type="module" src="login.js"></script>
   <script type="module">
@@ -99,6 +110,32 @@
       }
 
       render();
+
+      async function renderSupportRequests() {
+        const tbodySupport = document.querySelector('#supportTable tbody');
+        const { data, error } = await window.supabaseClient
+          .from('support_requests')
+          .select('created_at, name, email, message')
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (error) {
+          console.error('Error loading support requests', error);
+          tbodySupport.innerHTML = '<tr><td colspan="4">Unable to load requests.</td></tr>';
+          return;
+        }
+        if (!data || data.length === 0) {
+          tbodySupport.innerHTML = '<tr><td colspan="4">No messages yet.</td></tr>';
+          return;
+        }
+        tbodySupport.innerHTML = data.map(row => {
+          const when = new Date(row.created_at).toLocaleString();
+          const email = row.email || '-';
+          const msg = row.message || '';
+          return `<tr><td>${when}</td><td>${row.name}</td><td>${email}</td><td>${msg}</td></tr>`;
+        }).join('');
+      }
+
+      renderSupportRequests();
     });
   </script>
 </body>
