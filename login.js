@@ -1,7 +1,7 @@
 // login.js (Supabase-backed)
 // Adds accountStatus support and role-based access helpers.
 
-import { supabase, hasSupabaseConfig } from './supabase.js';
+import { supabase, hasSupabaseConfig, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase.js';
 
 window.supabaseClient = supabase;
 
@@ -63,6 +63,25 @@ function withTimeout(promise, ms, label) {
     }, ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
+async function checkSupabaseReachable() {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id&limit=1`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+      },
+      signal: controller.signal
+    });
+    return res.ok || res.status === 401 || res.status === 403 || res.status === 406;
+  } catch (err) {
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function isLoggedIn() {
@@ -184,21 +203,29 @@ document.addEventListener('DOMContentLoaded', function () {
     if (loginError) loginError.textContent = 'Signing in...';
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
+    const usesEmail = username.includes('@');
     let profile = null;
-    try {
-      profile = await withTimeout(getProfileByUsername(username), 8000, 'Login timed out. Check your connection.');
-    } catch (err) {
-      if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
-      return;
-    }
-    if (!profile) {
-      if (loginError) loginError.textContent = 'No account found for that username.';
-      return;
+    if (!usesEmail) {
+      try {
+        profile = await withTimeout(getProfileByUsername(username), 8000, 'Login timed out. Check your connection.');
+      } catch (err) {
+        const reachable = await checkSupabaseReachable();
+        if (loginError) {
+          loginError.textContent = reachable
+            ? (err?.message || 'Login failed. Please try again.')
+            : 'Cannot reach Supabase. Disable blockers or check your connection.';
+        }
+        return;
+      }
+      if (!profile) {
+        if (loginError) loginError.textContent = 'No account found for that username.';
+        return;
+      }
     }
     try {
       const { data, error } = await withTimeout(
         supabase.auth.signInWithPassword({
-          email: profile.email,
+          email: usesEmail ? username.trim() : profile.email,
           password
         }),
         8000,
@@ -208,7 +235,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (loginError) loginError.textContent = error?.message || 'Invalid username or password.';
         return;
       }
-      setSessionProfile(profile);
+      await loadProfileForSession(data.session);
       window.location.replace('loggedIn.html');
     } catch (err) {
       if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
