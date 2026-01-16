@@ -106,22 +106,34 @@ async function checkAuthHealth() {
   }
 }
 
-async function directPasswordLogin(email, password) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ email, password })
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = json.error_description || json.error || json.message || 'Login failed.';
-    throw new Error(msg);
+async function directPasswordLogin(email, password, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email, password }),
+      signal: controller.signal
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = json.error_description || json.error || json.message || `Login failed (${res.status}).`;
+      throw new Error(msg);
+    }
+    return json;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Login timed out. Check your connection.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return json;
 }
 
 function isLoggedIn() {
@@ -280,36 +292,21 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
     try {
-      let session = null;
-      try {
-        const { data, error } = await withTimeout(
-          supabase.auth.signInWithPassword({
-            email: usesEmail ? username.trim() : profile.email,
-            password
-          }),
-          8000,
-          'Login timed out. Check your connection.'
-        );
-        if (error || !data.session) {
-          throw error || new Error('Invalid username or password.');
-        }
-        session = data.session;
-      } catch (err) {
-        const direct = await withTimeout(
-          directPasswordLogin(usesEmail ? username.trim() : profile.email, password),
-          8000,
-          'Login timed out. Check your connection.'
-        );
-        const { error: setError } = await supabase.auth.setSession({
-          access_token: direct.access_token,
-          refresh_token: direct.refresh_token
-        });
-        if (setError) {
-          throw setError;
-        }
-        const { data: sessionData } = await supabase.auth.getSession();
-        session = sessionData.session;
+      const loginEmail = usesEmail ? username.trim() : profile?.email;
+      if (!loginEmail) {
+        if (loginError) loginError.textContent = 'No email found for that username.';
+        return;
       }
+      const direct = await directPasswordLogin(loginEmail, password, 8000);
+      const { error: setError } = await supabase.auth.setSession({
+        access_token: direct.access_token,
+        refresh_token: direct.refresh_token
+      });
+      if (setError) {
+        throw setError;
+      }
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData.session;
       if (!session) {
         if (loginError) loginError.textContent = 'Login failed. Please try again.';
         return;
