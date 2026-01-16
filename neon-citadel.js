@@ -355,6 +355,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
                 if(target) {
                     t.angle = Math.atan2(target.y-t.y, target.x-t.x);
                     takeDamage(target, t.dmg, t.type); 
+                    particles.push({type:'beam', sx:t.x, sy:t.y, ex:target.x, ey:target.y, color:t.color, life:6});
                     if(state.frame%2===0) particles.push({type:'spark', x:target.x, y:target.y, color:t.color, life:8, vx:Math.random()*6-3, vy:Math.random()*6-3});
                     t.firing = true; t.target = target;
                 } else {
@@ -426,7 +427,21 @@ import { getHighScore, submitHighScore } from './score-store.js';
                 continue;
             }
 
-            // Bullet/Shell/Plasma
+            if(p.type === 'plasma') {
+                if(!p.target || p.target.hp<=0) p.target = enemies[0];
+                if(!p.target) { projectiles.splice(i,1); continue; }
+                let ang = Math.atan2(p.target.y - p.y, p.target.x - p.x);
+                p.x += Math.cos(ang) * p.spd;
+                p.y += Math.sin(ang) * p.spd;
+                if(Math.hypot(p.target.x-p.x, p.target.y-p.y) < p.spd) {
+                    takeDamage(p.target, p.dmg, 'energy');
+                    particles.push({type:'spark', x:p.x, y:p.y, color:p.color, life:8});
+                    projectiles.splice(i,1);
+                }
+                continue;
+            }
+
+            // Bullet/Shell
             p.x+=p.vx; p.y+=p.vy;
             let hit = enemies.find(e => Math.hypot(e.x-p.x, e.y-p.y) < 20);
             if(hit) {
@@ -490,7 +505,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
             let next = enemies.find(e => !chain.includes(e) && Math.hypot(e.x-curr.x, e.y-curr.y) < 130);
             if(next) { chain.push(next); takeDamage(next, t.dmg*0.8, 'energy'); curr=next; }
         }
-        particles.push({type:'bolt', chain, color:t.color, life:5});
+        particles.push({type:'bolt', chain, color:'#ffe95a', life:7, jagged:1.6});
     }
 
     // --- DRAWING ---
@@ -567,7 +582,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
         });
 
         particles.forEach(p => {
-            if(p.type === 'bolt') drawFractalLightning(ctx, p.chain, p.color);
+            if(p.type === 'bolt') drawFractalLightning(ctx, p.chain, p.color, p.jagged);
             else if(p.type === 'shockwave') {
                 ctx.strokeStyle=p.color; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(p.x, p.y, (20-p.life)*4, 0, Math.PI*2); ctx.stroke();
             } else if(p.type === 'spark') {
@@ -596,9 +611,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
     }
 
     // --- RECURSIVE FRACTAL LIGHTNING ---
-    function drawFractalLightning(ctx, chain, color) {
+    function drawFractalLightning(ctx, chain, color, jagged) {
         if(chain.length<2) return;
-        ctx.strokeStyle=color; ctx.lineWidth=2; ctx.shadowColor=color; ctx.shadowBlur=15;
+        ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.shadowColor=color; ctx.shadowBlur=jagged ? 20 : 15;
         ctx.lineCap = 'round';
         ctx.beginPath();
         
@@ -606,13 +621,13 @@ import { getHighScore, submitHighScore } from './score-store.js';
         for(let i=1; i<chain.length; i++) {
             let start = chain[i-1];
             let end = chain[i];
-            drawBoltSegment(ctx, start.x, start.y, end.x, end.y, 1);
+            drawBoltSegment(ctx, start.x, start.y, end.x, end.y, 1, jagged || 1);
         }
         ctx.stroke(); 
         ctx.shadowBlur=0;
     }
 
-    function drawBoltSegment(ctx, x1, y1, x2, y2, depth) {
+    function drawBoltSegment(ctx, x1, y1, x2, y2, depth, jagged) {
         let dist = Math.hypot(x2-x1, y2-y1);
         if(dist < 10 || depth <= 0) {
             ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
@@ -620,12 +635,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
         }
         let midX = (x1+x2)/2; let midY = (y1+y2)/2;
         // Jitter based on distance
-        let offset = Math.max(5, dist * 0.2); 
+        let offset = Math.max(5, dist * (0.22 + (jagged * 0.08))); 
         midX += (Math.random()-0.5) * offset;
         midY += (Math.random()-0.5) * offset;
         
-        drawBoltSegment(ctx, x1, y1, midX, midY, depth-1);
-        drawBoltSegment(ctx, midX, midY, x2, y2, depth-1);
+        drawBoltSegment(ctx, x1, y1, midX, midY, depth-1, jagged);
+        drawBoltSegment(ctx, midX, midY, x2, y2, depth-1, jagged);
     }
 
     function drawTower(ctx, t) {

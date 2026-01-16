@@ -1,4 +1,4 @@
-async function sha256(input) {
+export async function sha256(input) {
   const encoder = new TextEncoder();
   const data = encoder.encode(input);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -7,5 +7,4 @@ async function sha256(input) {
   return hashHex;
 }
 
-// Usage:
-sha256("your string here").then(console.log);
+window.sha256 = sha256;

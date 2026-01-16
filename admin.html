@@ -23,7 +23,7 @@
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <div>
         <h2 style="margin:0;color:var(--primary);">Account Monitor</h2>
-        <div class="help">View and manage account statuses. Changes are saved to Supabase.</div>
+        <div class="help">View and manage account statuses. Changes are local for this session.</div>
       </div>
       <div>
         <a class="btn" href="loggedIn.html">Dashboard</a>
@@ -37,43 +37,25 @@
       <tbody></tbody>
     </table>
 
-    <div style="margin-top:12px;color:var(--muted);">Note: This admin panel updates the <code>profiles</code> table in Supabase.</div>
+    <div style="margin-top:12px;color:var(--muted);">Note: This admin panel uses the hardcoded account list.</div>
   </div>
 
   <div class="container" style="margin-top:18px;">
     <h2 style="margin:0;color:var(--primary);">Questions & Comments</h2>
-    <div class="help">Latest messages sent from the Questions & Comments page.</div>
-    <table id="supportTable" aria-live="polite">
-      <thead>
-        <tr><th>When</th><th>Name</th><th>Email</th><th>Message</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div class="help">Supabase is disabled, so messages are not loaded here.</div>
   </div>
 
   <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="questions.html">Questions & Comments</a></footer>
 
-  <script type="module" src="login.js?v=5"></script>
+  <script type="module" src="login.js?v=7"></script>
   <script type="module">
     // Admin-only page to view and change account statuses
     document.addEventListener('DOMContentLoaded', function() {
       if (!window.enforcePageAccess('admin.html')) return;
       const tbody = document.querySelector('#usersTable tbody');
 
-      async function loadProfiles() {
-        const { data, error } = await window.supabaseClient
-          .from('profiles')
-          .select('username, account_status')
-          .order('username');
-        if (error) {
-          console.error('Error loading profiles', error);
-          return [{ username: localStorage.getItem('username') || 'unknown', account_status: getAccountStatus() || 'standard' }];
-        }
-        return data || [];
-      }
-
       async function render() {
-        const baseUsers = await loadProfiles();
+        const baseUsers = window.getHardcodedUsers ? window.getHardcodedUsers() : [];
         tbody.innerHTML = '';
         baseUsers.forEach(u => {
           const tr = document.createElement('tr');
@@ -98,7 +80,7 @@
             const uname = btn.dataset.user;
             const sel = document.querySelector(`select[data-user="${uname}"]`);
             const newStatus = sel.value;
-            const ok = await window.adminSetAccountStatus(uname, newStatus);
+            const ok = window.adminSetAccountStatus(uname, newStatus);
             if (ok) {
               alert(`Status for ${uname} set to ${newStatus}.`);
               await render();
@@ -110,32 +92,6 @@
       }
 
       render();
-
-      async function renderSupportRequests() {
-        const tbodySupport = document.querySelector('#supportTable tbody');
-        const { data, error } = await window.supabaseClient
-          .from('support_requests')
-          .select('created_at, name, email, message')
-          .order('created_at', { ascending: false })
-          .limit(50);
-        if (error) {
-          console.error('Error loading support requests', error);
-          tbodySupport.innerHTML = '<tr><td colspan="4">Unable to load requests.</td></tr>';
-          return;
-        }
-        if (!data || data.length === 0) {
-          tbodySupport.innerHTML = '<tr><td colspan="4">No messages yet.</td></tr>';
-          return;
-        }
-        tbodySupport.innerHTML = data.map(row => {
-          const when = new Date(row.created_at).toLocaleString();
-          const email = row.email || '-';
-          const msg = row.message || '';
-          return `<tr><td>${when}</td><td>${row.name}</td><td>${email}</td><td>${msg}</td></tr>`;
-        }).join('');
-      }
-
-      renderSupportRequests();
     });
   </script>
 </body>

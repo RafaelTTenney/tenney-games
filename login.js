@@ -1,15 +1,29 @@
-// login.js (Supabase-backed)
-// Adds accountStatus support and role-based access helpers.
+// login.js (Hardcoded accounts)
+import { sha256 } from './sha256.js';
 
-import { supabase, hasSupabaseConfig, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase.js';
+const users = [
+  { username: 'admin', hash: '02079b31824a4d18a105f16b9d45e751a114ce5b4ff3d49c6f19633aed25abbc', accountStatus: 'admin', firstName: 'admin' },
+  { username: 'amagee', hash: 'e52a1359297822655226696b53192f9085c5f161d1bda5cbaed8e9ceb64c904b', accountStatus: 'admin', firstName: 'Andrew' },
+  { username: 'ccarty', hash: 'e3bd890850be9d6ffc4568c23a497e84fc8ed079ed196ce6d978a24a731f1de8', accountStatus: 'standard', firstName: 'Colleen' },
+  { username: 'smartinez', hash: 'cfadedad585d18910973603153c102a1ab83edd78886db527315b07d0630281e', accountStatus: 'admin', firstName: 'Santi' },
+  { username: 'rtenney', hash: 'd2809be3fe85fcf081294d173edc0580b93d17b8c6df3ccabc8b56d5b4f62714', accountStatus: 'advance', firstName: 'Robert' },
+  { username: 'cdillon', hash: '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8', accountStatus: 'standard', firstName: 'Calvin' }
+];
 
-window.supabaseClient = supabase;
+function normalizeUsername(value) {
+  return (value || '').trim().toLowerCase();
+}
 
-function setSessionProfile(profile) {
+function findUser(username) {
+  const normalized = normalizeUsername(username);
+  return users.find(u => u.username.toLowerCase() === normalized) || null;
+}
+
+function setSessionProfile(user) {
   localStorage.setItem('loggedIn', 'true');
-  localStorage.setItem('username', profile.username || '');
-  localStorage.setItem('firstName', profile.first_name || '');
-  localStorage.setItem('accountStatus', profile.account_status || 'standard');
+  localStorage.setItem('username', user.username || '');
+  localStorage.setItem('firstName', user.firstName || '');
+  localStorage.setItem('accountStatus', user.accountStatus || 'standard');
 }
 
 function clearSessionProfile() {
@@ -19,117 +33,23 @@ function clearSessionProfile() {
   localStorage.removeItem('firstName');
 }
 
-async function loadProfileForSession(session) {
-  if (!session || !session.user) {
-    clearSessionProfile();
-    return null;
-  }
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('username, first_name, account_status')
-    .eq('id', session.user.id)
-    .limit(1);
-  const profile = data && data.length ? data[0] : null;
-  if (error || !profile) {
-    clearSessionProfile();
-    return null;
-  }
-  setSessionProfile(profile);
-  return profile;
-}
-
-async function refreshSessionProfile() {
-  if (!hasSupabaseConfig()) return null;
-  const { data } = await supabase.auth.getSession();
-  return loadProfileForSession(data.session);
-}
-
-async function getProfileByUsername(username) {
-  const normalized = (username || '').trim().toLowerCase();
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, email, username, first_name, account_status')
-    .eq('username', normalized)
-    .limit(1);
-  if (error) return null;
-  return data && data.length ? data[0] : null;
-}
-
-function withTimeoutSignal(ms) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), ms);
-  return {
-    signal: controller.signal,
-    stop: () => clearTimeout(timeoutId)
-  };
-}
-
-async function checkSupabaseReachable() {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id&limit=1`, {
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-      },
-      signal: controller.signal
-    });
-    return res.ok || res.status === 401 || res.status === 403 || res.status === 406;
-  } catch (err) {
-    return false;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-async function directPasswordLogin(email, password) {
-  const timer = withTimeoutSignal(8000);
-  try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-      method: 'POST',
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ email, password }),
-      signal: timer.signal
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const msg = json.error_description || json.error || json.message || `Login failed (${res.status}).`;
-      throw new Error(msg);
-    }
-    return json;
-  } catch (err) {
-    if (err && err.name === 'AbortError') {
-      throw new Error('Login timed out. Check your connection.');
-    }
-    throw err;
-  } finally {
-    timer.stop();
-  }
-}
-
 function isLoggedIn() {
   return localStorage.getItem('loggedIn') === 'true';
 }
+
 async function logout() {
-  if (hasSupabaseConfig()) {
-    await supabase.auth.signOut();
-  }
   clearSessionProfile();
   window.location.replace('index.html');
 }
+
 function getAccountStatus() {
   return localStorage.getItem('accountStatus') || null;
 }
+
 function isAdmin() { return getAccountStatus() === 'admin'; }
 function isAdvance() { return getAccountStatus() === 'advance' || isAdmin(); }
 function isStandard() { return getAccountStatus() === 'standard' || isAdvance() || isAdmin(); }
 
-// Page access map
 const PAGE_ACCESS = {
   'loggedin.html': ['standard', 'advance', 'admin'],
   'loggedIn.html': ['standard', 'advance', 'admin'],
@@ -150,7 +70,6 @@ function pageNameFromPath(p) {
     const parts = u.pathname.split('/');
     return parts[parts.length - 1] || parts[parts.length - 2] || '';
   } catch (e) {
-    // fallback: try split
     const parts = p.split('/');
     return parts[parts.length - 1];
   }
@@ -160,140 +79,68 @@ function canAccessPage(pathOrName) {
   const page = pageNameFromPath(pathOrName).toLowerCase();
   if (!page) return false;
   const allowed = PAGE_ACCESS[page];
-  if (!allowed) {
-    // If page not listed, default to require login only
-    return isLoggedIn();
-  }
+  if (!allowed) return isLoggedIn();
   const status = getAccountStatus();
   return isLoggedIn() && allowed.includes(status);
 }
 
-// Helper to use in pages: if canAccessPage(...) === false, redirect to loggedIn.html or index.
 function enforcePageAccess(pathOrName) {
   if (!isLoggedIn()) {
     window.location.replace('index.html');
     return false;
   }
   if (!canAccessPage(pathOrName)) {
-    // Not allowed to view this page — send back to dashboard
     window.location.replace('loggedIn.html');
     return false;
   }
   return true;
 }
 
-// Admin utility: set account status in Supabase
-async function adminSetAccountStatus(username, newStatus) {
-  const { error } = await supabase
-    .from('profiles')
-    .update({ account_status: newStatus })
-    .eq('username', username);
-  if (error) {
-    console.error('Error saving account status', error);
-    return false;
-  }
+function adminSetAccountStatus(username, newStatus) {
+  const user = findUser(username);
+  if (!user) return false;
+  user.accountStatus = newStatus;
   const current = localStorage.getItem('username');
-  if (current === username) {
+  if (current === user.username) {
     localStorage.setItem('accountStatus', newStatus);
   }
   return true;
 }
 
+function getHardcodedUsers() {
+  return users.map(u => ({
+    username: u.username,
+    account_status: u.accountStatus || 'standard'
+  }));
+}
+
 document.addEventListener('DOMContentLoaded', function () {
-  if (hasSupabaseConfig()) {
-    supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session) {
-        await loadProfileForSession(session);
-        return;
-      }
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        await loadProfileForSession(data.session);
-        return;
-      }
-      clearSessionProfile();
-    });
-    refreshSessionProfile();
-  }
-  // Login form behavior (if exists on page)
   const loginForm = document.getElementById('loginForm');
-  if (!loginForm) {
-    // Nothing to do here if there's no login form
-    return;
-  }
+  if (!loginForm) return;
+
   const loginError = document.getElementById('loginError');
-  if (loginError) {
-    const online = navigator.onLine !== false;
-    if (!online) {
-      loginError.textContent = 'You appear to be offline.';
-    } else {
-      loginError.textContent = '';
-    }
-  }
   loginForm.addEventListener('submit', async function (e) {
     e.preventDefault();
-    if (!hasSupabaseConfig()) {
-      if (loginError) loginError.textContent = 'Supabase is not configured.';
-      return;
-    }
-    let pending = true;
-    const finish = () => {
-      pending = false;
-      if (slowTimer) clearTimeout(slowTimer);
-    };
     if (loginError) loginError.textContent = 'Signing in...';
-    let slowTimer = null;
-    if (loginError) {
-      slowTimer = setTimeout(() => {
-        if (pending) loginError.textContent = 'Still signing in...';
-      }, 4000);
-    }
+
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
-    const usesEmail = username.includes('@');
-    let profile = null;
-    if (!usesEmail) {
-      try {
-        profile = await getProfileByUsername(username);
-      } catch (err) {
-        if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
-        finish();
-        return;
-      }
-      if (!profile) {
-        if (loginError) loginError.textContent = 'No account found for that username.';
-        finish();
-        return;
-      }
+    const user = findUser(username);
+    if (!user) {
+      if (loginError) loginError.textContent = 'No account found for that username.';
+      return;
     }
+
     try {
-      const loginEmail = usesEmail ? username.trim() : profile?.email;
-      if (!loginEmail) {
-        if (loginError) loginError.textContent = 'No email found for that username.';
-        finish();
+      const hash = await sha256(password);
+      if (hash !== user.hash) {
+        if (loginError) loginError.textContent = 'Incorrect password.';
         return;
       }
-      const direct = await directPasswordLogin(loginEmail, password);
-      const { error: setError } = await supabase.auth.setSession({
-        access_token: direct.access_token,
-        refresh_token: direct.refresh_token
-      });
-      if (setError) {
-        throw setError;
-      }
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData.session;
-      if (!session) {
-        if (loginError) loginError.textContent = 'Login failed. Please try again.';
-        finish();
-        return;
-      }
-      await loadProfileForSession(session);
-      finish();
+      setSessionProfile(user);
       window.location.replace('loggedIn.html');
     } catch (err) {
-      if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
-      finish();
+      if (loginError) loginError.textContent = 'Login failed. Please try again.';
     }
   });
 });
@@ -307,3 +154,4 @@ window.isStandard = isStandard;
 window.canAccessPage = canAccessPage;
 window.enforcePageAccess = enforcePageAccess;
 window.adminSetAccountStatus = adminSetAccountStatus;
+window.getHardcodedUsers = getHardcodedUsers;

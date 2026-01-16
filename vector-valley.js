@@ -125,7 +125,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
                 if(target) {
                     if(t.name==='LASER') {
                         target.hp -= t.dmg; t.cd = t.rate;
-                        particles.push({type:'beam', x:t.x, y:t.y, tx:target.x, ty:target.y, color:t.color, life:2});
+                        particles.push({type:'beam', x:t.x, y:t.y, tx:target.x, ty:target.y, color:t.color, life:4, width:4});
                     } else if(t.name==='STASIS') {
                         enemies.forEach(e => { if(Math.hypot(e.x-t.x, e.y-t.y) < t.range) e.speed *= t.slow; });
                         particles.push({type:'ring', x:t.x, y:t.y, r:1, maxR:t.range, color:t.color, life:15});
@@ -209,7 +209,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
                 ctx.strokeStyle = p.color; ctx.beginPath();
                 ctx.arc(p.x, p.y, p.maxR * (1 - p.life/15), 0, Math.PI*2); ctx.stroke();
             } else if (p.type === 'beam') {
-                ctx.strokeStyle = p.color; ctx.lineWidth = 3;
+                ctx.strokeStyle = p.color; ctx.lineWidth = p.width || 3;
                 ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.tx, p.ty); ctx.stroke();
             } else {
                 ctx.fillStyle = p.color; ctx.fillRect(p.x,p.y,3,3);
