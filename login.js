@@ -231,6 +231,12 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     if (loginError) loginError.textContent = 'Signing in...';
+    let slowTimer = null;
+    if (loginError) {
+      slowTimer = setTimeout(() => {
+        loginError.textContent = 'Still signing in...';
+      }, 4000);
+    }
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     const usesEmail = username.includes('@');
@@ -251,9 +257,14 @@ document.addEventListener('DOMContentLoaded', function () {
       const loginEmail = usesEmail ? username.trim() : profile?.email;
       if (!loginEmail) {
         if (loginError) loginError.textContent = 'No email found for that username.';
+        if (slowTimer) clearTimeout(slowTimer);
         return;
       }
-      const direct = await directPasswordLogin(loginEmail, password);
+      const direct = await withTimeout(
+        directPasswordLogin(loginEmail, password),
+        8000,
+        'Login timed out. Check your connection.'
+      );
       const { error: setError } = await supabase.auth.setSession({
         access_token: direct.access_token,
         refresh_token: direct.refresh_token
@@ -265,12 +276,15 @@ document.addEventListener('DOMContentLoaded', function () {
       const session = sessionData.session;
       if (!session) {
         if (loginError) loginError.textContent = 'Login failed. Please try again.';
+        if (slowTimer) clearTimeout(slowTimer);
         return;
       }
       await loadProfileForSession(session);
+      if (slowTimer) clearTimeout(slowTimer);
       window.location.replace('loggedIn.html');
     } catch (err) {
       if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
+      if (slowTimer) clearTimeout(slowTimer);
     }
   });
 });
