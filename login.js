@@ -55,6 +55,16 @@ async function getProfileByUsername(username) {
   return data && data.length ? data[0] : null;
 }
 
+function withTimeout(promise, ms, label) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(label || 'Request timed out.'));
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
 function isLoggedIn() {
   return localStorage.getItem('loggedIn') === 'true';
 }
@@ -174,7 +184,13 @@ document.addEventListener('DOMContentLoaded', function () {
     if (loginError) loginError.textContent = 'Signing in...';
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
-    const profile = await getProfileByUsername(username);
+    let profile = null;
+    try {
+      profile = await withTimeout(getProfileByUsername(username), 8000, 'Login timed out. Check your connection.');
+    } catch (err) {
+      if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
+      return;
+    }
     if (!profile) {
       if (loginError) loginError.textContent = 'No account found for that username.';
       return;
