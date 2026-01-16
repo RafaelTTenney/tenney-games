@@ -196,10 +196,14 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: profile.email,
-        password
-      });
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: profile.email,
+          password
+        }),
+        8000,
+        'Login timed out. Check your connection.'
+      );
       if (error || !data.session) {
         if (loginError) loginError.textContent = error?.message || 'Invalid username or password.';
         return;
