@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>Sign Up</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="style.css">
   <style>
     :root {
       --primary-blue: #3366cc;
@@ -82,12 +82,16 @@
         return;
       }
 
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from('profiles')
         .select('username')
         .eq('username', username)
-        .maybeSingle();
-      if (existing) {
+        .limit(1);
+      if (existingError) {
+        statusEl.textContent = existingError.message;
+        return;
+      }
+      if (existing && existing.length) {
         statusEl.textContent = `Username ${username} is already taken.`;
         return;
       }

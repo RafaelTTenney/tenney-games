@@ -28,13 +28,14 @@ async function loadProfileForSession(session) {
     .from('profiles')
     .select('username, first_name, account_status')
     .eq('id', session.user.id)
-    .single();
-  if (error || !data) {
+    .limit(1);
+  const profile = data && data.length ? data[0] : null;
+  if (error || !profile) {
     clearSessionProfile();
     return null;
   }
-  setSessionProfile(data);
-  return data;
+  setSessionProfile(profile);
+  return profile;
 }
 
 async function refreshSessionProfile() {
@@ -48,9 +49,9 @@ async function getProfileByUsername(username) {
     .from('profiles')
     .select('id, email, username, first_name, account_status')
     .eq('username', username)
-    .single();
+    .limit(1);
   if (error) return null;
-  return data;
+  return data && data.length ? data[0] : null;
 }
 
 function isLoggedIn() {
