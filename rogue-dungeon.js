@@ -1,4 +1,24 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 /* Rogue Dungeon - Neon Depths Edition */
+
+const ROGUE_GAME_ID = 'rogue-dungeon';
+let rogueBestLevel = 0;
+let rogueSubmitted = false;
+
+async function loadRogueBest() {
+    rogueBestLevel = await getHighScore(ROGUE_GAME_ID);
+    updateRLUI();
+}
+
+async function submitRogueBestIfNeeded() {
+    if (rogueSubmitted) return;
+    rogueSubmitted = true;
+    if (rlState.level <= rogueBestLevel) return;
+    const saved = await submitHighScore(ROGUE_GAME_ID, rlState.level);
+    if (typeof saved === 'number') rogueBestLevel = saved;
+    updateRLUI();
+}
 
 let rlState = {
     canvas: null,
@@ -38,6 +58,7 @@ function initRogue() {
     window.addEventListener('keydown', handleRogueInput);
 
     startRun();
+    loadRogueBest();
     gameLoop(); // Start animation loop for particles
 }
 
@@ -47,6 +68,7 @@ function stopRogue() {
 }
 
 function startRun() {
+    rogueSubmitted = false;
     rlState.level = 1;
     rlState.player = {
         x: 1, y: 1, 
@@ -344,6 +366,7 @@ function moveEnemies() {
             if(rlState.player.hp <= 0) {
                 rlState.player.hp = 0;
                 logRL("CRITICAL FAILURE. SYSTEM OFFLINE.");
+                submitRogueBestIfNeeded();
             }
         } else if(dist < 8) {
             // Chase logic (simple pathfinding toward player)
@@ -424,13 +447,17 @@ function logRL(msg) {
 }
 
 function updateRLUI() {
-    document.getElementById('rl-level').innerText = `Lvl: ${rlState.player.level}`;
+    const bestLabel = rogueBestLevel > 0 ? ` | Best: ${rogueBestLevel}` : '';
+    document.getElementById('rl-level').innerText = `Lvl: ${rlState.player.level}${bestLabel}`;
     document.getElementById('rl-hp').innerText = `HP: ${rlState.player.hp}/${rlState.player.maxHp}`;
     let dmg = rlState.player.baseDmg + rlState.player.weapon.val;
     let def = rlState.player.armor.val;
     document.getElementById('rl-stats').innerText = `Atk: ${dmg} | Def: ${def}`;
     document.getElementById('rl-potions').innerText = `Potions: ${rlState.player.potions}`;
 }
+
+window.initRogue = initRogue;
+window.stopRogue = stopRogue;
 
 function gameLoop() {
     renderRL();

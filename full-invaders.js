@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 (function () {
   // Preview: Full Invaders (extracted from preview-games.js)
   const globalScope = typeof window !== 'undefined' ? window : globalThis;
@@ -12,6 +14,7 @@
   const previewStartInvadersBtn = document.getElementById('preview-startInvadersBtn');
   const previewInvadersScoreEl = document.getElementById('preview-invaders-score');
 
+  const GAME_ID = 'full-invaders';
   let previewInvaderState = {
     player: { x: 140, y: 350, width: 20, height: 15, lives: 3, alive: true },
     bullet: { x: 0, y: 0, width: 4, height: 10, active: false, alive: false },
@@ -21,6 +24,7 @@
     mysteryShip: { x: 0, y: 20, width: 25, height: 12, active: false, direction: 1, alive: false },
     enemyDirection: 1,
     score: 0,
+    highScore: 0,
     level: 1,
     gameOver: false,
     gameLoopId: null,
@@ -111,7 +115,7 @@
             state.bullet.active = false;
             state.bullet.alive = false;
             state.score += 10;
-            if (previewInvadersScoreEl) previewInvadersScoreEl.textContent = `Score: ${state.score}`;
+            if (previewInvadersScoreEl) previewInvadersScoreEl.textContent = `Score: ${state.score} | High: ${state.highScore}`;
             break;
           }
         }
@@ -125,7 +129,7 @@
           let bonus = (Math.floor(Math.random() * 3) + 1) * 50;
           state.score += bonus;
           if (previewInvadersMessageEl) previewInvadersMessageEl.textContent = `+${bonus} POINTS!`;
-          if (previewInvadersScoreEl) previewInvadersScoreEl.textContent = `Score: ${state.score}`;
+          if (previewInvadersScoreEl) previewInvadersScoreEl.textContent = `Score: ${state.score} | High: ${state.highScore}`;
         }
       }
     }
@@ -199,7 +203,7 @@
       }
       if (previewCheckCollision(bullet, state.player)) {
         state.player.lives--;
-        if (previewInvadersScoreEl) previewInvadersScoreEl.textContent = `Score: ${state.score}`;
+        if (previewInvadersScoreEl) previewInvadersScoreEl.textContent = `Score: ${state.score} | High: ${state.highScore}`;
         if (state.player.lives <= 0) {
           state.player.alive = false;
           previewStopInvaders("GAME OVER: You were hit!");
@@ -286,6 +290,22 @@
     }
   }
 
+  async function loadPreviewHighScore() {
+    previewInvaderState.highScore = await getHighScore(GAME_ID);
+    if (previewInvadersScoreEl) {
+      previewInvadersScoreEl.textContent = `Score: ${previewInvaderState.score} | High: ${previewInvaderState.highScore}`;
+    }
+  }
+
+  async function submitPreviewHighScore() {
+    if (previewInvaderState.score <= previewInvaderState.highScore) return;
+    const saved = await submitHighScore(GAME_ID, previewInvaderState.score);
+    if (typeof saved === 'number') previewInvaderState.highScore = saved;
+    if (previewInvadersScoreEl) {
+      previewInvadersScoreEl.textContent = `Score: ${previewInvaderState.score} | High: ${previewInvaderState.highScore}`;
+    }
+  }
+
   function previewStartInvaders() {
     if (previewInvaderState.gameLoopId) {
       cancelAnimationFrame(previewInvaderState.gameLoopId);
@@ -306,7 +326,9 @@
     previewInvaderState.mysteryShip.active = false;
     previewInvaderState.mysteryShip.alive = false;
     previewInvaderState.dropSpeed = 10;
-    if (previewInvadersScoreEl) previewInvadersScoreEl.textContent = "Score: 0";
+    if (previewInvadersScoreEl) {
+      previewInvadersScoreEl.textContent = `Score: 0 | High: ${previewInvaderState.highScore}`;
+    }
     if (previewInvadersMessageEl) previewInvadersMessageEl.textContent = "Good luck!";
     if (previewStartInvadersBtn) previewStartInvadersBtn.textContent = 'Restart';
     previewCreateEnemies();
@@ -322,6 +344,7 @@
     }
     if (previewInvadersMessageEl) previewInvadersMessageEl.textContent = message;
     if (previewStartInvadersBtn) previewStartInvadersBtn.textContent = 'Start';
+    submitPreviewHighScore();
   }
 
   function previewHandleInvadersKey(event) {
@@ -361,6 +384,7 @@
       previewInvadersCtx.fillStyle = '#000';
       previewInvadersCtx.fillRect(0, 0, previewInvadersCanvas.width, previewInvadersCanvas.height);
     }
+    loadPreviewHighScore();
   }
 
   // Expose init function for loader

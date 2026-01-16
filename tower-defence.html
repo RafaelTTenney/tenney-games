@@ -302,11 +302,11 @@
         </div>
     </div>
 
-    <script src="sentinel-grid.js"></script>
-    <script src="vector-valley.js"></script>
-    <script src="neon-citadel.js"></script>
+    <script type="module" src="sentinel-grid.js"></script>
+    <script type="module" src="vector-valley.js"></script>
+    <script type="module" src="neon-citadel.js"></script>
 
-    <script>
+    <script type="module">
     const App = {
         activeGame: null,
         gameId: null,
@@ -468,8 +468,10 @@
                 const w = (g.wave !== undefined) ? g.wave : (g.state ? g.state.wave : 0);
                 const m = (g.money !== undefined) ? g.money : (g.state ? g.state.money : 0);
                 const l = (g.lives !== undefined) ? g.lives : (g.state ? g.state.lives : 0);
+                const bestWave = (g.bestWave !== undefined) ? g.bestWave : (g.state ? g.state.bestWave : 0);
+                const bestDisplay = Math.max(bestWave || 0, w || 0);
                 
-                document.getElementById('ui-wave').innerText = w;
+                document.getElementById('ui-wave').innerText = bestDisplay ? `${w} | BEST ${bestDisplay}` : w;
                 document.getElementById('ui-money').innerText = Math.floor(m);
                 document.getElementById('ui-lives').innerText = l;
                 App.updateInspector();
@@ -521,6 +523,8 @@
         const sy = App.canvas.height / r.height;
         App.activeGame.click((e.clientX - r.left)*sx, (e.clientY - r.top)*sy);
     });
+
+    window.App = App;
     </script>
 </body>
 </html>

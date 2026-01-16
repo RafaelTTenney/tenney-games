@@ -23,7 +23,7 @@
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <div>
         <h2 style="margin:0;color:var(--primary);">Account Monitor</h2>
-        <div class="help">View and manage account statuses. Changes are saved to your browser (localStorage) for demo/testing. To persist server-side, implement a backend API.</div>
+        <div class="help">View and manage account statuses. Changes are saved to Supabase.</div>
       </div>
       <div>
         <a class="btn" href="loggedIn.html">Dashboard</a>
@@ -37,39 +37,36 @@
       <tbody></tbody>
     </table>
 
-    <div style="margin-top:12px;color:var(--muted);">Note: This admin panel updates a client-side override map stored under <code>accountStatusOverrides</code> in localStorage. To make permanent across users, wire these changes to your server.</div>
+    <div style="margin-top:12px;color:var(--muted);">Note: This admin panel updates the <code>profiles</code> table in Supabase.</div>
   </div>
 
   <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a></footer>
 
-  <script src="login.js"></script>
-  <script>
+  <script type="module" src="login.js"></script>
+  <script type="module">
     // Admin-only page to view and change account statuses
     document.addEventListener('DOMContentLoaded', function() {
-      if (!enforcePageAccess('admin.html')) return;
-      // Load base user list from login.js 'users' variable accessible globally
-      // If not accessible, we'll show the currently-logged-in user as fallback
+      if (!window.enforcePageAccess('admin.html')) return;
       const tbody = document.querySelector('#usersTable tbody');
 
-      // build display list using 'users' array if present, otherwise fallback
-      const baseUsers = (typeof users !== 'undefined' && Array.isArray(users)) ? users : [{ username: localStorage.getItem('username') || 'unknown', accountStatus: getAccountStatus() }];
+      async function loadProfiles() {
+        const { data, error } = await window.supabaseClient
+          .from('profiles')
+          .select('username, account_status')
+          .order('username');
+        if (error) {
+          console.error('Error loading profiles', error);
+          return [{ username: localStorage.getItem('username') || 'unknown', account_status: getAccountStatus() || 'standard' }];
+        }
+        return data || [];
+      }
 
-      function render() {
+      async function render() {
+        const baseUsers = await loadProfiles();
         tbody.innerHTML = '';
-        // Use copy to ensure stable iteration
         baseUsers.forEach(u => {
           const tr = document.createElement('tr');
-          const currentStatus = (function() {
-            // Show override if present
-            const overridesRaw = localStorage.getItem('accountStatusOverrides');
-            if (overridesRaw) {
-              try {
-                const overrides = JSON.parse(overridesRaw);
-                if (overrides && overrides[u.username]) return overrides[u.username];
-              } catch (e) {}
-            }
-            return u.accountStatus || 'standard';
-          })();
+          const currentStatus = u.account_status || 'standard';
           tr.innerHTML = `
             <td>${u.username}</td>
             <td>${currentStatus}</td>
@@ -86,14 +83,14 @@
         });
         // Bind buttons
         document.querySelectorAll('button.apply').forEach(btn => {
-          btn.onclick = () => {
+          btn.onclick = async () => {
             const uname = btn.dataset.user;
             const sel = document.querySelector(`select[data-user="${uname}"]`);
             const newStatus = sel.value;
-            const ok = adminSetAccountStatusOverride(uname, newStatus);
+            const ok = await window.adminSetAccountStatus(uname, newStatus);
             if (ok) {
-              alert(`Status for ${uname} set to ${newStatus} (saved locally).`);
-              render();
+              alert(`Status for ${uname} set to ${newStatus}.`);
+              await render();
             } else {
               alert('Error saving the status. Check console for details.');
             }

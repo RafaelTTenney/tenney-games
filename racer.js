@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 (function () {
   // Neon Racer (multi-game version) - simplified racer extracted from multi-game.js
   const globalScope = typeof window !== 'undefined' ? window : globalThis;
@@ -16,12 +18,14 @@
       y: canvas.height - 90
     };
 
+    const GAME_ID = 'neon-racer';
     const state = {
       running: false,
       lastTimestamp: 0,
       speed: 180,
       distance: 0,
       dodged: 0,
+      highScore: 0,
       obstacles: [],
       speedLines: [],
       spawnTimer: 0,
@@ -185,6 +189,7 @@
           if (message) {
             message.textContent = 'Crash! Reset to roll out again.';
           }
+          submitHighScoreIfNeeded();
           return;
         }
       }
@@ -241,6 +246,7 @@
       ensureSpeedLines();
       renderRacer();
       updateHud();
+      loadHighScore();
       const message = document.getElementById('racer-message');
       if (message) {
         message.textContent = 'Ready! Use ← and → to slide through the gaps.';
@@ -272,13 +278,25 @@
       document.__racerBound = true;
     }
 
+    async function loadHighScore() {
+      state.highScore = await getHighScore(GAME_ID);
+      updateHud();
+    }
+
+    async function submitHighScoreIfNeeded() {
+      if (state.dodged <= state.highScore) return;
+      const saved = await submitHighScore(GAME_ID, state.dodged);
+      if (typeof saved === 'number') state.highScore = saved;
+      updateHud();
+    }
+
     function updateHud() {
       const distanceEl = document.getElementById('racer-distance');
       const speedEl = document.getElementById('racer-speed');
       const obstaclesEl = document.getElementById('racer-obstacles');
       if (distanceEl) distanceEl.textContent = `Distance: ${Math.floor(state.distance)}m`;
       if (speedEl) speedEl.textContent = `Speed: ${Math.floor(state.speed)} mph`;
-      if (obstaclesEl) obstaclesEl.textContent = `Gaps cleared: ${state.dodged}`;
+      if (obstaclesEl) obstaclesEl.textContent = `Gaps cleared: ${state.dodged} | High: ${state.highScore}`;
     }
 
     return {

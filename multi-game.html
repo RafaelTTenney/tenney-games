@@ -288,12 +288,12 @@
   <footer>
     &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </footer>
-  <script src="login.js"></script>
-  <script src="snake.js"></script>
-  <script src="simple-tetris.js"></script>
-  <script src="paperio.js"></script>
-  <script src="racer.js"></script>
-  <script>
+  <script type="module" src="login.js"></script>
+  <script type="module" src="snake.js"></script>
+  <script type="module" src="simple-tetris.js"></script>
+  <script type="module" src="paperio.js"></script>
+  <script type="module" src="racer.js"></script>
+  <script type="module">
     // Card container logic
     const gameCards = document.querySelectorAll('.primary-btn[data-game-target]');
     const gameContainers = document.querySelectorAll('.game-container');
@@ -313,9 +313,9 @@
           targetContainer.style.display = 'flex';
           targetContainer.setAttribute('aria-hidden', 'false');
           switch(targetId) {
-            case "snake": if (typeof initSnakeGame === 'function') initSnakeGame(); break;
-            case "paperio": if (typeof initPaperioGame === 'function') initPaperioGame(); break;
-            case "racer": if (typeof initRacerGame === 'function') initRacerGame(); break;
+            case "snake": if (typeof window.initSnakeGame === 'function') window.initSnakeGame(); break;
+            case "paperio": if (typeof window.initPaperioGame === 'function') window.initPaperioGame(); break;
+            case "racer": if (typeof window.initRacerGame === 'function') window.initRacerGame(); break;
           }
         }
       });
@@ -334,14 +334,14 @@
         modal.style.display = 'flex';
         modal.setAttribute('aria-hidden', 'false');
       }
-      if (typeof initPreviewSimpleTetris === 'function') initPreviewSimpleTetris();
+      if (typeof window.initPreviewSimpleTetris === 'function') window.initPreviewSimpleTetris();
     });
 
     document.getElementById('preview-startBtn').addEventListener('click', () => {
-      if (typeof startPreviewTetris === 'function') { startPreviewTetris(); return; }
-      if (typeof startTetris === 'function') { startTetris(); return; }
-      if (typeof start === 'function') { start(); return; }
-      if (typeof t_start === 'function') { t_start(); return; }
+      if (typeof window.startPreviewTetris === 'function') { window.startPreviewTetris(); return; }
+      if (typeof window.startTetris === 'function') { window.startTetris(); return; }
+      if (typeof window.start === 'function') { window.start(); return; }
+      if (typeof window.t_start === 'function') { window.t_start(); return; }
       alert("No working start function found for Simple Tetris.");
     });
 
@@ -353,28 +353,28 @@
       }
       gameGrid.style.display = '';
       mainTitle.style.display = 'block';
-      if (typeof stopPreviewTetris === 'function') stopPreviewTetris();
+      if (typeof window.stopPreviewTetris === 'function') window.stopPreviewTetris();
     });
 
     document.getElementById('preview-controlsBtn').addEventListener('click', () => {
-      if (typeof initPreviewSimpleTetris === 'function') return;
+      if (typeof window.initPreviewSimpleTetris === 'function') return;
       alert('Controls:\nRight Arrow: Right\nLeft Arrow: Left\nSpace Bar: Rotate\nDown Arrow: Speed Up Fall');
     });
 
     document.getElementById('snakeRestartBtn')?.addEventListener('click', () => {
-      if (typeof resetSnake === 'function') resetSnake();
+      if (typeof window.resetSnake === 'function') window.resetSnake();
     });
     document.getElementById('paperioRestartBtn')?.addEventListener('click', () => {
-      if (typeof resetPaperio === 'function') resetPaperio();
+      if (typeof window.resetPaperio === 'function') window.resetPaperio();
     });
     document.getElementById('racerStartBtn')?.addEventListener('click', () => {
-      if (typeof startRacer === 'function') startRacer();
+      if (typeof window.startRacer === 'function') window.startRacer();
     });
     document.getElementById('racerPauseBtn')?.addEventListener('click', () => {
-      if (typeof pauseRacer === 'function') pauseRacer();
+      if (typeof window.pauseRacer === 'function') window.pauseRacer();
     });
     document.getElementById('racerResetBtn')?.addEventListener('click', () => {
-      if (typeof resetRacer === 'function') resetRacer();
+      if (typeof window.resetRacer === 'function') window.resetRacer();
     });
   </script>
 </body>

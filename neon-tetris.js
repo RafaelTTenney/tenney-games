@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 (function () {
   // Neon Tetris (full implementation restored from original experimental.js)
   const win = typeof window !== 'undefined' ? window : globalThis;
@@ -19,17 +21,22 @@
 
   let fastFall = false;
   let score = 0;
-  let highScore;
+  const GAME_ID = 'neon-tetris';
+  let highScore = 0;
 
-  // High score (localStorage key preserved)
-  function loadHighScore() {
-    highScore = parseInt(localStorage.getItem('tetris+HighScore')) || 0;
+  function renderScore() {
     if (scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
   }
 
-  function saveHighScore() {
-    localStorage.setItem('tetris+HighScore', highScore);
-    if (scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
+  async function loadHighScore() {
+    highScore = await getHighScore(GAME_ID);
+    renderScore();
+  }
+
+  async function saveHighScore() {
+    const saved = await submitHighScore(GAME_ID, highScore);
+    if (typeof saved === 'number') highScore = saved;
+    renderScore();
   }
 
   // In-game variables
@@ -204,7 +211,7 @@
                 console.log("Level up! Now on level " + currentLevel);
             }
 
-            if(scoreP) scoreP.textContent = 'Score: ' + score + ' | High Score: ' + highScore;
+            renderScore();
             i--;
           }
         }

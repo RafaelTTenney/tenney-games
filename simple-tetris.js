@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 (function () {
   // Simple preview Tetris (extracted from preview-games.js)
   const globalScope = typeof window !== 'undefined' ? window : globalThis;
@@ -17,7 +19,8 @@
 
   let t_fastFall = false;
   let t_score = 0;
-  let t_highScore;
+  const GAME_ID = 'simple-tetris';
+  let t_highScore = 0;
   let t_messageTimer = 0;
 
   let t_block;
@@ -45,14 +48,19 @@
     6: [[0, 0, 1], [1, 1, 1], [0, 0, 0]],
   };
 
-  function t_loadHighScore() {
-    t_highScore = parseInt(localStorage.getItem('tetrisHighScore')) || 0;
+  function t_renderScore() {
     if (tetrisScoreP) tetrisScoreP.textContent = 'Score: ' + t_score + ' | High Score: ' + t_highScore;
   }
 
-  function t_saveHighScore() {
-    localStorage.setItem('tetrisHighScore', t_highScore);
-    if (tetrisScoreP) tetrisScoreP.textContent = 'Score: ' + t_score + ' | High Score: ' + t_highScore;
+  async function t_loadHighScore() {
+    t_highScore = await getHighScore(GAME_ID);
+    t_renderScore();
+  }
+
+  async function t_saveHighScore() {
+    const saved = await submitHighScore(GAME_ID, t_highScore);
+    if (typeof saved === 'number') t_highScore = saved;
+    t_renderScore();
   }
 
   function t_initOffscreen() {
@@ -190,7 +198,7 @@
       else if (linesCleared === 4) { t_score += 50; t_messageTimer = 40; }
 
       if (linesCleared > 0) {
-        if (tetrisScoreP) tetrisScoreP.textContent = 'Score: ' + t_score + ' | High Score: ' + t_highScore;
+        t_renderScore();
       }
     }
   }

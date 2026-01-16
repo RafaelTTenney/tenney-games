@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 (function () {
   // Space Invaders++ (experimental) - completed module extracted from experimental.js
   const globalScope = typeof window !== 'undefined' ? window : globalThis;
@@ -21,6 +23,7 @@
       };
     }
 
+    const GAME_ID = 'space-invaders-plus';
     let invaderState = {
       player: { x: 140, y: 350, width: 20, height: 16, lives: 3, alive: true },
       bullet: { x: 0, y: 0, width: 4, height: 14, active: false, alive: false, speed: 24 },
@@ -30,6 +33,7 @@
       mysteryShip: { x: 0, y: 20, width: 30, height: 14, active: false, direction: 1, alive: false },
       enemyDirection: 1,
       score: 0,
+      highScore: 0,
       level: 1,
       gameOver: false,
       gameLoopId: null,
@@ -170,7 +174,7 @@
               state.bullet.active = false;
               state.bullet.alive = false;
               state.score += 10;
-              if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
+              if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score} | High: ${state.highScore}`;
               break;
             }
           }
@@ -274,7 +278,7 @@
 
         if (checkCollision(bullet, state.player)) {
           state.player.lives--;
-          if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score}`;
+          if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${state.score} | High: ${state.highScore}`;
           if (state.player.lives <= 0) {
             state.player.alive = false;
             stopInvaders("GAME OVER: You were hit!");
@@ -401,6 +405,7 @@
       invadersCtx.font = '15px "Courier New", monospace';
       invadersCtx.fillStyle = '#fff';
       invadersCtx.fillText(`Score: ${state.score}`, 12, 18);
+      invadersCtx.fillText(`High: ${state.highScore}`, 12, 36);
       invadersCtx.fillStyle = '#88FFFF';
       invadersCtx.fillText(`Level: ${state.level}`, invadersCanvas.width - 90, 18);
     }
@@ -438,6 +443,18 @@
       }
     }
 
+    async function loadHighScore() {
+      invaderState.highScore = await getHighScore(GAME_ID);
+      if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${invaderState.score} | High: ${invaderState.highScore}`;
+    }
+
+    async function submitHighScoreIfNeeded() {
+      if (invaderState.score <= invaderState.highScore) return;
+      const saved = await submitHighScore(GAME_ID, invaderState.score);
+      if (typeof saved === 'number') invaderState.highScore = saved;
+      if (invadersScoreEl) invadersScoreEl.textContent = `Score: ${invaderState.score} | High: ${invaderState.highScore}`;
+    }
+
     function startInvaders() {
       if (invaderState.gameLoopId) {
         cancelAnimationFrame(invaderState.gameLoopId);
@@ -461,7 +478,7 @@
       invaderState.mysteryShip.alive = false;
       invaderState.dropSpeed = 6; // reduced base drop speed
 
-      if (invadersScoreEl) invadersScoreEl.textContent = "Score: 0";
+      if (invadersScoreEl) invadersScoreEl.textContent = `Score: 0 | High: ${invaderState.highScore}`;
       if (invadersMessageEl) invadersMessageEl.textContent = "Good luck!";
       if (startInvadersBtn) startInvadersBtn.textContent = 'Restart';
 
@@ -478,6 +495,7 @@
       }
       if (invadersMessageEl) invadersMessageEl.textContent = message;
       if (startInvadersBtn) startInvadersBtn.textContent = 'Start';
+      submitHighScoreIfNeeded();
     }
 
     /* ============================
@@ -557,6 +575,7 @@
         invadersCtx.fillStyle = '#000';
         invadersCtx.fillRect(0, 0, invadersCanvas.width, invadersCanvas.height);
       }
+      loadHighScore();
     }
 
     return {

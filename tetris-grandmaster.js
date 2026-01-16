@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 /* Tetris Grandmaster - Enhanced Logic with Lock Delay & Visuals */
 
 let gmState = {
@@ -22,6 +24,7 @@ let gmState = {
     level: 0,
     grade: "9", // 9..1, S1..GM
     grades: ["9","8","7","6","5","4","3","2","1","S1","S2","S3","S4","M","GM"],
+    highScore: 0,
     
     running: false,
     gameOver: false,
@@ -46,6 +49,20 @@ let gmState = {
     colors: [null, '#00FFFF', '#FFFF00', '#AA00FF', '#FFAA00', '#0000FF', '#00FF00', '#FF0000']
 };
 
+const GM_GAME_ID = 'tetris-grandmaster';
+
+async function loadGMHighScore() {
+    gmState.highScore = await getHighScore(GM_GAME_ID);
+    if (gmState.ctx) renderGM();
+}
+
+async function submitGMHighScoreIfNeeded() {
+    if (gmState.score <= gmState.highScore) return;
+    const saved = await submitHighScore(GM_GAME_ID, gmState.score);
+    if (typeof saved === 'number') gmState.highScore = saved;
+    if (gmState.ctx) renderGM();
+}
+
 function initGM() {
     gmState.canvas = document.getElementById('gm-canvas');
     if(!gmState.canvas) return;
@@ -59,6 +76,7 @@ function initGM() {
     
     // Initial Render (Empty)
     renderGM();
+    loadGMHighScore();
 }
 
 function stopGM() {
@@ -82,6 +100,8 @@ function startGM() {
     gmState.dropInterval = 800;
     gmState.lockTimer = 0;
     gmState.isLanded = false;
+
+    loadGMHighScore();
     
     fillQueue();
     spawnPiece();
@@ -152,6 +172,7 @@ function spawnPiece() {
     if(collide(gmState.board, gmState.piece)) {
         gmState.gameOver = true;
         renderGM(); // Show fail state
+        submitGMHighScoreIfNeeded();
     }
     updateGhost();
     checkLanding(); // Check immediately if we spawned on floor
@@ -393,6 +414,7 @@ function renderGM() {
     ctx.fillText("LEVEL: " + gmState.level, nextX, 330);
     ctx.fillText("LINES: " + gmState.lines, nextX, 350);
     ctx.fillText("SCORE: " + gmState.score, nextX, 370);
+    ctx.fillText("HIGH: " + gmState.highScore, nextX, 390);
 
     // GAME OVER OVERLAY
     if(gmState.gameOver) {

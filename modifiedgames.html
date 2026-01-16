@@ -181,22 +181,22 @@
       </div>
     </div>
 
-    <script src="login.js"></script>
-    <script src="neon-tetris.js"></script>
-    <script src="tetris-grandmaster.js"></script>
-    <script>
+    <script type="module" src="login.js"></script>
+    <script type="module" src="neon-tetris.js"></script>
+    <script type="module" src="tetris-grandmaster.js"></script>
+    <script type="module">
         // --- Neon Tetris Logic ---
         document.getElementById('runNeonTetrisBtn').addEventListener('click', () => {
           document.getElementById('tetrisModal').style.display = 'flex';
           // Try to init neon tetris logic
-          if (typeof initTetrisGame === 'function') initTetrisGame();
-          else if (typeof initPreviewNeonTetris === 'function') initPreviewNeonTetris();
+          if (typeof window.initTetrisGame === 'function') window.initTetrisGame();
+          else if (typeof window.initPreviewNeonTetris === 'function') window.initPreviewNeonTetris();
         });
 
         document.getElementById('modalCloseBtn').addEventListener('click', () => {
           document.getElementById('tetrisModal').style.display = 'none';
-          if (typeof stopPreviewNeonTetris === 'function') stopPreviewNeonTetris();
-          if (typeof stopTetris === 'function') stopTetris();
+          if (typeof window.stopPreviewNeonTetris === 'function') window.stopPreviewNeonTetris();
+          if (typeof window.stopTetris === 'function') window.stopTetris();
         });
 
         const controlsBtn = document.getElementById('controlsBtn');
@@ -209,12 +209,12 @@
         // --- Grandmaster Logic ---
         document.getElementById('runGMBtn').addEventListener('click', () => {
           document.getElementById('gmModal').style.display = 'flex';
-          if(typeof initGM === 'function') initGM();
+          if(typeof window.initGM === 'function') window.initGM();
         });
 
         document.getElementById('gmCloseBtn').addEventListener('click', () => {
           document.getElementById('gmModal').style.display = 'none';
-          if(typeof stopGM === 'function') stopGM();
+          if(typeof window.stopGM === 'function') window.stopGM();
         });
         
         document.getElementById('gmControlsBtn').addEventListener('click', () => {

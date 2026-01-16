@@ -111,8 +111,10 @@
     &copy; 2025 Games & Programs | Contact: <a href="mailto:maintinence2025@outlook.com">maintinence2025@outlook.com</a>
   </footer>
 
-  <script src="login.js"></script>
-  <script src="minesweeper.js"></script> <script src="space-invaders-plus.js"></script> <script>
+  <script type="module" src="login.js"></script>
+  <script type="module" src="minesweeper.js"></script>
+  <script type="module" src="space-invaders-plus.js"></script>
+  <script type="module">
     // Space Invaders Plus Hookup
     document.getElementById('runInvadersBtn').addEventListener('click', () => {
         // Open the modal corresponding to the ID in the original experimental logic
@@ -122,21 +124,21 @@
         // If the script exposes an init function, call it.
         // space-invaders-plus.js usually auto-binds to the IDs (invaders-canvas, startInvadersBtn)
         // providing the elements exist when the script loaded. If they didn't exist then, we might need a manual start.
-        if (typeof initInvadersPlus === 'function') initInvadersPlus();
+        if (typeof window.initInvadersPlus === 'function') window.initInvadersPlus();
     });
 
     document.getElementById('closeInvadersModalBtn').addEventListener('click', () => {
         document.getElementById('invadersModal').style.display = 'none';
         // Try to stop if function exists
-        if (typeof stopInvaders === 'function') stopInvaders();
+        if (typeof window.stopInvaders === 'function') window.stopInvaders();
     });
 
     // Minesweeper Hookup
     document.getElementById('runMinesweeperBtn').addEventListener('click', () => {
         const modal = document.getElementById('minesweeperModal');
         modal.style.display = 'flex';
-        if(typeof initMinesweeperGame === 'function') {
-            initMinesweeperGame();
+        if(typeof window.initMinesweeperGame === 'function') {
+            window.initMinesweeperGame();
         }
     });
 

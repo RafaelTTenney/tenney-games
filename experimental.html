@@ -368,34 +368,34 @@
         </div>
     </div>
 
-    <script src="login.js"></script>
-    <script src="neon-racer-plus.js"></script>
-    <script src="minesweeper-elite.js"></script>
-    <script src="rogue-dungeon.js"></script>
+    <script type="module" src="login.js"></script>
+    <script type="module" src="neon-racer-plus.js"></script>
+    <script type="module" src="minesweeper-elite.js"></script>
+    <script type="module" src="rogue-dungeon.js"></script>
 
-    <script>
+    <script type="module">
         // Racer Hookup
         document.getElementById('runRacerBtn').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('racerModal').style.display = 'flex'; });
         document.getElementById('racerModalCloseBtn').addEventListener('click', () => document.getElementById('racerModal').style.display = 'none');
-        document.getElementById('startRacerBtn').addEventListener('click', () => { if(typeof startRacer === 'function') startRacer(); });
-        document.getElementById('pauseRacerBtn').addEventListener('click', () => { if(typeof pauseRacer === 'function') pauseRacer(); });
-        document.getElementById('resetRacerBtn').addEventListener('click', () => { if(typeof resetRacer === 'function') resetRacer(); });
+        document.getElementById('startRacerBtn').addEventListener('click', () => { if(typeof window.startRacer === 'function') window.startRacer(); });
+        document.getElementById('pauseRacerBtn').addEventListener('click', () => { if(typeof window.pauseRacer === 'function') window.pauseRacer(); });
+        document.getElementById('resetRacerBtn').addEventListener('click', () => { if(typeof window.resetRacer === 'function') window.resetRacer(); });
 
         // Minesweeper Hookup
         document.getElementById('runSuperMinesweeperBtn').addEventListener('click', () => document.getElementById('superMinesweeperModal').style.display = 'flex');
         document.getElementById('superMsCloseBtn').addEventListener('click', () => {
              document.getElementById('superMinesweeperModal').style.display = 'none';
-             if(typeof msState !== 'undefined' && msState.interval) clearInterval(msState.interval);
+             if(typeof window.msState !== 'undefined' && window.msState.interval) clearInterval(window.msState.interval);
         });
 
         // Rogue Dungeon Hookup
         document.getElementById('runRogueBtn').addEventListener('click', () => {
             document.getElementById('rogueModal').style.display = 'flex';
-            if(typeof initRogue === 'function') initRogue();
+            if(typeof window.initRogue === 'function') window.initRogue();
         });
         document.getElementById('rogueModalCloseBtn').addEventListener('click', () => {
             document.getElementById('rogueModal').style.display = 'none';
-            if(typeof stopRogue === 'function') stopRogue();
+            if(typeof window.stopRogue === 'function') window.stopRogue();
         });
 
         // Tower Defence modal hookup (Modal code remains, but anchor tag now goes directly to the page)

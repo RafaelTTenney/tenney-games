@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 /* NEON CITADEL - V9 (VISUAL & LOGIC FIXES) */
 (function(global){
   const Neon = (function(){
@@ -74,7 +76,10 @@
     let canvas, ctx;
     let grid=[], towers=[], enemies=[], projectiles=[], particles=[], floatingText=[], gasClouds=[];
     let mapStandard=[], mapDanger=[];
+    const GAME_ID = 'tower-neon';
     let state = { wave:1, money:750, lives:30, active:false, frame:0, paused:false, shake:0 };
+    let bestWave = 0;
+    let submitted = false;
     let selection=null, buildMode=null, boss=null;
     let startNode, endNode;
 
@@ -88,11 +93,24 @@
         reset();
     }
 
+    async function loadBestWave() {
+        bestWave = await getHighScore(GAME_ID);
+    }
+
+    async function submitBestWave() {
+        if (submitted) return;
+        submitted = true;
+        const saved = await submitHighScore(GAME_ID, state.wave);
+        if (typeof saved === 'number') bestWave = saved;
+    }
+
     function reset() {
         state = { wave:1, money:750, lives:30, active:false, frame:0, paused:false, shake:0 };
         towers=[]; enemies=[]; projectiles=[]; particles=[]; floatingText=[]; gasClouds=[];
         grid = new Array(COLS).fill(0).map(()=>new Array(ROWS).fill(null));
+        submitted = false;
         recalcPaths();
+        loadBestWave();
     }
 
     // --- PATHFINDING ---
@@ -219,7 +237,10 @@
     }
 
     function update() {
-        if(state.paused || state.lives <= 0) return;
+        if(state.paused || state.lives <= 0) {
+            if (state.lives <= 0) submitBestWave();
+            return;
+        }
         state.frame++;
         if(state.shake > 0) state.shake--;
 
@@ -425,7 +446,7 @@
         particles.forEach((p,i) => { p.life--; p.x+=(p.vx||0); p.y+=(p.vy||0); if(p.life<=0) particles.splice(i,1); });
         floatingText.forEach((t,i) => { t.y-=0.5; t.life--; if(t.life<=0) floatingText.splice(i,1); });
 
-        if(state.active && enemies.length===0) { state.active=false; state.wave++; state.money+=400; }
+        if(state.active && enemies.length===0) { state.active=false; state.wave++; state.money+=400; if (state.wave > bestWave) bestWave = state.wave; }
     }
 
     function takeDamage(e, amt, type) {
@@ -722,6 +743,7 @@
                 recalcPaths(); 
             } else { selection = null; }
         },
+        stop: ()=>{ submitBestWave(); },
         getEnemyTypes: () => ENEMY_INFO,
         drawPreview: (ctx, type) => {
             let def = ENEMY_INFO[type];
@@ -735,7 +757,7 @@
             drawEnemy(ctx, dummy);
         },
         conf: {towers: TOWER_TYPES},
-        get state(){return state}, get sel(){return selection}, get buildMode(){return buildMode}
+        get state(){return state}, get bestWave(){return bestWave}, get sel(){return selection}, get buildMode(){return buildMode}
     };
   })();
   window.NeonGame = Neon;

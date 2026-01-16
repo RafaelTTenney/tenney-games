@@ -1,3 +1,5 @@
+import { getHighScore, submitLowScore } from './score-store.js';
+
 // minesweeper.js
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -14,8 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let isGameOver = true;
     let flagsPlaced = 0;
     let cellsRevealed = 0;
+    const GAME_ID = 'minesweeper-preview';
     let timerInterval = null;
     let timeElapsed = 0;
+    let bestTime = 0;
     
     // Set up the grid layout based on size
     gridElement.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 1fr)`;
@@ -241,6 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (won) {
             messageElement.textContent = `🎉 YOU WIN! Time: ${timeElapsed}s 🎉`;
+            submitBestTime();
         } else {
             messageElement.textContent = '💥 Game Over! You hit a mine. 💥';
         }
@@ -248,12 +253,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Timer Functions ---
 
+    function renderTimer() {
+        const bestLabel = bestTime > 0 ? ` | Best: ${bestTime}s` : '';
+        timerElement.textContent = `Time: ${timeElapsed}${bestLabel}`;
+    }
+
+    async function loadBestTime() {
+        bestTime = await getHighScore(GAME_ID);
+        renderTimer();
+    }
+
+    async function submitBestTime() {
+        const saved = await submitLowScore(GAME_ID, timeElapsed);
+        if (typeof saved === 'number') bestTime = saved;
+        renderTimer();
+    }
+
     function startTimer() {
         timeElapsed = 0;
-        timerElement.textContent = 'Time: 0';
+        renderTimer();
         timerInterval = setInterval(() => {
             timeElapsed++;
-            timerElement.textContent = `Time: ${timeElapsed}`;
+            renderTimer();
         }, 1000);
     }
 
@@ -277,10 +298,11 @@ document.addEventListener('DOMContentLoaded', () => {
         timeElapsed = 0;
 
         mineCountElement.textContent = `Mines: ${NUM_MINES}`;
-        timerElement.textContent = 'Time: 0';
+        renderTimer();
         messageElement.textContent = 'Click any cell to start!';
 
         createBoard();
+        loadBestTime();
     }
     
     // Attach event listeners for modal and game

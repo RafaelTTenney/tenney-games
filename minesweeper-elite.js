@@ -1,8 +1,13 @@
+import { getHighScore, submitLowScore } from './score-store.js';
+
 /* Minesweeper Elite (Flagship) 
   Logic for the advanced minesweeper in Experimental
 */
 
 let msConfig = { difficulty: 0.1, size: 10 };
+const MS_GAME_BASE_ID = 'minesweeper-elite';
+let msBestTime = 0;
+let msGameId = `${MS_GAME_BASE_ID}-${msConfig.size}-${Math.round(msConfig.difficulty * 100)}`;
 let msState = { 
     grid: [], 
     mines: [], 
@@ -20,6 +25,27 @@ const msFlagsDisplay = document.getElementById('ms-flags-left');
 const msTimerDisplay = document.getElementById('ms-timer');
 const msStatusDisplay = document.getElementById('ms-status');
 const msGridContainer = document.getElementById('ms-grid');
+
+function renderMsTimer() {
+    const bestLabel = msBestTime > 0 ? ` | Best: ${msBestTime}` : '';
+    if (msTimerDisplay) msTimerDisplay.innerText = `Time: ${msState.timer}${bestLabel}`;
+}
+
+function currentMsGameId() {
+    return `${MS_GAME_BASE_ID}-${msConfig.size}-${Math.round(msConfig.difficulty * 100)}`;
+}
+
+async function loadMsBestTime() {
+    msGameId = currentMsGameId();
+    msBestTime = await getHighScore(msGameId);
+    renderMsTimer();
+}
+
+async function submitMsBestTime() {
+    const saved = await submitLowScore(msGameId, msState.timer);
+    if (typeof saved === 'number') msBestTime = saved;
+    renderMsTimer();
+}
 
 // --- Global Menu Functions (Exposed to Window for HTML Buttons) ---
 
@@ -71,6 +97,8 @@ function initMsGame() {
         interval: null,
         mineCount: mines
     };
+    window.msState = msState;
+    loadMsBestTime();
 
     // Place Mines Randomly
     let placed = 0;
@@ -94,7 +122,8 @@ function initMsGame() {
     if(msFlagsDisplay) msFlagsDisplay.innerText = "Flags: " + mines;
     if(msStatusDisplay) msStatusDisplay.innerText = "";
     if(msStatusDisplay) msStatusDisplay.style.color = "#fff";
-    if(msTimerDisplay) msTimerDisplay.innerText = "0";
+    msState.timer = 0;
+    renderMsTimer();
 
     renderGrid();
     
@@ -103,7 +132,7 @@ function initMsGame() {
     msState.interval = setInterval(() => {
         if(!msState.gameOver) {
             msState.timer++;
-            if(msTimerDisplay) msTimerDisplay.innerText = msState.timer;
+            renderMsTimer();
         }
     }, 1000);
 }
@@ -212,6 +241,7 @@ function gameOver(win) {
             msStatusDisplay.innerText = "VICTORY!";
             msStatusDisplay.style.color = "#00FF00";
         }
+        submitMsBestTime();
     }
 }
 

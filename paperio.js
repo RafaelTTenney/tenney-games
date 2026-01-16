@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 (function () {
   // Full Paper-io implementation extracted from the original multi-game bundle.
   // Wrapped in an IIFE and exposes:
@@ -26,6 +28,9 @@
 
     const COLORS = ['#1a8', '#e55353', '#ffe933', '#1bbf48'];
     const NAMES = ['You', 'Bot 1', 'Bot 2', 'Bot 3'];
+    const GAME_ID = 'paper-io';
+    const SCORE_SCALE = 1000; // store tenths of a percent (0-1000)
+    let highScore = 0;
 
     function createGrid(fillValue) {
       return Array.from({ length: boardSize }, () => Array(boardSize).fill(fillValue));
@@ -134,6 +139,10 @@
       return count;
     }
 
+    function formatPercent(score) {
+      return (score / 10).toFixed(1);
+    }
+
     function updateScoreboard() {
       if (!scoreboardEl) return;
       const lines = players.map(player => {
@@ -154,7 +163,7 @@
         }
         const baseLine = `${player.name}: ${owned} cells (${percent}%) — ${status}`;
         if (!player.ai) {
-          return `${baseLine} • best ${(player.bestShare * 100).toFixed(1)}%`;
+          return `${baseLine} • run best ${(player.bestShare * 100).toFixed(1)}% • high ${formatPercent(highScore)}%`;
         }
         return baseLine;
       });
@@ -239,6 +248,7 @@
         setEliminationMessage(`${player.name} eliminated: ${reason}`);
       } else {
         setEliminationMessage(`Game over! Best territory: ${(player.bestShare * 100).toFixed(1)}%`);
+        submitHighScoreIfNeeded(player.bestShare);
         if (intervalId) {
           clearInterval(intervalId);
           intervalId = null;
@@ -591,6 +601,19 @@
       ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
     }
 
+    async function loadHighScore() {
+      highScore = await getHighScore(GAME_ID);
+      updateScoreboard();
+    }
+
+    async function submitHighScoreIfNeeded(bestShare) {
+      const scoreValue = Math.round(bestShare * SCORE_SCALE);
+      if (scoreValue <= highScore) return;
+      const saved = await submitHighScore(GAME_ID, scoreValue);
+      if (typeof saved === 'number') highScore = saved;
+      updateScoreboard();
+    }
+
     function resetPaperio() {
       if (intervalId) {
         clearInterval(intervalId);
@@ -601,6 +624,7 @@
       resetPlayers();
       drawBoard();
       updateScoreboard();
+      loadHighScore();
       intervalId = setInterval(() => {
         advanceGame();
         handleRespawns();

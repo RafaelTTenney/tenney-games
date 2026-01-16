@@ -31,26 +31,6 @@
     .username-notice { background: #e6f0ff; color: #3366cc; padding: 8px 12px; border-radius: 6px; margin-bottom: 18px; font-size: 1em; text-align: center; border: 1px solid #99ccff;}
     @media (max-width: 500px) { .container { margin: 24px 8px; padding: 20px 8px; } }
   </style>
-  <script>
-    function formatMailto(e) {
-      e.preventDefault();
-      var name = document.getElementById('name').value.trim();
-      var lastname = document.getElementById('lastname').value.trim();
-      var email = document.getElementById('email').value.trim();
-      var desiredPassword = document.getElementById('password').value.trim();
-      var reason = document.getElementById('reason').value.trim();
-
-      var subject = encodeURIComponent('Account Application');
-      var body = encodeURIComponent(
-        `Hello,\n\nMy name is ${name} ${lastname}.\n\nI would like to apply for an account on Games & Programs.\n\nHere are my details:\n\nEmail: ${email}\nDesired password: ${desiredPassword}\nReason for account:\n${reason}\n\nThank you!\n\nPlease note: I understand it may take up to three days for my account to be ready.`
-      );
-      var mailto = `mailto:maintinence2025@outlook.com?subject=${subject}&body=${body}`;
-      window.location.href = mailto;
-      setTimeout(function() {
-        window.location.href = "account-application-sucess.html?name=" + encodeURIComponent(name) + "&lastname=" + encodeURIComponent(lastname) + "&email=" + encodeURIComponent(email);
-      }, 500);
-    }
-  </script>
 </head>
 <body>
   <div class="container">
@@ -66,7 +46,7 @@
       <br>
       <span style="font-size:0.95em;">Example: John Smith → <b>jsmith</b></span>
     </div>
-    <form onsubmit="formatMailto(event)">
+    <form id="applyForm">
       <label for="name">First Name</label>
       <input type="text" id="name" name="name" required>
       <label for="lastname">Last Name</label>
@@ -79,10 +59,76 @@
       <textarea id="reason" name="reason" required></textarea>
       <button type="submit">Send Application</button>
     </form>
+    <div class="note" id="applyStatus" aria-live="polite"></div>
     <a href="index.html" class="btn-home">Home</a>
     <div class="note">
-      <em>After pressing "Send Application", your email client will open with a nicely formatted message to send.</em>
+      <em>Your account will be created immediately. If email confirmation is enabled, check your inbox.</em>
     </div>
   </div>
+  <script type="module">
+    import { supabase, hasSupabaseConfig } from './supabase.js';
+
+    const form = document.getElementById('applyForm');
+    const statusEl = document.getElementById('applyStatus');
+
+    function toUsername(first, last) {
+      const safeFirst = (first || '').trim();
+      const safeLast = (last || '').trim();
+      const base = (safeFirst.charAt(0) + safeLast).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      return base;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      statusEl.textContent = '';
+      if (!hasSupabaseConfig()) {
+        statusEl.textContent = 'Supabase is not configured.';
+        return;
+      }
+      const firstName = document.getElementById('name').value.trim();
+      const lastName = document.getElementById('lastname').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const reason = document.getElementById('reason').value.trim();
+      const username = toUsername(firstName, lastName);
+
+      if (!username) {
+        statusEl.textContent = 'Please enter a valid first and last name.';
+        return;
+      }
+
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', username)
+        .maybeSingle();
+      if (existing) {
+        statusEl.textContent = `Username ${username} is already taken.`;
+        return;
+      }
+
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username,
+            first_name: firstName,
+            last_name: lastName,
+            reason
+          }
+        }
+      });
+
+      if (error) {
+        statusEl.textContent = error.message;
+        return;
+      }
+      statusEl.textContent = `Account created for ${username}. Check your email if confirmation is required, then log in.`;
+      setTimeout(() => {
+        window.location.href = 'login.html';
+      }, 1200);
+    });
+  </script>
 </body>
 </html>

@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 (function () {
   // Neon Racer++ (full implementation restored from original experimental.js)
   const win = typeof window !== 'undefined' ? window : globalThis;
@@ -857,14 +859,18 @@
       }
   }
 
-  function loadRacerHighScore() {
-      racerState.mostGapsCleared = parseInt(localStorage.getItem('racer+mostGapsCleared')) || 0;
+  const GAME_ID = 'neon-racer-plus';
+
+  async function loadRacerHighScore() {
+      racerState.mostGapsCleared = await getHighScore(GAME_ID);
+      updateHud();
   }
 
-  function saveRacerHighScore() {
+  async function saveRacerHighScore() {
       if (racerState.dodged > racerState.mostGapsCleared) {
           racerState.mostGapsCleared = racerState.dodged;
-          localStorage.setItem('racer+mostGapsCleared', racerState.mostGapsCleared);
+          const saved = await submitHighScore(GAME_ID, racerState.mostGapsCleared);
+          if (typeof saved === 'number') racerState.mostGapsCleared = saved;
       }
   }
 

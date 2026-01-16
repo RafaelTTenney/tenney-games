@@ -1,53 +1,69 @@
-// login.js (updated)
+// login.js (Supabase-backed)
 // Adds accountStatus support and role-based access helpers.
 
-async function sha256(message) {
-  const msgBuffer = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+import { supabase, hasSupabaseConfig } from './supabase.js';
+
+window.supabaseClient = supabase;
+
+function setSessionProfile(profile) {
+  localStorage.setItem('loggedIn', 'true');
+  localStorage.setItem('username', profile.username || '');
+  localStorage.setItem('firstName', profile.first_name || '');
+  localStorage.setItem('accountStatus', profile.account_status || 'standard');
 }
 
-// Note: accountStatus values: 'standard', 'advance', 'admin'
-const users = [
-  { username: 'admin', hash: '02079b31824a4d18a105f16b9d45e751a114ce5b4ff3d49c6f19633aed25abbc', accountStatus: 'admin', firstName: 'admin' },
-  { username: 'amagee', hash: 'e52a1359297822655226696b53192f9085c5f161d1bda5cbaed8e9ceb64c904b', accountStatus: 'admin', firstName: 'Andrew' },
-  { username: 'ccarty', hash: 'e3bd890850be9d6ffc4568c23a497e84fc8ed079ed196ce6d978a24a731f1de8', accountStatus: 'standard', firstName: 'Colleen' },
-  { username: 'smartinez', hash: 'cfadedad585d18910973603153c102a1ab83edd78886db527315b07d0630281e', accountStatus: 'admin', firstName: 'Santi' },
-  { username: 'rtenney', hash: 'd2809be3fe85fcf081294d173edc0580b93d17b8c6df3ccabc8b56d5b4f62714', accountStatus: 'advance', firstName: 'Robert' },
-  { username: 'cdillon', hash: '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8', accountStatus: 'standard', firstName: 'Calvin' }
-];
-
-function isLoggedIn() {
-  return localStorage.getItem('loggedIn') === 'true';
-}
-function logout() {
+function clearSessionProfile() {
   localStorage.removeItem('loggedIn');
   localStorage.removeItem('username');
   localStorage.removeItem('accountStatus');
   localStorage.removeItem('firstName');
-  // Also remove any admin-managed overrides stored locally
-  // (keeps behavior predictable when testing)
-  // DO NOT clear other app data if used elsewhere.
+}
+
+async function loadProfileForSession(session) {
+  if (!session || !session.user) {
+    clearSessionProfile();
+    return null;
+  }
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('username, first_name, account_status')
+    .eq('id', session.user.id)
+    .single();
+  if (error || !data) {
+    clearSessionProfile();
+    return null;
+  }
+  setSessionProfile(data);
+  return data;
+}
+
+async function refreshSessionProfile() {
+  if (!hasSupabaseConfig()) return null;
+  const { data } = await supabase.auth.getSession();
+  return loadProfileForSession(data.session);
+}
+
+async function getProfileByUsername(username) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, username, first_name, account_status')
+    .eq('username', username)
+    .single();
+  if (error) return null;
+  return data;
+}
+
+function isLoggedIn() {
+  return localStorage.getItem('loggedIn') === 'true';
+}
+async function logout() {
+  if (hasSupabaseConfig()) {
+    await supabase.auth.signOut();
+  }
+  clearSessionProfile();
   window.location.replace('index.html');
 }
 function getAccountStatus() {
-  // First check override map (admin edits saved to localStorage)
-  // Stored structure: { username: status, ... } as JSON string under 'accountStatusOverrides'
-  try {
-    const username = localStorage.getItem('username');
-    if (!username) return null;
-    const overridesRaw = localStorage.getItem('accountStatusOverrides');
-    if (overridesRaw) {
-      const overrides = JSON.parse(overridesRaw);
-      if (overrides && overrides[username]) {
-        return overrides[username];
-      }
-    }
-  } catch (e) {
-    console.error('Error reading accountStatusOverrides', e);
-  }
-  // Otherwise use stored session accountStatus (set at login)
   return localStorage.getItem('accountStatus') || null;
 }
 function isAdmin() { return getAccountStatus() === 'admin'; }
@@ -107,26 +123,34 @@ function enforcePageAccess(pathOrName) {
   return true;
 }
 
-// Admin utility: set override statuses (persisted to localStorage)
-function adminSetAccountStatusOverride(username, newStatus) {
-  try {
-    const raw = localStorage.getItem('accountStatusOverrides');
-    const overrides = raw ? JSON.parse(raw) : {};
-    overrides[username] = newStatus;
-    localStorage.setItem('accountStatusOverrides', JSON.stringify(overrides));
-    // If the currently logged-in user is the one changed, update session accountStatus
-    const current = localStorage.getItem('username');
-    if (current === username) {
-      localStorage.setItem('accountStatus', newStatus);
-    }
-    return true;
-  } catch (e) {
-    console.error('Error saving account status override', e);
+// Admin utility: set account status in Supabase
+async function adminSetAccountStatus(username, newStatus) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ account_status: newStatus })
+    .eq('username', username);
+  if (error) {
+    console.error('Error saving account status', error);
     return false;
   }
+  const current = localStorage.getItem('username');
+  if (current === username) {
+    localStorage.setItem('accountStatus', newStatus);
+  }
+  return true;
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+  if (hasSupabaseConfig()) {
+    supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        loadProfileForSession(session);
+      } else {
+        clearSessionProfile();
+      }
+    });
+    refreshSessionProfile();
+  }
   // Login form behavior (if exists on page)
   const loginForm = document.getElementById('loginForm');
   if (!loginForm) {
@@ -135,24 +159,36 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   loginForm.addEventListener('submit', async function (e) {
     e.preventDefault();
+    if (!hasSupabaseConfig()) {
+      document.getElementById('loginError').textContent = 'Supabase is not configured.';
+      return;
+    }
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
-    const user = users.find(u => u.username === username);
-    if (!user) {
+    const profile = await getProfileByUsername(username);
+    if (!profile) {
       document.getElementById('loginError').textContent = 'Invalid username or password.';
       return;
     }
-    const inputHash = await sha256(password);
-    if (inputHash === user.hash) {
-      localStorage.setItem('loggedIn', 'true');
-      localStorage.setItem('username', username);
-      localStorage.setItem('firstName', user.firstName);
-      // Save initial accountStatus from users array (session); admin may override later
-      localStorage.setItem('accountStatus', user.accountStatus || 'standard');
-      // Redirect to the new loggedIn landing page
-      window.location.replace('loggedIn.html');
-    } else {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: profile.email,
+      password
+    });
+    if (error || !data.session) {
       document.getElementById('loginError').textContent = 'Invalid username or password.';
+      return;
     }
+    setSessionProfile(profile);
+    window.location.replace('loggedIn.html');
   });
 });
+
+window.isLoggedIn = isLoggedIn;
+window.logout = logout;
+window.getAccountStatus = getAccountStatus;
+window.isAdmin = isAdmin;
+window.isAdvance = isAdvance;
+window.isStandard = isStandard;
+window.canAccessPage = canAccessPage;
+window.enforcePageAccess = enforcePageAccess;
+window.adminSetAccountStatus = adminSetAccountStatus;

@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 /* VECTOR VALLEY */
 (function(global){
   const Vector = (function(){
@@ -11,7 +13,10 @@
 
     let canvas, ctx;
     let path=[], towers=[], enemies=[], projs=[], particles=[];
+    const GAME_ID = 'tower-vector';
     let wave=1, money=600, lives=20, active=false;
+    let bestWave = 0;
+    let submitted = false;
     let buildType=null, selected=null;
 
     function init(c, opts) {
@@ -19,11 +24,24 @@
         reset(opts ? opts.difficulty : 'med');
     }
 
+    async function loadBestWave() {
+        bestWave = await getHighScore(GAME_ID);
+    }
+
+    async function submitBestWave() {
+        if (submitted) return;
+        submitted = true;
+        const saved = await submitHighScore(GAME_ID, wave);
+        if (typeof saved === 'number') bestWave = saved;
+    }
+
     function reset(diff) {
         wave=1; money=600; lives=20; active=false;
         towers=[]; enemies=[]; projs=[]; particles=[];
         buildType=null; selected=null;
+        submitted = false;
         generatePath(diff);
+        loadBestWave();
     }
 
     function generatePath(diff) {
@@ -68,7 +86,10 @@
     }
 
     function update() {
-        if(lives <= 0) return;
+        if(lives <= 0) {
+            submitBestWave();
+            return;
+        }
 
         for(let i=enemies.length-1; i>=0; i--) {
             let e = enemies[i];
@@ -92,7 +113,7 @@
             }
         }
         
-        if(active && enemies.length===0) { active=false; wave++; }
+        if(active && enemies.length===0) { active=false; wave++; if (wave > bestWave) bestWave = wave; }
 
         towers.forEach(t => {
             if(t.cd > 0) t.cd--;
@@ -206,9 +227,9 @@
         deselect: ()=>{selected=null; buildType=null;},
         upgrade: ()=>{if(selected && money>=Math.floor(selected.cost*0.8)){ money-=Math.floor(selected.cost*0.8); selected.level++; selected.dmg*=1.4; }},
         sell: ()=>{if(selected){ money+=Math.floor(selected.cost*0.5); towers=towers.filter(t=>t!==selected); selected=null; }},
-        stop: ()=>{},
+        stop: ()=>{ submitBestWave(); },
         conf: {towers: TOWERS},
-        get wave(){return wave}, get money(){return money}, get lives(){return lives}, 
+        get wave(){return wave}, get money(){return money}, get lives(){return lives}, get bestWave(){return bestWave},
         get sel(){return selected}, get buildMode(){return buildType}
     };
   })();

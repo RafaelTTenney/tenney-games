@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 (function () {
   // Snake game implementation (extracted from multi-game.js)
   const globalScope = typeof window !== 'undefined' ? window : globalThis;
@@ -13,13 +15,27 @@
     let direction = { x: 0, y: -1 };
     let queuedDirection = { x: 0, y: -1 };
     let food = { x: 5, y: 5 };
+    const GAME_ID = 'snake';
     let score = 0;
+    let highScore = 0;
     let intervalId = null;
     let gameOver = false;
 
     function updateScore() {
       const scoreEl = document.getElementById('snake-score');
-      if (scoreEl) scoreEl.textContent = `Score: ${score}`;
+      if (scoreEl) scoreEl.textContent = `Score: ${score} | High Score: ${highScore}`;
+    }
+
+    async function loadHighScore() {
+      highScore = await getHighScore(GAME_ID);
+      updateScore();
+    }
+
+    async function submitHighScoreIfNeeded() {
+      if (score <= highScore) return;
+      const saved = await submitHighScore(GAME_ID, score);
+      if (typeof saved === 'number') highScore = saved;
+      updateScore();
     }
 
     function randomPosition() {
@@ -82,6 +98,7 @@
         gameOver = true;
         clearInterval(intervalId);
         drawSnake();
+        submitHighScoreIfNeeded();
         return;
       }
 
@@ -111,6 +128,7 @@
       score = 0;
       gameOver = false;
       updateScore();
+      loadHighScore();
       placeFood();
       drawSnake();
       clearInterval(intervalId);
