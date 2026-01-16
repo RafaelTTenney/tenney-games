@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Apply for Account</title>
+  <title>Sign Up</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="styles.css">
   <style>
@@ -34,18 +34,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>Apply for an Account</h1>
-    <div class="reminder">
-      Reminder: It may take up to three days for your account to be ready.
-    </div>
-    <div class="username-notice">
-      <strong>Your username will be:</strong><br>
-      the first letter of your first name, followed by your last name.<br>
-      <em>(No spaces, all lowercase)</em>
-      <br>
-      <br>
-      <span style="font-size:0.95em;">Example: John Smith → <b>jsmith</b></span>
-    </div>
+    <h1>Sign Up</h1>
     <form id="applyForm">
       <label for="name">First Name</label>
       <input type="text" id="name" name="name" required>
@@ -53,11 +42,11 @@
       <input type="text" id="lastname" name="lastname" required>
       <label for="email">Email</label>
       <input type="email" id="email" name="email" required>
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" required>
       <label for="password">Desired Password</label>
       <input type="password" id="password" name="password" required>
-      <label for="reason">Why do you want the account?</label>
-      <textarea id="reason" name="reason" required></textarea>
-      <button type="submit">Send Application</button>
+      <button type="submit">Create Account</button>
     </form>
     <div class="note" id="applyStatus" aria-live="polite"></div>
     <a href="index.html" class="btn-home">Home</a>
@@ -71,11 +60,8 @@
     const form = document.getElementById('applyForm');
     const statusEl = document.getElementById('applyStatus');
 
-    function toUsername(first, last) {
-      const safeFirst = (first || '').trim();
-      const safeLast = (last || '').trim();
-      const base = (safeFirst.charAt(0) + safeLast).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-      return base;
+    function normalizeUsername(value) {
+      return (value || '').trim().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
     }
 
     form.addEventListener('submit', async (e) => {
@@ -89,11 +75,10 @@
       const lastName = document.getElementById('lastname').value.trim();
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value.trim();
-      const reason = document.getElementById('reason').value.trim();
-      const username = toUsername(firstName, lastName);
+      const username = normalizeUsername(document.getElementById('username').value);
 
       if (!username) {
-        statusEl.textContent = 'Please enter a valid first and last name.';
+        statusEl.textContent = 'Please enter a valid username.';
         return;
       }
 
@@ -114,8 +99,7 @@
           data: {
             username,
             first_name: firstName,
-            last_name: lastName,
-            reason
+            last_name: lastName
           }
         }
       });
