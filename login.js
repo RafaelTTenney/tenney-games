@@ -143,12 +143,17 @@ async function adminSetAccountStatus(username, newStatus) {
 
 document.addEventListener('DOMContentLoaded', function () {
   if (hasSupabaseConfig()) {
-    supabase.auth.onAuthStateChange((_event, session) => {
+    supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
-        loadProfileForSession(session);
-      } else {
-        clearSessionProfile();
+        await loadProfileForSession(session);
+        return;
       }
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        await loadProfileForSession(data.session);
+        return;
+      }
+      clearSessionProfile();
     });
     refreshSessionProfile();
   }
