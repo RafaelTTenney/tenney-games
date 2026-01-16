@@ -84,28 +84,6 @@ async function checkSupabaseReachable() {
   }
 }
 
-async function checkAuthHealth() {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
-  try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-      method: 'POST',
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ email: 'healthcheck@example.com', password: 'invalid' }),
-      signal: controller.signal
-    });
-    return res.status >= 200 && res.status < 500;
-  } catch (err) {
-    return false;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
 async function directPasswordLogin(email, password, timeoutMs = 8000) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -251,13 +229,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!online) {
       loginError.textContent = 'You appear to be offline.';
     } else {
-      checkAuthHealth()
-        .then((healthy) => {
-          loginError.textContent = healthy ? '' : 'Cannot reach Supabase auth. Check blockers or network.';
-        })
-        .catch(() => {
-          loginError.textContent = 'Cannot reach Supabase auth. Check blockers or network.';
-        });
+      loginError.textContent = '';
     }
   }
   loginForm.addEventListener('submit', async function (e) {
@@ -275,15 +247,7 @@ document.addEventListener('DOMContentLoaded', function () {
       try {
         profile = await withTimeout(getProfileByUsername(username), 8000, 'Login timed out. Check your connection.');
       } catch (err) {
-        const reachable = await checkSupabaseReachable();
-        const authHealthy = await checkAuthHealth();
-        if (loginError) {
-          if (!reachable || !authHealthy) {
-            loginError.textContent = 'Cannot reach Supabase. Disable blockers or check your network.';
-          } else {
-            loginError.textContent = err?.message || 'Login failed. Please try again.';
-          }
-        }
+        if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
         return;
       }
       if (!profile) {
@@ -314,15 +278,7 @@ document.addEventListener('DOMContentLoaded', function () {
       await loadProfileForSession(session);
       window.location.replace('loggedIn.html');
     } catch (err) {
-      const reachable = await checkSupabaseReachable();
-      const authHealthy = await checkAuthHealth();
-      if (loginError) {
-        if (!reachable || !authHealthy) {
-          loginError.textContent = 'Cannot reach Supabase. Disable blockers or check your network.';
-        } else {
-          loginError.textContent = err?.message || 'Login failed. Please try again.';
-        }
-      }
+      if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
     }
   });
 });
