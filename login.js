@@ -84,9 +84,7 @@ async function checkSupabaseReachable() {
   }
 }
 
-async function directPasswordLogin(email, password, timeoutMs = 8000) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+async function directPasswordLogin(email, password) {
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
@@ -95,8 +93,7 @@ async function directPasswordLogin(email, password, timeoutMs = 8000) {
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ email, password }),
-      signal: controller.signal
+      body: JSON.stringify({ email, password })
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -105,12 +102,7 @@ async function directPasswordLogin(email, password, timeoutMs = 8000) {
     }
     return json;
   } catch (err) {
-    if (err.name === 'AbortError') {
-      throw new Error('Login timed out. Check your connection.');
-    }
     throw err;
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 
@@ -245,7 +237,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let profile = null;
     if (!usesEmail) {
       try {
-        profile = await withTimeout(getProfileByUsername(username), 8000, 'Login timed out. Check your connection.');
+        profile = await getProfileByUsername(username);
       } catch (err) {
         if (loginError) loginError.textContent = err?.message || 'Login failed. Please try again.';
         return;
@@ -261,7 +253,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (loginError) loginError.textContent = 'No email found for that username.';
         return;
       }
-      const direct = await directPasswordLogin(loginEmail, password, 8000);
+      const direct = await directPasswordLogin(loginEmail, password);
       const { error: setError } = await supabase.auth.setSession({
         access_token: direct.access_token,
         refresh_token: direct.refresh_token
