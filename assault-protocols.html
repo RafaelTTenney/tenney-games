@@ -224,36 +224,36 @@
 
     <div class="container">
         <div style="color:#9aa4b2; max-width:900px; line-height:1.6;">
-            Assault Protocols flips tower defense into an attacker-command simulation. Each mode is its own doctrine:
-            Duel is a control war with relays and shields, Overdrive is a momentum rush with hazards,
-            and Siege Ops is a convoy escort with logistics, checkpoints, and supply management.
+            Assault Protocols flips tower defense into attacker-command simulations with radically different play styles.
+            Signal Dominion is node-control and drop tactics, Rail Surge is a lane-based reactor rush,
+            and Convoy Run is a waypoint escort with logistics and checkpoint unlocks.
         </div>
         <div class="section">
             <p class="section-title">Assault Simulations</p>
             <div class="grid">
                 <div class="card duel" style="border-top: 4px solid #34d399;">
-                    <div class="card-header"><h2 style="color:#34d399">BREACH DUEL</h2></div>
+                    <div class="card-header"><h2 style="color:#34d399">SIGNAL DOMINION</h2></div>
                     <div class="card-body">
-                        <span class="badge" style="color:#34d399">COMPETITIVE CORE</span>
-                        <p>Balanced duel mode with adaptive AI, abilities, and clean counter-play.</p>
+                        <span class="badge" style="color:#34d399">CONTROL WAR</span>
+                        <p>Drop squads into an open arena, flip signal nodes, and choke AI control to win dominance.</p>
                         <button class="play-btn" style="background:#34d399" onclick="App.launch('duel')">INITIALIZE</button>
                     </div>
                 </div>
 
                 <div class="card overdrive" style="border-top: 4px solid #fbbf24;">
-                    <div class="card-header"><h2 style="color:#fbbf24">OVERDRIVE</h2></div>
+                    <div class="card-header"><h2 style="color:#fbbf24">RAIL SURGE</h2></div>
                     <div class="card-body">
-                        <span class="badge" style="color:#fbbf24">HIGH CHAOS</span>
-                        <p>Hyper-paced assault with faster units, cheaper abilities, and brutal momentum.</p>
+                        <span class="badge" style="color:#fbbf24">LANE RUSH</span>
+                        <p>Arcade assault on fixed lanes. Chain reactor hits, ride heat, and outpace rail cannons.</p>
                         <button class="play-btn" style="background:#fbbf24" onclick="App.launch('overdrive')">INITIALIZE</button>
                     </div>
                 </div>
 
                 <div class="card siegeops" style="border-top: 4px solid #c084fc;">
-                    <div class="card-header"><h2 style="color:#c084fc">SIEGE OPS</h2></div>
+                    <div class="card-header"><h2 style="color:#c084fc">CONVOY RUN</h2></div>
                     <div class="card-body">
-                        <span class="badge" style="color:#c084fc">TACTICAL SLOW BURN</span>
-                        <p>Methodical assaults with tougher towers, slower economy, and heavier stakes.</p>
+                        <span class="badge" style="color:#c084fc">ESCORT OPS</span>
+                        <p>Plot waypoints, guard the carrier, and unlock new squads at checkpoint gates.</p>
                         <button class="play-btn" style="background:#c084fc" onclick="App.launch('siege')">INITIALIZE</button>
                     </div>
                 </div>
@@ -355,7 +355,7 @@
                 <div class="action-dock">
                     <button class="act-btn" onclick="App.toggleCodex()">DATABASE</button>
                     <button class="act-btn" id="cmd-btn" onclick="App.toggleCommand()" style="display:none;">COMMAND</button>
-                    <button class="act-btn primary" onclick="App.gameAction('wave')">NEXT WAVE</button>
+                    <button class="act-btn primary" id="wave-btn" onclick="App.gameAction('wave')">NEXT WAVE</button>
                 </div>
             </div>
         </div>
@@ -650,19 +650,26 @@
         },
         updateBriefing: (id) => {
             const titles = {
-                duel: 'BREACH DUEL',
-                overdrive: 'OVERDRIVE',
-                siege: 'SIEGE OPS'
+                duel: 'SIGNAL DOMINION',
+                overdrive: 'RAIL SURGE',
+                siege: 'CONVOY RUN'
             };
             const desc = {
-                duel: 'Capture control relays to suppress AI builds, dismantle shield pylons, then crack the core. This is a tactical control war.',
-                overdrive: 'A momentum rush. Burst waves and storm zones force constant aggression and split-second timing.',
-                siege: 'Escort the carrier, unlock tiers at checkpoints, and manage supply drops. Slow, methodical, high-stakes.'
+                duel: 'Drop units directly into the arena, flip signal nodes, and win dominance through territorial control.',
+                overdrive: 'Lane-based reactor rush. Keep the heat high, break rail cannons, and score chain breaches.',
+                siege: 'Escort a carrier along player-set waypoints, capture gates to unlock tiers, and keep the convoy alive.'
+            };
+            const waveLabels = {
+                duel: 'DEPLOY DROP',
+                overdrive: 'TRIGGER SURGE',
+                siege: 'ADVANCE CONVOY'
             };
             const titleEl = document.getElementById('mode-title');
             const descEl = document.getElementById('mode-desc');
             if (titleEl) titleEl.textContent = titles[id] || 'SYSTEM READY';
             if (descEl) descEl.textContent = desc[id] || '';
+            const waveBtn = document.getElementById('wave-btn');
+            if (waveBtn) waveBtn.textContent = waveLabels[id] || 'NEXT WAVE';
         }
     };
 

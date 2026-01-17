@@ -1,68 +1,64 @@
 import { getHighScore, submitHighScore } from './score-store.js';
 
-/* BREACH COMMAND (SIEGE OPS) */
+/* BREACH COMMAND (CONVOY RUN) */
 (function(global){
   const Reverse = (function(){
     const CELL = 40;
     let COLS, ROWS;
+    let canvas, ctx;
 
     const UNITS = {
-      runner: { name:'RUNNER', cost:45, color:'#6ee7b7', hp:70, spd:2.8, dmg:6, range:26, rate:14, breach:12, role:'runner', supply: 1, desc:'Fast breach unit focused on core damage.' },
-      raider: { name:'RAIDER', cost:70, color:'#7dd3fc', hp:110, spd:2.2, dmg:12, range:32, rate:18, breach:12, role:'breaker', supply: 2, desc:'Skirmisher that harasses nearby towers.' },
-      brute:  { name:'BRUTE',  cost:120, color:'#fb7185', hp:280, spd:1.2, dmg:26, range:40, rate:28, breach:22, armor:0.35, role:'breaker', supply: 3, desc:'Armored breaker with heavy tower damage.' },
-      siege:  { name:'SIEGE',  cost:210, color:'#fbbf24', hp:380, spd:0.95, dmg:38, range:70, rate:34, breach:34, bonus:1.6, role:'breaker', supply: 4, desc:'Siege rig that melts fortified nodes.' },
-      hacker: { name:'HACKER', cost:170, color:'#c77dff', hp:140, spd:1.7, dmg:5, range:100, rate:26, breach:12, stun:110, role:'breaker', supply: 2, desc:'Disables towers briefly while attacking.' },
-      bomber: { name:'BOMBER', cost:180, color:'#f97316', hp:160, spd:1.7, dmg:0, range:20, rate:1, breach:16, explode:120, role:'breaker', supply: 2, desc:'Explodes on contact, damaging nearby towers.' },
-      ghost:  { name:'GHOST',  cost:150, color:'#d1fae5', hp:85, spd:2.6, dmg:9, range:26, rate:16, breach:16, stealth:0.55, role:'runner', supply: 2, desc:'Harder to target; slips past defenses.' },
-      medic:  { name:'MEDIC',  cost:140, color:'#a7f3d0', hp:150, spd:1.9, dmg:5, range:80, rate:24, breach:8, heal:10, role:'support', supply: 2, desc:'Repairs allied attackers in a radius.' },
-      carrier: { name:'CARRIER', cost:0, color:'#f8fafc', hp:900, spd:0.7, dmg:0, range:0, rate:0, breach:60, role:'carrier', supply: 5, desc:'Objective unit. If it dies, you lose a life.' }
+      scout:  { name:'SCOUT', cost:40, color:'#22d3ee', hp:60, spd:2.8, dmg:6, range:60, rate:18, supply:1, desc:'Fast escort that chases nearby turrets.' },
+      guard:  { name:'GUARD', cost:70, color:'#a7f3d0', hp:120, spd:2.0, dmg:12, range:70, rate:20, supply:2, desc:'Balanced convoy guard unit.' },
+      breaker:{ name:'BREAKER', cost:120, color:'#fb7185', hp:220, spd:1.6, dmg:28, range:80, rate:26, armor:0.35, supply:3, desc:'Armored tower breaker for heavy defenses.' },
+      medic:  { name:'MEDIC', cost:90, color:'#c4f2ff', hp:110, spd:1.8, dmg:4, range:90, rate:24, heal:10, supply:2, desc:'Support drone that repairs escorts.' },
+      sniper: { name:'SNIPER', cost:140, color:'#f8fafc', hp:90, spd:1.7, dmg:30, range:160, rate:36, supply:2, desc:'Long-range convoy overwatch.' },
+      ward:   { name:'WARD', cost:160, color:'#fbbf24', hp:160, spd:1.5, dmg:8, range:120, rate:28, shield:0.2, supply:3, desc:'Shield drone that dampens tower damage.' }
     };
 
     const TOWER_TYPES = {
-      laser: { name:'LASER', cost:120, color:'#ff4d6d', range:200, dmg:6, rate:6, hp:140, beam:true },
-      cannon:{ name:'CANNON',cost:160, color:'#ffd166', range:170, dmg:24, rate:42, hp:180, aoe:70 },
-      tesla: { name:'TESLA', cost:180, color:'#ffe95a', range:150, dmg:12, rate:26, hp:160, chain:3 },
-      flak:  { name:'FLAK',  cost:140, color:'#4d96ff', range:230, dmg:9, rate:14, hp:150, slow:0.5 },
-      sniper:{ name:'SNIPER',cost:200, color:'#a855f7', range:280, dmg:34, rate:60, hp:120 },
-      burner:{ name:'BURNER',cost:130, color:'#fb923c', range:120, dmg:4, rate:8, hp:160, cone:true }
+      rail:  { name:'RAIL', cost:140, color:'#f97316', range:200, dmg:10, rate:10, hp:150, beam:true },
+      mortar:{ name:'MORTAR', cost:170, color:'#fbbf24', range:180, dmg:26, rate:46, hp:170, aoe:70 },
+      tesla: { name:'TESLA', cost:190, color:'#fde68a', range:150, dmg:12, rate:24, hp:160, chain:3 },
+      flak:  { name:'FLAK', cost:140, color:'#4d96ff', range:230, dmg:9, rate:14, hp:150, slow:0.5 },
+      burner:{ name:'BURNER', cost:150, color:'#fb7185', range:120, dmg:4, rate:8, hp:160, cone:true }
     };
 
     const ABILITIES = {
-      emp: { name:'EMP', cost:260, cooldown:1100, radius:180, stun:200 },
-      overclock: { name:'OVERCLOCK', cost:220, cooldown:900, duration:420, dmg:0.35, spd:0.28 },
-      decoy: { name:'DECOY SWARM', cost:160, cooldown:800, count:5, type:'runner' },
-      strike: { name:'ORBITAL STRIKE', cost:300, cooldown:1400, radius:150, dmg:160 }
+      emp: { name:'EMP', cost:220, cooldown:900, radius:180, stun:200 },
+      overclock: { name:'OVERCLOCK', cost:200, cooldown:800, duration:360, dmg:0.4, spd:0.3 },
+      decoy: { name:'DECOY FLOCK', cost:160, cooldown:700, count:4, type:'scout' },
+      strike: { name:'ARTILLERY', cost:280, cooldown:1200, radius:150, dmg:160 }
     };
 
     const GAME_ID = 'tower-reverse-siege';
-    let canvas, ctx;
+
     let grid = [];
     let units = [];
     let towers = [];
     let projs = [];
     let particles = [];
 
-    let startNode, endNode;
     let wave = 1;
-    let money = 220;
-    let lives = 25;
-    let baseMax = 180;
-    let baseHp = 180;
+    let money = 240;
+    let integrity = 100;
     let bestWave = 0;
     let submitted = false;
     let buildType = null;
     let frame = 0;
 
-    let aiCredits = 0;
+    let aiCredits = 240;
     let aiCooldown = 0;
     let aiUpgradeCooldown = 0;
-    let supplyCap = 10;
+
+    let supplyCap = 8;
     let supplyUsed = 0;
-    let carrierId = null;
-    let buildWindow = 0;
-    let drops = [];
+
+    let carrier = null;
+    let waypoints = [];
     let gates = [];
-    let unlocks = {};
+    let unlocked = { tier1: false, tier2: false, tier3: false };
+    let inTransit = false;
 
     const upgradeState = { dmg: 0, spd: 0, hp: 0, armor: 0 };
     const abilityState = {
@@ -72,15 +68,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
       strike: { cooldown: 0 }
     };
 
-    const spawnHistory = [];
-
     function init(c) {
       canvas = c;
       ctx = c.getContext('2d');
       COLS = Math.floor(canvas.width / CELL);
       ROWS = Math.floor(canvas.height / CELL);
-      startNode = { x: 0, y: Math.floor(ROWS / 2) };
-      endNode = { x: COLS - 1, y: Math.floor(ROWS / 2) };
       reset();
     }
 
@@ -97,24 +89,17 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
     function reset() {
       wave = 1;
-      money = 220;
-      lives = 25;
-      baseMax = 180;
-      baseHp = baseMax;
+      money = 240;
+      integrity = 100;
       aiCredits = 260;
       aiCooldown = 0;
       aiUpgradeCooldown = 80;
-      supplyCap = 10;
+      supplyCap = 8;
       supplyUsed = 0;
-      carrierId = null;
-      buildWindow = 0;
-      drops = [];
-      gates = buildGates();
-      unlocks = { tier1: false, tier2: false, tier3: false };
       units = [];
+      towers = [];
       projs = [];
       particles = [];
-      towers = [];
       buildType = null;
       frame = 0;
       submitted = false;
@@ -127,49 +112,47 @@ import { getHighScore, submitHighScore } from './score-store.js';
       abilityState.overclock.timer = 0;
       abilityState.decoy.cooldown = 0;
       abilityState.strike.cooldown = 0;
-      spawnHistory.length = 0;
+      unlocked = { tier1: true, tier2: false, tier3: false };
+      carrier = {
+        x: 80,
+        y: canvas.height / 2,
+        hp: 520,
+        maxHp: 520,
+        spd: 0.9,
+        shield: 0
+      };
+      waypoints = [{ x: canvas.width - 120, y: canvas.height / 2 }];
+      gates = buildGates();
+      inTransit = false;
       grid = new Array(COLS).fill(0).map(() => new Array(ROWS).fill(null));
       loadBestWave();
+      seedTowers();
     }
 
     function buildGates() {
-      const path = [
-        { x: Math.floor(COLS * 0.35), y: Math.floor(ROWS * 0.45) },
-        { x: Math.floor(COLS * 0.6), y: Math.floor(ROWS * 0.55) },
-        { x: Math.floor(COLS * 0.8), y: Math.floor(ROWS * 0.5) }
+      return [
+        { x: canvas.width * 0.35, y: canvas.height * 0.35, radius: 60, tier: 1, active: true },
+        { x: canvas.width * 0.55, y: canvas.height * 0.65, radius: 60, tier: 2, active: true },
+        { x: canvas.width * 0.75, y: canvas.height * 0.5, radius: 60, tier: 3, active: true }
       ];
-      return path.map((p, i) => ({
-        id: `gate-${i}`,
-        x: p.x * CELL + CELL / 2,
-        y: p.y * CELL + CELL / 2,
-        radius: 50,
-        tier: i + 1,
-        active: true
-      }));
     }
 
     function isUnitUnlocked(type) {
-      if (type === 'runner') return true;
-      if (type === 'raider') return unlocks.tier1;
-      if (type === 'medic') return unlocks.tier1;
-      if (type === 'brute' || type === 'hacker') return unlocks.tier2;
-      if (type === 'siege' || type === 'bomber' || type === 'ghost') return unlocks.tier3;
-      if (type === 'carrier') return true;
+      if (type === 'scout' || type === 'guard' || type === 'medic') return true;
+      if ((type === 'breaker' || type === 'sniper') && unlocked.tier2) return true;
+      if (type === 'ward' && unlocked.tier3) return true;
       return false;
     }
 
     function canBuild(type) {
       const def = UNITS[type];
-      if (!def) return false;
-      if (!isUnitUnlocked(type)) return false;
-      const used = units.reduce((sum, u) => sum + (u.supply || 1), 0);
-      return used + (def.supply || 1) <= supplyCap;
+      if (!def || !isUnitUnlocked(type)) return false;
+      return supplyUsed + (def.supply || 1) <= supplyCap;
     }
 
     function getUpgradeCost(attr) {
       const lvl = upgradeState[attr] || 0;
-      const base = 120;
-      return Math.floor(base * Math.pow(1.6, lvl));
+      return Math.floor(120 * Math.pow(1.6, lvl));
     }
 
     function applyUpgradeToUnit(unit) {
@@ -215,15 +198,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
       };
     }
 
-    function spawnUnit(type, record) {
+    function spawnUnit(type) {
       const def = UNITS[type];
       if (!def) return;
-      if (!isUnitUnlocked(type)) return;
-      const jitter = (Math.random() - 0.5) * 20;
       const unit = {
-        id: `u-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        x: startNode.x * CELL + CELL / 2,
-        y: startNode.y * CELL + CELL / 2 + jitter,
+        x: carrier.x + (Math.random() - 0.5) * 30,
+        y: carrier.y + (Math.random() - 0.5) * 30,
         hp: def.hp,
         maxHp: def.hp,
         spd: def.spd,
@@ -231,17 +211,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
         dmg: def.dmg,
         range: def.range,
         rate: def.rate,
-        breach: def.breach,
-        bonus: def.bonus || 1,
         armor: def.armor || 0,
-        stun: def.stun || 0,
-        explode: def.explode || 0,
-        stealth: def.stealth || 1,
         heal: def.heal || 0,
-        role: def.role,
+        shield: def.shield || 0,
+        supply: def.supply || 1,
         color: def.color,
         type,
-        supply: def.supply || 1,
         cd: 0,
         slowTimer: 0
       };
@@ -249,65 +224,35 @@ import { getHighScore, submitHighScore } from './score-store.js';
         applyUpgradeToUnit(unit);
       }
       units.push(unit);
-      if (record) spawnHistory.push({ type, frame });
+      supplyUsed += unit.supply;
     }
 
     function canPlaceTower(gx, gy) {
       if (gx <= 1 || gx >= COLS - 2 || gy <= 1 || gy >= ROWS - 2) return false;
       if (grid[gx][gy]) return false;
-      if (gx === startNode.x && gy === startNode.y) return false;
-      if (gx === endNode.x && gy === endNode.y) return false;
       return true;
     }
 
-    function pickTowerType() {
-      const counts = { runner: 1, breaker: 1, support: 1 };
-      spawnHistory.forEach(s => {
-        const role = UNITS[s.type]?.role || 'runner';
-        counts[role] = (counts[role] || 0) + 1;
-      });
-      const weights = {
-        laser: 1 + counts.runner * 0.6,
-        sniper: 1 + counts.runner * 0.9,
-        flak: 1 + counts.runner * 0.7,
-        cannon: 1 + counts.breaker * 0.8,
-        tesla: 1 + counts.support * 0.5 + counts.breaker * 0.4,
-        burner: 1 + counts.breaker * 0.6
-      };
-      const entries = Object.entries(weights);
-      const total = entries.reduce((sum, [,w]) => sum + w, 0);
-      let roll = Math.random() * total;
-      for (const [key, weight] of entries) {
-        roll -= weight;
-        if (roll <= 0) return key;
-      }
-      return 'laser';
-    }
-
-    function attemptBuildTower() {
-      const pick = pickTowerType();
+    function attemptBuildTower(force) {
+      const keys = Object.keys(TOWER_TYPES);
+      const pick = keys[Math.floor(Math.random() * keys.length)];
       const def = TOWER_TYPES[pick];
-      if (aiCredits < def.cost) return false;
-
+      if (!force && aiCredits < def.cost) return false;
       let best = null;
       let bestScore = -Infinity;
-      for (let attempt = 0; attempt < 40; attempt++) {
-        const gx = Math.floor(Math.random() * COLS);
-        const gy = Math.floor(Math.random() * ROWS);
+      for (let i = 0; i < 20; i++) {
+        const gx = 2 + Math.floor(Math.random() * (COLS - 4));
+        const gy = 2 + Math.floor(Math.random() * (ROWS - 4));
         if (!canPlaceTower(gx, gy)) continue;
-        const dx = gx - endNode.x;
-        const dy = gy - endNode.y;
-        const distCore = Math.hypot(dx, dy);
-        const distStart = Math.hypot(gx - startNode.x, gy - startNode.y);
-        const density = towers.reduce((acc, t) => acc + (Math.hypot(t.gx - gx, t.gy - gy) < 3 ? 1 : 0), 0);
-        const score = (8 - Math.min(8, distCore)) + (Math.random() * 1.5) - density * 0.8 + (distStart * 0.05);
+        const dx = gx * CELL - carrier.x;
+        const dy = gy * CELL - carrier.y;
+        const score = (Math.random() * 4) + Math.hypot(dx, dy) * 0.2;
         if (score > bestScore) {
           bestScore = score;
           best = { gx, gy };
         }
       }
       if (!best) return false;
-
       const tower = {
         gx: best.gx,
         gy: best.gy,
@@ -317,7 +262,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
         name: def.name,
         color: def.color,
         range: def.range,
-        dmg: def.dmg * (1 + wave * 0.15),
+        dmg: def.dmg * (1 + wave * 0.12),
         rate: Math.max(6, Math.floor(def.rate * (1 - wave * 0.02))),
         aoe: def.aoe || 0,
         chain: def.chain || 0,
@@ -336,10 +281,15 @@ import { getHighScore, submitHighScore } from './score-store.js';
       return true;
     }
 
+    function seedTowers() {
+      for (let i = 0; i < 5; i++) {
+        attemptBuildTower(true);
+      }
+    }
+
     function attemptUpgradeTower() {
       if (!towers.length) return false;
       const target = towers[Math.floor(Math.random() * towers.length)];
-      if (!target) return false;
       const cost = Math.floor(80 * Math.pow(1.6, target.level));
       if (aiCredits < cost) return false;
       target.level += 1;
@@ -352,67 +302,17 @@ import { getHighScore, submitHighScore } from './score-store.js';
       return true;
     }
 
-    function startWave() {
-      aiCredits += 260 + wave * 160;
-      baseMax = 180 + wave * 80;
-      baseHp = baseMax;
-      money += 120 + wave * 50;
-      aiCooldown = 26;
-      aiUpgradeCooldown = 80;
-      buildWindow = 300;
-      supplyCap = 10 + Math.floor(wave * 1.5);
-      spawnCarrier();
-    }
-
-    function findTowerTarget(u) {
-      let best = null;
-      let bestDist = Infinity;
-      towers.forEach(t => {
-        if (t.hp <= 0) return;
-        const range = t.range * (u.stealth || 1);
-        const d = Math.hypot(t.x - u.x, t.y - u.y);
-        if (d <= range && d < bestDist) {
-          best = t;
-          bestDist = d;
-        }
-      });
-      return best;
-    }
-
     function applyTowerDamage(unit, dmg) {
-      const bonus = unit.armorBonus || 0;
-      const final = dmg * (1 - Math.min(0.7, (unit.armor || 0) + bonus));
+      const final = dmg * (1 - (unit.armor || 0)) * (1 - (unit.shield || 0));
       unit.hp -= final;
       particles.push({ type:'spark', x:unit.x, y:unit.y, life:10, color:unit.color });
     }
 
-    function explode(x, y, r, dmg, towerMult) {
+    function explode(x, y, r, dmg) {
       particles.push({ type:'shock', x, y, life:18, color:'#ff8866', r });
       towers.forEach(t => {
-        if (Math.hypot(t.x - x, t.y - y) < r) {
-          t.hp -= dmg * (towerMult || 1);
-        }
+        if (Math.hypot(t.x - x, t.y - y) < r) t.hp -= dmg;
       });
-      units.forEach(u => {
-        if (Math.hypot(u.x - x, u.y - y) < r) {
-          u.hp -= dmg * 0.6;
-        }
-      });
-    }
-
-    function chainStrike(t, target) {
-      let chain = [target];
-      let curr = target;
-      applyTowerDamage(curr, t.dmg);
-      for (let k = 0; k < t.chain; k++) {
-        let next = units.find(u => !chain.includes(u) && Math.hypot(u.x - curr.x, u.y - curr.y) < 120);
-        if (next) {
-          chain.push(next);
-          applyTowerDamage(next, t.dmg * 0.8);
-          curr = next;
-        }
-      }
-      particles.push({ type:'bolt', chain, color:'#ffe95a', life:6 });
     }
 
     function useAbility(key) {
@@ -424,13 +324,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
       state.cooldown = ability.cooldown;
 
       if (key === 'emp') {
-        const center = findTowerCluster(ability.radius);
         towers.forEach(t => {
-          if (Math.hypot(t.x - center.x, t.y - center.y) < ability.radius) {
-            t.stun = Math.max(t.stun, ability.stun);
-          }
+          if (Math.hypot(t.x - carrier.x, t.y - carrier.y) < ability.radius) t.stun = Math.max(t.stun, ability.stun);
         });
-        particles.push({ type:'shock', x:center.x, y:center.y, life:26, color:'#7dd3fc', r:ability.radius });
+        particles.push({ type:'ring', x:carrier.x, y:carrier.y, life:26, color:'#93c5fd', r:ability.radius });
       }
 
       if (key === 'overclock') {
@@ -439,48 +336,66 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
       if (key === 'decoy') {
         for (let i = 0; i < ability.count; i++) {
-          spawnUnit(ability.type, false);
+          spawnUnit(ability.type);
         }
       }
 
       if (key === 'strike') {
-        const center = findTowerCluster(ability.radius);
-        explode(center.x, center.y, ability.radius, ability.dmg, 1.6);
+        const target = towers[0];
+        const cx = target ? target.x : carrier.x + 200;
+        const cy = target ? target.y : carrier.y;
+        explode(cx, cy, ability.radius, ability.dmg);
       }
       return true;
     }
 
-    function findTowerCluster(radius) {
-      if (!towers.length) {
-        return { x: endNode.x * CELL + CELL / 2, y: endNode.y * CELL + CELL / 2 };
+    function startWave() {
+      inTransit = true;
+      money += 160 + wave * 60;
+      aiCredits += 140 + wave * 50;
+      aiCooldown = 12;
+      aiUpgradeCooldown = 80;
+    }
+
+    function updateWaypoints() {
+      if (!inTransit) return;
+      if (!waypoints.length) return;
+      const target = waypoints[0];
+      const dx = target.x - carrier.x;
+      const dy = target.y - carrier.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 8) {
+        waypoints.shift();
+        if (!waypoints.length) inTransit = false;
+        return;
       }
-      let best = towers[0];
-      let bestCount = -1;
-      towers.forEach(t => {
-        let count = 0;
-        towers.forEach(o => {
-          if (Math.hypot(o.x - t.x, o.y - t.y) < radius) count++;
-        });
-        if (count > bestCount) {
-          best = t;
-          bestCount = count;
+      carrier.x += (dx / d) * carrier.spd;
+      carrier.y += (dy / d) * carrier.spd;
+    }
+
+    function updateGates() {
+      gates.forEach(g => {
+        if (!g.active) return;
+        if (Math.hypot(carrier.x - g.x, carrier.y - g.y) < g.radius) {
+          g.active = false;
+          if (g.tier === 1) { unlocked.tier2 = true; supplyCap += 2; }
+          if (g.tier === 2) { unlocked.tier3 = true; supplyCap += 2; }
+          if (g.tier === 3) { supplyCap += 2; }
+          money += 120;
+          particles.push({ type:'ring', x:g.x, y:g.y, life:30, color:'#22c55e', r:g.radius });
         }
       });
-      return { x: best.x, y: best.y };
     }
 
     function update() {
       frame++;
-      if (lives <= 0) {
+      if (integrity <= 0) {
         submitBestWave();
         return;
       }
 
-      money += 0.03 + wave * 0.004;
-      aiCredits += 0.05 + wave * 0.012;
-
-      if (buildWindow > 0) buildWindow--;
-      if (frame % 600 === 0) spawnDrop();
+      money += 0.04;
+      aiCredits += 0.04 + wave * 0.01;
 
       if (abilityState.emp.cooldown > 0) abilityState.emp.cooldown--;
       if (abilityState.overclock.cooldown > 0) abilityState.overclock.cooldown--;
@@ -488,36 +403,28 @@ import { getHighScore, submitHighScore } from './score-store.js';
       if (abilityState.strike.cooldown > 0) abilityState.strike.cooldown--;
       if (abilityState.overclock.timer > 0) abilityState.overclock.timer--;
 
-      while (spawnHistory.length && frame - spawnHistory[0].frame > 600) {
-        spawnHistory.shift();
-      }
-
       if (aiCooldown > 0) aiCooldown--;
       if (aiUpgradeCooldown > 0) aiUpgradeCooldown--;
-      if (buildWindow > 0) {
-        if (aiCooldown === 0 && aiCredits >= 120) {
-          const built = attemptBuildTower();
-          aiCooldown = built ? Math.max(14, 48 - wave * 1.2) : 24;
-        }
-        if (aiUpgradeCooldown === 0 && aiCredits >= 90) {
-          const upgraded = attemptUpgradeTower();
-          aiUpgradeCooldown = upgraded ? Math.max(70, 160 - wave * 4) : 110;
-        }
+      if (aiCooldown === 0 && aiCredits >= 120) {
+        const built = attemptBuildTower();
+        aiCooldown = built ? Math.max(12, 40 - wave * 2) : 20;
+      }
+      if (aiUpgradeCooldown === 0 && aiCredits >= 90) {
+        const upgraded = attemptUpgradeTower();
+        aiUpgradeCooldown = upgraded ? Math.max(90, 200 - wave * 6) : 120;
       }
 
-      const coreX = endNode.x * CELL + CELL / 2;
-      const coreY = endNode.y * CELL + CELL / 2;
-      const overclockOn = abilityState.overclock.timer > 0;
-      const overclockDmg = overclockOn ? 1 + ABILITIES.overclock.dmg : 1;
-      const overclockSpd = overclockOn ? 1 + ABILITIES.overclock.spd : 1;
+      updateWaypoints();
+      updateGates();
 
-      supplyUsed = units.reduce((sum, u) => sum + (u.supply || 1), 0);
+      const overclockOn = abilityState.overclock.timer > 0;
+      const spdMult = overclockOn ? 1 + ABILITIES.overclock.spd : 1;
+      const dmgMult = overclockOn ? 1 + ABILITIES.overclock.dmg : 1;
+
       for (let i = units.length - 1; i >= 0; i--) {
         const u = units[i];
-        u.armorBonus = 0;
         if (u.slowTimer > 0) u.slowTimer--;
-        u.spd = (u.slowTimer > 0 ? u.baseSpd * 0.6 : u.baseSpd) * overclockSpd;
-
+        u.spd = (u.slowTimer > 0 ? u.baseSpd * 0.65 : u.baseSpd) * spdMult;
         if (u.heal && frame % 30 === 0) {
           units.forEach(o => {
             if (Math.hypot(o.x - u.x, o.y - u.y) < u.range) {
@@ -525,136 +432,44 @@ import { getHighScore, submitHighScore } from './score-store.js';
             }
           });
         }
-        if (carrierId) {
-          const carrier = units.find(x => x.type === 'carrier');
-          if (carrier && u.type !== 'carrier') {
-            const dist = Math.hypot(carrier.x - u.x, carrier.y - u.y);
-            if (dist < 120) {
-              u.hp = Math.min(u.maxHp, u.hp + 0.05);
-              u.armorBonus = 0.15;
-            } else {
-              u.armorBonus = 0;
-            }
-          }
-        }
 
-        const towerTarget = (u.role === 'breaker') ? findTowerTarget(u) : null;
-        if (towerTarget) {
+        let target = null;
+        let best = Infinity;
+        towers.forEach(t => {
+          if (t.hp <= 0) return;
+          const d = Math.hypot(t.x - u.x, t.y - u.y);
+          if (d < u.range && d < best) { target = t; best = d; }
+        });
+
+        if (target) {
           if (u.cd > 0) {
             u.cd--;
           } else {
-            if (u.type === 'bomber' && u.explode) {
-              explode(u.x, u.y, u.explode, u.dmg || 0, 1.4);
-              u.hp = 0;
-            } else {
-              const damage = u.dmg * (u.bonus || 1) * overclockDmg;
-              towerTarget.hp -= damage;
-              if (u.stun) towerTarget.stun = Math.max(towerTarget.stun, u.stun);
-              particles.push({ type:'slash', x: towerTarget.x, y: towerTarget.y, life: 10, color: u.color });
-            }
+            target.hp -= u.dmg * dmgMult;
+            particles.push({ type:'slash', x: target.x, y: target.y, life: 10, color: u.color });
             u.cd = u.rate;
           }
         } else {
-          let vx = coreX - u.x;
-          let vy = coreY - u.y;
-          let mag = Math.hypot(vx, vy) || 1;
-          vx /= mag;
-          vy /= mag;
-
-          let repelX = 0;
-          let repelY = 0;
-          towers.forEach(t => {
-            const dx = u.x - t.x;
-            const dy = u.y - t.y;
-            const d = Math.hypot(dx, dy);
-            if (d > 0 && d < 90) {
-              const strength = (90 - d) / 90;
-              repelX += (dx / d) * strength;
-              repelY += (dy / d) * strength;
-            }
-          });
-
-          let sepX = 0;
-          let sepY = 0;
-          units.forEach(o => {
-            if (o === u) return;
-            const dx = u.x - o.x;
-            const dy = u.y - o.y;
-            const d = Math.hypot(dx, dy);
-            if (d > 0 && d < 18) {
-              sepX += dx / d;
-              sepY += dy / d;
-            }
-          });
-
-          const jitter = (Math.random() - 0.5) * 0.2;
-          const moveX = vx + repelX + sepX * 0.2 + jitter;
-          const moveY = vy + repelY + sepY * 0.2 + jitter;
-          const moveMag = Math.hypot(moveX, moveY) || 1;
-          u.x += (moveX / moveMag) * u.spd;
-          u.y += (moveY / moveMag) * u.spd;
-
-          if (Math.hypot(u.x - coreX, u.y - coreY) < 24) {
-            baseHp -= u.breach;
-            money += 10;
-            units.splice(i, 1);
-            continue;
-          }
+          const orbitX = carrier.x + Math.cos((frame + i * 30) * 0.02) * 50;
+          const orbitY = carrier.y + Math.sin((frame + i * 30) * 0.02) * 50;
+          const dx = orbitX - u.x;
+          const dy = orbitY - u.y;
+          const d = Math.hypot(dx, dy) || 1;
+          u.x += (dx / d) * u.spd;
+          u.y += (dy / d) * u.spd;
         }
 
         if (u.hp <= 0) {
-          if (u.type === 'carrier') {
-            lives--;
-            units = [];
-            projs = [];
-            carrierId = null;
-            buildWindow = 240;
-            break;
-          }
-          lives--;
-          for (let k = 0; k < 8; k++) {
-            particles.push({ type:'spark', x:u.x, y:u.y, vx:(Math.random()-0.5)*4, vy:(Math.random()-0.5)*4, life:18, color:u.color });
-          }
+          supplyUsed = Math.max(0, supplyUsed - (u.supply || 1));
           units.splice(i, 1);
-          continue;
-        }
-
-        if (u.x < -30 || u.x > canvas.width + 30 || u.y < -30 || u.y > canvas.height + 30) {
-          units.splice(i, 1);
-        }
-
-        for (let d = drops.length - 1; d >= 0; d--) {
-          const drop = drops[d];
-          if (Math.hypot(drop.x - u.x, drop.y - u.y) < 22) {
-            money += 60;
-            supplyCap += 1;
-            drops.splice(d, 1);
-            particles.push({ type:'ring', x:drop.x, y:drop.y, life:18, color:'#22c55e', r:60 });
-            break;
-          }
-        }
-
-        for (let g = 0; g < gates.length; g++) {
-          const gate = gates[g];
-          if (!gate.active) continue;
-          if (Math.hypot(gate.x - u.x, gate.y - u.y) < gate.radius) {
-            gate.active = false;
-            if (gate.tier === 1) unlocks.tier1 = true;
-            if (gate.tier === 2) unlocks.tier2 = true;
-            if (gate.tier === 3) unlocks.tier3 = true;
-            particles.push({ type:'ring', x:gate.x, y:gate.y, life:24, color:'#22c55e', r:120 });
-          }
         }
       }
 
       for (let i = towers.length - 1; i >= 0; i--) {
         const t = towers[i];
         if (t.hp <= 0) {
-          money += 35 + wave * 5;
+          money += 30 + wave * 4;
           grid[t.gx][t.gy] = null;
-          for (let k = 0; k < 10; k++) {
-            particles.push({ type:'debris', x:t.x, y:t.y, vx:(Math.random()-0.5)*6, vy:(Math.random()-0.5)*6, life:22, color:t.color });
-          }
           towers.splice(i, 1);
           continue;
         }
@@ -662,14 +477,21 @@ import { getHighScore, submitHighScore } from './score-store.js';
         if (t.stun > 0) { t.stun--; continue; }
         if (t.cd > 0) { t.cd--; continue; }
 
-        const target = units.find(u => Math.hypot(u.x - t.x, u.y - t.y) < t.range * (u.stealth || 1));
+        const distCarrier = Math.hypot(carrier.x - t.x, carrier.y - t.y);
+        let target = null;
+        if (distCarrier < t.range) {
+          target = carrier;
+        } else {
+          target = units.find(u => Math.hypot(u.x - t.x, u.y - t.y) < t.range);
+        }
+
         if (target) {
-          if (t.beam) {
-            applyTowerDamage(target, t.dmg);
-            particles.push({ type:'beam', sx:t.x, sy:t.y, ex:target.x, ey:target.y, color:t.color, life:6 });
+          if (target === carrier) {
+            carrier.hp -= t.dmg * 0.7;
+            particles.push({ type:'beam', sx:t.x, sy:t.y, ex:carrier.x, ey:carrier.y, color:t.color, life:6 });
             t.cd = t.rate;
           } else if (t.chain) {
-            chainStrike(t, target);
+            applyTowerDamage(target, t.dmg);
             t.cd = t.rate;
           } else if (t.cone) {
             units.forEach(u => {
@@ -680,7 +502,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
             particles.push({ type:'ring', x:t.x, y:t.y, life:12, color:t.color, r:t.range });
             t.cd = t.rate;
           } else {
-            projs.push({ x:t.x, y:t.y, tx:target.x, ty:target.y, dmg:t.dmg, spd:9, aoe:t.aoe, slow:t.slow, color:t.color });
+            projs.push({ x:t.x, y:t.y, tx:target.x, ty:target.y, dmg:t.dmg, spd:8, aoe:t.aoe, slow:t.slow, color:t.color });
             t.cd = t.rate;
           }
         }
@@ -721,229 +543,123 @@ import { getHighScore, submitHighScore } from './score-store.js';
         if (p.life <= 0) particles.splice(i, 1);
       });
 
-      drops.forEach((d, i) => {
-        d.life--;
-        if (d.life <= 0) drops.splice(i, 1);
-      });
+      if (carrier.hp <= 0) {
+        integrity -= 20;
+        carrier.hp = carrier.maxHp;
+        inTransit = false;
+      }
 
-      if (baseHp <= 0) {
+      if (carrier.x > canvas.width - 80) {
         wave++;
-        money += 150 + wave * 40;
-        lives += 5;
-        aiCredits += 160 + wave * 60;
-        baseMax = 180 + wave * 80;
-        baseHp = baseMax;
-        units = [];
-        projs = [];
-        drops = [];
+        money += 200 + wave * 60;
+        carrier.x = 80;
+        carrier.y = canvas.height / 2;
+        carrier.hp = carrier.maxHp;
+        waypoints = [{ x: canvas.width - 120, y: canvas.height / 2 }];
         gates = buildGates();
-        unlocks = { tier1: false, tier2: false, tier3: false };
+        inTransit = false;
+        towers = [];
+        projs = [];
+        particles.push({ type:'ring', x: canvas.width - 120, y: canvas.height / 2, life:40, color:'#22c55e', r:180 });
+        seedTowers();
         if (wave > bestWave) bestWave = wave;
       }
     }
 
-    function spawnDrop() {
-      const x = (Math.floor(COLS * (0.2 + Math.random() * 0.6)) * CELL) + CELL / 2;
-      const y = (Math.floor(ROWS * (0.2 + Math.random() * 0.6)) * CELL) + CELL / 2;
-      drops.push({ x, y, life: 900 });
-    }
-
     function draw(ctx) {
-      const bg = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      bg.addColorStop(0, '#0b0f0d');
-      bg.addColorStop(1, '#10161d');
-      ctx.fillStyle = bg;
+      ctx.fillStyle = '#0b120f';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const timeShift = Math.sin(frame * 0.01) * 0.5;
-      ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+      ctx.strokeStyle = 'rgba(34,197,94,0.08)';
       ctx.beginPath();
-      for (let x = 0; x <= COLS; x++) { ctx.moveTo(x * CELL + timeShift, 0); ctx.lineTo(x * CELL + timeShift, canvas.height); }
-      for (let y = 0; y <= ROWS; y++) { ctx.moveTo(0, y * CELL + timeShift); ctx.lineTo(canvas.width, y * CELL + timeShift); }
+      for (let y = 0; y <= canvas.height; y += 40) {
+        ctx.moveTo(0, y + Math.sin((frame + y) * 0.01) * 6);
+        ctx.lineTo(canvas.width, y + Math.sin((frame + y) * 0.01) * 6);
+      }
       ctx.stroke();
 
-      ctx.strokeStyle = 'rgba(34,197,94,0.12)';
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      ctx.moveTo(startNode.x * CELL + CELL / 2, startNode.y * CELL + CELL / 2);
-      ctx.lineTo(endNode.x * CELL + CELL / 2, endNode.y * CELL + CELL / 2);
-      ctx.stroke();
-      ctx.lineWidth = 1;
-
-      const baseX = (COLS - 1) * CELL;
-      ctx.fillStyle = 'rgba(255,0,120,0.18)';
-      ctx.fillRect(baseX, 0, CELL, canvas.height);
-      ctx.strokeStyle = 'rgba(255,0,120,0.6)';
-      ctx.strokeRect(baseX, 0, CELL, canvas.height);
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 14px monospace';
-      ctx.fillText(`CORE ${Math.max(0, Math.floor(baseHp))}/${baseMax}`, canvas.width - 210, 30);
-
-      drops.forEach(drop => {
-        ctx.strokeStyle = '#22c55e';
+      gates.forEach(g => {
+        if (!g.active) return;
+        ctx.strokeStyle = 'rgba(34,197,94,0.45)';
         ctx.beginPath();
-        ctx.arc(drop.x, drop.y, 10 + Math.sin(frame * 0.1) * 3, 0, Math.PI * 2);
+        ctx.arc(g.x, g.y, g.radius, 0, Math.PI * 2);
         ctx.stroke();
-      });
-
-      gates.forEach(gate => {
-        if (!gate.active) return;
-        ctx.strokeStyle = '#22c55e';
-        ctx.beginPath();
-        ctx.arc(gate.x, gate.y, gate.radius, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.fillStyle = 'rgba(34,197,94,0.08)';
-        ctx.beginPath();
-        ctx.arc(gate.x, gate.y, gate.radius * 0.6, 0, Math.PI * 2);
-        ctx.fill();
       });
 
       towers.forEach(t => {
-        ctx.save();
-        ctx.translate(t.x, t.y);
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#22c55e';
-        ctx.fillStyle = '#1b2a1f';
-        ctx.fillRect(-14, -10, 28, 20);
+        ctx.fillStyle = '#0f172a';
         ctx.strokeStyle = t.color;
-        ctx.strokeRect(-14, -10, 28, 20);
-        ctx.shadowBlur = 0;
-        if (t.stun > 0) {
-          ctx.strokeStyle = '#facc15';
-          ctx.beginPath();
-          ctx.moveTo(-18, -14); ctx.lineTo(18, 14);
-          ctx.moveTo(18, -14); ctx.lineTo(-18, 14);
-          ctx.stroke();
-        }
-        ctx.restore();
-        ctx.fillStyle = '#f33';
-        ctx.fillRect(t.x - 14, t.y - 22, 28, 4);
-        ctx.fillStyle = '#0f0';
-        ctx.fillRect(t.x - 14, t.y - 22, 28 * (t.hp / t.maxHp), 4);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.rect(t.x - 12, t.y - 12, 24, 24);
+        ctx.fill();
+        ctx.stroke();
       });
 
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.arc(carrier.x, carrier.y, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.stroke();
+
       units.forEach(u => {
-        ctx.save();
-        ctx.translate(u.x, u.y);
         ctx.fillStyle = u.color;
-        if (u.type === 'carrier') {
-          ctx.fillRect(-16, -10, 32, 20);
-          ctx.strokeStyle = '#22c55e';
-          ctx.beginPath();
-          ctx.arc(0, 0, 60 + Math.sin(frame * 0.08) * 6, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.strokeStyle = '#f8fafc';
-          ctx.beginPath();
-          ctx.moveTo(-8, 0); ctx.lineTo(8, 0);
-          ctx.moveTo(0, -8); ctx.lineTo(0, 8);
-          ctx.stroke();
-        } else if (u.type === 'runner' || u.type === 'ghost') {
-          ctx.beginPath();
-          ctx.moveTo(10, 0);
-          ctx.lineTo(-8, 7);
-          ctx.lineTo(-8, -7);
-          ctx.fill();
-        } else if (u.type === 'siege') {
-          ctx.fillRect(-10, -10, 20, 20);
-        } else if (u.type === 'medic') {
-          ctx.beginPath();
-          ctx.arc(0, 0, 9, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = '#fff';
-          ctx.beginPath();
-          ctx.moveTo(-4, 0); ctx.lineTo(4, 0);
-          ctx.moveTo(0, -4); ctx.lineTo(0, 4);
-          ctx.stroke();
-        } else {
-          ctx.beginPath();
-          ctx.arc(0, 0, 9, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-        ctx.fillStyle = '#0f0';
-        ctx.fillRect(u.x - 12, u.y - 16, 24 * (u.hp / u.maxHp), 3);
+        ctx.beginPath();
+        ctx.arc(u.x, u.y, 6, 0, Math.PI * 2);
+        ctx.fill();
       });
 
       projs.forEach(p => {
         ctx.fillStyle = p.color;
-        ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
       });
 
       particles.forEach(p => {
-        ctx.globalAlpha = Math.max(0, p.life / 18);
-        if (p.type === 'trail') {
+        if (p.type === 'spark') {
           ctx.fillStyle = p.color;
-          ctx.fillRect(p.x, p.y, 3, 3);
-        } else if (p.type === 'ring' || p.type === 'shock') {
-          ctx.strokeStyle = p.color;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r * (1 - p.life / 14), 0, Math.PI * 2);
-          ctx.stroke();
-        } else if (p.type === 'bolt') {
-          drawBolt(ctx, p.chain, p.color);
+          ctx.fillRect(p.x, p.y, 2, 2);
+        } else if (p.type === 'trail') {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = Math.max(0, p.life / 12);
+          ctx.fillRect(p.x, p.y, 2, 2);
+          ctx.globalAlpha = 1;
         } else if (p.type === 'beam') {
           ctx.strokeStyle = p.color;
-          ctx.lineWidth = 3;
-          ctx.shadowBlur = 15; ctx.shadowColor = p.color;
-          ctx.beginPath(); ctx.moveTo(p.sx, p.sy); ctx.lineTo(p.ex, p.ey); ctx.stroke();
-          ctx.shadowBlur = 0;
-        } else if (p.type === 'debris' || p.type === 'spark' || p.type === 'slash') {
-          ctx.fillStyle = p.color;
-          ctx.fillRect(p.x, p.y, 3, 3);
+          ctx.globalAlpha = 0.7;
+          ctx.beginPath();
+          ctx.moveTo(p.sx, p.sy);
+          ctx.lineTo(p.ex, p.ey);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        } else if (p.type === 'ring') {
+          ctx.strokeStyle = p.color;
+          ctx.globalAlpha = 0.5;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
         }
-        ctx.globalAlpha = 1;
       });
-    }
 
-    function drawBolt(ctx, chain, color) {
-      if (chain.length < 2) return;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2.2;
-      ctx.shadowBlur = 18;
-      ctx.shadowColor = color;
-      ctx.beginPath();
-      for (let i = 1; i < chain.length; i++) {
-        const a = chain[i - 1];
-        const b = chain[i];
-        drawBoltSegment(ctx, a.x, a.y, b.x, b.y, 1);
-      }
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
-    function drawBoltSegment(ctx, x1, y1, x2, y2, depth) {
-      const dist = Math.hypot(x2 - x1, y2 - y1);
-      if (dist < 10 || depth <= 0) {
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        return;
-      }
-      let midX = (x1 + x2) / 2;
-      let midY = (y1 + y2) / 2;
-      const offset = Math.max(6, dist * 0.25);
-      midX += (Math.random() - 0.5) * offset;
-      midY += (Math.random() - 0.5) * offset;
-      drawBoltSegment(ctx, x1, y1, midX, midY, depth - 1);
-      drawBoltSegment(ctx, midX, midY, x2, y2, depth - 1);
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = 'bold 14px monospace';
+      ctx.fillText(`CONVOY ${Math.floor(carrier.hp)}/${carrier.maxHp}`, 30, 30);
+      ctx.fillText(`SUPPLY ${supplyUsed}/${supplyCap}`, 30, 50);
     }
 
     function click(x, y) {
-      if (!buildType) return;
-      if (x > 140) return;
-      const def = UNITS[buildType];
-      if (!def || money < def.cost) return;
-      const supplyCost = def.supply || 1;
-      const used = units.reduce((sum, u) => sum + (u.supply || 1), 0);
-      if (used + supplyCost > supplyCap) return;
-      if (!isUnitUnlocked(buildType)) return;
-      money -= def.cost;
-      spawnUnit(buildType, true);
-    }
-
-    function spawnCarrier() {
-      if (carrierId) return;
-      spawnUnit('carrier', false);
-      carrierId = units[units.length - 1]?.id || 'carrier';
+      if (buildType) {
+        if (x < 140) return;
+        const def = UNITS[buildType];
+        if (!def || money < def.cost) return;
+        if (!canBuild(buildType)) return;
+        money -= def.cost;
+        spawnUnit(buildType);
+        return;
+      }
+      if (x < 140) return;
+      waypoints.push({ x, y });
     }
 
     return {
@@ -959,19 +675,19 @@ import { getHighScore, submitHighScore } from './score-store.js';
       getCommandState,
       canBuild,
       getHud: () => ({
-        labels: ['PHASE', 'CREDITS', 'LIVES'],
-        values: [wave, Math.floor(money), lives]
+        labels: ['PHASE', 'CREDITS', 'CONVOY'],
+        values: [`RUN ${wave}`, Math.floor(money), `${Math.floor(carrier.hp)}`]
       }),
       castAbility: useAbility,
       stop: () => { submitBestWave(); },
       conf: { towers: UNITS },
       get wave(){return wave;},
       get money(){return money;},
-      get lives(){return lives;},
+      get lives(){return Math.floor(integrity);},
       get bestWave(){return bestWave;},
       get sel(){return null;},
       get buildMode(){return buildType;}
     };
   })();
-      window.ReverseSiegeOpsGame = Reverse;
+  window.ReverseSiegeOpsGame = Reverse;
 })(window);
