@@ -14,7 +14,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
       hacker: { name:'HACKER', cost:140, color:'#c77dff', hp:120, spd:2.0, dmg:4, range:90, rate:22, breach:12, stun:90, role:'breaker', desc:'Disables towers briefly while attacking.' },
       bomber: { name:'BOMBER', cost:150, color:'#f97316', hp:140, spd:2.1, dmg:0, range:20, rate:1, breach:14, explode:100, role:'breaker', desc:'Explodes on contact, damaging nearby towers.' },
       ghost:  { name:'GHOST',  cost:120, color:'#d1fae5', hp:75, spd:3.0, dmg:8, range:26, rate:14, breach:16, stealth:0.6, role:'runner', desc:'Harder to target; slips past defenses.' },
-      medic:  { name:'MEDIC',  cost:110, color:'#a7f3d0', hp:120, spd:2.2, dmg:4, range:70, rate:22, breach:8, heal:8, role:'support', desc:'Repairs allied attackers in a radius.' }
+      medic:  { name:'MEDIC',  cost:110, color:'#a7f3d0', hp:120, spd:2.2, dmg:4, range:70, rate:22, breach:8, heal:8, role:'support', desc:'Repairs allied attackers in a radius.' },
+      saboteur: { name:'SABOTEUR', cost:150, color:'#fca5a5', hp:140, spd:2.4, dmg:16, range:55, rate:22, breach:10, role:'breaker', pylon:2.5, desc:'Specialist that shreds shield pylons.' }
     };
 
     const TOWER_TYPES = {
@@ -55,6 +56,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
     let aiCredits = 0;
     let aiCooldown = 0;
     let aiUpgradeCooldown = 0;
+    let pylons = [];
+    let shieldPulse = 0;
 
     const upgradeState = { dmg: 0, spd: 0, hp: 0, armor: 0 };
     const abilityState = {
@@ -114,7 +117,33 @@ import { getHighScore, submitHighScore } from './score-store.js';
       abilityState.strike.cooldown = 0;
       spawnHistory.length = 0;
       grid = new Array(COLS).fill(0).map(() => new Array(ROWS).fill(null));
+      pylons = buildPylons();
+      shieldPulse = 0;
       loadBestWave();
+    }
+
+    function buildPylons() {
+      const positions = [
+        { x: Math.floor(COLS * 0.6), y: Math.floor(ROWS * 0.25) },
+        { x: Math.floor(COLS * 0.65), y: Math.floor(ROWS * 0.75) },
+        { x: Math.floor(COLS * 0.8), y: Math.floor(ROWS * 0.5) }
+      ];
+      return positions.map((p, idx) => ({
+        id: `pylon-${idx}-${Date.now()}`,
+        x: p.x * CELL + CELL / 2,
+        y: p.y * CELL + CELL / 2,
+        gx: p.x,
+        gy: p.y,
+        hp: 220 + wave * 40,
+        maxHp: 220 + wave * 40,
+        lastHit: 0,
+        isPylon: true,
+        color: '#38bdf8'
+      }));
+    }
+
+    function pylonsAlive() {
+      return pylons.filter(p => p.hp > 0);
     }
 
     function getUpgradeCost(attr) {
@@ -254,28 +283,30 @@ import { getHighScore, submitHighScore } from './score-store.js';
       }
       if (!best) return false;
 
-      const tower = {
-        gx: best.gx,
-        gy: best.gy,
-        x: best.gx * CELL + CELL / 2,
-        y: best.gy * CELL + CELL / 2,
-        type: pick,
-        name: def.name,
-        color: def.color,
-        range: def.range,
-        dmg: def.dmg * (1 + wave * 0.15),
-        rate: Math.max(6, Math.floor(def.rate * (1 - wave * 0.02))),
-        aoe: def.aoe || 0,
-        chain: def.chain || 0,
-        slow: def.slow || 0,
-        beam: !!def.beam,
-        cone: !!def.cone,
-        hp: Math.floor(def.hp * (1 + wave * 0.25)),
-        maxHp: Math.floor(def.hp * (1 + wave * 0.25)),
-        level: 1,
-        cd: Math.floor(Math.random() * 12),
-        stun: 0
-      };
+        const tower = {
+          gx: best.gx,
+          gy: best.gy,
+          x: best.gx * CELL + CELL / 2,
+          y: best.gy * CELL + CELL / 2,
+          type: pick,
+          name: def.name,
+          color: def.color,
+          range: def.range,
+          dmg: def.dmg * (1 + wave * 0.15),
+          rate: Math.max(6, Math.floor(def.rate * (1 - wave * 0.02))),
+          aoe: def.aoe || 0,
+          chain: def.chain || 0,
+          slow: def.slow || 0,
+          beam: !!def.beam,
+          cone: !!def.cone,
+          hp: Math.floor(def.hp * (1 + wave * 0.25)),
+          maxHp: Math.floor(def.hp * (1 + wave * 0.25)),
+          level: 1,
+          rangeDebuff: 1,
+          debuffTimer: 0,
+          cd: Math.floor(Math.random() * 12),
+          stun: 0
+        };
       grid[best.gx][best.gy] = tower;
       towers.push(tower);
       aiCredits -= def.cost;
@@ -308,6 +339,16 @@ import { getHighScore, submitHighScore } from './score-store.js';
     }
 
     function findTowerTarget(u) {
+      const activePylons = pylonsAlive();
+      if (u.role === 'breaker' && activePylons.length) {
+        let best = null;
+        let bestDist = Infinity;
+        activePylons.forEach(p => {
+          const d = Math.hypot(p.x - u.x, p.y - u.y);
+          if (d < bestDist) { best = p; bestDist = d; }
+        });
+        if (best) return best;
+      }
       let best = null;
       let bestDist = Infinity;
       towers.forEach(t => {
@@ -392,6 +433,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
       return true;
     }
 
+    function getTowerRange(t) {
+      const debuff = t.rangeDebuff || 1;
+      return t.range * debuff;
+    }
+
     function findTowerCluster(radius) {
       if (!towers.length) {
         return { x: endNode.x * CELL + CELL / 2, y: endNode.y * CELL + CELL / 2 };
@@ -448,6 +494,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const overclockDmg = overclockOn ? 1 + ABILITIES.overclock.dmg : 1;
       const overclockSpd = overclockOn ? 1 + ABILITIES.overclock.spd : 1;
 
+      const activePylons = pylonsAlive();
+      const shieldActive = activePylons.length > 0;
+      if (shieldActive) shieldPulse = (shieldPulse + 1) % 60;
+
       for (let i = units.length - 1; i >= 0; i--) {
         const u = units[i];
         if (u.slowTimer > 0) u.slowTimer--;
@@ -470,8 +520,13 @@ import { getHighScore, submitHighScore } from './score-store.js';
               explode(u.x, u.y, u.explode, u.dmg || 0, 1.4);
               u.hp = 0;
             } else {
-              const damage = u.dmg * (u.bonus || 1) * overclockDmg;
+              const damage = u.dmg * (u.bonus || 1) * overclockDmg * (towerTarget.isPylon ? (u.pylon || 1.2) : 1);
               towerTarget.hp -= damage;
+              if (towerTarget.isPylon) towerTarget.lastHit = frame;
+              if (u.type === 'saboteur' && !towerTarget.isPylon) {
+                towerTarget.rangeDebuff = 0.7;
+                towerTarget.debuffTimer = 180;
+              }
               if (u.stun) towerTarget.stun = Math.max(towerTarget.stun, u.stun);
               particles.push({ type:'slash', x: towerTarget.x, y: towerTarget.y, life: 10, color: u.color });
             }
@@ -518,7 +573,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
           u.y += (moveY / moveMag) * u.spd;
 
           if (Math.hypot(u.x - coreX, u.y - coreY) < 24) {
-            baseHp -= u.breach;
+            if (shieldActive) {
+              const p = activePylons[Math.floor(Math.random() * activePylons.length)];
+              if (p) { p.hp -= u.breach * 2.2; p.lastHit = frame; }
+            } else {
+              baseHp -= u.breach;
+            }
             money += 10;
             units.splice(i, 1);
             continue;
@@ -541,6 +601,13 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
       for (let i = towers.length - 1; i >= 0; i--) {
         const t = towers[i];
+        if (t.debuffTimer) {
+          t.debuffTimer--;
+          if (t.debuffTimer <= 0) {
+            t.rangeDebuff = 1;
+            t.debuffTimer = 0;
+          }
+        }
         if (t.hp <= 0) {
           money += 35 + wave * 5;
           grid[t.gx][t.gy] = null;
@@ -554,10 +621,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
         if (t.stun > 0) { t.stun--; continue; }
         if (t.cd > 0) { t.cd--; continue; }
 
-        const target = units.find(u => Math.hypot(u.x - t.x, u.y - t.y) < t.range * (u.stealth || 1));
+        const effectiveRange = getTowerRange(t);
+        const target = units.find(u => Math.hypot(u.x - t.x, u.y - t.y) < effectiveRange * (u.stealth || 1));
         if (target) {
           if (t.beam) {
-            applyTowerDamage(target, t.dmg);
+            applyTowerDamage(target, t.dmg * (shieldActive ? 1.15 : 1));
             particles.push({ type:'beam', sx:t.x, sy:t.y, ex:target.x, ey:target.y, color:t.color, life:6 });
             t.cd = t.rate;
           } else if (t.chain) {
@@ -565,14 +633,14 @@ import { getHighScore, submitHighScore } from './score-store.js';
             t.cd = t.rate;
           } else if (t.cone) {
             units.forEach(u => {
-              if (Math.hypot(u.x - t.x, u.y - t.y) < t.range) {
-                applyTowerDamage(u, t.dmg);
+              if (Math.hypot(u.x - t.x, u.y - t.y) < effectiveRange) {
+                applyTowerDamage(u, t.dmg * (shieldActive ? 1.15 : 1));
               }
             });
-            particles.push({ type:'ring', x:t.x, y:t.y, life:12, color:t.color, r:t.range });
+            particles.push({ type:'ring', x:t.x, y:t.y, life:12, color:t.color, r:effectiveRange });
             t.cd = t.rate;
           } else {
-            projs.push({ x:t.x, y:t.y, tx:target.x, ty:target.y, dmg:t.dmg, spd:9, aoe:t.aoe, slow:t.slow, color:t.color });
+            projs.push({ x:t.x, y:t.y, tx:target.x, ty:target.y, dmg:t.dmg * (shieldActive ? 1.15 : 1), spd:9, aoe:t.aoe, slow:t.slow, color:t.color });
             t.cd = t.rate;
           }
         }
@@ -613,6 +681,13 @@ import { getHighScore, submitHighScore } from './score-store.js';
         if (p.life <= 0) particles.splice(i, 1);
       });
 
+      pylons.forEach(p => {
+        if (p.hp <= 0) return;
+        if (frame - p.lastHit > 240 && p.hp < p.maxHp) {
+          p.hp = Math.min(p.maxHp, p.hp + 0.25);
+        }
+      });
+
       if (baseHp <= 0) {
         wave++;
         money += 150 + wave * 40;
@@ -622,14 +697,15 @@ import { getHighScore, submitHighScore } from './score-store.js';
         baseHp = baseMax;
         units = [];
         projs = [];
+        pylons = buildPylons();
         if (wave > bestWave) bestWave = wave;
       }
     }
 
     function draw(ctx) {
       const bg = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      bg.addColorStop(0, '#04070d');
-      bg.addColorStop(1, '#120514');
+      bg.addColorStop(0, '#04181a');
+      bg.addColorStop(1, '#0a0f1c');
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -656,6 +732,38 @@ import { getHighScore, submitHighScore } from './score-store.js';
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 14px monospace';
       ctx.fillText(`CORE ${Math.max(0, Math.floor(baseHp))}/${baseMax}`, canvas.width - 210, 30);
+
+      if (pylonsAlive().length) {
+        ctx.strokeStyle = `rgba(56,189,248,${0.12 + (shieldPulse / 600)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(endNode.x * CELL + CELL / 2, endNode.y * CELL + CELL / 2, 80 + (shieldPulse / 3), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+
+      pylons.forEach(p => {
+        if (p.hp <= 0) return;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(0, 0, 18, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(56,189,248,0.2)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.fillStyle = '#f33';
+        ctx.fillRect(p.x - 14, p.y - 22, 28, 4);
+        ctx.fillStyle = '#0f0';
+        ctx.fillRect(p.x - 14, p.y - 22, 28 * (p.hp / p.maxHp), 4);
+      });
 
       towers.forEach(t => {
         ctx.save();

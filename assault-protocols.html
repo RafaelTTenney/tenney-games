@@ -208,7 +208,7 @@
 <body>
 
     <header>
-        <h1>ASSAULT <span>PROTOCOLS</span></h1>
+        <h1 id="page-title">ASSAULT <span>PROTOCOLS</span></h1>
     </header>
     
     <div class="system-nav">
@@ -316,6 +316,7 @@
                         <button class="insp-close" onclick="App.toggleCommand()">×</button>
                     </div>
                     <div class="command-row"><span>AI Credits</span><b id="cmd-ai">0</b></div>
+                    <div class="command-row" id="cmd-supply-row" style="display:none;"><span>Supply</span><b id="cmd-supply">0/0</b></div>
                     <div class="command-row"><span>Damage</span><b id="cmd-dmg">0</b></div>
                     <button class="cmd-btn" onclick="App.gameAction('upg_dmg')">UPGRADE DAMAGE <span id="cmd-dmg-cost"></span></button>
                     <div class="command-row"><span>Speed</span><b id="cmd-spd">0</b></div>
@@ -378,6 +379,21 @@
             el.style.display = (el.style.display === 'block') ? 'none' : 'block';
             if (el.style.display === 'block') App.updateCommandPanel();
         },
+        setTheme: (id) => {
+            const root = document.documentElement;
+            const themes = {
+                duel: { primary: '#34d399', secondary: '#38bdf8', tertiary: '#22d3ee', text: '#e6fffb' },
+                overdrive: { primary: '#fbbf24', secondary: '#fb7185', tertiary: '#f97316', text: '#fff8e1' },
+                siege: { primary: '#c084fc', secondary: '#94a3b8', tertiary: '#22c55e', text: '#efe6ff' }
+            };
+            const t = themes[id] || themes.duel;
+            root.style.setProperty('--primary', t.primary);
+            root.style.setProperty('--secondary', t.secondary);
+            root.style.setProperty('--tertiary', t.tertiary);
+            root.style.setProperty('--text', t.text);
+            const title = document.getElementById('page-title');
+            if (title) title.innerHTML = `ASSAULT <span style=\"color:${t.primary}\">PROTOCOLS</span>`;
+        },
 
         populateCodex: () => {
             if(!App.activeGame || !App.activeGame.getEnemyTypes) return;
@@ -433,6 +449,7 @@
             document.getElementById('command-panel').style.display = 'none';
             document.getElementById('diff-selector').style.display = 'none';
             document.getElementById('cmd-btn').style.display = 'inline-flex';
+            App.setTheme(id);
 
             if(id === 'duel' && window.ReverseDuelGame) App.activeGame = window.ReverseDuelGame;
             else if(id === 'overdrive' && window.ReverseOverdriveGame) App.activeGame = window.ReverseOverdriveGame;
@@ -575,6 +592,13 @@
             if (panel.style.display !== 'block') return;
             const data = App.activeGame.getCommandState();
             document.getElementById('cmd-ai').innerText = Math.floor(data.aiCredits || 0);
+            const supplyRow = document.getElementById('cmd-supply-row');
+            if (data.supplyCap !== undefined) {
+                supplyRow.style.display = 'flex';
+                document.getElementById('cmd-supply').innerText = `${Math.floor(data.supplyUsed || 0)}/${Math.floor(data.supplyCap || 0)}`;
+            } else {
+                supplyRow.style.display = 'none';
+            }
             document.getElementById('cmd-dmg').innerText = `L${data.upgrades.dmg.level}`;
             document.getElementById('cmd-spd').innerText = `L${data.upgrades.spd.level}`;
             document.getElementById('cmd-arm').innerText = `L${data.upgrades.armor.level}`;

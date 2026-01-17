@@ -7,14 +7,15 @@ import { getHighScore, submitHighScore } from './score-store.js';
     let COLS, ROWS;
 
     const UNITS = {
-      runner: { name:'RUNNER', cost:45, color:'#6ee7b7', hp:70, spd:2.8, dmg:6, range:26, rate:14, breach:12, role:'runner', desc:'Fast breach unit focused on core damage.' },
-      raider: { name:'RAIDER', cost:70, color:'#7dd3fc', hp:110, spd:2.2, dmg:12, range:32, rate:18, breach:12, role:'breaker', desc:'Skirmisher that harasses nearby towers.' },
-      brute:  { name:'BRUTE',  cost:120, color:'#fb7185', hp:280, spd:1.2, dmg:26, range:40, rate:28, breach:22, armor:0.35, role:'breaker', desc:'Armored breaker with heavy tower damage.' },
-      siege:  { name:'SIEGE',  cost:210, color:'#fbbf24', hp:380, spd:0.95, dmg:38, range:70, rate:34, breach:34, bonus:1.6, role:'breaker', desc:'Siege rig that melts fortified nodes.' },
-      hacker: { name:'HACKER', cost:170, color:'#c77dff', hp:140, spd:1.7, dmg:5, range:100, rate:26, breach:12, stun:110, role:'breaker', desc:'Disables towers briefly while attacking.' },
-      bomber: { name:'BOMBER', cost:180, color:'#f97316', hp:160, spd:1.7, dmg:0, range:20, rate:1, breach:16, explode:120, role:'breaker', desc:'Explodes on contact, damaging nearby towers.' },
-      ghost:  { name:'GHOST',  cost:150, color:'#d1fae5', hp:85, spd:2.6, dmg:9, range:26, rate:16, breach:16, stealth:0.55, role:'runner', desc:'Harder to target; slips past defenses.' },
-      medic:  { name:'MEDIC',  cost:140, color:'#a7f3d0', hp:150, spd:1.9, dmg:5, range:80, rate:24, breach:8, heal:10, role:'support', desc:'Repairs allied attackers in a radius.' }
+      runner: { name:'RUNNER', cost:45, color:'#6ee7b7', hp:70, spd:2.8, dmg:6, range:26, rate:14, breach:12, role:'runner', supply: 1, desc:'Fast breach unit focused on core damage.' },
+      raider: { name:'RAIDER', cost:70, color:'#7dd3fc', hp:110, spd:2.2, dmg:12, range:32, rate:18, breach:12, role:'breaker', supply: 2, desc:'Skirmisher that harasses nearby towers.' },
+      brute:  { name:'BRUTE',  cost:120, color:'#fb7185', hp:280, spd:1.2, dmg:26, range:40, rate:28, breach:22, armor:0.35, role:'breaker', supply: 3, desc:'Armored breaker with heavy tower damage.' },
+      siege:  { name:'SIEGE',  cost:210, color:'#fbbf24', hp:380, spd:0.95, dmg:38, range:70, rate:34, breach:34, bonus:1.6, role:'breaker', supply: 4, desc:'Siege rig that melts fortified nodes.' },
+      hacker: { name:'HACKER', cost:170, color:'#c77dff', hp:140, spd:1.7, dmg:5, range:100, rate:26, breach:12, stun:110, role:'breaker', supply: 2, desc:'Disables towers briefly while attacking.' },
+      bomber: { name:'BOMBER', cost:180, color:'#f97316', hp:160, spd:1.7, dmg:0, range:20, rate:1, breach:16, explode:120, role:'breaker', supply: 2, desc:'Explodes on contact, damaging nearby towers.' },
+      ghost:  { name:'GHOST',  cost:150, color:'#d1fae5', hp:85, spd:2.6, dmg:9, range:26, rate:16, breach:16, stealth:0.55, role:'runner', supply: 2, desc:'Harder to target; slips past defenses.' },
+      medic:  { name:'MEDIC',  cost:140, color:'#a7f3d0', hp:150, spd:1.9, dmg:5, range:80, rate:24, breach:8, heal:10, role:'support', supply: 2, desc:'Repairs allied attackers in a radius.' },
+      carrier: { name:'CARRIER', cost:0, color:'#f8fafc', hp:900, spd:0.7, dmg:0, range:0, rate:0, breach:60, role:'carrier', supply: 5, desc:'Objective unit. If it dies, you lose a life.' }
     };
 
     const TOWER_TYPES = {
@@ -55,6 +56,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
     let aiCredits = 0;
     let aiCooldown = 0;
     let aiUpgradeCooldown = 0;
+    let supplyCap = 10;
+    let supplyUsed = 0;
+    let carrierId = null;
+    let buildWindow = 0;
+    let drops = [];
 
     const upgradeState = { dmg: 0, spd: 0, hp: 0, armor: 0 };
     const abilityState = {
@@ -96,6 +102,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
       aiCredits = 260;
       aiCooldown = 0;
       aiUpgradeCooldown = 80;
+      supplyCap = 10;
+      supplyUsed = 0;
+      carrierId = null;
+      buildWindow = 0;
+      drops = [];
       units = [];
       projs = [];
       particles = [];
@@ -124,12 +135,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
     }
 
     function applyUpgradeToUnit(unit) {
-      unit.baseSpd *= 1 + (upgradeState.spd * 0.08);
+      unit.baseSpd *= 1 + (upgradeState.spd * 0.06);
       unit.spd = unit.baseSpd;
-      unit.dmg *= 1 + (upgradeState.dmg * 0.18);
-      unit.maxHp *= 1 + (upgradeState.hp * 0.22);
+      unit.dmg *= 1 + (upgradeState.dmg * 0.16);
+      unit.maxHp *= 1 + (upgradeState.hp * 0.2);
       unit.hp = Math.min(unit.hp, unit.maxHp);
-      unit.armor = Math.min(0.6, (unit.armor || 0) + upgradeState.armor * 0.06);
+      unit.armor = Math.min(0.6, (unit.armor || 0) + upgradeState.armor * 0.05);
     }
 
     function upgrade(attr) {
@@ -160,7 +171,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
           decoy: { cooldown: abilityState.decoy.cooldown, cost: ABILITIES.decoy.cost },
           strike: { cooldown: abilityState.strike.cooldown, cost: ABILITIES.strike.cost }
         },
-        aiCredits
+        aiCredits,
+        supplyCap,
+        supplyUsed
       };
     }
 
@@ -169,6 +182,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       if (!def) return;
       const jitter = (Math.random() - 0.5) * 20;
       const unit = {
+        id: `u-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         x: startNode.x * CELL + CELL / 2,
         y: startNode.y * CELL + CELL / 2 + jitter,
         hp: def.hp,
@@ -188,6 +202,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
         role: def.role,
         color: def.color,
         type,
+        supply: def.supply || 1,
         cd: 0,
         slowTimer: 0
       };
@@ -305,6 +320,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
       money += 120 + wave * 50;
       aiCooldown = 26;
       aiUpgradeCooldown = 80;
+      buildWindow = 300;
+      supplyCap = 10 + Math.floor(wave * 1.5);
+      spawnCarrier();
     }
 
     function findTowerTarget(u) {
@@ -323,7 +341,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
     }
 
     function applyTowerDamage(unit, dmg) {
-      const final = dmg * (1 - (unit.armor || 0));
+      const bonus = unit.armorBonus || 0;
+      const final = dmg * (1 - Math.min(0.7, (unit.armor || 0) + bonus));
       unit.hp -= final;
       particles.push({ type:'spark', x:unit.x, y:unit.y, life:10, color:unit.color });
     }
@@ -421,6 +440,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
       money += 0.03 + wave * 0.004;
       aiCredits += 0.05 + wave * 0.012;
 
+      if (buildWindow > 0) buildWindow--;
+      if (frame % 600 === 0) spawnDrop();
+
       if (abilityState.emp.cooldown > 0) abilityState.emp.cooldown--;
       if (abilityState.overclock.cooldown > 0) abilityState.overclock.cooldown--;
       if (abilityState.decoy.cooldown > 0) abilityState.decoy.cooldown--;
@@ -433,13 +455,15 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
       if (aiCooldown > 0) aiCooldown--;
       if (aiUpgradeCooldown > 0) aiUpgradeCooldown--;
-      if (aiCooldown === 0 && aiCredits >= 120) {
-        const built = attemptBuildTower();
-        aiCooldown = built ? Math.max(14, 48 - wave * 1.2) : 24;
-      }
-      if (aiUpgradeCooldown === 0 && aiCredits >= 90) {
-        const upgraded = attemptUpgradeTower();
-        aiUpgradeCooldown = upgraded ? Math.max(70, 160 - wave * 4) : 110;
+      if (buildWindow > 0) {
+        if (aiCooldown === 0 && aiCredits >= 120) {
+          const built = attemptBuildTower();
+          aiCooldown = built ? Math.max(14, 48 - wave * 1.2) : 24;
+        }
+        if (aiUpgradeCooldown === 0 && aiCredits >= 90) {
+          const upgraded = attemptUpgradeTower();
+          aiUpgradeCooldown = upgraded ? Math.max(70, 160 - wave * 4) : 110;
+        }
       }
 
       const coreX = endNode.x * CELL + CELL / 2;
@@ -448,8 +472,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const overclockDmg = overclockOn ? 1 + ABILITIES.overclock.dmg : 1;
       const overclockSpd = overclockOn ? 1 + ABILITIES.overclock.spd : 1;
 
+      supplyUsed = units.reduce((sum, u) => sum + (u.supply || 1), 0);
       for (let i = units.length - 1; i >= 0; i--) {
         const u = units[i];
+        u.armorBonus = 0;
         if (u.slowTimer > 0) u.slowTimer--;
         u.spd = (u.slowTimer > 0 ? u.baseSpd * 0.6 : u.baseSpd) * overclockSpd;
 
@@ -459,6 +485,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
               o.hp = Math.min(o.maxHp, o.hp + u.heal);
             }
           });
+        }
+        if (carrierId) {
+          const carrier = units.find(x => x.type === 'carrier');
+          if (carrier && u.type !== 'carrier') {
+            const dist = Math.hypot(carrier.x - u.x, carrier.y - u.y);
+            if (dist < 120) {
+              u.hp = Math.min(u.maxHp, u.hp + 0.05);
+              u.armorBonus = 0.15;
+            } else {
+              u.armorBonus = 0;
+            }
+          }
         }
 
         const towerTarget = (u.role === 'breaker') ? findTowerTarget(u) : null;
@@ -526,6 +564,14 @@ import { getHighScore, submitHighScore } from './score-store.js';
         }
 
         if (u.hp <= 0) {
+          if (u.type === 'carrier') {
+            lives--;
+            units = [];
+            projs = [];
+            carrierId = null;
+            buildWindow = 240;
+            break;
+          }
           lives--;
           for (let k = 0; k < 8; k++) {
             particles.push({ type:'spark', x:u.x, y:u.y, vx:(Math.random()-0.5)*4, vy:(Math.random()-0.5)*4, life:18, color:u.color });
@@ -536,6 +582,17 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
         if (u.x < -30 || u.x > canvas.width + 30 || u.y < -30 || u.y > canvas.height + 30) {
           units.splice(i, 1);
+        }
+
+        for (let d = drops.length - 1; d >= 0; d--) {
+          const drop = drops[d];
+          if (Math.hypot(drop.x - u.x, drop.y - u.y) < 22) {
+            money += 60;
+            supplyCap += 1;
+            drops.splice(d, 1);
+            particles.push({ type:'ring', x:drop.x, y:drop.y, life:18, color:'#22c55e', r:60 });
+            break;
+          }
         }
       }
 
@@ -613,23 +670,35 @@ import { getHighScore, submitHighScore } from './score-store.js';
         if (p.life <= 0) particles.splice(i, 1);
       });
 
+      drops.forEach((d, i) => {
+        d.life--;
+        if (d.life <= 0) drops.splice(i, 1);
+      });
+
       if (baseHp <= 0) {
         wave++;
         money += 150 + wave * 40;
         lives += 5;
         aiCredits += 160 + wave * 60;
-        baseMax = 140 + wave * 70;
+        baseMax = 180 + wave * 80;
         baseHp = baseMax;
         units = [];
         projs = [];
+        drops = [];
         if (wave > bestWave) bestWave = wave;
       }
     }
 
+    function spawnDrop() {
+      const x = (Math.floor(COLS * (0.2 + Math.random() * 0.6)) * CELL) + CELL / 2;
+      const y = (Math.floor(ROWS * (0.2 + Math.random() * 0.6)) * CELL) + CELL / 2;
+      drops.push({ x, y, life: 900 });
+    }
+
     function draw(ctx) {
       const bg = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      bg.addColorStop(0, '#04070d');
-      bg.addColorStop(1, '#120514');
+      bg.addColorStop(0, '#0b0f0d');
+      bg.addColorStop(1, '#10161d');
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -640,7 +709,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       for (let y = 0; y <= ROWS; y++) { ctx.moveTo(0, y * CELL + timeShift); ctx.lineTo(canvas.width, y * CELL + timeShift); }
       ctx.stroke();
 
-      ctx.strokeStyle = 'rgba(0,255,204,0.12)';
+      ctx.strokeStyle = 'rgba(34,197,94,0.12)';
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(startNode.x * CELL + CELL / 2, startNode.y * CELL + CELL / 2);
@@ -656,6 +725,13 @@ import { getHighScore, submitHighScore } from './score-store.js';
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 14px monospace';
       ctx.fillText(`CORE ${Math.max(0, Math.floor(baseHp))}/${baseMax}`, canvas.width - 210, 30);
+
+      drops.forEach(drop => {
+        ctx.strokeStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.arc(drop.x, drop.y, 10 + Math.sin(frame * 0.1) * 3, 0, Math.PI * 2);
+        ctx.stroke();
+      });
 
       towers.forEach(t => {
         ctx.save();
@@ -684,7 +760,13 @@ import { getHighScore, submitHighScore } from './score-store.js';
         ctx.save();
         ctx.translate(u.x, u.y);
         ctx.fillStyle = u.color;
-        if (u.type === 'runner' || u.type === 'ghost') {
+        if (u.type === 'carrier') {
+          ctx.fillRect(-16, -10, 32, 20);
+          ctx.strokeStyle = '#22c55e';
+          ctx.beginPath();
+          ctx.arc(0, 0, 60 + Math.sin(frame * 0.08) * 6, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (u.type === 'runner' || u.type === 'ghost') {
           ctx.beginPath();
           ctx.moveTo(10, 0);
           ctx.lineTo(-8, 7);
@@ -779,8 +861,17 @@ import { getHighScore, submitHighScore } from './score-store.js';
       if (x > 140) return;
       const def = UNITS[buildType];
       if (!def || money < def.cost) return;
+      const supplyCost = def.supply || 1;
+      const used = units.reduce((sum, u) => sum + (u.supply || 1), 0);
+      if (used + supplyCost > supplyCap) return;
       money -= def.cost;
       spawnUnit(buildType, true);
+    }
+
+    function spawnCarrier() {
+      if (carrierId) return;
+      spawnUnit('carrier', false);
+      carrierId = units[units.length - 1]?.id || 'carrier';
     }
 
     return {
