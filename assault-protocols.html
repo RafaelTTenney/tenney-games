@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Assault Protocols | Command</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+        :root {
+            --bg: #050505;
+            --panel: #0a0f14;
+            --border: #333;
+            --primary: #00ffcc; 
+            --secondary: #ffaa00; 
+            --tertiary: #d000ff; 
+            --text: #eee;
+        }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', Tahoma, sans-serif; overflow: hidden; }
+        
+        header {
+            padding: 15px; text-align: center; border-bottom: 1px solid #222;
+            background: linear-gradient(180deg, #101010 0%, #050505 100%);
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            position: relative; z-index: 10;
+        }
+        h1 { margin: 0; font-weight: 300; letter-spacing: 6px; text-transform: uppercase; color: #fff; font-size: 1.4rem; }
+        h1 span { color: var(--primary); font-weight: 700; text-shadow: 0 0 15px rgba(0,255,204,0.3); }
+
+        .system-nav { background: #000; padding: 10px 0; text-align: center; border-bottom: 1px solid #111; }
+        .back-btn {
+            background: linear-gradient(180deg, var(--primary), var(--primary)); color: #000;
+            padding: 10px 25px; border-radius: 6px; text-decoration: none; font-weight: 800;
+            border: none; transition: all 0.3s ease; box-shadow: 0 0 15px rgba(0, 255, 204, 0.5);
+            cursor: pointer; display: inline-block; font-size: 1em; letter-spacing: 2px; text-transform: uppercase;
+        }
+        .back-btn:hover { background: var(--bg); color: var(--primary); border: 1px solid var(--primary); box-shadow: 0 0 25px var(--primary); }
+
+        .container { 
+            max-width: 1400px; margin: 0 auto; padding: 30px 20px 50px;
+            height: calc(100vh - 120px); overflow-y: auto;
+            display: flex; flex-direction: column; gap: 30px;
+        }
+        .section { display: flex; flex-direction: column; gap: 18px; }
+        .section-title {
+            font-size: 0.9rem; letter-spacing: 4px; text-transform: uppercase;
+            color: #777; font-weight: 700; margin: 0 0 6px;
+        }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 30px; width: 100%; }
+        
+        .card {
+            background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s; 
+            display: flex; flex-direction: column; position: relative; height: 450px;
+        }
+        .card:hover { transform: translateY(-10px); box-shadow: 0 20px 50px rgba(0,0,0,0.7); border-color: #555; }
+        
+        .card-header { height: 180px; display: flex; align-items: center; justify-content: center; background: #000; position: relative; border-bottom: 1px solid #222; }
+        .card.duel .card-header { background: radial-gradient(circle at center, #062b2b 0%, #000 100%); }
+        .card.overdrive .card-header { background: radial-gradient(circle at center, #332200 0%, #000 100%); }
+        .card.siegeops .card-header { background: radial-gradient(circle at center, #1f0d2e 0%, #000 100%); }
+
+        .card h2 { z-index: 2; margin: 0; font-size: 2em; text-transform: uppercase; letter-spacing: 4px; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
+        .card-body { padding: 30px; flex: 1; display: flex; flex-direction: column; }
+        .badge { 
+            padding: 6px 10px; font-size: 0.7em; font-weight: 700; letter-spacing: 1px;
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); 
+            border-radius: 4px; margin-bottom: 15px; width: fit-content; text-transform: uppercase;
+        }
+        .card p { color: #889; line-height: 1.6; margin-bottom: 20px; flex: 1; font-size: 0.95em; }
+        
+        .play-btn {
+            width: 100%; padding: 15px; border: none; border-radius: 4px; 
+            font-weight: 800; font-size: 1.1em; text-transform: uppercase; cursor: pointer;
+            transition: 0.2s; color: #000; letter-spacing: 2px;
+        }
+        .play-btn:hover { filter: brightness(1.2); box-shadow: 0 0 25px currentColor; }
+
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.95); z-index: 9999;
+            align-items: center; justify-content: center; backdrop-filter: blur(10px);
+        }
+        .modal.active { display: flex; }
+        
+        .game-frame {
+            width: 1280px; max-width: 95vw; height: 800px; max-height: 95vh;
+            background: #000; border: 1px solid #333; border-radius: 4px;
+            display: flex; flex-direction: column; position: relative;
+            box-shadow: 0 0 100px rgba(0,0,0,0.8); overflow: hidden;
+        }
+
+        .gf-header {
+            height: 60px; background: #080808; border-bottom: 1px solid #222; 
+            display: flex; align-items: center; justify-content: space-between; padding: 0 25px;
+        }
+        .stats-bar { display: flex; gap: 40px; font-family: 'Courier New', monospace; font-size: 1.2em; color: #fff; }
+        .stat span { color: #555; margin-right: 8px; font-size: 0.7em; font-weight: 700; letter-spacing: 1px; }
+        .stat b { color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
+        .close-btn { 
+            background: #111; border: 1px solid #333; color: #888; 
+            padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 0.8em; 
+            font-weight: 700; transition: 0.2s;
+        }
+        .close-btn:hover { background: #300; border-color: #f00; color: #fcc; }
+
+        .canvas-container { flex: 1; position: relative; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        canvas { display: block; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+        
+        .info-overlay {
+            position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); border: 1px solid #444; padding: 15px;
+            color: #fff; text-align: center; border-radius: 4px; display: none;
+            backdrop-filter: blur(5px); z-index: 80; width: 60%;
+        }
+        .info-title { color: var(--primary); font-weight: 800; font-size: 1.2em; text-transform: uppercase; margin-bottom: 5px; }
+        .info-desc { color: #ccc; font-size: 0.9em; }
+
+        /* CODEX MODAL STYLES */
+        .codex-modal {
+            position: absolute; top:50px; left:50%; transform:translateX(-50%);
+            width: 600px; height: 500px; background: rgba(10,15,20,0.95);
+            border: 1px solid #333; border-radius: 8px; z-index: 200;
+            display: none; padding: 20px; backdrop-filter: blur(10px);
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+        }
+        .codex-grid { display: grid; grid-template-columns: 200px 1fr; gap: 20px; height: 100%; }
+        .codex-list { border-right: 1px solid #333; overflow-y: auto; }
+        .codex-item { 
+            padding: 10px; cursor: pointer; color: #888; font-family: monospace; 
+            border-bottom: 1px solid #222; transition: 0.2s; 
+        }
+        .codex-item:hover, .codex-item.active { color: #fff; background: rgba(255,255,255,0.05); }
+        
+        .codex-view { display: flex; flex-direction: column; align-items: center; }
+        .cx-canvas { background: #000; border: 1px solid #333; margin-bottom: 20px; }
+        .cx-stats { width: 100%; }
+        .cx-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-family: monospace; color: #aaa; border-bottom: 1px solid #222; padding-bottom: 5px; }
+        .cx-row b { color: #fff; }
+
+        .gf-controls {
+            height: 100px; background: #080808; border-top: 1px solid #222;
+            display: flex; align-items: center; padding: 0 30px; gap: 30px;
+        }
+        .tower-dock { display: flex; gap: 15px; overflow-x: auto; flex: 1; height: 100%; align-items: center; }
+        .t-card {
+            min-width: 90px; height: 70px; background: #111; border: 1px solid #333; border-radius: 4px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; transition: 0.2s; position: relative; flex-shrink: 0;
+        }
+        .t-card:hover { background: #1a1a1a; transform: translateY(-3px); border-color: #666; }
+        .t-card.active { border-color: var(--primary); background: rgba(0,255,204,0.05); box-shadow: 0 0 20px rgba(0,255,204,0.15); }
+        .t-name { font-size: 0.7em; font-weight: 800; margin-bottom: 5px; color: #ccc; letter-spacing: 1px; }
+        .t-cost { font-size: 0.8em; color: #ffd700; font-family: 'Courier New', monospace; }
+        
+        .action-dock { display: flex; gap: 10px; }
+        .act-btn { height: 70px; padding: 0 30px; font-weight: 800; cursor: pointer; background: #1a1a1a; border: 1px solid #333; color: #fff; border-radius: 4px; letter-spacing: 1px; }
+        .act-btn.primary { background: linear-gradient(180deg, #222, #111); border-color: var(--primary); color: var(--primary); }
+        .act-btn.primary:hover { background: var(--primary); color: #000; box-shadow: 0 0 20px rgba(0,255,204,0.3); }
+
+        .inspector {
+            position: absolute; right: 30px; top: 30px; width: 300px;
+            background: rgba(10,12,14,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px;
+            padding: 20px; backdrop-filter: blur(12px); display: none;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5); z-index: 60;
+        }
+        .command-panel {
+            position: absolute; left: 30px; top: 30px; width: 280px;
+            background: rgba(10,12,14,0.92); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px;
+            padding: 16px; backdrop-filter: blur(10px); display: none;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5); z-index: 60;
+        }
+        .command-title { font-weight: 800; color: #fff; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 10px; }
+        .command-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-family: 'Courier New', monospace; color: #aaa; }
+        .command-row b { color: #fff; }
+        .cmd-btn { width: 100%; padding: 8px 10px; margin-top: 6px; border: 1px solid #333; background: #111; color: #fff; cursor: pointer; font-weight: 700; }
+        .cmd-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .insp-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 15px; }
+        .insp-title { font-weight: 800; color: #fff; letter-spacing: 1px; text-transform: uppercase; margin:0; }
+        .insp-close { background: none; border: none; color: #666; font-size: 1.2em; cursor: pointer; font-weight: bold; }
+        .insp-close:hover { color: #fff; }
+
+        .insp-row { display: flex; justify-content: space-between; font-size: 0.85em; color: #999; margin-bottom: 8px; font-family: 'Courier New', monospace; }
+        .insp-row b { color: #fff; }
+        .insp-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+        .i-btn { padding: 10px; border: none; border-radius: 2px; cursor: pointer; font-size: 0.75em; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+        .upg { background: #003311; color: #00ff66; border: 1px solid #005522; }
+        .upg:hover { background: #005522; }
+        .sell { background: #330000; color: #ff5555; border: 1px solid #550000; }
+        .sell:hover { background: #550000; }
+        
+        .ingame-menu {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 100;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .diff-select { display: flex; gap: 20px; margin: 30px 0; }
+        .d-btn { 
+            padding: 15px 30px; background: transparent; border: 1px solid #444; color: #888; 
+            cursor: pointer; border-radius: 4px; font-weight: 700; letter-spacing: 2px; transition: 0.2s; 
+        }
+        .d-btn.selected { border-color: #fff; color: #fff; background: rgba(255,255,255,0.1); box-shadow: 0 0 15px rgba(255,255,255,0.1); }
+        .neon-control-btn {
+            background: #151515; color: #ccc; border: 1px solid #333; padding: 10px; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center; font-family: 'Courier New', monospace; font-size: 0.8em;
+        }
+        .neon-control-btn:hover { border-color: #fff; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>ASSAULT <span>PROTOCOLS</span></h1>
+    </header>
+    
+    <div class="system-nav">
+        <a href="experimental.html" class="back-btn">BACK TO SYSTEM</a>
+    </div>
+
+    <div class="container">
+        <div class="section">
+            <p class="section-title">Assault Simulations</p>
+            <div class="grid">
+                <div class="card duel" style="border-top: 4px solid #34d399;">
+                    <div class="card-header"><h2 style="color:#34d399">BREACH DUEL</h2></div>
+                    <div class="card-body">
+                        <span class="badge" style="color:#34d399">COMPETITIVE CORE</span>
+                        <p>Balanced duel mode with adaptive AI, abilities, and clean counter-play.</p>
+                        <button class="play-btn" style="background:#34d399" onclick="App.launch('duel')">INITIALIZE</button>
+                    </div>
+                </div>
+
+                <div class="card overdrive" style="border-top: 4px solid #fbbf24;">
+                    <div class="card-header"><h2 style="color:#fbbf24">OVERDRIVE</h2></div>
+                    <div class="card-body">
+                        <span class="badge" style="color:#fbbf24">HIGH CHAOS</span>
+                        <p>Hyper-paced assault with faster units, cheaper abilities, and brutal momentum.</p>
+                        <button class="play-btn" style="background:#fbbf24" onclick="App.launch('overdrive')">INITIALIZE</button>
+                    </div>
+                </div>
+
+                <div class="card siegeops" style="border-top: 4px solid #c084fc;">
+                    <div class="card-header"><h2 style="color:#c084fc">SIEGE OPS</h2></div>
+                    <div class="card-body">
+                        <span class="badge" style="color:#c084fc">TACTICAL SLOW BURN</span>
+                        <p>Methodical assaults with tougher towers, slower economy, and heavier stakes.</p>
+                        <button class="play-btn" style="background:#c084fc" onclick="App.launch('siege')">INITIALIZE</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal" class="modal">
+        <div class="game-frame">
+            <div class="gf-header">
+                <div class="stats-bar">
+                    <div class="stat"><span>WAVE</span> <b id="ui-wave">1</b></div>
+                    <div class="stat"><span>CREDITS</span> <b id="ui-money">0</b></div>
+                    <div class="stat"><span>LIVES</span> <b id="ui-lives">100</b></div>
+                </div>
+                <button class="close-btn" onclick="App.close()">TERMINATE</button>
+            </div>
+
+            <div class="canvas-container">
+                <canvas id="game-canvas" width="1200" height="800"></canvas>
+                
+                <div id="info-overlay" class="info-overlay">
+                    <div id="info-title" class="info-title"></div>
+                    <div id="info-desc" class="info-desc"></div>
+                </div>
+
+                <div id="codex-modal" class="codex-modal">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                        <h2 style="margin:0; color:#fff;">ENEMY DATABASE</h2>
+                        <button class="insp-close" onclick="App.toggleCodex()">×</button>
+                    </div>
+                    <div class="codex-grid">
+                        <div class="codex-list" id="cx-list"></div>
+                        <div class="codex-view">
+                            <canvas id="cx-preview" width="100" height="100" class="cx-canvas"></canvas>
+                            <div class="cx-stats" id="cx-details"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="start-menu" class="ingame-menu">
+                    <h2 style="color:#fff; font-size:3em; letter-spacing:8px; text-shadow: 0 0 20px rgba(255,255,255,0.5);">SYSTEM READY</h2>
+                    <div id="diff-selector" class="diff-select" style="display:none;">
+                        <button class="d-btn" onclick="App.setDiff('easy', this)">EASY</button>
+                        <button class="d-btn selected" onclick="App.setDiff('med', this)">NORMAL</button>
+                        <button class="d-btn" onclick="App.setDiff('hard', this)">HARD</button>
+                    </div>
+                    <button class="play-btn" style="width:250px; background:#fff;" onclick="App.startMatch()">ENGAGE</button>
+                </div>
+
+                <div id="inspector" class="inspector">
+                    <div class="insp-header">
+                        <h3 class="insp-title" id="i-name">TOWER</h3>
+                        <button class="insp-close" onclick="App.deselect()">×</button>
+                    </div>
+                    <div id="i-stats"></div>
+                    <div class="insp-btns" id="i-controls-std">
+                        <button class="i-btn upg" onclick="App.gameAction('upgrade')">UPGRADE <span id="i-cost-up"></span></button>
+                        <button class="i-btn sell" onclick="App.gameAction('sell')">SELL <span id="i-cost-sell"></span></button>
+                    </div>
+                    <div class="insp-btns" id="i-controls-neon" style="display:none; grid-template-columns:1fr; gap:5px;">
+                        <button class="neon-control-btn" onclick="App.gameAction('upg_dmg')">DMG <span id="n-cost-dmg" style="color:gold"></span></button>
+                        <button class="neon-control-btn" onclick="App.gameAction('upg_rng')">RNG <span id="n-cost-rng" style="color:gold"></span></button>
+                        <button class="neon-control-btn" onclick="App.gameAction('upg_rate')">SPD <span id="n-cost-rate" style="color:gold"></span></button>
+                        <button class="i-btn sell" onclick="App.gameAction('sell')">DISMANTLE <span id="n-cost-sell" style="color:#faa"></span></button>
+                    </div>
+                </div>
+
+                <div id="command-panel" class="command-panel">
+                    <div class="insp-header">
+                        <h3 class="command-title">COMMAND UPLINK</h3>
+                        <button class="insp-close" onclick="App.toggleCommand()">×</button>
+                    </div>
+                    <div class="command-row"><span>AI Credits</span><b id="cmd-ai">0</b></div>
+                    <div class="command-row"><span>Damage</span><b id="cmd-dmg">0</b></div>
+                    <button class="cmd-btn" onclick="App.gameAction('upg_dmg')">UPGRADE DAMAGE <span id="cmd-dmg-cost"></span></button>
+                    <div class="command-row"><span>Speed</span><b id="cmd-spd">0</b></div>
+                    <button class="cmd-btn" onclick="App.gameAction('upg_spd')">UPGRADE SPEED <span id="cmd-spd-cost"></span></button>
+                    <div class="command-row"><span>Armor</span><b id="cmd-arm">0</b></div>
+                    <button class="cmd-btn" onclick="App.gameAction('upg_armor')">UPGRADE ARMOR <span id="cmd-arm-cost"></span></button>
+                    <div class="command-row"><span>Hull</span><b id="cmd-hp">0</b></div>
+                    <button class="cmd-btn" onclick="App.gameAction('upg_hp')">UPGRADE HULL <span id="cmd-hp-cost"></span></button>
+
+                    <div class="command-row" style="margin-top:12px;"><span>EMP</span><b id="cmd-emp">READY</b></div>
+                    <button class="cmd-btn" onclick="App.gameAction('ability_emp')">CAST EMP <span id="cmd-emp-cost"></span></button>
+                    <div class="command-row"><span>Overclock</span><b id="cmd-oc">READY</b></div>
+                    <button class="cmd-btn" onclick="App.gameAction('ability_overclock')">OVERCLOCK <span id="cmd-oc-cost"></span></button>
+                    <div class="command-row"><span>Decoy</span><b id="cmd-decoy">READY</b></div>
+                    <button class="cmd-btn" onclick="App.gameAction('ability_decoy')">DECOY SWARM <span id="cmd-decoy-cost"></span></button>
+                    <div class="command-row"><span>Strike</span><b id="cmd-strike">READY</b></div>
+                    <button class="cmd-btn" onclick="App.gameAction('ability_strike')">ORBITAL STRIKE <span id="cmd-strike-cost"></span></button>
+                </div>
+            </div>
+
+            <div class="gf-controls">
+                <div class="tower-dock" id="tower-dock"></div>
+                <div class="action-dock">
+                    <button class="act-btn" onclick="App.toggleCodex()">DATABASE</button>
+                    <button class="act-btn" id="cmd-btn" onclick="App.toggleCommand()" style="display:none;">COMMAND</button>
+                    <button class="act-btn primary" onclick="App.gameAction('wave')">NEXT WAVE</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="reverse-duel.js"></script>
+    <script type="module" src="reverse-overdrive.js"></script>
+    <script type="module" src="reverse-siege-ops.js"></script>
+
+    <script type="module">
+    const App = {
+        activeGame: null,
+        gameId: null,
+        loopId: null,
+        diff: 'med',
+        canvas: document.getElementById('game-canvas'),
+        ctx: document.getElementById('game-canvas').getContext('2d', { alpha: false }),
+        
+        // CODEX LOGIC
+        toggleCodex: () => {
+            const el = document.getElementById('codex-modal');
+            if(el.style.display === 'block') {
+                el.style.display = 'none';
+                if(App.activeGame && App.activeGame.pause) App.activeGame.pause(false);
+            } else {
+                el.style.display = 'block';
+                if(App.activeGame && App.activeGame.pause) App.activeGame.pause(true);
+                App.populateCodex();
+            }
+        },
+        toggleCommand: () => {
+            const el = document.getElementById('command-panel');
+            if (!el) return;
+            el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+            if (el.style.display === 'block') App.updateCommandPanel();
+        },
+
+        populateCodex: () => {
+            if(!App.activeGame || !App.activeGame.getEnemyTypes) return;
+            const data = App.activeGame.getEnemyTypes();
+            const list = document.getElementById('cx-list');
+            list.innerHTML = '';
+            
+            let first = true;
+            for(let key in data) {
+                let d = data[key];
+                let item = document.createElement('div');
+                item.className = 'codex-item';
+                item.innerText = d.name;
+                item.onclick = () => {
+                    document.querySelectorAll('.codex-item').forEach(x=>x.classList.remove('active'));
+                    item.classList.add('active');
+                    App.showCodexEntry(key, d);
+                };
+                list.appendChild(item);
+                if(first) { item.click(); first=false; }
+            }
+        },
+
+        showCodexEntry: (key, d) => {
+            // Stats
+            let html = `
+                <div class="cx-row"><span>HP Class</span><b>${d.hp}</b></div>
+                <div class="cx-row"><span>Speed</span><b>${d.spd}</b></div>
+                <div class="cx-row"><span style="color:#f55">WEAKNESS</span><b>${d.weak}</b></div>
+                <div style="margin-top:15px; color:#ddd; font-size:0.9em; line-height:1.4;">${d.desc}</div>
+            `;
+            document.getElementById('cx-details').innerHTML = html;
+
+            // Canvas Preview
+            const cvs = document.getElementById('cx-preview');
+            const ctx = cvs.getContext('2d');
+            ctx.clearRect(0,0,100,100);
+            ctx.fillStyle = '#050508';
+            ctx.fillRect(0,0,100,100);
+            
+            // Invoke Game's drawEnemy on this canvas
+            if(App.activeGame.drawPreview) {
+                App.activeGame.drawPreview(ctx, key);
+            }
+        },
+
+        launch: (id) => {
+            App.gameId = id;
+            document.getElementById('modal').classList.add('active');
+            document.getElementById('start-menu').style.display = 'flex';
+            document.getElementById('inspector').style.display = 'none';
+            document.getElementById('info-overlay').style.display = 'none';
+            document.getElementById('command-panel').style.display = 'none';
+            document.getElementById('diff-selector').style.display = 'none';
+            document.getElementById('cmd-btn').style.display = 'inline-flex';
+
+            if(id === 'duel' && window.ReverseDuelGame) App.activeGame = window.ReverseDuelGame;
+            else if(id === 'overdrive' && window.ReverseOverdriveGame) App.activeGame = window.ReverseOverdriveGame;
+            else if(id === 'siege' && window.ReverseSiegeOpsGame) App.activeGame = window.ReverseSiegeOpsGame;
+            else { alert('Game Module Error.'); App.close(); return; }
+
+            App.buildDock();
+            App.activeGame.init(App.canvas, { difficulty: App.diff });
+            App.loop();
+        },
+
+        close: () => {
+            if(App.loopId) cancelAnimationFrame(App.loopId);
+            if(App.activeGame && App.activeGame.stop) App.activeGame.stop();
+            App.activeGame = null;
+            document.getElementById('modal').classList.remove('active');
+        },
+
+        setDiff: (d, btn) => {
+            App.diff = d;
+            document.querySelectorAll('.d-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+        },
+
+        startMatch: () => {
+            document.getElementById('start-menu').style.display = 'none';
+            if(App.activeGame) App.activeGame.init(App.canvas, { difficulty: App.diff });
+        },
+
+        deselect: () => {
+             if(App.activeGame && App.activeGame.deselect) App.activeGame.deselect();
+             document.getElementById('inspector').style.display = 'none';
+        },
+
+        buildDock: () => {
+            const dock = document.getElementById('tower-dock');
+            dock.innerHTML = '';
+            const conf = App.activeGame.conf.towers;
+            
+            for(let key in conf) {
+                let t = conf[key];
+                let btn = document.createElement('div');
+                btn.className = 't-card';
+                btn.innerHTML = `<div class="t-name" style="color:${t.color}">${t.name}</div><div class="t-cost">$${t.cost}</div>`;
+                
+                btn.onmouseenter = () => {
+                    if(App.activeGame.pause) App.activeGame.pause(true);
+                    let ov = document.getElementById('info-overlay');
+                    ov.style.display = 'block';
+                    document.getElementById('info-title').innerText = t.name;
+                    document.getElementById('info-title').style.color = t.color;
+                    document.getElementById('info-desc').innerText = t.desc || "No description available.";
+                };
+                
+                btn.onmouseleave = () => {
+                    if(App.activeGame.pause) App.activeGame.pause(false);
+                    document.getElementById('info-overlay').style.display = 'none';
+                };
+
+                btn.onclick = () => {
+                    App.activeGame.setBuild(key);
+                    document.querySelectorAll('.t-card').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                };
+                dock.appendChild(btn);
+            }
+        },
+
+        gameAction: (act) => {
+            if(!App.activeGame) return;
+            try {
+                if(act === 'wave') App.activeGame.startWave();
+                else if(act === 'upgrade') App.activeGame.upgrade();
+                else if(act === 'sell') App.activeGame.sell();
+                else if(act.startsWith('upg_')) App.activeGame.upgrade(act.replace('upg_', ''));
+                else if(act.startsWith('ability_') && App.activeGame.castAbility) App.activeGame.castAbility(act.replace('ability_', ''));
+            } catch(e) { console.error("Game Action Error:", e); }
+        },
+
+        loop: () => {
+            if(!App.activeGame) return;
+            try {
+                App.activeGame.update();
+                App.activeGame.draw(App.ctx);
+                
+                const g = App.activeGame;
+                const w = (g.wave !== undefined) ? g.wave : (g.state ? g.state.wave : 0);
+                const m = (g.money !== undefined) ? g.money : (g.state ? g.state.money : 0);
+                const l = (g.lives !== undefined) ? g.lives : (g.state ? g.state.lives : 0);
+                const bestWave = (g.bestWave !== undefined) ? g.bestWave : (g.state ? g.state.bestWave : 0);
+                const bestDisplay = Math.max(bestWave || 0, w || 0);
+                
+                document.getElementById('ui-wave').innerText = bestDisplay ? `${w} | BEST ${bestDisplay}` : w;
+                document.getElementById('ui-money').innerText = Math.floor(m);
+                document.getElementById('ui-lives').innerText = l;
+                App.updateInspector();
+                App.updateCommandPanel();
+            } catch(err) { console.error("Game Loop Crashed:", err); }
+            App.loopId = requestAnimationFrame(App.loop);
+        },
+
+        updateInspector: () => {
+            if (!App.activeGame || !App.activeGame.sel) { document.getElementById('inspector').style.display = 'none'; return; }
+            const sel = App.activeGame.sel;
+            const panel = document.getElementById('inspector');
+            if(!App.activeGame.buildMode) document.querySelectorAll('.t-card').forEach(b => b.classList.remove('active'));
+            panel.style.display = 'block';
+            document.getElementById('i-name').innerText = sel.name;
+            document.getElementById('i-name').style.color = sel.color;
+            let html = '';
+            if(sel.dmg) html += `<div class="insp-row"><span>Damage</span><b>${Math.floor(sel.dmg)}</b></div>`;
+            if(sel.rng || sel.range) html += `<div class="insp-row"><span>Range</span><b>${Math.floor(sel.rng || sel.range)}</b></div>`;
+            if(sel.rate) html += `<div class="insp-row"><span>Rate</span><b>${sel.rate}</b></div>`;
+            document.getElementById('i-stats').innerHTML = html;
+            if(App.gameId === 'neon') {
+                document.getElementById('i-controls-std').style.display = 'none';
+                document.getElementById('i-controls-neon').style.display = 'grid';
+                const def = App.activeGame.conf.towers[sel.key || sel.type];
+                if (!def) return; 
+                const base = def.cost;
+                const costCalc = (lvl) => Math.floor(base * 0.5 * ((lvl||0)+1));
+                document.getElementById('n-cost-dmg').innerText = '$'+costCalc(sel.attrLevels.dmg);
+                document.getElementById('n-cost-rng').innerText = '$'+costCalc(sel.attrLevels.rng);
+                document.getElementById('n-cost-rate').innerText = '$'+costCalc(sel.attrLevels.rate);
+                document.getElementById('n-cost-sell').innerText = '$'+Math.floor(base*0.5);
+            } else {
+                document.getElementById('i-controls-std').style.display = 'grid';
+                document.getElementById('i-controls-neon').style.display = 'none';
+                let def = App.activeGame.conf.towers[sel.type];
+                if(def) {
+                    let upCost = Math.floor(def.cost * 0.8 * (sel.level || 1));
+                    document.getElementById('i-cost-up').innerText = '$'+upCost;
+                    document.getElementById('i-cost-sell').innerText = '$'+Math.floor(def.cost*0.5);
+                }
+            }
+        },
+        updateCommandPanel: () => {
+            if (!App.activeGame || !App.activeGame.getCommandState) return;
+            const panel = document.getElementById('command-panel');
+            if (panel.style.display !== 'block') return;
+            const data = App.activeGame.getCommandState();
+            document.getElementById('cmd-ai').innerText = Math.floor(data.aiCredits || 0);
+            document.getElementById('cmd-dmg').innerText = `L${data.upgrades.dmg.level}`;
+            document.getElementById('cmd-spd').innerText = `L${data.upgrades.spd.level}`;
+            document.getElementById('cmd-arm').innerText = `L${data.upgrades.armor.level}`;
+            document.getElementById('cmd-hp').innerText = `L${data.upgrades.hp.level}`;
+            document.getElementById('cmd-dmg-cost').innerText = `$${data.upgrades.dmg.cost}`;
+            document.getElementById('cmd-spd-cost').innerText = `$${data.upgrades.spd.cost}`;
+            document.getElementById('cmd-arm-cost').innerText = `$${data.upgrades.armor.cost}`;
+            document.getElementById('cmd-hp-cost').innerText = `$${data.upgrades.hp.cost}`;
+
+            document.getElementById('cmd-emp').innerText = data.abilities.emp.cooldown ? `CD ${data.abilities.emp.cooldown}` : 'READY';
+            document.getElementById('cmd-oc').innerText = data.abilities.overclock.cooldown ? `CD ${data.abilities.overclock.cooldown}` : 'READY';
+            document.getElementById('cmd-decoy').innerText = data.abilities.decoy.cooldown ? `CD ${data.abilities.decoy.cooldown}` : 'READY';
+            document.getElementById('cmd-strike').innerText = data.abilities.strike.cooldown ? `CD ${data.abilities.strike.cooldown}` : 'READY';
+            document.getElementById('cmd-emp-cost').innerText = `$${data.abilities.emp.cost}`;
+            document.getElementById('cmd-oc-cost').innerText = `$${data.abilities.overclock.cost}`;
+            document.getElementById('cmd-decoy-cost').innerText = `$${data.abilities.decoy.cost}`;
+            document.getElementById('cmd-strike-cost').innerText = `$${data.abilities.strike.cost}`;
+        }
+    };
+
+    document.getElementById('game-canvas').addEventListener('mousedown', (e) => {
+        if(!App.activeGame) return;
+        const r = App.canvas.getBoundingClientRect();
+        const sx = App.canvas.width / r.width;
+        const sy = App.canvas.height / r.height;
+        App.activeGame.click((e.clientX - r.left)*sx, (e.clientY - r.top)*sy);
+    });
+
+    window.App = App;
+    </script>
+</body>
+</html>
