@@ -15,6 +15,12 @@
             --text: #eee;
         }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', Tahoma, sans-serif; overflow: hidden; }
+        body[data-mode="duel"] { background: #02181b; }
+        body[data-mode="overdrive"] { background: #1b0904; }
+        body[data-mode="siege"] { background: #0b120f; }
+        body[data-mode="overdrive"] .game-frame { box-shadow: 0 0 120px rgba(255, 120, 70, 0.4); }
+        body[data-mode="duel"] .game-frame { box-shadow: 0 0 120px rgba(45, 212, 191, 0.35); }
+        body[data-mode="siege"] .game-frame { box-shadow: 0 0 120px rgba(34, 197, 94, 0.25); }
         
         header {
             padding: 15px; text-align: center; border-bottom: 1px solid #222;
@@ -146,6 +152,7 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             cursor: pointer; transition: 0.2s; position: relative; flex-shrink: 0;
         }
+        .t-card.disabled { opacity: 0.4; filter: grayscale(0.6); pointer-events: none; }
         .t-card:hover { background: #1a1a1a; transform: translateY(-3px); border-color: #666; }
         .t-card.active { border-color: var(--primary); background: rgba(0,255,204,0.05); box-shadow: 0 0 20px rgba(0,255,204,0.15); }
         .t-name { font-size: 0.7em; font-weight: 800; margin-bottom: 5px; color: #ccc; letter-spacing: 1px; }
@@ -216,6 +223,11 @@
     </div>
 
     <div class="container">
+        <div style="color:#9aa4b2; max-width:900px; line-height:1.6;">
+            Assault Protocols flips tower defense into an attacker-command simulation. Each mode is its own doctrine:
+            Duel is a control war with relays and shields, Overdrive is a momentum rush with hazards,
+            and Siege Ops is a convoy escort with logistics, checkpoints, and supply management.
+        </div>
         <div class="section">
             <p class="section-title">Assault Simulations</p>
             <div class="grid">
@@ -252,11 +264,11 @@
     <div id="modal" class="modal">
         <div class="game-frame">
             <div class="gf-header">
-                <div class="stats-bar">
-                    <div class="stat"><span>WAVE</span> <b id="ui-wave">1</b></div>
-                    <div class="stat"><span>CREDITS</span> <b id="ui-money">0</b></div>
-                    <div class="stat"><span>LIVES</span> <b id="ui-lives">100</b></div>
-                </div>
+            <div class="stats-bar">
+                <div class="stat"><span id="ui-label-wave">WAVE</span> <b id="ui-wave">1</b></div>
+                <div class="stat"><span id="ui-label-money">CREDITS</span> <b id="ui-money">0</b></div>
+                <div class="stat"><span id="ui-label-lives">LIVES</span> <b id="ui-lives">100</b></div>
+            </div>
                 <button class="close-btn" onclick="App.close()">TERMINATE</button>
             </div>
 
@@ -283,7 +295,8 @@
                 </div>
 
                 <div id="start-menu" class="ingame-menu">
-                    <h2 style="color:#fff; font-size:3em; letter-spacing:8px; text-shadow: 0 0 20px rgba(255,255,255,0.5);">SYSTEM READY</h2>
+                    <h2 id="mode-title" style="color:#fff; font-size:3em; letter-spacing:8px; text-shadow: 0 0 20px rgba(255,255,255,0.5);">SYSTEM READY</h2>
+                    <div id="mode-desc" style="max-width:700px; text-align:center; color:#9aa4b2; margin-top:16px; line-height:1.6;"></div>
                     <div id="diff-selector" class="diff-select" style="display:none;">
                         <button class="d-btn" onclick="App.setDiff('easy', this)">EASY</button>
                         <button class="d-btn selected" onclick="App.setDiff('med', this)">NORMAL</button>
@@ -391,6 +404,7 @@
             root.style.setProperty('--secondary', t.secondary);
             root.style.setProperty('--tertiary', t.tertiary);
             root.style.setProperty('--text', t.text);
+            document.body.dataset.mode = id;
             const title = document.getElementById('page-title');
             if (title) title.innerHTML = `ASSAULT <span style=\"color:${t.primary}\">PROTOCOLS</span>`;
         },
@@ -450,6 +464,7 @@
             document.getElementById('diff-selector').style.display = 'none';
             document.getElementById('cmd-btn').style.display = 'inline-flex';
             App.setTheme(id);
+            App.updateBriefing(id);
 
             if(id === 'duel' && window.ReverseDuelGame) App.activeGame = window.ReverseDuelGame;
             else if(id === 'overdrive' && window.ReverseOverdriveGame) App.activeGame = window.ReverseOverdriveGame;
@@ -494,6 +509,8 @@
                 let btn = document.createElement('div');
                 btn.className = 't-card';
                 btn.innerHTML = `<div class="t-name" style="color:${t.color}">${t.name}</div><div class="t-cost">$${t.cost}</div>`;
+                const canBuild = App.activeGame.canBuild ? App.activeGame.canBuild(key) : true;
+                if (!canBuild) btn.classList.add('disabled');
                 
                 btn.onmouseenter = () => {
                     if(App.activeGame.pause) App.activeGame.pause(true);
@@ -510,6 +527,7 @@
                 };
 
                 btn.onclick = () => {
+                    if (App.activeGame.canBuild && !App.activeGame.canBuild(key)) return;
                     App.activeGame.setBuild(key);
                     document.querySelectorAll('.t-card').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
@@ -541,10 +559,23 @@
                 const l = (g.lives !== undefined) ? g.lives : (g.state ? g.state.lives : 0);
                 const bestWave = (g.bestWave !== undefined) ? g.bestWave : (g.state ? g.state.bestWave : 0);
                 const bestDisplay = Math.max(bestWave || 0, w || 0);
-                
-                document.getElementById('ui-wave').innerText = bestDisplay ? `${w} | BEST ${bestDisplay}` : w;
-                document.getElementById('ui-money').innerText = Math.floor(m);
-                document.getElementById('ui-lives').innerText = l;
+
+                if (g.getHud) {
+                    const hud = g.getHud();
+                    document.getElementById('ui-label-wave').innerText = hud.labels[0];
+                    document.getElementById('ui-label-money').innerText = hud.labels[1];
+                    document.getElementById('ui-label-lives').innerText = hud.labels[2];
+                    document.getElementById('ui-wave').innerText = hud.values[0];
+                    document.getElementById('ui-money').innerText = hud.values[1];
+                    document.getElementById('ui-lives').innerText = hud.values[2];
+                } else {
+                    document.getElementById('ui-label-wave').innerText = 'WAVE';
+                    document.getElementById('ui-label-money').innerText = 'CREDITS';
+                    document.getElementById('ui-label-lives').innerText = 'LIVES';
+                    document.getElementById('ui-wave').innerText = bestDisplay ? `${w} | BEST ${bestDisplay}` : w;
+                    document.getElementById('ui-money').innerText = Math.floor(m);
+                    document.getElementById('ui-lives').innerText = l;
+                }
                 App.updateInspector();
                 App.updateCommandPanel();
             } catch(err) { console.error("Game Loop Crashed:", err); }
@@ -616,6 +647,22 @@
             document.getElementById('cmd-oc-cost').innerText = `$${data.abilities.overclock.cost}`;
             document.getElementById('cmd-decoy-cost').innerText = `$${data.abilities.decoy.cost}`;
             document.getElementById('cmd-strike-cost').innerText = `$${data.abilities.strike.cost}`;
+        },
+        updateBriefing: (id) => {
+            const titles = {
+                duel: 'BREACH DUEL',
+                overdrive: 'OVERDRIVE',
+                siege: 'SIEGE OPS'
+            };
+            const desc = {
+                duel: 'Capture control relays to suppress AI builds, dismantle shield pylons, then crack the core. This is a tactical control war.',
+                overdrive: 'A momentum rush. Burst waves and storm zones force constant aggression and split-second timing.',
+                siege: 'Escort the carrier, unlock tiers at checkpoints, and manage supply drops. Slow, methodical, high-stakes.'
+            };
+            const titleEl = document.getElementById('mode-title');
+            const descEl = document.getElementById('mode-desc');
+            if (titleEl) titleEl.textContent = titles[id] || 'SYSTEM READY';
+            if (descEl) descEl.textContent = desc[id] || '';
         }
     };
 

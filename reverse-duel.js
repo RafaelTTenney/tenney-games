@@ -60,6 +60,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
     let relays = [];
     let shieldPulse = 0;
     let aiSuppressed = 0;
+    let dominance = 0;
 
     const upgradeState = { dmg: 0, spd: 0, hp: 0, armor: 0 };
     const abilityState = {
@@ -123,6 +124,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       relays = buildRelays();
       shieldPulse = 0;
       aiSuppressed = 0;
+      dominance = 0;
       loadBestWave();
     }
 
@@ -640,6 +642,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const aiRelayCount = relays.filter(r => r.owner === 'ai').length;
       const playerRelayCount = relays.filter(r => r.owner === 'player').length;
       const aiPower = 1 + aiRelayCount * 0.12;
+      if (playerRelayCount !== aiRelayCount) {
+        dominance += (playerRelayCount - aiRelayCount) * 0.05;
+        dominance = Math.max(0, Math.min(100, dominance));
+      } else {
+        dominance = Math.max(0, dominance - 0.01);
+      }
 
       for (let i = towers.length - 1; i >= 0; i--) {
         const t = towers[i];
@@ -736,6 +744,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
         aiSuppressed = 1200;
         particles.push({ type:'ring', x:endNode.x * CELL + CELL / 2, y:endNode.y * CELL + CELL / 2, life:40, color:'#34d399', r:200 });
       }
+      if (dominance >= 100) {
+        baseHp = 0;
+      }
 
       if (baseHp <= 0) {
         wave++;
@@ -802,6 +813,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 14px monospace';
       ctx.fillText(`CORE ${Math.max(0, Math.floor(baseHp))}/${baseMax}`, canvas.width - 210, 30);
+      ctx.fillStyle = '#34d399';
+      ctx.fillRect(30, 24, Math.max(0, dominance), 6);
+      ctx.strokeStyle = '#0f172a';
+      ctx.strokeRect(30, 24, 100, 6);
 
       if (pylonsAlive().length) {
         ctx.strokeStyle = `rgba(56,189,248,${0.12 + (shieldPulse / 600)})`;
@@ -858,12 +873,19 @@ import { getHighScore, submitHighScore } from './score-store.js';
       towers.forEach(t => {
         ctx.save();
         ctx.translate(t.x, t.y);
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 12;
         ctx.shadowColor = t.color;
-        ctx.fillStyle = t.color;
+        ctx.strokeStyle = t.color;
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(0, 0, 14, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(0, -14);
+        ctx.lineTo(12, -7);
+        ctx.lineTo(12, 7);
+        ctx.lineTo(0, 14);
+        ctx.lineTo(-12, 7);
+        ctx.lineTo(-12, -7);
+        ctx.closePath();
+        ctx.stroke();
         ctx.shadowBlur = 0;
         if (t.stun > 0) {
           ctx.strokeStyle = '#ffe95a';
@@ -881,19 +903,21 @@ import { getHighScore, submitHighScore } from './score-store.js';
       units.forEach(u => {
         ctx.save();
         ctx.translate(u.x, u.y);
-        ctx.fillStyle = u.color;
+        ctx.strokeStyle = u.color;
+        ctx.lineWidth = 2;
         if (u.type === 'runner' || u.type === 'ghost') {
           ctx.beginPath();
           ctx.moveTo(10, 0);
           ctx.lineTo(-8, 7);
           ctx.lineTo(-8, -7);
-          ctx.fill();
+          ctx.closePath();
+          ctx.stroke();
         } else if (u.type === 'siege') {
-          ctx.fillRect(-10, -10, 20, 20);
+          ctx.strokeRect(-10, -10, 20, 20);
         } else if (u.type === 'medic') {
           ctx.beginPath();
           ctx.arc(0, 0, 9, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.stroke();
           ctx.strokeStyle = '#fff';
           ctx.beginPath();
           ctx.moveTo(-4, 0); ctx.lineTo(4, 0);
@@ -902,7 +926,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
         } else {
           ctx.beginPath();
           ctx.arc(0, 0, 9, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.stroke();
         }
         ctx.restore();
         ctx.fillStyle = '#0f0';
@@ -992,6 +1016,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
       upgrade,
       getUpgradeState,
       getCommandState,
+      getHud: () => ({
+        labels: ['DOMINANCE', 'CREDITS', 'LIVES'],
+        values: [`${Math.floor(dominance)}%`, Math.floor(money), lives]
+      }),
       getCommandState,
       castAbility: useAbility,
       stop: () => { submitBestWave(); },

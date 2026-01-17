@@ -158,6 +158,14 @@ import { getHighScore, submitHighScore } from './score-store.js';
       return false;
     }
 
+    function canBuild(type) {
+      const def = UNITS[type];
+      if (!def) return false;
+      if (!isUnitUnlocked(type)) return false;
+      const used = units.reduce((sum, u) => sum + (u.supply || 1), 0);
+      return used + (def.supply || 1) <= supplyCap;
+    }
+
     function getUpgradeCost(attr) {
       const lvl = upgradeState[attr] || 0;
       const base = 120;
@@ -793,17 +801,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
       towers.forEach(t => {
         ctx.save();
         ctx.translate(t.x, t.y);
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = t.color;
-        ctx.fillStyle = t.color;
-        ctx.beginPath();
-        ctx.arc(0, 0, 14, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#22c55e';
+        ctx.fillStyle = '#1b2a1f';
+        ctx.fillRect(-14, -10, 28, 20);
+        ctx.strokeStyle = t.color;
+        ctx.strokeRect(-14, -10, 28, 20);
         ctx.shadowBlur = 0;
         if (t.stun > 0) {
-          ctx.strokeStyle = '#ffe95a';
+          ctx.strokeStyle = '#facc15';
           ctx.beginPath();
-          ctx.arc(0, 0, 20, 0, Math.PI * 2);
+          ctx.moveTo(-18, -14); ctx.lineTo(18, 14);
+          ctx.moveTo(18, -14); ctx.lineTo(-18, 14);
           ctx.stroke();
         }
         ctx.restore();
@@ -948,6 +957,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
       upgrade,
       getUpgradeState,
       getCommandState,
+      canBuild,
+      getHud: () => ({
+        labels: ['PHASE', 'CREDITS', 'LIVES'],
+        values: [wave, Math.floor(money), lives]
+      }),
       castAbility: useAbility,
       stop: () => { submitBestWave(); },
       conf: { towers: UNITS },

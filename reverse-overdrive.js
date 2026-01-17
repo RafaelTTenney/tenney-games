@@ -57,6 +57,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
     let aiUpgradeCooldown = 0;
     let storms = [];
     let burstTimer = 0;
+    let heat = 0;
+    let combo = 0;
+    let phaseTimer = 0;
+    let phaseMax = 0;
 
     const upgradeState = { dmg: 0, spd: 0, hp: 0, armor: 0 };
     const abilityState = {
@@ -100,6 +104,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
       aiUpgradeCooldown = 80;
       storms = [];
       burstTimer = 400;
+      heat = 0;
+      combo = 0;
+      phaseTimer = 0;
+      phaseMax = 0;
       units = [];
       projs = [];
       particles = [];
@@ -200,6 +208,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       }
       units.push(unit);
       if (record) spawnHistory.push({ type, frame });
+      heat = Math.min(140, heat + 6);
     }
 
     function canPlaceTower(gx, gy) {
@@ -309,6 +318,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
       money += 200 + wave * 90;
       aiCooldown = 12;
       aiUpgradeCooldown = 80;
+      phaseTimer = 1200;
+      phaseMax = phaseTimer;
     }
 
     function findTowerTarget(u) {
@@ -422,8 +433,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
         return;
       }
 
-      money += 0.09 + wave * 0.01;
+      money += 0.09 + wave * 0.01 + combo * 0.01;
       aiCredits += 0.08 + wave * 0.02;
+      heat = Math.max(0, heat - 0.12);
 
       if (burstTimer > 0) burstTimer--;
       if (burstTimer === 0) {
@@ -436,6 +448,19 @@ import { getHighScore, submitHighScore } from './score-store.js';
         s.life--;
         if (s.life <= 0) storms.splice(i, 1);
       });
+
+      if (phaseTimer > 0) {
+        phaseTimer--;
+        if (phaseTimer === 0) {
+          wave++;
+          money += 120 + wave * 30;
+          aiCredits += 100 + wave * 20;
+          baseMax = 120 + wave * 60;
+          baseHp = Math.min(baseMax, baseHp + baseMax * 0.2);
+          phaseTimer = phaseMax;
+          spawnBurst();
+        }
+      }
 
       if (abilityState.emp.cooldown > 0) abilityState.emp.cooldown--;
       if (abilityState.overclock.cooldown > 0) abilityState.overclock.cooldown--;
@@ -462,8 +487,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const coreY = endNode.y * CELL + CELL / 2;
       const overclockOn = abilityState.overclock.timer > 0;
       const frenzy = baseHp < baseMax * 0.5 ? 1.2 : 1;
-      const overclockDmg = (overclockOn ? 1 + ABILITIES.overclock.dmg : 1) * frenzy;
-      const overclockSpd = (overclockOn ? 1 + ABILITIES.overclock.spd : 1) * frenzy;
+      const overheat = heat > 100;
+      const heatBoost = overheat ? 1.25 : 1;
+      const overclockDmg = (overclockOn ? 1 + ABILITIES.overclock.dmg : 1) * frenzy * heatBoost;
+      const overclockSpd = (overclockOn ? 1 + ABILITIES.overclock.spd : 1) * frenzy * heatBoost;
 
       for (let i = units.length - 1; i >= 0; i--) {
         const u = units[i];
@@ -541,8 +568,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
           u.y += (moveY / moveMag) * u.spd;
 
           if (Math.hypot(u.x - coreX, u.y - coreY) < 24) {
-            baseHp -= u.breach;
-            money += 10;
+            baseHp -= u.breach * (overheat ? 1.2 : 1);
+            money += 12;
+            combo = Math.min(20, combo + 1);
+            heat = Math.min(140, heat + 10);
             units.splice(i, 1);
             continue;
           }
@@ -550,6 +579,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
         if (u.hp <= 0) {
           lives--;
+          combo = Math.max(0, combo - 2);
           for (let k = 0; k < 8; k++) {
             particles.push({ type:'spark', x:u.x, y:u.y, vx:(Math.random()-0.5)*4, vy:(Math.random()-0.5)*4, life:18, color:u.color });
           }
@@ -668,17 +698,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
     function draw(ctx) {
       const bg = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      bg.addColorStop(0, '#04070d');
-      bg.addColorStop(1, '#120514');
+      bg.addColorStop(0, '#18040d');
+      bg.addColorStop(1, '#1a0b04');
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const timeShift = Math.sin(frame * 0.01) * 0.5;
-      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-      ctx.beginPath();
-      for (let x = 0; x <= COLS; x++) { ctx.moveTo(x * CELL + timeShift, 0); ctx.lineTo(x * CELL + timeShift, canvas.height); }
-      for (let y = 0; y <= ROWS; y++) { ctx.moveTo(0, y * CELL + timeShift); ctx.lineTo(canvas.width, y * CELL + timeShift); }
-      ctx.stroke();
+      ctx.globalAlpha = 0.2;
+      for (let i = 0; i < 14; i++) {
+        const y = (i * 50 + (frame * 3) % 50);
+        ctx.fillStyle = '#fb7185';
+        ctx.fillRect(0, y, canvas.width, 2);
+      }
+      ctx.globalAlpha = 1;
 
       ctx.strokeStyle = 'rgba(0,255,204,0.12)';
       ctx.lineWidth = 3;
@@ -704,15 +735,26 @@ import { getHighScore, submitHighScore } from './score-store.js';
         ctx.stroke();
       });
 
+      ctx.fillStyle = '#fb923c';
+      ctx.fillRect(30, 24, Math.min(140, heat) * 1.2, 6);
+      ctx.strokeStyle = '#1f2937';
+      ctx.strokeRect(30, 24, 168, 6);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillText(`COMBO ${combo}`, 30, 18);
+
       towers.forEach(t => {
         ctx.save();
         ctx.translate(t.x, t.y);
         ctx.shadowBlur = 15;
         ctx.shadowColor = t.color;
-        ctx.fillStyle = t.color;
+        ctx.strokeStyle = t.color;
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(0, 0, 14, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(0, -16);
+        ctx.lineTo(12, 12);
+        ctx.lineTo(-12, 12);
+        ctx.closePath();
+        ctx.stroke();
         ctx.shadowBlur = 0;
         if (t.stun > 0) {
           ctx.strokeStyle = '#ffe95a';
@@ -730,19 +772,23 @@ import { getHighScore, submitHighScore } from './score-store.js';
       units.forEach(u => {
         ctx.save();
         ctx.translate(u.x, u.y);
-        ctx.fillStyle = u.color;
+        ctx.strokeStyle = u.color;
+        ctx.lineWidth = 2;
         if (u.type === 'runner' || u.type === 'ghost') {
           ctx.beginPath();
-          ctx.moveTo(10, 0);
-          ctx.lineTo(-8, 7);
-          ctx.lineTo(-8, -7);
-          ctx.fill();
+          ctx.moveTo(-12, -6);
+          ctx.lineTo(12, 6);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(-12, 6);
+          ctx.lineTo(12, -6);
+          ctx.stroke();
         } else if (u.type === 'siege') {
-          ctx.fillRect(-10, -10, 20, 20);
+          ctx.strokeRect(-10, -10, 20, 20);
         } else if (u.type === 'medic') {
           ctx.beginPath();
           ctx.arc(0, 0, 9, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.stroke();
           ctx.strokeStyle = '#fff';
           ctx.beginPath();
           ctx.moveTo(-4, 0); ctx.lineTo(4, 0);
@@ -751,7 +797,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
         } else {
           ctx.beginPath();
           ctx.arc(0, 0, 9, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.stroke();
         }
         ctx.restore();
         ctx.fillStyle = '#0f0';
@@ -841,6 +887,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
       upgrade,
       getUpgradeState,
       getCommandState,
+      getHud: () => ({
+        labels: ['PHASE', 'CREDITS', 'HEAT'],
+        values: [`${wave} | ${Math.ceil(phaseTimer / 60)}s`, Math.floor(money), Math.floor(heat)]
+      }),
       castAbility: useAbility,
       stop: () => { submitBestWave(); },
       conf: { towers: UNITS },
