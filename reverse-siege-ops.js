@@ -61,6 +61,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
     let carrierId = null;
     let buildWindow = 0;
     let drops = [];
+    let gates = [];
+    let unlocks = {};
 
     const upgradeState = { dmg: 0, spd: 0, hp: 0, armor: 0 };
     const abilityState = {
@@ -107,6 +109,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
       carrierId = null;
       buildWindow = 0;
       drops = [];
+      gates = buildGates();
+      unlocks = { tier1: false, tier2: false, tier3: false };
       units = [];
       projs = [];
       particles = [];
@@ -126,6 +130,32 @@ import { getHighScore, submitHighScore } from './score-store.js';
       spawnHistory.length = 0;
       grid = new Array(COLS).fill(0).map(() => new Array(ROWS).fill(null));
       loadBestWave();
+    }
+
+    function buildGates() {
+      const path = [
+        { x: Math.floor(COLS * 0.35), y: Math.floor(ROWS * 0.45) },
+        { x: Math.floor(COLS * 0.6), y: Math.floor(ROWS * 0.55) },
+        { x: Math.floor(COLS * 0.8), y: Math.floor(ROWS * 0.5) }
+      ];
+      return path.map((p, i) => ({
+        id: `gate-${i}`,
+        x: p.x * CELL + CELL / 2,
+        y: p.y * CELL + CELL / 2,
+        radius: 50,
+        tier: i + 1,
+        active: true
+      }));
+    }
+
+    function isUnitUnlocked(type) {
+      if (type === 'runner') return true;
+      if (type === 'raider') return unlocks.tier1;
+      if (type === 'medic') return unlocks.tier1;
+      if (type === 'brute' || type === 'hacker') return unlocks.tier2;
+      if (type === 'siege' || type === 'bomber' || type === 'ghost') return unlocks.tier3;
+      if (type === 'carrier') return true;
+      return false;
     }
 
     function getUpgradeCost(attr) {
@@ -180,6 +210,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
     function spawnUnit(type, record) {
       const def = UNITS[type];
       if (!def) return;
+      if (!isUnitUnlocked(type)) return;
       const jitter = (Math.random() - 0.5) * 20;
       const unit = {
         id: `u-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -594,6 +625,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
             break;
           }
         }
+
+        for (let g = 0; g < gates.length; g++) {
+          const gate = gates[g];
+          if (!gate.active) continue;
+          if (Math.hypot(gate.x - u.x, gate.y - u.y) < gate.radius) {
+            gate.active = false;
+            if (gate.tier === 1) unlocks.tier1 = true;
+            if (gate.tier === 2) unlocks.tier2 = true;
+            if (gate.tier === 3) unlocks.tier3 = true;
+            particles.push({ type:'ring', x:gate.x, y:gate.y, life:24, color:'#22c55e', r:120 });
+          }
+        }
       }
 
       for (let i = towers.length - 1; i >= 0; i--) {
@@ -685,6 +728,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
         units = [];
         projs = [];
         drops = [];
+        gates = buildGates();
+        unlocks = { tier1: false, tier2: false, tier3: false };
         if (wave > bestWave) bestWave = wave;
       }
     }
@@ -703,14 +748,14 @@ import { getHighScore, submitHighScore } from './score-store.js';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const timeShift = Math.sin(frame * 0.01) * 0.5;
-      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.03)';
       ctx.beginPath();
       for (let x = 0; x <= COLS; x++) { ctx.moveTo(x * CELL + timeShift, 0); ctx.lineTo(x * CELL + timeShift, canvas.height); }
       for (let y = 0; y <= ROWS; y++) { ctx.moveTo(0, y * CELL + timeShift); ctx.lineTo(canvas.width, y * CELL + timeShift); }
       ctx.stroke();
 
       ctx.strokeStyle = 'rgba(34,197,94,0.12)';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 8;
       ctx.beginPath();
       ctx.moveTo(startNode.x * CELL + CELL / 2, startNode.y * CELL + CELL / 2);
       ctx.lineTo(endNode.x * CELL + CELL / 2, endNode.y * CELL + CELL / 2);
@@ -731,6 +776,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
         ctx.beginPath();
         ctx.arc(drop.x, drop.y, 10 + Math.sin(frame * 0.1) * 3, 0, Math.PI * 2);
         ctx.stroke();
+      });
+
+      gates.forEach(gate => {
+        if (!gate.active) return;
+        ctx.strokeStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.arc(gate.x, gate.y, gate.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(34,197,94,0.08)';
+        ctx.beginPath();
+        ctx.arc(gate.x, gate.y, gate.radius * 0.6, 0, Math.PI * 2);
+        ctx.fill();
       });
 
       towers.forEach(t => {
@@ -765,6 +822,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
           ctx.strokeStyle = '#22c55e';
           ctx.beginPath();
           ctx.arc(0, 0, 60 + Math.sin(frame * 0.08) * 6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = '#f8fafc';
+          ctx.beginPath();
+          ctx.moveTo(-8, 0); ctx.lineTo(8, 0);
+          ctx.moveTo(0, -8); ctx.lineTo(0, 8);
           ctx.stroke();
         } else if (u.type === 'runner' || u.type === 'ghost') {
           ctx.beginPath();
@@ -864,6 +926,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const supplyCost = def.supply || 1;
       const used = units.reduce((sum, u) => sum + (u.supply || 1), 0);
       if (used + supplyCost > supplyCap) return;
+      if (!isUnitUnlocked(buildType)) return;
       money -= def.cost;
       spawnUnit(buildType, true);
     }

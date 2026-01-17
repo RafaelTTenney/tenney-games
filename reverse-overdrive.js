@@ -55,6 +55,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
     let aiCredits = 0;
     let aiCooldown = 0;
     let aiUpgradeCooldown = 0;
+    let storms = [];
+    let burstTimer = 0;
 
     const upgradeState = { dmg: 0, spd: 0, hp: 0, armor: 0 };
     const abilityState = {
@@ -96,6 +98,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
       aiCredits = 320;
       aiCooldown = 0;
       aiUpgradeCooldown = 80;
+      storms = [];
+      burstTimer = 400;
       units = [];
       projs = [];
       particles = [];
@@ -421,6 +425,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
       money += 0.09 + wave * 0.01;
       aiCredits += 0.08 + wave * 0.02;
 
+      if (burstTimer > 0) burstTimer--;
+      if (burstTimer === 0) {
+        spawnBurst();
+        burstTimer = Math.max(240, 480 - wave * 20);
+      }
+
+      if (frame % 360 === 0) spawnStorm();
+      storms.forEach((s, i) => {
+        s.life--;
+        if (s.life <= 0) storms.splice(i, 1);
+      });
+
       if (abilityState.emp.cooldown > 0) abilityState.emp.cooldown--;
       if (abilityState.overclock.cooldown > 0) abilityState.overclock.cooldown--;
       if (abilityState.decoy.cooldown > 0) abilityState.decoy.cooldown--;
@@ -453,6 +469,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
         const u = units[i];
         if (u.slowTimer > 0) u.slowTimer--;
         u.spd = (u.slowTimer > 0 ? u.baseSpd * 0.6 : u.baseSpd) * overclockSpd;
+
+        storms.forEach(s => {
+          if (Math.hypot(u.x - s.x, u.y - s.y) < s.r) {
+            u.hp -= 0.25;
+          }
+        });
 
         if (u.heal && frame % 30 === 0) {
           units.forEach(o => {
@@ -555,7 +577,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
         if (t.stun > 0) { t.stun--; continue; }
         if (t.cd > 0) { t.cd--; continue; }
 
-        const target = units.find(u => Math.hypot(u.x - t.x, u.y - t.y) < t.range * (u.stealth || 1));
+        const stormDebuff = storms.some(s => Math.hypot(t.x - s.x, t.y - s.y) < s.r) ? 0.75 : 1;
+        const target = units.find(u => Math.hypot(u.x - t.x, u.y - t.y) < t.range * stormDebuff * (u.stealth || 1));
         if (target) {
           if (t.beam) {
             applyTowerDamage(target, t.dmg);
@@ -623,8 +646,24 @@ import { getHighScore, submitHighScore } from './score-store.js';
         baseHp = baseMax;
         units = [];
         projs = [];
+        storms = [];
         if (wave > bestWave) bestWave = wave;
       }
+    }
+
+    function spawnStorm() {
+      const x = (Math.floor(COLS * (0.2 + Math.random() * 0.6)) * CELL) + CELL / 2;
+      const y = (Math.floor(ROWS * (0.2 + Math.random() * 0.6)) * CELL) + CELL / 2;
+      storms.push({ x, y, r: 140 + Math.random() * 40, life: 260 });
+    }
+
+    function spawnBurst() {
+      const picks = ['runner', 'raider', 'ghost'];
+      const count = 6 + Math.floor(wave * 0.6);
+      for (let i = 0; i < count; i++) {
+        spawnUnit(picks[i % picks.length], false);
+      }
+      particles.push({ type:'ring', x:startNode.x * CELL + CELL / 2, y:startNode.y * CELL + CELL / 2, life:20, color:'#f97316', r:120 });
     }
 
     function draw(ctx) {
@@ -657,6 +696,13 @@ import { getHighScore, submitHighScore } from './score-store.js';
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 14px monospace';
       ctx.fillText(`CORE ${Math.max(0, Math.floor(baseHp))}/${baseMax}`, canvas.width - 210, 30);
+
+      storms.forEach(s => {
+        ctx.strokeStyle = 'rgba(249,115,22,0.5)';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r * (1 - s.life / 260), 0, Math.PI * 2);
+        ctx.stroke();
+      });
 
       towers.forEach(t => {
         ctx.save();

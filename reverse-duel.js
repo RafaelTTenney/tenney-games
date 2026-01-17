@@ -15,7 +15,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       bomber: { name:'BOMBER', cost:150, color:'#f97316', hp:140, spd:2.1, dmg:0, range:20, rate:1, breach:14, explode:100, role:'breaker', desc:'Explodes on contact, damaging nearby towers.' },
       ghost:  { name:'GHOST',  cost:120, color:'#d1fae5', hp:75, spd:3.0, dmg:8, range:26, rate:14, breach:16, stealth:0.6, role:'runner', desc:'Harder to target; slips past defenses.' },
       medic:  { name:'MEDIC',  cost:110, color:'#a7f3d0', hp:120, spd:2.2, dmg:4, range:70, rate:22, breach:8, heal:8, role:'support', desc:'Repairs allied attackers in a radius.' },
-      saboteur: { name:'SABOTEUR', cost:150, color:'#fca5a5', hp:140, spd:2.4, dmg:16, range:55, rate:22, breach:10, role:'breaker', pylon:2.5, desc:'Specialist that shreds shield pylons.' }
+      saboteur: { name:'SABOTEUR', cost:150, color:'#fca5a5', hp:140, spd:2.4, dmg:16, range:55, rate:22, breach:10, role:'breaker', pylon:2.5, capture: 2.0, desc:'Specialist that shreds shield pylons.' }
     };
 
     const TOWER_TYPES = {
@@ -57,7 +57,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
     let aiCooldown = 0;
     let aiUpgradeCooldown = 0;
     let pylons = [];
+    let relays = [];
     let shieldPulse = 0;
+    let aiSuppressed = 0;
 
     const upgradeState = { dmg: 0, spd: 0, hp: 0, armor: 0 };
     const abilityState = {
@@ -118,7 +120,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
       spawnHistory.length = 0;
       grid = new Array(COLS).fill(0).map(() => new Array(ROWS).fill(null));
       pylons = buildPylons();
+      relays = buildRelays();
       shieldPulse = 0;
+      aiSuppressed = 0;
       loadBestWave();
     }
 
@@ -139,6 +143,22 @@ import { getHighScore, submitHighScore } from './score-store.js';
         lastHit: 0,
         isPylon: true,
         color: '#38bdf8'
+      }));
+    }
+
+    function buildRelays() {
+      const positions = [
+        { x: Math.floor(COLS * 0.45), y: Math.floor(ROWS * 0.3) },
+        { x: Math.floor(COLS * 0.5), y: Math.floor(ROWS * 0.6) },
+        { x: Math.floor(COLS * 0.7), y: Math.floor(ROWS * 0.45) }
+      ];
+      return positions.map((p, idx) => ({
+        id: `relay-${idx}-${Date.now()}`,
+        x: p.x * CELL + CELL / 2,
+        y: p.y * CELL + CELL / 2,
+        control: 0,
+        owner: 'neutral',
+        radius: 90
       }));
     }
 
@@ -433,6 +453,19 @@ import { getHighScore, submitHighScore } from './score-store.js';
       return true;
     }
 
+    function getCommandState() {
+      return {
+        upgrades: getUpgradeState(),
+        abilities: {
+          emp: { cooldown: abilityState.emp.cooldown, cost: ABILITIES.emp.cost },
+          overclock: { cooldown: abilityState.overclock.cooldown, cost: ABILITIES.overclock.cost },
+          decoy: { cooldown: abilityState.decoy.cooldown, cost: ABILITIES.decoy.cost },
+          strike: { cooldown: abilityState.strike.cooldown, cost: ABILITIES.strike.cost }
+        },
+        aiCredits
+      };
+    }
+
     function getTowerRange(t) {
       const debuff = t.rangeDebuff || 1;
       return t.range * debuff;
@@ -479,13 +512,17 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
       if (aiCooldown > 0) aiCooldown--;
       if (aiUpgradeCooldown > 0) aiUpgradeCooldown--;
-      if (aiCooldown === 0 && aiCredits >= 120) {
-        const built = attemptBuildTower();
-        aiCooldown = built ? Math.max(12, 40 - wave * 2) : 20;
-      }
-      if (aiUpgradeCooldown === 0 && aiCredits >= 90) {
-        const upgraded = attemptUpgradeTower();
-        aiUpgradeCooldown = upgraded ? Math.max(90, 200 - wave * 6) : 120;
+      if (aiSuppressed > 0) {
+        aiSuppressed--;
+      } else {
+        if (aiCooldown === 0 && aiCredits >= 120) {
+          const built = attemptBuildTower();
+          aiCooldown = built ? Math.max(12, 40 - wave * 2) : 20;
+        }
+        if (aiUpgradeCooldown === 0 && aiCredits >= 90) {
+          const upgraded = attemptUpgradeTower();
+          aiUpgradeCooldown = upgraded ? Math.max(90, 200 - wave * 6) : 120;
+        }
       }
 
       const coreX = endNode.x * CELL + CELL / 2;
@@ -599,6 +636,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
         }
       }
 
+      updateRelays();
+      const aiRelayCount = relays.filter(r => r.owner === 'ai').length;
+      const playerRelayCount = relays.filter(r => r.owner === 'player').length;
+      const aiPower = 1 + aiRelayCount * 0.12;
+
       for (let i = towers.length - 1; i >= 0; i--) {
         const t = towers[i];
         if (t.debuffTimer) {
@@ -625,7 +667,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
         const target = units.find(u => Math.hypot(u.x - t.x, u.y - t.y) < effectiveRange * (u.stealth || 1));
         if (target) {
           if (t.beam) {
-            applyTowerDamage(target, t.dmg * (shieldActive ? 1.15 : 1));
+            applyTowerDamage(target, t.dmg * aiPower * (shieldActive ? 1.15 : 1));
             particles.push({ type:'beam', sx:t.x, sy:t.y, ex:target.x, ey:target.y, color:t.color, life:6 });
             t.cd = t.rate;
           } else if (t.chain) {
@@ -634,13 +676,13 @@ import { getHighScore, submitHighScore } from './score-store.js';
           } else if (t.cone) {
             units.forEach(u => {
               if (Math.hypot(u.x - t.x, u.y - t.y) < effectiveRange) {
-                applyTowerDamage(u, t.dmg * (shieldActive ? 1.15 : 1));
+                applyTowerDamage(u, t.dmg * aiPower * (shieldActive ? 1.15 : 1));
               }
             });
             particles.push({ type:'ring', x:t.x, y:t.y, life:12, color:t.color, r:effectiveRange });
             t.cd = t.rate;
           } else {
-            projs.push({ x:t.x, y:t.y, tx:target.x, ty:target.y, dmg:t.dmg * (shieldActive ? 1.15 : 1), spd:9, aoe:t.aoe, slow:t.slow, color:t.color });
+            projs.push({ x:t.x, y:t.y, tx:target.x, ty:target.y, dmg:t.dmg * aiPower * (shieldActive ? 1.15 : 1), spd:9, aoe:t.aoe, slow:t.slow, color:t.color });
             t.cd = t.rate;
           }
         }
@@ -688,6 +730,13 @@ import { getHighScore, submitHighScore } from './score-store.js';
         }
       });
 
+      if (playerRelayCount > 0) money += 0.04 * playerRelayCount;
+      if (playerRelayCount > 0) aiCredits = Math.max(0, aiCredits - 0.03 * playerRelayCount);
+      if (playerRelayCount === relays.length && aiSuppressed === 0) {
+        aiSuppressed = 1200;
+        particles.push({ type:'ring', x:endNode.x * CELL + CELL / 2, y:endNode.y * CELL + CELL / 2, life:40, color:'#34d399', r:200 });
+      }
+
       if (baseHp <= 0) {
         wave++;
         money += 150 + wave * 40;
@@ -698,8 +747,29 @@ import { getHighScore, submitHighScore } from './score-store.js';
         units = [];
         projs = [];
         pylons = buildPylons();
+        relays = buildRelays();
         if (wave > bestWave) bestWave = wave;
       }
+    }
+
+    function updateRelays() {
+      relays.forEach(r => {
+        let player = 0;
+        let ai = 0;
+        units.forEach(u => {
+          if (Math.hypot(u.x - r.x, u.y - r.y) < r.radius) player += (u.capture || 1);
+        });
+        towers.forEach(t => {
+          if (Math.hypot(t.x - r.x, t.y - r.y) < r.radius) ai += 1;
+        });
+        if (player !== ai) {
+          r.control += (player - ai) * 0.0025;
+          r.control = Math.max(-1, Math.min(1, r.control));
+        }
+        if (r.control >= 0.8) r.owner = 'player';
+        else if (r.control <= -0.8) r.owner = 'ai';
+        else r.owner = 'neutral';
+      });
     }
 
     function draw(ctx) {
@@ -741,6 +811,26 @@ import { getHighScore, submitHighScore } from './score-store.js';
         ctx.stroke();
         ctx.lineWidth = 1;
       }
+
+      relays.forEach(r => {
+        const color = r.owner === 'player' ? '#34d399' : r.owner === 'ai' ? '#f43f5e' : '#94a3b8';
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(r.x, r.y - 14);
+        ctx.lineTo(r.x + 12, r.y - 7);
+        ctx.lineTo(r.x + 12, r.y + 7);
+        ctx.lineTo(r.x, r.y + 14);
+        ctx.lineTo(r.x - 12, r.y + 7);
+        ctx.lineTo(r.x - 12, r.y - 7);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.radius * (0.35 + (r.control + 1) * 0.15), 0, Math.PI * 2);
+        ctx.stroke();
+      });
 
       pylons.forEach(p => {
         if (p.hp <= 0) return;
@@ -901,6 +991,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       deselect: () => { buildType = null; },
       upgrade,
       getUpgradeState,
+      getCommandState,
       getCommandState,
       castAbility: useAbility,
       stop: () => { submitBestWave(); },
