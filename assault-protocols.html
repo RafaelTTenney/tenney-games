@@ -15,12 +15,16 @@
             --text: #eee;
         }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', Tahoma, sans-serif; overflow: hidden; }
-        body[data-mode="duel"] { background: #02181b; }
-        body[data-mode="overdrive"] { background: #1b0904; }
-        body[data-mode="siege"] { background: #0b120f; }
-        body[data-mode="overdrive"] .game-frame { box-shadow: 0 0 120px rgba(255, 120, 70, 0.4); }
-        body[data-mode="duel"] .game-frame { box-shadow: 0 0 120px rgba(45, 212, 191, 0.35); }
-        body[data-mode="siege"] .game-frame { box-shadow: 0 0 120px rgba(34, 197, 94, 0.25); }
+        body[data-mode="escort"] { background: #0b120f; }
+        body[data-mode="shard"] { background: #120718; }
+        body[data-mode="mirage"] { background: #020308; }
+        body[data-mode="rift"] { background: #07131d; }
+        body[data-mode="echo"] { background: #061014; }
+        body[data-mode="escort"] .game-frame { box-shadow: 0 0 120px rgba(34, 197, 94, 0.25); }
+        body[data-mode="shard"] .game-frame { box-shadow: 0 0 120px rgba(244, 114, 182, 0.35); }
+        body[data-mode="mirage"] .game-frame { box-shadow: 0 0 120px rgba(96, 165, 250, 0.25); }
+        body[data-mode="rift"] .game-frame { box-shadow: 0 0 120px rgba(59, 130, 246, 0.3); }
+        body[data-mode="echo"] .game-frame { box-shadow: 0 0 120px rgba(45, 212, 191, 0.25); }
         
         header {
             padding: 15px; text-align: center; border-bottom: 1px solid #222;
@@ -60,9 +64,11 @@
         .card:hover { transform: translateY(-10px); box-shadow: 0 20px 50px rgba(0,0,0,0.7); border-color: #555; }
         
         .card-header { height: 180px; display: flex; align-items: center; justify-content: center; background: #000; position: relative; border-bottom: 1px solid #222; }
-        .card.duel .card-header { background: radial-gradient(circle at center, #062b2b 0%, #000 100%); }
-        .card.overdrive .card-header { background: radial-gradient(circle at center, #332200 0%, #000 100%); }
-        .card.siegeops .card-header { background: radial-gradient(circle at center, #1f0d2e 0%, #000 100%); }
+        .card.escort .card-header { background: radial-gradient(circle at center, #0f2b1c 0%, #000 100%); }
+        .card.shard .card-header { background: radial-gradient(circle at center, #2b0f2a 0%, #000 100%); }
+        .card.mirage .card-header { background: radial-gradient(circle at center, #0c102b 0%, #000 100%); }
+        .card.rift .card-header { background: radial-gradient(circle at center, #0f2331 0%, #000 100%); }
+        .card.echo .card-header { background: radial-gradient(circle at center, #052023 0%, #000 100%); }
 
         .card h2 { z-index: 2; margin: 0; font-size: 2em; text-transform: uppercase; letter-spacing: 4px; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
         .card-body { padding: 30px; flex: 1; display: flex; flex-direction: column; }
@@ -224,37 +230,55 @@
 
     <div class="container">
         <div style="color:#9aa4b2; max-width:900px; line-height:1.6;">
-            Assault Protocols flips tower defense into attacker-command simulations with radically different play styles.
-            Signal Dominion is node-control and drop tactics, Rail Surge is a lane-based reactor rush,
-            and Convoy Run is a waypoint escort with logistics and checkpoint unlocks.
+            Assault Protocols is a set of five attacker-command remakes with distinct rules, goals, and visuals.
+            Escort Tactics is a convoy run, Shardstorm Arena is a short-round score chase, Mirage Protocol is fog-of-war deception,
+            Vector Rift is portal routing, and Echo Circuit is a memory-clone escalation.
         </div>
         <div class="section">
             <p class="section-title">Assault Simulations</p>
             <div class="grid">
-                <div class="card duel" style="border-top: 4px solid #34d399;">
-                    <div class="card-header"><h2 style="color:#34d399">SIGNAL DOMINION</h2></div>
+                <div class="card escort" style="border-top: 4px solid #22c55e;">
+                    <div class="card-header"><h2 style="color:#22c55e">ESCORT TACTICS</h2></div>
                     <div class="card-body">
-                        <span class="badge" style="color:#34d399">CONTROL WAR</span>
-                        <p>Drop squads into an open arena, flip signal nodes, and choke AI control to win dominance.</p>
-                        <button class="play-btn" style="background:#34d399" onclick="App.launch('duel')">INITIALIZE</button>
+                        <span class="badge" style="color:#22c55e">CONVOY RUN</span>
+                        <p>Protect the carrier, plot waypoints, and clear defenses to reach extraction.</p>
+                        <button class="play-btn" style="background:#22c55e" onclick="App.launch('escort')">INITIALIZE</button>
                     </div>
                 </div>
 
-                <div class="card overdrive" style="border-top: 4px solid #fbbf24;">
-                    <div class="card-header"><h2 style="color:#fbbf24">RAIL SURGE</h2></div>
+                <div class="card shard" style="border-top: 4px solid #f472b6;">
+                    <div class="card-header"><h2 style="color:#f472b6">SHARDSTORM ARENA</h2></div>
                     <div class="card-body">
-                        <span class="badge" style="color:#fbbf24">LANE RUSH</span>
-                        <p>Arcade assault on fixed lanes. Chain reactor hits, ride heat, and outpace rail cannons.</p>
-                        <button class="play-btn" style="background:#fbbf24" onclick="App.launch('overdrive')">INITIALIZE</button>
+                        <span class="badge" style="color:#f472b6">ROUND SCORE</span>
+                        <p>Timed rounds, shifting hazards, and score beacons that reward bold spawns.</p>
+                        <button class="play-btn" style="background:#f472b6" onclick="App.launch('shard')">INITIALIZE</button>
                     </div>
                 </div>
 
-                <div class="card siegeops" style="border-top: 4px solid #c084fc;">
-                    <div class="card-header"><h2 style="color:#c084fc">CONVOY RUN</h2></div>
+                <div class="card mirage" style="border-top: 4px solid #60a5fa;">
+                    <div class="card-header"><h2 style="color:#60a5fa">MIRAGE PROTOCOL</h2></div>
                     <div class="card-body">
-                        <span class="badge" style="color:#c084fc">ESCORT OPS</span>
-                        <p>Plot waypoints, guard the carrier, and unlock new squads at checkpoint gates.</p>
-                        <button class="play-btn" style="background:#c084fc" onclick="App.launch('siege')">INITIALIZE</button>
+                        <span class="badge" style="color:#60a5fa">FOG WAR</span>
+                        <p>Hidden towers, fake cores, and scouting tactics. Find the real target.</p>
+                        <button class="play-btn" style="background:#60a5fa" onclick="App.launch('mirage')">INITIALIZE</button>
+                    </div>
+                </div>
+
+                <div class="card rift" style="border-top: 4px solid #38bdf8;">
+                    <div class="card-header"><h2 style="color:#38bdf8">VECTOR RIFT</h2></div>
+                    <div class="card-body">
+                        <span class="badge" style="color:#38bdf8">PORTAL WAR</span>
+                        <p>Place rifts, warp units and shots, and bend the battlefield geometry.</p>
+                        <button class="play-btn" style="background:#38bdf8" onclick="App.launch('rift')">INITIALIZE</button>
+                    </div>
+                </div>
+
+                <div class="card echo" style="border-top: 4px solid #14b8a6;">
+                    <div class="card-header"><h2 style="color:#14b8a6">ECHO CIRCUIT</h2></div>
+                    <div class="card-body">
+                        <span class="badge" style="color:#14b8a6">MEMORY LOOP</span>
+                        <p>Every wave echoes your past units. Build a composition that compounds.</p>
+                        <button class="play-btn" style="background:#14b8a6" onclick="App.launch('echo')">INITIALIZE</button>
                     </div>
                 </div>
             </div>
@@ -361,9 +385,11 @@
         </div>
     </div>
 
-    <script type="module" src="reverse-duel.js"></script>
-    <script type="module" src="reverse-overdrive.js"></script>
-    <script type="module" src="reverse-siege-ops.js"></script>
+    <script type="module" src="escort-tactics.js"></script>
+    <script type="module" src="shardstorm-arena.js"></script>
+    <script type="module" src="mirage-protocol.js"></script>
+    <script type="module" src="vector-rift.js"></script>
+    <script type="module" src="echo-circuit.js"></script>
 
     <script type="module">
     const App = {
@@ -395,11 +421,13 @@
         setTheme: (id) => {
             const root = document.documentElement;
             const themes = {
-                duel: { primary: '#34d399', secondary: '#38bdf8', tertiary: '#22d3ee', text: '#e6fffb' },
-                overdrive: { primary: '#fbbf24', secondary: '#fb7185', tertiary: '#f97316', text: '#fff8e1' },
-                siege: { primary: '#c084fc', secondary: '#94a3b8', tertiary: '#22c55e', text: '#efe6ff' }
+                escort: { primary: '#22c55e', secondary: '#86efac', tertiary: '#4ade80', text: '#dcfce7' },
+                shard: { primary: '#f472b6', secondary: '#fbcfe8', tertiary: '#fb7185', text: '#fff1f2' },
+                mirage: { primary: '#60a5fa', secondary: '#38bdf8', tertiary: '#94a3b8', text: '#e0f2fe' },
+                rift: { primary: '#38bdf8', secondary: '#0ea5e9', tertiary: '#22d3ee', text: '#ecfeff' },
+                echo: { primary: '#14b8a6', secondary: '#5eead4', tertiary: '#2dd4bf', text: '#ccfbf1' }
             };
-            const t = themes[id] || themes.duel;
+            const t = themes[id] || themes.escort;
             root.style.setProperty('--primary', t.primary);
             root.style.setProperty('--secondary', t.secondary);
             root.style.setProperty('--tertiary', t.tertiary);
@@ -466,9 +494,11 @@
             App.setTheme(id);
             App.updateBriefing(id);
 
-            if(id === 'duel' && window.ReverseDuelGame) App.activeGame = window.ReverseDuelGame;
-            else if(id === 'overdrive' && window.ReverseOverdriveGame) App.activeGame = window.ReverseOverdriveGame;
-            else if(id === 'siege' && window.ReverseSiegeOpsGame) App.activeGame = window.ReverseSiegeOpsGame;
+            if(id === 'escort' && window.EscortTacticsGame) App.activeGame = window.EscortTacticsGame;
+            else if(id === 'shard' && window.ShardstormArenaGame) App.activeGame = window.ShardstormArenaGame;
+            else if(id === 'mirage' && window.MirageProtocolGame) App.activeGame = window.MirageProtocolGame;
+            else if(id === 'rift' && window.VectorRiftGame) App.activeGame = window.VectorRiftGame;
+            else if(id === 'echo' && window.EchoCircuitGame) App.activeGame = window.EchoCircuitGame;
             else { alert('Game Module Error.'); App.close(); return; }
 
             App.buildDock();
@@ -508,6 +538,7 @@
                 let t = conf[key];
                 let btn = document.createElement('div');
                 btn.className = 't-card';
+                btn.dataset.key = key;
                 btn.innerHTML = `<div class="t-name" style="color:${t.color}">${t.name}</div><div class="t-cost">$${t.cost}</div>`;
                 const canBuild = App.activeGame.canBuild ? App.activeGame.canBuild(key) : true;
                 if (!canBuild) btn.classList.add('disabled');
@@ -575,6 +606,14 @@
                     document.getElementById('ui-wave').innerText = bestDisplay ? `${w} | BEST ${bestDisplay}` : w;
                     document.getElementById('ui-money').innerText = Math.floor(m);
                     document.getElementById('ui-lives').innerText = l;
+                }
+                if (g.canBuild) {
+                    document.querySelectorAll('.t-card').forEach(btn => {
+                        const key = btn.dataset.key;
+                        if (!key) return;
+                        if (g.canBuild(key)) btn.classList.remove('disabled');
+                        else btn.classList.add('disabled');
+                    });
                 }
                 App.updateInspector();
                 App.updateCommandPanel();
@@ -650,19 +689,25 @@
         },
         updateBriefing: (id) => {
             const titles = {
-                duel: 'SIGNAL DOMINION',
-                overdrive: 'RAIL SURGE',
-                siege: 'CONVOY RUN'
+                escort: 'ESCORT TACTICS',
+                shard: 'SHARDSTORM ARENA',
+                mirage: 'MIRAGE PROTOCOL',
+                rift: 'VECTOR RIFT',
+                echo: 'ECHO CIRCUIT'
             };
             const desc = {
-                duel: 'Drop units directly into the arena, flip signal nodes, and win dominance through territorial control.',
-                overdrive: 'Lane-based reactor rush. Keep the heat high, break rail cannons, and score chain breaches.',
-                siege: 'Escort a carrier along player-set waypoints, capture gates to unlock tiers, and keep the convoy alive.'
+                escort: 'Protect the carrier. Plot waypoints, field escorts, and punch through tower lines to reach extraction.',
+                shard: 'Timed rounds in a shifting arena. Spawn shards to score beacons while storms and towers reshuffle.',
+                mirage: 'Fog-of-war deception. Scout to reveal towers and identify the real core among decoys.',
+                rift: 'Place rifts to warp units and shots. Build a portal network that bends the battlefield.',
+                echo: 'Every wave replays your past. Echo units spawn automatically, so your composition compounds.'
             };
             const waveLabels = {
-                duel: 'DEPLOY DROP',
-                overdrive: 'TRIGGER SURGE',
-                siege: 'ADVANCE CONVOY'
+                escort: 'ADVANCE CONVOY',
+                shard: 'START ROUND',
+                mirage: 'SEND SCOUTS',
+                rift: 'OPEN RIFTS',
+                echo: 'TRIGGER LOOP'
             };
             const titleEl = document.getElementById('mode-title');
             const descEl = document.getElementById('mode-desc');
