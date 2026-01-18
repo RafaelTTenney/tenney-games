@@ -23,18 +23,21 @@ async function submitRogueBestIfNeeded() {
 let rlState = {
     canvas: null,
     ctx: null,
-    tileSize: 20,
-    cols: 24,
-    rows: 24,
+    tileSize: 22,
+    cols: 26,
+    rows: 26,
     map: [],        // 1 = Wall, 0 = Floor
     memory: [],     // True if player has visited this tile (Fog of War)
     visible: [],    // True if currently in FOV
     items: [],
     traps: [],
     shrines: [],
+    rooms: [],
     stairs: null,
     stairsActive: false,
     particles: [],  // Floating damage numbers
+    alert: 0,
+    alertMax: 100,
     player: {
         x: 1, y: 1, 
         hp: 100, maxHp: 100, 
@@ -43,7 +46,9 @@ let rlState = {
         potions: 1, // Start with 1 potion
         weapon: {name: "Bare Hands", val: 0},
         armor: {name: "Rags", val: 0},
-        shield: 0
+        shield: 0,
+        pulseCharges: 1,
+        pulseMax: 2
     },
     enemies: [],
     level: 1,
@@ -85,10 +90,13 @@ function startRun() {
         potions: 1,
         weapon: {name: "Bare Hands", val: 0},
         armor: {name: "Rags", val: 0},
-        shield: 0
+        shield: 0,
+        pulseCharges: 1,
+        pulseMax: 2
     };
     rlState.log = [];
     rlState.particles = [];
+    rlState.alert = 0;
     
     generateLevel();
     logRL("Welcome to the Neon Depths.");
@@ -167,10 +175,14 @@ function generateLevel() {
         rooms.push(fallback);
     }
 
+    rlState.rooms = rooms;
+
     // Place Player in first room
     let fRoom = rooms[0];
     rlState.player.x = fRoom.x + Math.floor(fRoom.w / 2);
     rlState.player.y = fRoom.y + Math.floor(fRoom.h / 2);
+
+    ensureConnectedRooms(rooms);
 
     // Spawn entities in other rooms
     for(let i=1; i<rooms.length; i++) {
@@ -229,15 +241,15 @@ function findOpenTile(room) {
     return null;
 }
 
-function pruneDisconnectedFloors() {
+function computeConnectivity(startX, startY) {
     const cols = rlState.cols;
     const rows = rlState.rows;
     const visited = Array(cols).fill().map(() => Array(rows).fill(false));
     const dist = Array(cols).fill().map(() => Array(rows).fill(-1));
-    const startX = rlState.player.x;
-    const startY = rlState.player.y;
 
-    if (rlState.map[startX][startY] !== 0) return;
+    if (rlState.map[startX][startY] !== 0) {
+        return { visited, dist };
+    }
 
     const queue = [{ x: startX, y: startY }];
     visited[startX][startY] = true;
@@ -260,6 +272,36 @@ function pruneDisconnectedFloors() {
             queue.push(next);
         });
     }
+
+    return { visited, dist };
+}
+
+function ensureConnectedRooms(rooms) {
+    if (!rooms || rooms.length === 0) return;
+    const start = { x: rlState.player.x, y: rlState.player.y };
+    let connectivity = computeConnectivity(start.x, start.y);
+
+    rooms.forEach(room => {
+        const cx = room.x + Math.floor(room.w / 2);
+        const cy = room.y + Math.floor(room.h / 2);
+        if (!connectivity.visited[cx][cy]) {
+            createHTunnel(start.x, cx, start.y);
+            createVTunnel(start.y, cy, cx);
+            connectivity = computeConnectivity(start.x, start.y);
+        }
+    });
+}
+
+function pruneDisconnectedFloors() {
+    const cols = rlState.cols;
+    const rows = rlState.rows;
+    const startX = rlState.player.x;
+    const startY = rlState.player.y;
+    if (rlState.map[startX][startY] !== 0) return;
+
+    const connectivity = computeConnectivity(startX, startY);
+    const visited = connectivity.visited;
+    const dist = connectivity.dist;
 
     for (let x = 0; x < cols; x++) {
         for (let y = 0; y < rows; y++) {
@@ -298,44 +340,8 @@ function spawnInRoom(room) {
     if(Math.random() < 0.8) {
         const spawn = findOpenTile(room);
         if(spawn) {
-            let ex = spawn.x;
-            let ey = spawn.y;
-            // Base Enemy Scaling
-            let hp = 15 + (rlState.level * 4);
-            let dmg = 4 + Math.floor(rlState.level * 1.5);
-            let typeRoll = Math.random();
-            let enemy = {
-                x: ex, y: ey,
-                hp: hp, maxHp: hp,
-                name: "Cyber-Goblin",
-                dmg: dmg,
-                moveDelay: 1,
-                moveCooldown: 0,
-                range: 1,
-                xp: 15,
-                color: `hsl(${0 + (rlState.level * 20)}, 100%, 50%)`
-            };
-            if (typeRoll > 0.6 && rlState.level >= 2) {
-                enemy.name = "Neon Wraith";
-                enemy.hp = hp - 2;
-                enemy.maxHp = enemy.hp;
-                enemy.dmg = Math.max(3, dmg - 1);
-                enemy.range = 2;
-                enemy.rangedDmg = Math.max(2, Math.floor(enemy.dmg * 0.7));
-                enemy.moveDelay = 2;
-                enemy.xp = 18;
-                enemy.color = "#9b5cff";
-            } else if (typeRoll > 0.82 && rlState.level >= 3) {
-                enemy.name = "Steel Brute";
-                enemy.hp = hp + 10 + rlState.level * 2;
-                enemy.maxHp = enemy.hp;
-                enemy.dmg = dmg + 2;
-                enemy.moveDelay = 2;
-                enemy.range = 1;
-                enemy.xp = 22;
-                enemy.color = "#ff7755";
-            }
-            rlState.enemies.push(enemy);
+            const enemy = createEnemyAt(spawn.x, spawn.y);
+            if (enemy) rlState.enemies.push(enemy);
         }
     }
 
@@ -362,6 +368,45 @@ function spawnInRoom(room) {
             rlState.shrines.push({ x: spawn.x, y: spawn.y, type, active: true });
         }
     }
+}
+
+function createEnemyAt(ex, ey) {
+    // Base Enemy Scaling
+    let hp = 15 + (rlState.level * 4);
+    let dmg = 4 + Math.floor(rlState.level * 1.5);
+    let typeRoll = Math.random();
+    let enemy = {
+        x: ex, y: ey,
+        hp: hp, maxHp: hp,
+        name: "Cyber-Goblin",
+        dmg: dmg,
+        moveDelay: 1,
+        moveCooldown: 0,
+        range: 1,
+        xp: 15,
+        color: `hsl(${0 + (rlState.level * 20)}, 100%, 50%)`
+    };
+    if (typeRoll > 0.6 && rlState.level >= 2) {
+        enemy.name = "Neon Wraith";
+        enemy.hp = hp - 2;
+        enemy.maxHp = enemy.hp;
+        enemy.dmg = Math.max(3, dmg - 1);
+        enemy.range = 2;
+        enemy.rangedDmg = Math.max(2, Math.floor(enemy.dmg * 0.7));
+        enemy.moveDelay = 2;
+        enemy.xp = 18;
+        enemy.color = "#9b5cff";
+    } else if (typeRoll > 0.82 && rlState.level >= 3) {
+        enemy.name = "Steel Brute";
+        enemy.hp = hp + 10 + rlState.level * 2;
+        enemy.maxHp = enemy.hp;
+        enemy.dmg = dmg + 2;
+        enemy.moveDelay = 2;
+        enemy.range = 1;
+        enemy.xp = 22;
+        enemy.color = "#ff7755";
+    }
+    return enemy;
 }
 
 function generateItem(x, y) {
@@ -400,6 +445,12 @@ function handleRogueInput(e) {
         tookTurn = true;
     }
 
+    if(e.key === "e" || e.key === "E" || e.code === "KeyE") {
+        e.preventDefault();
+        usePulse();
+        tookTurn = true;
+    }
+
     if(dx !== 0 || dy !== 0) {
         e.preventDefault();
         tookTurn = movePlayer(dx, dy);
@@ -407,6 +458,7 @@ function handleRogueInput(e) {
 
     if(tookTurn) {
         if(rlState.player.hp > 0) moveEnemies();
+        tickAlert();
         updateRLUI();
     }
     // Render happens in gameLoop
@@ -421,6 +473,71 @@ function usePotion() {
         addParticle(rlState.player.x, rlState.player.y, `+${heal}`, "#00FF00");
     } else {
         logRL("No potions left!");
+    }
+}
+
+function usePulse() {
+    if (rlState.player.pulseCharges <= 0) {
+        logRL("Pulse offline. No charges.");
+        return;
+    }
+    rlState.player.pulseCharges--;
+    const radius = 2;
+    let hit = 0;
+    rlState.enemies.forEach(enemy => {
+        const dist = Math.abs(enemy.x - rlState.player.x) + Math.abs(enemy.y - rlState.player.y);
+        if (dist <= radius) {
+            const dmg = 8 + Math.floor(rlState.level * 1.5);
+            enemy.hp -= dmg;
+            enemy.moveCooldown = Math.max(enemy.moveCooldown, 1);
+            addParticle(enemy.x, enemy.y, dmg, "#7dd3fc", true);
+            hit++;
+        }
+    });
+    rlState.enemies = rlState.enemies.filter(enemy => {
+        if (enemy.hp > 0) return true;
+        logRL(`Pulse destroyed ${enemy.name}. +${enemy.xp || 15} XP`);
+        gainXP(enemy.xp || 15);
+        if (Math.random() < 0.35 && rlState.player.pulseCharges < rlState.player.pulseMax) {
+            rlState.player.pulseCharges++;
+            logRL("Pulse recharged.");
+        }
+        return false;
+    });
+    if (hit > 0) {
+        logRL("EMP pulse detonated.");
+        checkLevelClear();
+    } else {
+        logRL("Pulse fizzled. No targets.");
+    }
+}
+
+function findRandomOpenTile() {
+    for (let i = 0; i < 80; i++) {
+        const x = Math.floor(Math.random() * rlState.cols);
+        const y = Math.floor(Math.random() * rlState.rows);
+        if (rlState.map[x][y] !== 0) continue;
+        if (isFeatureBlocked(x, y)) continue;
+        return { x, y };
+    }
+    return null;
+}
+
+function spawnReinforcement() {
+    const tile = findRandomOpenTile();
+    if (!tile) return;
+    const enemy = createEnemyAt(tile.x, tile.y);
+    if (enemy) {
+        rlState.enemies.push(enemy);
+        logRL("Reinforcement deployed.");
+    }
+}
+
+function tickAlert() {
+    rlState.alert = Math.min(rlState.alertMax, rlState.alert + 8);
+    if (rlState.alert >= rlState.alertMax) {
+        spawnReinforcement();
+        rlState.alert = 20;
     }
 }
 
@@ -448,6 +565,10 @@ function movePlayer(dx, dy) {
             logRL(`Destroyed ${target.name}. +${target.xp || 15} XP`);
             rlState.enemies = rlState.enemies.filter(e => e !== target);
             gainXP(target.xp || 15);
+            if(Math.random() < 0.3 && rlState.player.pulseCharges < rlState.player.pulseMax) {
+                rlState.player.pulseCharges++;
+                logRL("Pulse charge recovered.");
+            }
             // Drop loot chance
             if(Math.random() < 0.3) generateItem(nx, ny);
             
@@ -522,6 +643,10 @@ function pickupItem(item) {
         logRL("Recovered data cache. Map pulse online.");
         gainXP(item.val);
         revealMemoryPulse(rlState.player.x, rlState.player.y, item.reveal || 6);
+        if (rlState.player.pulseCharges < rlState.player.pulseMax) {
+            rlState.player.pulseCharges++;
+            logRL("Pulse charge restored.");
+        }
         addParticle(rlState.player.x, rlState.player.y, "+DATA", "#7dd3fc");
     } else {
         if(item.val > rlState.player.armor.val) {
@@ -672,7 +797,7 @@ function revealMemoryPulse(cx, cy, radius) {
 // --- Visuals & Rendering ---
 
 function updateFOV() {
-    let r = 6;
+    let r = 7;
     // Clear visible
     rlState.visible = Array(rlState.cols).fill().map(() => Array(rlState.rows).fill(false));
     
@@ -715,6 +840,10 @@ function updateRLUI() {
     let dmg = rlState.player.baseDmg + rlState.player.weapon.val;
     let def = rlState.player.armor.val;
     document.getElementById('rl-stats').innerText = `Atk: ${dmg} | Def: ${def} | Shield: ${rlState.player.shield}`;
+    const pulseLabel = `${rlState.player.pulseCharges}/${rlState.player.pulseMax}`;
+    const alertPct = Math.round((rlState.alert / rlState.alertMax) * 100);
+    document.getElementById('rl-pulse').innerText = `Pulse: ${pulseLabel} (E)`;
+    document.getElementById('rl-alert').innerText = `Alert: ${alertPct}%`;
     document.getElementById('rl-potions').innerText = `Potions: ${rlState.player.potions}`;
 }
 

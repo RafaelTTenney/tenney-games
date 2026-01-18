@@ -76,9 +76,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
       spawnMinTime: 760,
       spawnTimeVariance: 200,
       spawnTimeTightenRate: 20,
-      gapWidthStartMultiplier: 2.05,
-      gapWidthMinMultiplier: 1.45,
-      gapWidthTightenRate: 0.018,
+      obstacleDepth: 4,
+      spawnSpacing: 150,
+      initialSpawnOffset: 20,
+      gapWidthStartMultiplier: 2.2,
+      gapWidthMinMultiplier: 1.6,
+      gapWidthTightenRate: 0.015,
       particles: [],
       explosionParticles: [],
       laneLerpSpeed: 0.2,
@@ -555,7 +558,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       });
   }
 
-  function spawnObstacle() {
+  function spawnObstacle(startY, skipTimer) {
       const lanes = [-1, 0, 1];
       const gapLane = lanes[Math.floor(Math.random() * lanes.length)];
       const colorHue = Math.floor(Math.random() * 360);
@@ -568,18 +571,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const playerScale = getPerspectiveScale(playerCar.y);
       const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * playerScale + roadWidthTop;
       const laneWidthAtPlayer = roadWidthAtPlayer / 3;
-      let gapWidthAtPlayer = (laneWidthAtPlayer * 0.6) * currentGapMultiplier;
+      let gapWidthAtPlayer = (laneWidthAtPlayer * 0.65) * currentGapMultiplier;
 
-      const minSafeGap = Math.max(playerCar.width * 1.15, playerCar.baseWidth, laneWidthAtPlayer * 0.6);
+      const minSafeGap = Math.max(playerCar.width * 1.25, playerCar.baseWidth * 1.05, laneWidthAtPlayer * 0.65);
       if (gapWidthAtPlayer < minSafeGap) {
           gapWidthAtPlayer = minSafeGap;
       }
 
-      gapWidthAtPlayer = Math.min(gapWidthAtPlayer, 280);
+      gapWidthAtPlayer = Math.min(gapWidthAtPlayer, 320);
 
-      const spawnY = horizonY;
+      const spawnY = typeof startY === 'number' ? startY : horizonY;
 
-      const shiftLimit = laneWidthAtPlayer * 0.22;
+      const shiftLimit = laneWidthAtPlayer * 0.18;
       const gapShift = (Math.random() - 0.5) * shiftLimit;
       const shiftSpeed = (Math.random() - 0.5) * 30;
 
@@ -605,13 +608,43 @@ import { getHighScore, submitHighScore } from './score-store.js';
           });
       }
 
-      const dynamicForwardTime = Math.max(
-          racerState.spawnMinTime,
-          racerState.spawnStartTime - racerState.dodged * racerState.spawnTimeTightenRate
-      );
-      racerState.spawnTimer = dynamicForwardTime + Math.random() * racerState.spawnTimeVariance;
+      if (!skipTimer) {
+          const dynamicForwardTime = Math.max(
+              racerState.spawnMinTime,
+              racerState.spawnStartTime - racerState.dodged * racerState.spawnTimeTightenRate
+          );
+          racerState.spawnTimer = dynamicForwardTime + Math.random() * racerState.spawnTimeVariance;
+      }
 
       racerState.edgeFlash = 20;
+  }
+
+  function seedObstacles() {
+      seedObstacles();
+      const spacing = racerState.spawnSpacing;
+      const offset = racerState.initialSpawnOffset;
+      const maxY = canvasHeight - 80;
+      for (let i = 0; i < racerState.obstacleDepth; i++) {
+          const y = horizonY + offset + (i * spacing);
+          if (y > maxY) break;
+          spawnObstacle(y, true);
+      }
+  }
+
+  function fillObstacleDepth() {
+      if (racerState.obstacles.length >= racerState.obstacleDepth) return;
+      const spacing = racerState.spawnSpacing;
+      const offset = racerState.initialSpawnOffset;
+      let topY = horizonY + offset + spacing;
+      racerState.obstacles.forEach(ob => {
+          if (ob.y < topY) topY = ob.y;
+      });
+      while (racerState.obstacles.length < racerState.obstacleDepth) {
+          const spawnY = Math.max(horizonY + offset, topY - spacing);
+          if (Math.abs(spawnY - topY) < 12) break;
+          spawnObstacle(spawnY, true);
+          topY = spawnY;
+      }
   }
 
   function spawnAICar(startY) {
@@ -699,7 +732,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
       racerState.spawnTimer -= delta;
       if (racerState.spawnTimer <= 0) {
-          spawnObstacle();
+          if (racerState.obstacles.length < racerState.obstacleDepth) {
+              spawnObstacle();
+          } else {
+              racerState.spawnTimer = 200;
+          }
       }
 
       racerState.aiSpawnTimer -= delta;
@@ -724,7 +761,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
           if (ob.y > racerCanvas.height + obstacleHeight) {
               racerState.dodged += 1;
               spawnWhooshLines(canvasWidth / 2, racerCanvas.height - 40);
-              const scale = Math.min(1.1, 1 + racerState.dodged * 0.008);
+              const scale = Math.min(1.06, 1 + racerState.dodged * 0.004);
               playerCar.width = playerCar.baseWidth * scale;
               if (ob.closeCall) {
                   racerState.nearMisses += 1;
@@ -738,6 +775,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
           }
           return true;
       });
+      fillObstacleDepth();
 
       racerState.aiCars.forEach(ai => {
           ai.y += traveled * ai.speedFactor;
@@ -832,7 +870,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const roadWidthPlayer = roadWidthAtY(playerCar.y);
       const exactPlayerCenterX = playerCar.x;
 
-      const collisionWidth = playerCar.width * 0.9;
+      const collisionWidth = playerCar.width * 0.86;
       const carLeft = exactPlayerCenterX - collisionWidth / 2;
       const carRight = exactPlayerCenterX + collisionWidth / 2;
       const carTop = playerCar.y;
@@ -851,10 +889,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
           if (carBottom <= obTop || carTop >= obBottom) continue;
 
-          const baseCushion = Math.max(2, Math.round(collisionWidth * 0.03));
+          const baseCushion = Math.max(1, Math.round(collisionWidth * 0.02));
           const safeGapLeft = gapLeft - baseCushion;
           const safeGapRight = gapRight + baseCushion;
-          const nearMargin = Math.max(8, Math.round(collisionWidth * 0.12));
+          const nearMargin = Math.max(6, Math.round(collisionWidth * 0.1));
 
           if (!ob.closeCall) {
               if (carLeft < gapLeft + nearMargin || carRight > gapRight - nearMargin) {

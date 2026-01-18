@@ -345,24 +345,27 @@
     </div>
 
     <div id="rogueModal" class="modal-overlay">
-        <div class="modal-content" style="border-color: #FF00FF; box-shadow: 0 0 30px #FF00FF; min-width: 520px;">
+        <div class="modal-content" style="border-color: #FF00FF; box-shadow: 0 0 30px #FF00FF; min-width: 620px; max-width: 96vw;">
             <div class="modal-header">
                 <h2 style="color:#FF00FF; text-shadow: 0 0 10px #FF00FF;">Rogue Dungeon: Neon Depths</h2>
                 <span class="modal-close" id="rogueModalCloseBtn">&times;</span>
             </div>
             
-            <div style="display:flex; justify-content:space-between; padding: 10px; background: #220022; border: 1px solid #550055; font-family: monospace;">
+            <div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:space-between; padding: 10px; background: #220022; border: 1px solid #550055; font-family: monospace;">
                 <span id="rl-level" style="color:#fff;">Lvl: 1</span>
                 <span id="rl-hp" style="color:#FF3333;">HP: 100</span>
                 <span id="rl-stats" style="color:#FFFF00;">Atk: 5 | Def: 0</span>
+                <span id="rl-pulse" style="color:#7dd3fc;">Pulse: 1/2 (E)</span>
+                <span id="rl-alert" style="color:#ffa347;">Alert: 0%</span>
                 <span id="rl-potions" style="color:#00FF00;">Potions: 0 (Space)</span>
             </div>
 
-            <canvas id="rogue-canvas" width="480" height="480" style="background:#050005; border: 2px solid #550055; margin-top:10px; box-shadow: inset 0 0 20px #220022; cursor: pointer;"></canvas>
+            <canvas id="rogue-canvas" width="572" height="572" style="background:#050005; border: 2px solid #550055; margin-top:10px; box-shadow: inset 0 0 20px #220022; cursor: pointer; max-width: 100%; height: auto;"></canvas>
             
             <div style="margin-top:10px; color:#aaa; font-size:0.85em; display:flex; justify-content:space-between;">
                 <span>ARROWS: Move/Attack</span>
                 <span>SPACE: Drink Potion</span>
+                <span>E: EMP Pulse</span>
                 <span>Clear sector to unlock lift</span>
             </div>
             
