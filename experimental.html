@@ -232,6 +232,14 @@
                 </div>
             </section>
 
+            <section class="card" style="border-color: #0ea5e9; box-shadow: 0 0 15px rgba(14, 165, 233, 0.25);">
+                <h3 style="color:#0ea5e9;">Tunnel Rush</h3>
+                <div class="meta">Rotate through the tunnel gaps and survive the speed surge.</div>
+                <div class="actions">
+                    <button class="btn" style="background:#0ea5e9; color:#000; border-color: white;" id="runTunnelBtn">Launch</button>
+                </div>
+            </section>
+
             <section class="card flagship">
                 <h3>Minesweeper Elite</h3>
                 <div class="meta">The First Flagship. Customizable difficulty, flood-fill, right-click flagging, and smart styling.</div>
@@ -300,8 +308,13 @@
                 <span class="modal-close" id="racerModalCloseBtn">&times;</span>
             </div>
             <canvas id="racer-canvas" width="340" height="520" style="background:#000;"></canvas>
-            <div id="racer-hud">
+            <div id="racer-hud" style="display:flex; flex-direction:column; gap:4px; color:#dff7ff; font-family:monospace;">
                 <div id="racer-distance">Distance: 0m</div>
+                <div id="racer-speed">Speed: 0 mph</div>
+                <div id="racer-obstacles">Gaps cleared: 0 | High: 0</div>
+                <div id="racer-shield">Shield: 0</div>
+                <div id="racer-boost">Boost: Ready</div>
+                <div id="racer-message" style="color:#7de3ff;">Ready.</div>
             </div>
             <div class="modal-controls">
                 <button id="startRacerBtn" class="btn">Start</button>
@@ -343,6 +356,30 @@
                 <div class="modal-controls">
                     <button class="btn secondary" onclick="showMsMenu()">Back to Menu</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tunnelModal" class="modal-overlay">
+        <div class="modal-content" style="border-color:#0ea5e9; box-shadow:0 0 20px rgba(14,165,233,0.45);">
+            <div class="modal-header">
+                <h2 style="color:#0ea5e9;">Tunnel Rush</h2>
+                <span class="modal-close" id="tunnelModalCloseBtn">&times;</span>
+            </div>
+            <div class="meta" style="max-width:720px; margin:0 auto 10px;">
+                Rotate around the tunnel to pass through gaps. Speed ramps up as you survive.
+                Controls: Left/Right arrows to rotate.
+            </div>
+            <canvas id="tunnel-canvas" width="600" height="600" style="background:#010b14; border:2px solid #0ea5e9;"></canvas>
+            <div id="tunnel-hud" style="display:flex; justify-content:space-between; margin-top:8px; color:#e0f2fe; font-family:monospace;">
+                <div id="tunnel-score">Score: 0</div>
+                <div id="tunnel-speed">Speed: 1.0x</div>
+                <div id="tunnel-gap">Gap: 120°</div>
+            </div>
+            <div class="modal-controls">
+                <button id="startTunnelBtn" class="btn">Start</button>
+                <button id="pauseTunnelBtn" class="btn secondary">Pause</button>
+                <button id="resetTunnelBtn" class="btn secondary">Reset</button>
             </div>
         </div>
     </div>
@@ -476,6 +513,7 @@
     <script type="module" src="arc-reactor.js"></script>
     <script type="module" src="neon-rally.js"></script>
     <script type="module" src="vector-tanks.js"></script>
+    <script type="module" src="tunnel-rush.js"></script>
 
     <script type="module">
         // Racer Hookup
@@ -484,6 +522,27 @@
         document.getElementById('startRacerBtn').addEventListener('click', () => { if(typeof window.startRacer === 'function') window.startRacer(); });
         document.getElementById('pauseRacerBtn').addEventListener('click', () => { if(typeof window.pauseRacer === 'function') window.pauseRacer(); });
         document.getElementById('resetRacerBtn').addEventListener('click', () => { if(typeof window.resetRacer === 'function') window.resetRacer(); });
+
+        // Tunnel Rush Hookup
+        const tunnelModal = document.getElementById('tunnelModal');
+        document.getElementById('runTunnelBtn').addEventListener('click', () => {
+            tunnelModal.style.display = 'flex';
+            if (typeof window.initTunnelRushGame === 'function') window.initTunnelRushGame();
+            if (typeof window.resetTunnelRush === 'function') window.resetTunnelRush();
+        });
+        document.getElementById('tunnelModalCloseBtn').addEventListener('click', () => {
+            tunnelModal.style.display = 'none';
+            if (typeof window.pauseTunnelRush === 'function') window.pauseTunnelRush();
+        });
+        tunnelModal.addEventListener('click', (e) => {
+            if (e.target === tunnelModal) {
+                tunnelModal.style.display = 'none';
+                if (typeof window.pauseTunnelRush === 'function') window.pauseTunnelRush();
+            }
+        });
+        document.getElementById('startTunnelBtn').addEventListener('click', () => { if (typeof window.startTunnelRush === 'function') window.startTunnelRush(); });
+        document.getElementById('pauseTunnelBtn').addEventListener('click', () => { if (typeof window.pauseTunnelRush === 'function') window.pauseTunnelRush(); });
+        document.getElementById('resetTunnelBtn').addEventListener('click', () => { if (typeof window.resetTunnelRush === 'function') window.resetTunnelRush(); });
 
         // Arc Reactor Hookup
         const arcModal = document.getElementById('arcModal');
@@ -599,7 +658,7 @@
         // Close modal on ESC
         document.addEventListener('keydown', (e) => {
             if(e.key === 'Escape') {
-                ['racerModal','superMinesweeperModal','rogueModal','tdModal','arcModal','rallyModal','tanksModal'].forEach(id => {
+                ['racerModal','superMinesweeperModal','rogueModal','tdModal','arcModal','rallyModal','tanksModal','tunnelModal'].forEach(id => {
                     const el = document.getElementById(id);
                     if(el && el.style.display === 'flex') {
                         el.style.display = 'none';
@@ -607,6 +666,7 @@
                         if(id === 'arcModal' && typeof window.pauseArcReactor === 'function') window.pauseArcReactor();
                         if(id === 'rallyModal' && typeof window.pauseNeonRally === 'function') window.pauseNeonRally();
                         if(id === 'tanksModal' && typeof window.pauseVectorTanks === 'function') window.pauseVectorTanks();
+                        if(id === 'tunnelModal' && typeof window.pauseTunnelRush === 'function') window.pauseTunnelRush();
                     }
                 });
             }

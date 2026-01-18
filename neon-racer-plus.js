@@ -14,6 +14,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
   const racerDistanceEl = document.getElementById('racer-distance');
   const racerSpeedEl = document.getElementById('racer-speed');
   const racerObstaclesEl = document.getElementById('racer-obstacles');
+  const racerShieldEl = document.getElementById('racer-shield');
+  const racerBoostEl = document.getElementById('racer-boost');
   const racerMessageEl = document.getElementById('racer-message');
   const startRacerBtn = document.getElementById('startRacerBtn');
   const pauseRacerBtn = document.getElementById('pauseRacerBtn');
@@ -58,7 +60,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
       distance: 0,
       dodged: 0,
       mostGapsCleared: 0,
+      nearMisses: 0,
+      shield: 0,
+      boostTimer: 0,
       obstacles: [],
+      pickups: [],
       speedLines: [],
       stars: [],
       spawnTimer: 0,
@@ -106,6 +112,25 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const offsetFromVP = playerLaneCenterAtPlayer - vp;
       const rwY = roadWidthAtY(targetY);
       return vp + offsetFromVP * (rwY / roadWidthAtPlayerStored);
+  }
+
+  function getObstacleGap(ob) {
+      const roadWPlayer = ob.roadWidthAtPlayer || roadWidthAtY(playerCar.y);
+      const roadWAtY = roadWidthAtY(ob.y);
+      const shift = (ob.gapShift || 0) * (roadWAtY / roadWPlayer);
+      let center = laneCenterAtY(ob.gapLane, ob.y, roadWPlayer) + shift;
+      const width = ob.gapWidthAtPlayer * (roadWAtY / roadWPlayer);
+      const roadLeft = (canvasWidth / 2) - (roadWAtY / 2);
+      const roadRight = (canvasWidth / 2) + (roadWAtY / 2);
+      const half = width / 2;
+      center = Math.max(roadLeft + half, Math.min(center, roadRight - half));
+      return {
+          center,
+          width,
+          left: center - half,
+          right: center + half,
+          roadWPlayer
+      };
   }
 
   // Particle/effects functions
@@ -356,12 +381,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
           const scaledHeight = obstacleHeight * scale;
           const top = ob.y - scaledHeight;
-          const roadWPlayer = ob.roadWidthAtPlayer || roadWidthAtY(playerCar.y);
-          const scaledGapCenter = laneCenterAtY(ob.gapLane, ob.y, roadWPlayer);
-          const scaledGapWidth = ob.gapWidthAtPlayer * (roadWidthAtY(ob.y) / roadWPlayer);
-
-          const gapLeft = scaledGapCenter - scaledGapWidth / 2;
-          const gapRight = scaledGapCenter + scaledGapWidth / 2;
+          const gap = getObstacleGap(ob);
+          const gapLeft = gap.left;
+          const gapRight = gap.right;
 
           racerCtx.shadowColor = ob.color;
           racerCtx.fillStyle = 'rgba(0,0,0,0)';
@@ -443,6 +465,17 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerCtx.fillStyle = '#3be7ff';
       racerCtx.fillRect(-w * 0.05, carY + h * 0.2, w * 0.1, h * 0.6);
 
+      if (racerState.shield > 0) {
+          racerCtx.save();
+          racerCtx.globalAlpha = 0.5;
+          racerCtx.strokeStyle = '#7dd3fc';
+          racerCtx.lineWidth = 2;
+          racerCtx.beginPath();
+          racerCtx.arc(0, carY + h * 0.55, w * 0.55 + 6, 0, Math.PI * 2);
+          racerCtx.stroke();
+          racerCtx.restore();
+      }
+
       racerCtx.restore();
   }
 
@@ -458,12 +491,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
           const scaledHeight = obstacleHeight * scale;
           const top = ob.y - scaledHeight;
 
-          const roadWPlayer = ob.roadWidthAtPlayer || roadWidthAtY(playerCar.y);
-          const scaledGapCenter = laneCenterAtY(ob.gapLane, ob.y, roadWPlayer);
-          const scaledGapWidth = (ob.gapWidthAtPlayer) * (roadWidthAtY(ob.y) / roadWPlayer);
-
-          const gapLeft = scaledGapCenter - scaledGapWidth / 2;
-          const gapRight = scaledGapCenter + scaledGapWidth / 2;
+          const gap = getObstacleGap(ob);
+          const gapLeft = gap.left;
+          const gapRight = gap.right;
           const edgeHeight = 6 * scale;
 
           if (gapLeft > 0) {
@@ -478,6 +508,25 @@ import { getHighScore, submitHighScore } from './score-store.js';
               racerCtx.fillStyle = `hsl(${ob.hue}, 100%, 85%)`;
               racerCtx.fillRect(gapRight, top, canvasWidth - gapRight, edgeHeight);
           }
+      });
+  }
+
+  function drawPickups() {
+      if (!racerCtx) return;
+      racerState.pickups.forEach(pick => {
+          const scale = getPerspectiveScale(pick.y);
+          if (scale < 0.02) return;
+          const roadWPlayer = pick.roadWidthAtPlayer || roadWidthAtY(playerCar.y);
+          const centerX = laneCenterAtY(pick.lane, pick.y, roadWPlayer);
+          const size = 10 * scale + 4;
+          racerCtx.save();
+          racerCtx.shadowBlur = 18;
+          racerCtx.shadowColor = pick.type === 'shield' ? '#7dd3fc' : '#fbbf24';
+          racerCtx.fillStyle = pick.type === 'shield' ? '#7dd3fc' : '#fbbf24';
+          racerCtx.beginPath();
+          racerCtx.arc(centerX, pick.y, size, 0, Math.PI * 2);
+          racerCtx.fill();
+          racerCtx.restore();
       });
   }
 
@@ -505,14 +554,31 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
       const spawnY = horizonY;
 
+      const shiftLimit = laneWidthAtPlayer * 0.28;
+      const gapShift = (Math.random() - 0.5) * shiftLimit;
+      const shiftSpeed = (Math.random() - 0.5) * 30;
+
       racerState.obstacles.push({
           y: spawnY,
           gapLane: gapLane,
           gapWidthAtPlayer: gapWidthAtPlayer,
           roadWidthAtPlayer: roadWidthAtPlayer,
+          gapShift,
+          shiftSpeed,
+          closeCall: false,
           color: `hsl(${colorHue}, 90%, 60%)`,
           hue: colorHue
       });
+
+      if (Math.random() < 0.22) {
+          const pickupType = Math.random() < 0.45 ? 'shield' : 'boost';
+          racerState.pickups.push({
+              y: spawnY - 20,
+              lane: gapLane,
+              roadWidthAtPlayer,
+              type: pickupType
+          });
+      }
 
       const dynamicForwardTime = Math.max(
           racerState.spawnMinTime,
@@ -579,7 +645,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const traveled = (speedInPxPerSecond * (delta / 1000));
 
       const baseSpeed = 180 + racerState.dodged * 6 + Math.floor(racerState.distance / 800);
-      racerState.speed = Math.min(520, baseSpeed);
+      if (racerState.boostTimer > 0) {
+          racerState.boostTimer = Math.max(0, racerState.boostTimer - delta);
+      }
+      const boostBonus = racerState.boostTimer > 0 ? 140 : 0;
+      racerState.speed = Math.min(560, baseSpeed + boostBonus);
       racerState.distance += traveled;
 
       racerState.spawnTimer -= delta;
@@ -589,17 +659,54 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
       racerState.obstacles.forEach(ob => {
           ob.y += traveled;
+          if (ob.shiftSpeed) {
+              const laneWidthAtPlayer = (ob.roadWidthAtPlayer || roadWidthAtY(playerCar.y)) / 3;
+              const shiftLimit = laneWidthAtPlayer * 0.28;
+              ob.gapShift += ob.shiftSpeed * (delta / 1000);
+              if (ob.gapShift > shiftLimit || ob.gapShift < -shiftLimit) {
+                  ob.shiftSpeed *= -1;
+              }
+          }
       });
 
       racerState.obstacles = racerState.obstacles.filter(ob => {
           if (ob.y > racerCanvas.height + obstacleHeight) {
               racerState.dodged += 1;
               spawnWhooshLines(canvasWidth / 2, racerCanvas.height - 40);
-              const scale = Math.min(1.3, 1 + racerState.dodged * 0.02);
+              const scale = Math.min(1.15, 1 + racerState.dodged * 0.01);
               playerCar.width = playerCar.baseWidth * scale;
+              if (ob.closeCall) {
+                  racerState.nearMisses += 1;
+                  racerState.boostTimer = Math.max(racerState.boostTimer, 600);
+                  if (racerMessageEl) racerMessageEl.textContent = 'Near miss! Boost surge.';
+              }
               if (racerState.dodged > 0 && racerState.dodged % 10 === 0) {
                   if (racerMessageEl) racerMessageEl.textContent = `Boost! Speed increased.`;
               }
+              return false;
+          }
+          return true;
+      });
+
+      racerState.pickups.forEach(pick => {
+          pick.y += traveled;
+      });
+      racerState.pickups = racerState.pickups.filter(pick => {
+          if (pick.y > racerCanvas.height + 40) return false;
+          const pickupY = pick.y;
+          const roadWPlayer = pick.roadWidthAtPlayer || roadWidthAtY(playerCar.y);
+          const centerX = laneCenterAtY(pick.lane, pickupY, roadWPlayer);
+          const inBand = Math.abs(pickupY - (playerCar.y + playerCar.height * 0.4)) < 26;
+          const inLane = Math.abs(playerCar.x - centerX) < playerCar.width * 0.45;
+          if (inBand && inLane) {
+              if (pick.type === 'shield') {
+                  racerState.shield = Math.min(2, racerState.shield + 1);
+                  if (racerMessageEl) racerMessageEl.textContent = 'Shield charged.';
+              } else if (pick.type === 'boost') {
+                  racerState.boostTimer = Math.max(racerState.boostTimer, 1200);
+                  if (racerMessageEl) racerMessageEl.textContent = 'Boost engaged!';
+              }
+              spawnParticles(centerX, pickupY, pick.type === 'shield' ? '#7dd3fc' : '#fbbf24', 14);
               return false;
           }
           return true;
@@ -660,46 +767,49 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
       const playerScale = getPerspectiveScale(playerCar.y);
       const roadWidthPlayer = roadWidthAtY(playerCar.y);
-      const exactPlayerCenterX = laneCenterAtY(playerCar.lane, playerCar.y, roadWidthPlayer);
+      const exactPlayerCenterX = playerCar.x;
 
-      const collisionWidth = playerCar.width * 0.96;
+      const collisionWidth = playerCar.width * 0.94;
       const carLeft = exactPlayerCenterX - collisionWidth / 2;
       const carRight = exactPlayerCenterX + collisionWidth / 2;
       const carTop = playerCar.y;
       const carBottom = playerCar.y + playerCar.height;
 
-      for (const ob of racerState.obstacles) {
+      for (let i = 0; i < racerState.obstacles.length; i++) {
+          const ob = racerState.obstacles[i];
           const scale = getPerspectiveScale(ob.y);
           const scaledHeight = obstacleHeight * scale;
           const obTop = ob.y - scaledHeight;
           const obBottom = ob.y;
 
-          const roadWPlayerStored = ob.roadWidthAtPlayer || roadWidthPlayer;
-          const scaledGapCenter = laneCenterAtY(ob.gapLane, ob.y, roadWPlayerStored);
-          const scaledGapWidth = ob.gapWidthAtPlayer * (roadWidthAtY(ob.y) / roadWPlayerStored);
-          const gapLeft = scaledGapCenter - scaledGapWidth / 2;
-          const gapRight = scaledGapCenter + scaledGapWidth / 2;
+          const gap = getObstacleGap(ob);
+          const gapLeft = gap.left;
+          const gapRight = gap.right;
 
           if (carBottom <= obTop || carTop >= obBottom) continue;
 
-          const baseCushion = Math.max(5, Math.round(collisionWidth * 0.06));
-          const innerLaneBonus = Math.max(10, Math.round(collisionWidth * 0.18));
-          const outerLaneTrim = Math.max(4, Math.round(collisionWidth * 0.08));
+          const baseCushion = Math.max(4, Math.round(collisionWidth * 0.05));
+          const safeGapLeft = gapLeft - baseCushion;
+          const safeGapRight = gapRight + baseCushion;
+          const nearMargin = Math.max(10, Math.round(collisionWidth * 0.18));
 
-          let safeGapLeft = gapLeft - baseCushion;
-          let safeGapRight = gapRight + baseCushion;
-
-          if (ob.gapLane === -1) {
-              // Left lane: push the safe gap toward center by trimming the outer edge
-              safeGapLeft += outerLaneTrim;
-              safeGapRight += innerLaneBonus;
-          } else if (ob.gapLane === 1) {
-              // Right lane: push the safe gap toward center by trimming the outer edge
-              safeGapLeft -= innerLaneBonus;
-              safeGapRight -= outerLaneTrim;
+          if (!ob.closeCall) {
+              if (carLeft < gapLeft + nearMargin || carRight > gapRight - nearMargin) {
+                  ob.closeCall = true;
+              }
           }
 
           if (carLeft < safeGapLeft || carRight > safeGapRight) {
+              if (racerState.shield > 0) {
+                  racerState.shield -= 1;
+                  racerState.flash.alpha = 0.6;
+                  racerState.shake.intensity = Math.max(racerState.shake.intensity, 0.2);
+                  spawnParticles(playerCar.x, playerCar.y + playerCar.height / 2, '#7dd3fc', 24);
+                  racerState.obstacles.splice(i, 1);
+                  i -= 1;
+                  if (racerMessageEl) racerMessageEl.textContent = 'Shield absorbed impact.';
+                  continue;
+              }
               if (racerState.animationFrame) {
                   cancelAnimationFrame(racerState.animationFrame);
                   racerState.animationFrame = null;
@@ -726,6 +836,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       drawSpeedLines();
       drawGlow();
       drawObstacles();
+      drawPickups();
       drawPlayer(delta);
       drawParticles();
 
@@ -810,10 +921,14 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerState.speed = 180;
       racerState.distance = 0;
       racerState.dodged = 0;
+      racerState.nearMisses = 0;
+      racerState.shield = 0;
+      racerState.boostTimer = 0;
       racerState.speedLines = [];
       racerState.stars = [];
       racerState.particles = [];
       racerState.explosionParticles = [];
+      racerState.pickups = [];
       racerState.shake = { x: 0, y: 0, intensity: 0 };
       racerState.flash = { alpha: 0 };
       racerState.carSway = 0;
@@ -877,7 +992,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
   function updateHud() {
       if (racerDistanceEl) racerDistanceEl.textContent = `Distance: ${Math.floor(racerState.distance)}m`;
       if (racerSpeedEl) racerSpeedEl.textContent = `Speed: ${Math.floor(racerState.speed)} mph`;
-      if (racerObstaclesEl) racerObstaclesEl.textContent = `Gaps cleared: ${racerState.dodged} | High: ${racerState.mostGapsCleared}`;
+      if (racerObstaclesEl) racerObstaclesEl.textContent = `Gaps cleared: ${racerState.dodged} | Near: ${racerState.nearMisses} | High: ${racerState.mostGapsCleared}`;
+      if (racerShieldEl) racerShieldEl.textContent = `Shield: ${racerState.shield}`;
+      if (racerBoostEl) racerBoostEl.textContent = `Boost: ${racerState.boostTimer > 0 ? 'ACTIVE' : 'Ready'}`;
   }
 
   // INIT function (to be called by UI loader)
