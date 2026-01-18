@@ -23,14 +23,15 @@ async function submitRogueBestIfNeeded() {
 let rlState = {
     canvas: null,
     ctx: null,
-    tileSize: 24,
-    cols: 20,
-    rows: 20,
+    tileSize: 20,
+    cols: 24,
+    rows: 24,
     map: [],        // 1 = Wall, 0 = Floor
     memory: [],     // True if player has visited this tile (Fog of War)
     visible: [],    // True if currently in FOV
     items: [],
     traps: [],
+    shrines: [],
     stairs: null,
     stairsActive: false,
     particles: [],  // Floating damage numbers
@@ -41,7 +42,8 @@ let rlState = {
         baseDmg: 6, 
         potions: 1, // Start with 1 potion
         weapon: {name: "Bare Hands", val: 0},
-        armor: {name: "Rags", val: 0}
+        armor: {name: "Rags", val: 0},
+        shield: 0
     },
     enemies: [],
     level: 1,
@@ -53,6 +55,8 @@ function initRogue() {
     rlState.canvas = document.getElementById('rogue-canvas');
     if(!rlState.canvas) return;
     rlState.ctx = rlState.canvas.getContext('2d');
+    rlState.canvas.width = rlState.cols * rlState.tileSize;
+    rlState.canvas.height = rlState.rows * rlState.tileSize;
     
     document.getElementById('rl-restart').onclick = startRun;
     
@@ -80,7 +84,8 @@ function startRun() {
         baseDmg: 6, 
         potions: 1,
         weapon: {name: "Bare Hands", val: 0},
-        armor: {name: "Rags", val: 0}
+        armor: {name: "Rags", val: 0},
+        shield: 0
     };
     rlState.log = [];
     rlState.particles = [];
@@ -100,13 +105,14 @@ function generateLevel() {
     rlState.enemies = [];
     rlState.items = [];
     rlState.traps = [];
+    rlState.shrines = [];
     rlState.stairs = null;
     rlState.stairsActive = false;
 
     const rooms = [];
-    const maxRooms = 8;
-    const minSize = 3;
-    const maxSize = 6;
+    const maxRooms = 12;
+    const minSize = 4;
+    const maxSize = 8;
 
     for (let i = 0; i < maxRooms; i++) {
         // Random dimensions
@@ -150,6 +156,17 @@ function generateLevel() {
         }
     }
 
+    if (rooms.length === 0) {
+        const fallback = {
+            x: Math.max(1, Math.floor(rlState.cols / 2) - 2),
+            y: Math.max(1, Math.floor(rlState.rows / 2) - 2),
+            w: 5,
+            h: 5
+        };
+        createRoom(fallback);
+        rooms.push(fallback);
+    }
+
     // Place Player in first room
     let fRoom = rooms[0];
     rlState.player.x = fRoom.x + Math.floor(fRoom.w / 2);
@@ -167,6 +184,7 @@ function generateLevel() {
         y: lastRoom.y + Math.floor(lastRoom.h / 2)
     };
 
+    pruneDisconnectedFloors();
     updateFOV();
 }
 
@@ -190,64 +208,158 @@ function createVTunnel(y1, y2, x) {
     }
 }
 
+function isFeatureBlocked(x, y) {
+    if (rlState.player.x === x && rlState.player.y === y) return true;
+    if (rlState.stairs && rlState.stairs.x === x && rlState.stairs.y === y) return true;
+    if (rlState.enemies.find(e => e.x === x && e.y === y)) return true;
+    if (rlState.items.find(i => i.x === x && i.y === y)) return true;
+    if (rlState.traps.find(t => t.x === x && t.y === y)) return true;
+    if (rlState.shrines.find(s => s.x === x && s.y === y)) return true;
+    return false;
+}
+
+function findOpenTile(room) {
+    for (let tries = 0; tries < 20; tries++) {
+        const x = room.x + Math.floor(Math.random() * room.w);
+        const y = room.y + Math.floor(Math.random() * room.h);
+        if (rlState.map[x][y] === 0 && !isFeatureBlocked(x, y)) {
+            return { x, y };
+        }
+    }
+    return null;
+}
+
+function pruneDisconnectedFloors() {
+    const cols = rlState.cols;
+    const rows = rlState.rows;
+    const visited = Array(cols).fill().map(() => Array(rows).fill(false));
+    const dist = Array(cols).fill().map(() => Array(rows).fill(-1));
+    const startX = rlState.player.x;
+    const startY = rlState.player.y;
+
+    if (rlState.map[startX][startY] !== 0) return;
+
+    const queue = [{ x: startX, y: startY }];
+    visited[startX][startY] = true;
+    dist[startX][startY] = 0;
+
+    for (let i = 0; i < queue.length; i++) {
+        const cur = queue[i];
+        const neighbors = [
+            { x: cur.x + 1, y: cur.y },
+            { x: cur.x - 1, y: cur.y },
+            { x: cur.x, y: cur.y + 1 },
+            { x: cur.x, y: cur.y - 1 }
+        ];
+        neighbors.forEach(next => {
+            if (next.x < 0 || next.x >= cols || next.y < 0 || next.y >= rows) return;
+            if (visited[next.x][next.y]) return;
+            if (rlState.map[next.x][next.y] !== 0) return;
+            visited[next.x][next.y] = true;
+            dist[next.x][next.y] = dist[cur.x][cur.y] + 1;
+            queue.push(next);
+        });
+    }
+
+    for (let x = 0; x < cols; x++) {
+        for (let y = 0; y < rows; y++) {
+            if (rlState.map[x][y] === 0 && !visited[x][y]) {
+                rlState.map[x][y] = 1;
+                rlState.memory[x][y] = false;
+                rlState.visible[x][y] = false;
+            }
+        }
+    }
+
+    rlState.items = rlState.items.filter(i => visited[i.x] && visited[i.x][i.y]);
+    rlState.traps = rlState.traps.filter(t => visited[t.x] && visited[t.x][t.y]);
+    rlState.enemies = rlState.enemies.filter(e => visited[e.x] && visited[e.x][e.y]);
+    rlState.shrines = rlState.shrines.filter(s => visited[s.x] && visited[s.x][s.y]);
+
+    if (rlState.stairs && (!visited[rlState.stairs.x] || !visited[rlState.stairs.x][rlState.stairs.y])) {
+        let best = null;
+        let bestDist = -1;
+        for (let x = 0; x < cols; x++) {
+            for (let y = 0; y < rows; y++) {
+                if (!visited[x][y]) continue;
+                if (x === rlState.player.x && y === rlState.player.y) continue;
+                if (dist[x][y] > bestDist) {
+                    bestDist = dist[x][y];
+                    best = { x, y };
+                }
+            }
+        }
+        rlState.stairs = best || { x: rlState.player.x, y: rlState.player.y };
+    }
+}
+
 function spawnInRoom(room) {
     // Chance for enemy
     if(Math.random() < 0.8) {
-        let ex = room.x + Math.floor(Math.random() * room.w);
-        let ey = room.y + Math.floor(Math.random() * room.h);
-        // Base Enemy Scaling
-        let hp = 15 + (rlState.level * 4);
-        let dmg = 4 + Math.floor(rlState.level * 1.5);
-        let typeRoll = Math.random();
-        let enemy = {
-            x: ex, y: ey,
-            hp: hp, maxHp: hp,
-            name: "Cyber-Goblin",
-            dmg: dmg,
-            moveDelay: 1,
-            moveCooldown: 0,
-            range: 1,
-            xp: 15,
-            color: `hsl(${0 + (rlState.level * 20)}, 100%, 50%)`
-        };
-        if (typeRoll > 0.6 && rlState.level >= 2) {
-            enemy.name = "Neon Wraith";
-            enemy.hp = hp - 2;
-            enemy.maxHp = enemy.hp;
-            enemy.dmg = Math.max(3, dmg - 1);
-            enemy.range = 2;
-            enemy.rangedDmg = Math.max(2, Math.floor(enemy.dmg * 0.7));
-            enemy.moveDelay = 2;
-            enemy.xp = 18;
-            enemy.color = "#9b5cff";
-        } else if (typeRoll > 0.82 && rlState.level >= 3) {
-            enemy.name = "Steel Brute";
-            enemy.hp = hp + 10 + rlState.level * 2;
-            enemy.maxHp = enemy.hp;
-            enemy.dmg = dmg + 2;
-            enemy.moveDelay = 2;
-            enemy.range = 1;
-            enemy.xp = 22;
-            enemy.color = "#ff7755";
+        const spawn = findOpenTile(room);
+        if(spawn) {
+            let ex = spawn.x;
+            let ey = spawn.y;
+            // Base Enemy Scaling
+            let hp = 15 + (rlState.level * 4);
+            let dmg = 4 + Math.floor(rlState.level * 1.5);
+            let typeRoll = Math.random();
+            let enemy = {
+                x: ex, y: ey,
+                hp: hp, maxHp: hp,
+                name: "Cyber-Goblin",
+                dmg: dmg,
+                moveDelay: 1,
+                moveCooldown: 0,
+                range: 1,
+                xp: 15,
+                color: `hsl(${0 + (rlState.level * 20)}, 100%, 50%)`
+            };
+            if (typeRoll > 0.6 && rlState.level >= 2) {
+                enemy.name = "Neon Wraith";
+                enemy.hp = hp - 2;
+                enemy.maxHp = enemy.hp;
+                enemy.dmg = Math.max(3, dmg - 1);
+                enemy.range = 2;
+                enemy.rangedDmg = Math.max(2, Math.floor(enemy.dmg * 0.7));
+                enemy.moveDelay = 2;
+                enemy.xp = 18;
+                enemy.color = "#9b5cff";
+            } else if (typeRoll > 0.82 && rlState.level >= 3) {
+                enemy.name = "Steel Brute";
+                enemy.hp = hp + 10 + rlState.level * 2;
+                enemy.maxHp = enemy.hp;
+                enemy.dmg = dmg + 2;
+                enemy.moveDelay = 2;
+                enemy.range = 1;
+                enemy.xp = 22;
+                enemy.color = "#ff7755";
+            }
+            rlState.enemies.push(enemy);
         }
-        rlState.enemies.push(enemy);
     }
 
     // Chance for item
     if(Math.random() < 0.5) {
-        let ix = room.x + Math.floor(Math.random() * room.w);
-        let iy = room.y + Math.floor(Math.random() * room.h);
-        if(rlState.map[ix][iy] === 0) {
-            generateItem(ix, iy);
-        }
+        const spawn = findOpenTile(room);
+        if(spawn) generateItem(spawn.x, spawn.y);
     }
 
     // Chance for trap
     if(Math.random() < 0.3) {
-        let tx = room.x + Math.floor(Math.random() * room.w);
-        let ty = room.y + Math.floor(Math.random() * room.h);
-        if(rlState.map[tx][ty] === 0) {
-            rlState.traps.push({ x: tx, y: ty, active: true });
+        const spawn = findOpenTile(room);
+        if(spawn) rlState.traps.push({ x: spawn.x, y: spawn.y, active: true });
+    }
+
+    // Chance for shrine
+    if(Math.random() < 0.2) {
+        const spawn = findOpenTile(room);
+        if(spawn) {
+            const roll = Math.random();
+            let type = 'heal';
+            if (roll > 0.7) type = 'fury';
+            else if (roll > 0.4) type = 'shield';
+            rlState.shrines.push({ x: spawn.x, y: spawn.y, type, active: true });
         }
     }
 }
@@ -256,15 +368,17 @@ function generateItem(x, y) {
     let rand = Math.random();
     let val = Math.floor(Math.random() * 2) + rlState.level;
     
-    // 25% Potion, 30% Weapon, 30% Armor, 15% Chip
-    if(rand < 0.25) {
+    // 20% Potion, 25% Weapon, 25% Armor, 15% Chip, 15% Cache
+    if(rand < 0.2) {
         rlState.items.push({ x, y, type: 'potion', name: "Neon Potion", val: 30 });
-    } else if (rand < 0.55) {
+    } else if (rand < 0.45) {
         rlState.items.push({ x, y, type: 'weapon', name: "Laser Blade Mk." + val, val: val * 2 });
-    } else if (rand < 0.85) {
+    } else if (rand < 0.7) {
         rlState.items.push({ x, y, type: 'armor', name: "Plasteel Vest Mk." + val, val: val });
-    } else {
+    } else if (rand < 0.85) {
         rlState.items.push({ x, y, type: 'chip', name: "Core Chip", val: 5 });
+    } else {
+        rlState.items.push({ x, y, type: 'cache', name: "Data Cache", val: 20, reveal: 6 });
     }
 }
 
@@ -375,6 +489,10 @@ function movePlayer(dx, dy) {
             pickupItem(item);
             rlState.items.splice(itemIdx, 1);
         }
+        const shrine = rlState.shrines.find(s => s.x === nx && s.y === ny && s.active);
+        if(shrine) {
+            triggerShrine(shrine);
+        }
         updateFOV();
         return true;
     }
@@ -400,6 +518,11 @@ function pickupItem(item) {
         rlState.player.baseDmg += 1;
         logRL("Installed Core Chip (+HP/+DMG).");
         addParticle(rlState.player.x, rlState.player.y, "CHIP", "#FFD700");
+    } else if(item.type === 'cache') {
+        logRL("Recovered data cache. Map pulse online.");
+        gainXP(item.val);
+        revealMemoryPulse(rlState.player.x, rlState.player.y, item.reveal || 6);
+        addParticle(rlState.player.x, rlState.player.y, "+DATA", "#7dd3fc");
     } else {
         if(item.val > rlState.player.armor.val) {
             rlState.player.armor = item;
@@ -408,6 +531,29 @@ function pickupItem(item) {
         } else {
             logRL(`Scrapped weak armor (+5 XP).`);
             gainXP(5);
+        }
+    }
+}
+
+function triggerShrine(shrine) {
+    shrine.active = false;
+    if (shrine.type === 'shield') {
+        rlState.player.shield += 1;
+        logRL("Shield shrine: barrier charged.");
+        addParticle(shrine.x, shrine.y, "SHIELD", "#7dd3fc", true);
+    } else if (shrine.type === 'fury') {
+        rlState.player.baseDmg += 2;
+        logRL("Fury shrine: attack matrix boosted.");
+        addParticle(shrine.x, shrine.y, "FURY", "#ff8a65", true);
+    } else {
+        const heal = Math.min(30, rlState.player.maxHp - rlState.player.hp);
+        rlState.player.hp = Math.min(rlState.player.maxHp, rlState.player.hp + heal);
+        if (heal > 0) {
+            logRL("Restore shrine: systems repaired.");
+            addParticle(shrine.x, shrine.y, `+${heal}`, "#00FFAA", true);
+        } else {
+            logRL("Restore shrine: systems already stable.");
+            addParticle(shrine.x, shrine.y, "STABLE", "#00FFAA", true);
         }
     }
 }
@@ -448,6 +594,14 @@ function moveEnemies() {
             let mitigated = Math.max(0, rawDmg - rlState.player.armor.val);
             // Minimum 1 damage if hit
             let finalDmg = Math.max(1, mitigated);
+
+            if(rlState.player.shield > 0) {
+                rlState.player.shield -= 1;
+                addParticle(rlState.player.x, rlState.player.y, "SHIELD", "#7dd3fc", true);
+                logRL("Shield absorbed a hit.");
+                if(e.moveDelay && e.moveDelay > 1) e.moveCooldown = e.moveDelay - 1;
+                return;
+            }
             
             rlState.player.hp -= finalDmg;
             addParticle(rlState.player.x, rlState.player.y, `-${finalDmg}`, "#FF0000");
@@ -468,9 +622,13 @@ function moveEnemies() {
                 if(Math.abs(dx) > Math.abs(dy)) mx = dx > 0 ? 1 : -1;
                 else my = dy > 0 ? 1 : -1;
 
-                if(rlState.map[e.x+mx][e.y+my] === 0 && !isOccupied(e.x+mx, e.y+my)) {
-                    e.x += mx;
-                    e.y += my;
+                const nextX = e.x + mx;
+                const nextY = e.y + my;
+                if(nextX >= 0 && nextX < rlState.cols && nextY >= 0 && nextY < rlState.rows) {
+                    if(rlState.map[nextX][nextY] === 0 && !isOccupied(nextX, nextY)) {
+                        e.x = nextX;
+                        e.y = nextY;
+                    }
                 }
                 if(e.moveDelay && e.moveDelay > 1) e.moveCooldown = e.moveDelay - 1;
             }
@@ -498,10 +656,23 @@ function gainXP(amt) {
     }
 }
 
+function revealMemoryPulse(cx, cy, radius) {
+    for(let x = cx - radius; x <= cx + radius; x++) {
+        for(let y = cy - radius; y <= cy + radius; y++) {
+            if(x >= 0 && x < rlState.cols && y >= 0 && y < rlState.rows) {
+                const d = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+                if(d <= radius && rlState.map[x][y] === 0) {
+                    rlState.memory[x][y] = true;
+                }
+            }
+        }
+    }
+}
+
 // --- Visuals & Rendering ---
 
 function updateFOV() {
-    let r = 5;
+    let r = 6;
     // Clear visible
     rlState.visible = Array(rlState.cols).fill().map(() => Array(rlState.rows).fill(false));
     
@@ -522,8 +693,8 @@ function updateFOV() {
 
 function addParticle(x, y, text, color, bold=false) {
     rlState.particles.push({
-        x: x * rlState.tileSize + 12, // center
-        y: y * rlState.tileSize,
+        x: x * rlState.tileSize + (rlState.tileSize / 2),
+        y: y * rlState.tileSize + (rlState.tileSize / 2),
         text: text,
         color: color,
         life: 30, // frames
@@ -543,7 +714,7 @@ function updateRLUI() {
     document.getElementById('rl-hp').innerText = `HP: ${rlState.player.hp}/${rlState.player.maxHp}`;
     let dmg = rlState.player.baseDmg + rlState.player.weapon.val;
     let def = rlState.player.armor.val;
-    document.getElementById('rl-stats').innerText = `Atk: ${dmg} | Def: ${def}`;
+    document.getElementById('rl-stats').innerText = `Atk: ${dmg} | Def: ${def} | Shield: ${rlState.player.shield}`;
     document.getElementById('rl-potions').innerText = `Potions: ${rlState.player.potions}`;
 }
 
@@ -623,6 +794,28 @@ function renderRL() {
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
                 ctx.fillText("🛡️", cx, cy);
+            } else if(i.type === 'chip') {
+                ctx.fillStyle = "#FFD700";
+                ctx.shadowColor = "#FFD700";
+                ctx.beginPath();
+                ctx.moveTo(cx, cy - 7);
+                ctx.lineTo(cx + 7, cy);
+                ctx.lineTo(cx, cy + 7);
+                ctx.lineTo(cx - 7, cy);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = "#fff2a8";
+                ctx.stroke();
+            } else if(i.type === 'cache') {
+                ctx.fillStyle = "#7dd3fc";
+                ctx.shadowColor = "#7dd3fc";
+                ctx.fillRect(cx - 6, cy - 6, 12, 12);
+                ctx.strokeStyle = "#0ea5e9";
+                ctx.strokeRect(cx - 6, cy - 6, 12, 12);
+                ctx.beginPath();
+                ctx.moveTo(cx - 4, cy);
+                ctx.lineTo(cx + 4, cy);
+                ctx.stroke();
             } else {
                 ctx.fillStyle = "#00FF00";
                 ctx.shadowColor = "#00FF00";
@@ -645,6 +838,28 @@ function renderRL() {
             ctx.lineTo(cx + 6, cy + 6);
             ctx.moveTo(cx + 6, cy - 6);
             ctx.lineTo(cx - 6, cy + 6);
+            ctx.stroke();
+        }
+    });
+
+    // Render Shrines
+    rlState.shrines.forEach(s => {
+        if(rlState.visible[s.x][s.y] || rlState.memory[s.x][s.y]) {
+            let cx = s.x*ts + ts/2;
+            let cy = s.y*ts + ts/2;
+            let color = "#00FFAA";
+            if (s.type === 'shield') color = "#7dd3fc";
+            if (s.type === 'fury') color = "#ff8a65";
+            const fill = s.active ? color : "#223";
+            ctx.fillStyle = fill;
+            ctx.strokeStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - 7);
+            ctx.lineTo(cx + 7, cy);
+            ctx.lineTo(cx, cy + 7);
+            ctx.lineTo(cx - 7, cy);
+            ctx.closePath();
+            ctx.fill();
             ctx.stroke();
         }
     });

@@ -66,19 +66,19 @@ import { getHighScore, submitHighScore } from './score-store.js';
       obstacles: [],
       aiCars: [],
       aiSpawnTimer: 0,
-      aiSpawnStartTime: 2400,
+      aiSpawnStartTime: 1600,
       pickups: [],
       speedLines: [],
       stars: [],
       spawnTimer: 0,
       animationFrame: null,
-      spawnStartTime: 2200,
-      spawnMinTime: 800,
+      spawnStartTime: 2100,
+      spawnMinTime: 760,
       spawnTimeVariance: 200,
       spawnTimeTightenRate: 20,
-      gapWidthStartMultiplier: 1.7,
-      gapWidthMinMultiplier: 1.2,
-      gapWidthTightenRate: 0.02,
+      gapWidthStartMultiplier: 2.05,
+      gapWidthMinMultiplier: 1.45,
+      gapWidthTightenRate: 0.018,
       particles: [],
       explosionParticles: [],
       laneLerpSpeed: 0.2,
@@ -568,18 +568,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const playerScale = getPerspectiveScale(playerCar.y);
       const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * playerScale + roadWidthTop;
       const laneWidthAtPlayer = roadWidthAtPlayer / 3;
-      let gapWidthAtPlayer = (laneWidthAtPlayer * 0.55) * currentGapMultiplier;
+      let gapWidthAtPlayer = (laneWidthAtPlayer * 0.6) * currentGapMultiplier;
 
-      const minSafeGap = Math.max(playerCar.width * 1.05, playerCar.baseWidth * 0.95, laneWidthAtPlayer * 0.5);
+      const minSafeGap = Math.max(playerCar.width * 1.15, playerCar.baseWidth, laneWidthAtPlayer * 0.6);
       if (gapWidthAtPlayer < minSafeGap) {
           gapWidthAtPlayer = minSafeGap;
       }
 
-      gapWidthAtPlayer = Math.min(gapWidthAtPlayer, 250);
+      gapWidthAtPlayer = Math.min(gapWidthAtPlayer, 280);
 
       const spawnY = horizonY;
 
-      const shiftLimit = laneWidthAtPlayer * 0.28;
+      const shiftLimit = laneWidthAtPlayer * 0.22;
       const gapShift = (Math.random() - 0.5) * shiftLimit;
       const shiftSpeed = (Math.random() - 0.5) * 30;
 
@@ -614,13 +614,14 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerState.edgeFlash = 20;
   }
 
-  function spawnAICar() {
+  function spawnAICar(startY) {
       const lanes = [-1, 0, 1];
       const lane = lanes[Math.floor(Math.random() * lanes.length)];
       const roadWidthAtPlayer = roadWidthAtY(playerCar.y);
       const colorHue = Math.floor(Math.random() * 360);
+      const spawnY = typeof startY === 'number' ? startY : (horizonY + 140 + Math.random() * 60);
       racerState.aiCars.push({
-          y: horizonY + 10,
+          y: spawnY,
           lane,
           lanePos: lane,
           laneTarget: lane,
@@ -704,7 +705,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerState.aiSpawnTimer -= delta;
       if (racerState.aiSpawnTimer <= 0) {
           spawnAICar();
-          racerState.aiSpawnTimer = racerState.aiSpawnStartTime - Math.min(1200, racerState.dodged * 40);
+          racerState.aiSpawnTimer = Math.max(900, racerState.aiSpawnStartTime - Math.min(1100, racerState.dodged * 35));
       }
 
       racerState.obstacles.forEach(ob => {
@@ -723,7 +724,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
           if (ob.y > racerCanvas.height + obstacleHeight) {
               racerState.dodged += 1;
               spawnWhooshLines(canvasWidth / 2, racerCanvas.height - 40);
-              const scale = Math.min(1.15, 1 + racerState.dodged * 0.01);
+              const scale = Math.min(1.1, 1 + racerState.dodged * 0.008);
               playerCar.width = playerCar.baseWidth * scale;
               if (ob.closeCall) {
                   racerState.nearMisses += 1;
@@ -831,7 +832,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const roadWidthPlayer = roadWidthAtY(playerCar.y);
       const exactPlayerCenterX = playerCar.x;
 
-      const collisionWidth = playerCar.width * 0.94;
+      const collisionWidth = playerCar.width * 0.9;
       const carLeft = exactPlayerCenterX - collisionWidth / 2;
       const carRight = exactPlayerCenterX + collisionWidth / 2;
       const carTop = playerCar.y;
@@ -850,10 +851,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
           if (carBottom <= obTop || carTop >= obBottom) continue;
 
-          const baseCushion = Math.max(4, Math.round(collisionWidth * 0.05));
+          const baseCushion = Math.max(2, Math.round(collisionWidth * 0.03));
           const safeGapLeft = gapLeft - baseCushion;
           const safeGapRight = gapRight + baseCushion;
-          const nearMargin = Math.max(10, Math.round(collisionWidth * 0.18));
+          const nearMargin = Math.max(8, Math.round(collisionWidth * 0.12));
 
           if (!ob.closeCall) {
               if (carLeft < gapLeft + nearMargin || carRight > gapRight - nearMargin) {
@@ -1040,6 +1041,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
       resetObstacles();
       racerState.aiCars = [];
+      for (let i = 0; i < 2; i++) {
+          spawnAICar(horizonY + 160 + i * 90);
+      }
       racerState.aiSpawnTimer = racerState.aiSpawnStartTime;
       ensureSpeedLines();
       ensureStars();
