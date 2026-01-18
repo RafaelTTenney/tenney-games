@@ -428,9 +428,11 @@
                 Controls: Arrow keys to steer and accelerate.
             </div>
             <canvas id="rally-canvas" width="900" height="600" style="background:#0a0502; border:2px solid #f97316;"></canvas>
-            <div id="rally-hud" style="display:flex; justify-content:space-between; margin-top:8px; color:#fff5eb; font-family:monospace;">
+            <div id="rally-hud" style="display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; margin-top:8px; color:#fff5eb; font-family:monospace;">
                 <div id="rally-lap">Lap: 1</div>
                 <div id="rally-time">Time: 0.0s</div>
+                <div id="rally-best">Best: --</div>
+                <div id="rally-checkpoint">Checkpoint: 1/4</div>
                 <div id="rally-speed">Speed: 0</div>
             </div>
             <div class="modal-controls">
