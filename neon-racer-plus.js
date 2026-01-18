@@ -68,8 +68,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
       speedLines: [],
       stars: [],
       animationFrame: null,
-      obstacleDepth: 4,
-      spawnSpacing: 150,
+      obstacleDepth: 3,
+      spawnSpacing: 220,
       initialSpawnOffset: 20,
       gapWidthStartMultiplier: 2.2,
       gapWidthMinMultiplier: 1.6,
@@ -112,11 +112,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
       return vp + offsetFromVP * (rwY / roadWidthAtPlayerStored);
   }
 
-  function getObstacleGap(ob) {
+  function getObstacleGap(ob, targetY = ob.y) {
       const roadWPlayer = ob.roadWidthAtPlayer || roadWidthAtY(playerCar.y);
-      const roadWAtY = roadWidthAtY(ob.y);
+      const roadWAtY = roadWidthAtY(targetY);
       const shift = (ob.gapShift || 0) * (roadWAtY / roadWPlayer);
-      let center = laneCenterAtY(ob.gapLane, ob.y, roadWPlayer) + shift;
+      let center = laneCenterAtY(ob.gapLane, targetY, roadWPlayer) + shift;
       const width = ob.gapWidthAtPlayer * (roadWAtY / roadWPlayer);
       const roadLeft = (canvasWidth / 2) - (roadWAtY / 2);
       const roadRight = (canvasWidth / 2) + (roadWAtY / 2);
@@ -127,8 +127,22 @@ import { getHighScore, submitHighScore } from './score-store.js';
           width,
           left: center - half,
           right: center + half,
-          roadWPlayer
+          roadWPlayer,
+          roadLeft,
+          roadRight,
+          roadWAtY
       };
+  }
+
+  function drawQuad(ax, ay, bx, by, cx, cy, dx, dy, fillStyle) {
+      racerCtx.beginPath();
+      racerCtx.moveTo(ax, ay);
+      racerCtx.lineTo(bx, by);
+      racerCtx.lineTo(cx, cy);
+      racerCtx.lineTo(dx, dy);
+      racerCtx.closePath();
+      racerCtx.fillStyle = fillStyle;
+      racerCtx.fill();
   }
 
   // Particle/effects functions
@@ -378,18 +392,29 @@ import { getHighScore, submitHighScore } from './score-store.js';
           if (scale < 0.01) return;
 
           const scaledHeight = obstacleHeight * scale;
-          const top = ob.y - scaledHeight;
-          const gap = getObstacleGap(ob);
-          const gapLeft = gap.left;
-          const gapRight = gap.right;
+          const topY = ob.y - scaledHeight;
+          const bottomGap = getObstacleGap(ob, ob.y);
+          const topGap = getObstacleGap(ob, topY);
 
           racerCtx.shadowColor = ob.color;
-          racerCtx.fillStyle = 'rgba(0,0,0,0)';
-          if (gapLeft > 0) {
-              racerCtx.fillRect(0, top, gapLeft, scaledHeight);
+          const glowFill = 'rgba(0,0,0,0.02)';
+          if (bottomGap.left > bottomGap.roadLeft + 0.5) {
+              drawQuad(
+                  bottomGap.roadLeft, ob.y,
+                  bottomGap.left, ob.y,
+                  topGap.left, topY,
+                  topGap.roadLeft, topY,
+                  glowFill
+              );
           }
-          if (gapRight < racerCanvas.width) {
-              racerCtx.fillRect(gapRight, top, racerCanvas.width - gapRight, scaledHeight);
+          if (bottomGap.right < bottomGap.roadRight - 0.5) {
+              drawQuad(
+                  bottomGap.right, ob.y,
+                  bottomGap.roadRight, ob.y,
+                  topGap.roadRight, topY,
+                  topGap.right, topY,
+                  glowFill
+              );
           }
       });
 
@@ -488,24 +513,45 @@ import { getHighScore, submitHighScore } from './score-store.js';
           if (scale < 0.01) return;
 
           const scaledHeight = obstacleHeight * scale;
-          const top = ob.y - scaledHeight;
+          const topY = ob.y - scaledHeight;
 
-          const gap = getObstacleGap(ob);
-          const gapLeft = gap.left;
-          const gapRight = gap.right;
-          const edgeHeight = 6 * scale;
+          const bottomGap = getObstacleGap(ob, ob.y);
+          const topGap = getObstacleGap(ob, topY);
+          const edgeHeight = Math.max(2, 6 * scale);
+          const edgeBottomY = topY + edgeHeight;
+          const edgeGap = getObstacleGap(ob, edgeBottomY);
 
-          if (gapLeft > 0) {
-              racerCtx.fillStyle = ob.color;
-              racerCtx.fillRect(0, top + edgeHeight, gapLeft, scaledHeight - edgeHeight);
-              racerCtx.fillStyle = `hsl(${ob.hue}, 100%, 85%)`;
-              racerCtx.fillRect(0, top, gapLeft, edgeHeight);
+          if (bottomGap.left > bottomGap.roadLeft + 0.5) {
+              drawQuad(
+                  bottomGap.roadLeft, ob.y,
+                  bottomGap.left, ob.y,
+                  topGap.left, topY,
+                  topGap.roadLeft, topY,
+                  ob.color
+              );
+              drawQuad(
+                  topGap.roadLeft, topY,
+                  topGap.left, topY,
+                  edgeGap.left, edgeBottomY,
+                  edgeGap.roadLeft, edgeBottomY,
+                  `hsl(${ob.hue}, 100%, 85%)`
+              );
           }
-          if (gapRight < racerCanvas.width) {
-              racerCtx.fillStyle = ob.color;
-              racerCtx.fillRect(gapRight, top + edgeHeight, canvasWidth - gapRight, scaledHeight - edgeHeight);
-              racerCtx.fillStyle = `hsl(${ob.hue}, 100%, 85%)`;
-              racerCtx.fillRect(gapRight, top, canvasWidth - gapRight, edgeHeight);
+          if (bottomGap.right < bottomGap.roadRight - 0.5) {
+              drawQuad(
+                  bottomGap.right, ob.y,
+                  bottomGap.roadRight, ob.y,
+                  topGap.roadRight, topY,
+                  topGap.right, topY,
+                  ob.color
+              );
+              drawQuad(
+                  topGap.right, topY,
+                  topGap.roadRight, topY,
+                  edgeGap.roadRight, edgeBottomY,
+                  edgeGap.right, edgeBottomY,
+                  `hsl(${ob.hue}, 100%, 85%)`
+              );
           }
       });
   }
