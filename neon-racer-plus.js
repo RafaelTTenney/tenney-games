@@ -64,6 +64,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
       shield: 0,
       boostTimer: 0,
       obstacles: [],
+      aiCars: [],
+      aiSpawnTimer: 0,
+      aiSpawnStartTime: 2400,
       pickups: [],
       speedLines: [],
       stars: [],
@@ -78,7 +81,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       gapWidthTightenRate: 0.02,
       particles: [],
       explosionParticles: [],
-      laneLerpSpeed: 0.12,
+      laneLerpSpeed: 0.2,
       shake: { x: 0, y: 0, intensity: 0 },
       flash: { alpha: 0 },
       crashAnimId: null,
@@ -87,7 +90,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       carSwayMax: 0.035,
       carTilt: 0,
       carTiltMax: 0.1,
-      carTiltSpeed: 0.1,
+      carTiltSpeed: 0.16,
       edgeFlash: 0
   };
 
@@ -415,9 +418,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerCtx.restore();
   }
 
-  function drawPlayer(delta) {
-      if (!racerCtx) return;
-
+  function updatePlayerLanePosition(delta) {
       const playerScale = getPerspectiveScale(playerCar.y);
       const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * playerScale + roadWidthTop;
       const scaledLaneWidth = roadWidthAtPlayer / 3;
@@ -433,7 +434,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerState.carTilt = Math.max(-racerState.carTiltMax, Math.min(racerState.carTiltMax, racerState.carTilt));
 
       racerState.carSway = Math.sin(racerState.distance * racerState.carSwaySpeed) * racerState.carSwayMax;
+  }
 
+  function drawPlayer() {
+      if (!racerCtx) return;
       racerCtx.save();
       racerCtx.translate(playerCar.x, playerCar.y + playerCar.height * 0.75);
       racerCtx.rotate(racerState.carSway + racerState.carTilt);
@@ -511,6 +515,28 @@ import { getHighScore, submitHighScore } from './score-store.js';
       });
   }
 
+  function drawAICars() {
+      if (!racerCtx) return;
+      racerState.aiCars.forEach(ai => {
+          const scale = getPerspectiveScale(ai.y);
+          if (scale < 0.02) return;
+          const centerX = laneCenterAtY(ai.lanePos, ai.y, ai.roadWidthAtPlayer);
+          const w = playerCar.baseWidth * scale * 0.9;
+          const h = playerCar.height * scale * 0.9;
+          racerCtx.save();
+          racerCtx.translate(centerX, ai.y + h * 0.2);
+          racerCtx.fillStyle = ai.color;
+          racerCtx.beginPath();
+          racerCtx.moveTo(-w * 0.35, h * 0.2);
+          racerCtx.lineTo(w * 0.35, h * 0.2);
+          racerCtx.lineTo(w * 0.25, -h * 0.4);
+          racerCtx.lineTo(-w * 0.25, -h * 0.4);
+          racerCtx.closePath();
+          racerCtx.fill();
+          racerCtx.restore();
+      });
+  }
+
   function drawPickups() {
       if (!racerCtx) return;
       racerState.pickups.forEach(pick => {
@@ -518,14 +544,13 @@ import { getHighScore, submitHighScore } from './score-store.js';
           if (scale < 0.02) return;
           const roadWPlayer = pick.roadWidthAtPlayer || roadWidthAtY(playerCar.y);
           const centerX = laneCenterAtY(pick.lane, pick.y, roadWPlayer);
-          const size = 10 * scale + 4;
+          const padW = (roadWidthAtY(pick.y) / 3) * 0.5;
+          const padH = 8 * scale + 4;
           racerCtx.save();
           racerCtx.shadowBlur = 18;
           racerCtx.shadowColor = pick.type === 'shield' ? '#7dd3fc' : '#fbbf24';
           racerCtx.fillStyle = pick.type === 'shield' ? '#7dd3fc' : '#fbbf24';
-          racerCtx.beginPath();
-          racerCtx.arc(centerX, pick.y, size, 0, Math.PI * 2);
-          racerCtx.fill();
+          racerCtx.fillRect(centerX - padW / 2, pick.y - padH / 2, padW, padH);
           racerCtx.restore();
       });
   }
@@ -589,6 +614,23 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerState.edgeFlash = 20;
   }
 
+  function spawnAICar() {
+      const lanes = [-1, 0, 1];
+      const lane = lanes[Math.floor(Math.random() * lanes.length)];
+      const roadWidthAtPlayer = roadWidthAtY(playerCar.y);
+      const colorHue = Math.floor(Math.random() * 360);
+      racerState.aiCars.push({
+          y: horizonY + 10,
+          lane,
+          lanePos: lane,
+          laneTarget: lane,
+          roadWidthAtPlayer,
+          speedFactor: 0.85 + Math.random() * 0.35,
+          shiftTimer: 600 + Math.random() * 600,
+          color: `hsl(${colorHue}, 90%, 58%)`
+      });
+  }
+
   function resetObstacles() {
       racerState.obstacles = [];
       racerState.spawnTimer = 0;
@@ -641,6 +683,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
   function updateRacer(delta) {
       if (!racerCanvas || racerState.crashed) return;
 
+      updatePlayerLanePosition(delta);
+
       const speedInPxPerSecond = racerState.speed * 1.5;
       const traveled = (speedInPxPerSecond * (delta / 1000));
 
@@ -655,6 +699,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerState.spawnTimer -= delta;
       if (racerState.spawnTimer <= 0) {
           spawnObstacle();
+      }
+
+      racerState.aiSpawnTimer -= delta;
+      if (racerState.aiSpawnTimer <= 0) {
+          spawnAICar();
+          racerState.aiSpawnTimer = racerState.aiSpawnStartTime - Math.min(1200, racerState.dodged * 40);
       }
 
       racerState.obstacles.forEach(ob => {
@@ -687,6 +737,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
           }
           return true;
       });
+
+      racerState.aiCars.forEach(ai => {
+          ai.y += traveled * ai.speedFactor;
+          ai.shiftTimer -= delta;
+          if (ai.shiftTimer <= 0) {
+              const shift = Math.random() < 0.5 ? -1 : 1;
+              ai.laneTarget = Math.max(-1, Math.min(1, ai.laneTarget + shift));
+              ai.shiftTimer = 500 + Math.random() * 800;
+          }
+          ai.lanePos += (ai.laneTarget - ai.lanePos) * 0.06;
+      });
+      racerState.aiCars = racerState.aiCars.filter(ai => ai.y < racerCanvas.height + 80);
 
       racerState.pickups.forEach(pick => {
           pick.y += traveled;
@@ -824,6 +886,45 @@ import { getHighScore, submitHighScore } from './score-store.js';
               return;
           }
       }
+
+      for (let i = 0; i < racerState.aiCars.length; i++) {
+          const ai = racerState.aiCars[i];
+          const scale = getPerspectiveScale(ai.y);
+          if (scale < 0.02) continue;
+          const centerX = laneCenterAtY(ai.lanePos, ai.y, ai.roadWidthAtPlayer);
+          const aiW = playerCar.baseWidth * scale * 0.9;
+          const aiH = playerCar.height * scale * 0.9;
+          const aiLeft = centerX - aiW / 2;
+          const aiRight = centerX + aiW / 2;
+          const aiTop = ai.y - aiH * 0.7;
+          const aiBottom = ai.y + aiH * 0.3;
+          if (carBottom <= aiTop || carTop >= aiBottom) continue;
+
+          if (carRight > aiLeft && carLeft < aiRight) {
+              if (racerState.shield > 0) {
+                  racerState.shield -= 1;
+                  racerState.flash.alpha = 0.6;
+                  racerState.shake.intensity = Math.max(racerState.shake.intensity, 0.2);
+                  spawnParticles(centerX, ai.y, '#7dd3fc', 22);
+                  racerState.aiCars.splice(i, 1);
+                  i -= 1;
+                  if (racerMessageEl) racerMessageEl.textContent = 'Shield blocked rival.';
+                  continue;
+              }
+              if (racerState.animationFrame) {
+                  cancelAnimationFrame(racerState.animationFrame);
+                  racerState.animationFrame = null;
+              }
+              saveRacerHighScore();
+              spawnCrash(playerCar.x, playerCar.y + playerCar.height / 2);
+              racerState.running = false;
+              startCrashAnimation();
+              if (racerMessageEl) {
+                  racerMessageEl.textContent = 'Collision! Reset to roll out again.';
+              }
+              return;
+          }
+      }
   }
 
   function renderRacer(delta) {
@@ -836,8 +937,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
       drawSpeedLines();
       drawGlow();
       drawObstacles();
+      drawAICars();
       drawPickups();
-      drawPlayer(delta);
+      drawPlayer();
       drawParticles();
 
       if (racerState.flash.alpha > 0) {
@@ -937,6 +1039,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerState.crashed = false;
 
       resetObstacles();
+      racerState.aiCars = [];
+      racerState.aiSpawnTimer = racerState.aiSpawnStartTime;
       ensureSpeedLines();
       ensureStars();
 
@@ -955,6 +1059,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       playerCar.lane = nextLane;
 
       if (!racerState.running) {
+          updatePlayerLanePosition(16.67);
           renderRacer(0);
           updateHud();
       }
@@ -964,11 +1069,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
       if (!racerModal || racerModal.style.display !== 'flex') return;
       if (racerState.crashed) return;
 
-      if (event.key === 'ArrowLeft') {
+      const key = event.code || event.key;
+      if (key === 'ArrowLeft') {
           shiftLane(-1);
           event.preventDefault();
       }
-      if (event.key === 'ArrowRight') {
+      if (key === 'ArrowRight') {
           shiftLane(1);
           event.preventDefault();
       }
@@ -994,7 +1100,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
       if (racerSpeedEl) racerSpeedEl.textContent = `Speed: ${Math.floor(racerState.speed)} mph`;
       if (racerObstaclesEl) racerObstaclesEl.textContent = `Gaps cleared: ${racerState.dodged} | Near: ${racerState.nearMisses} | High: ${racerState.mostGapsCleared}`;
       if (racerShieldEl) racerShieldEl.textContent = `Shield: ${racerState.shield}`;
-      if (racerBoostEl) racerBoostEl.textContent = `Boost: ${racerState.boostTimer > 0 ? 'ACTIVE' : 'Ready'}`;
+      if (racerBoostEl) {
+          const secs = Math.ceil(racerState.boostTimer / 1000);
+          racerBoostEl.textContent = `Boost: ${racerState.boostTimer > 0 ? `ACTIVE ${secs}s` : 'Ready'}`;
+      }
   }
 
   // INIT function (to be called by UI loader)

@@ -30,6 +30,9 @@ let rlState = {
     memory: [],     // True if player has visited this tile (Fog of War)
     visible: [],    // True if currently in FOV
     items: [],
+    traps: [],
+    stairs: null,
+    stairsActive: false,
     particles: [],  // Floating damage numbers
     player: {
         x: 1, y: 1, 
@@ -96,6 +99,9 @@ function generateLevel() {
     rlState.visible = Array(rlState.cols).fill().map(() => Array(rlState.rows).fill(false));
     rlState.enemies = [];
     rlState.items = [];
+    rlState.traps = [];
+    rlState.stairs = null;
+    rlState.stairsActive = false;
 
     const rooms = [];
     const maxRooms = 8;
@@ -154,6 +160,13 @@ function generateLevel() {
         spawnInRoom(rooms[i]);
     }
 
+    // Place exit in farthest room (last room)
+    let lastRoom = rooms[rooms.length - 1];
+    rlState.stairs = {
+        x: lastRoom.x + Math.floor(lastRoom.w / 2),
+        y: lastRoom.y + Math.floor(lastRoom.h / 2)
+    };
+
     updateFOV();
 }
 
@@ -185,13 +198,39 @@ function spawnInRoom(room) {
         // Base Enemy Scaling
         let hp = 15 + (rlState.level * 4);
         let dmg = 4 + Math.floor(rlState.level * 1.5);
-        rlState.enemies.push({
-            x: ex, y: ey, 
-            hp: hp, maxHp: hp, 
-            name: "Cyber-Goblin", 
+        let typeRoll = Math.random();
+        let enemy = {
+            x: ex, y: ey,
+            hp: hp, maxHp: hp,
+            name: "Cyber-Goblin",
             dmg: dmg,
-            color: `hsl(${0 + (rlState.level * 20)}, 100%, 50%)` // Enemies change color per level
-        });
+            moveDelay: 1,
+            moveCooldown: 0,
+            range: 1,
+            xp: 15,
+            color: `hsl(${0 + (rlState.level * 20)}, 100%, 50%)`
+        };
+        if (typeRoll > 0.6 && rlState.level >= 2) {
+            enemy.name = "Neon Wraith";
+            enemy.hp = hp - 2;
+            enemy.maxHp = enemy.hp;
+            enemy.dmg = Math.max(3, dmg - 1);
+            enemy.range = 2;
+            enemy.rangedDmg = Math.max(2, Math.floor(enemy.dmg * 0.7));
+            enemy.moveDelay = 2;
+            enemy.xp = 18;
+            enemy.color = "#9b5cff";
+        } else if (typeRoll > 0.82 && rlState.level >= 3) {
+            enemy.name = "Steel Brute";
+            enemy.hp = hp + 10 + rlState.level * 2;
+            enemy.maxHp = enemy.hp;
+            enemy.dmg = dmg + 2;
+            enemy.moveDelay = 2;
+            enemy.range = 1;
+            enemy.xp = 22;
+            enemy.color = "#ff7755";
+        }
+        rlState.enemies.push(enemy);
     }
 
     // Chance for item
@@ -202,19 +241,30 @@ function spawnInRoom(room) {
             generateItem(ix, iy);
         }
     }
+
+    // Chance for trap
+    if(Math.random() < 0.3) {
+        let tx = room.x + Math.floor(Math.random() * room.w);
+        let ty = room.y + Math.floor(Math.random() * room.h);
+        if(rlState.map[tx][ty] === 0) {
+            rlState.traps.push({ x: tx, y: ty, active: true });
+        }
+    }
 }
 
 function generateItem(x, y) {
     let rand = Math.random();
     let val = Math.floor(Math.random() * 2) + rlState.level;
     
-    // 30% Potion, 35% Weapon, 35% Armor
-    if(rand < 0.3) {
+    // 25% Potion, 30% Weapon, 30% Armor, 15% Chip
+    if(rand < 0.25) {
         rlState.items.push({ x, y, type: 'potion', name: "Neon Potion", val: 30 });
-    } else if (rand < 0.65) {
+    } else if (rand < 0.55) {
         rlState.items.push({ x, y, type: 'weapon', name: "Laser Blade Mk." + val, val: val * 2 });
-    } else {
+    } else if (rand < 0.85) {
         rlState.items.push({ x, y, type: 'armor', name: "Plasteel Vest Mk." + val, val: val });
+    } else {
+        rlState.items.push({ x, y, type: 'chip', name: "Core Chip", val: 5 });
     }
 }
 
@@ -281,9 +331,9 @@ function movePlayer(dx, dy) {
         addParticle(target.x, target.y, dmg, isCrit ? "#FF0000" : "#fff", isCrit); // Floating text
 
         if(target.hp <= 0) {
-            logRL(`Destroyed ${target.name}. +15 XP`);
+            logRL(`Destroyed ${target.name}. +${target.xp || 15} XP`);
             rlState.enemies = rlState.enemies.filter(e => e !== target);
-            gainXP(15);
+            gainXP(target.xp || 15);
             // Drop loot chance
             if(Math.random() < 0.3) generateItem(nx, ny);
             
@@ -296,6 +346,27 @@ function movePlayer(dx, dy) {
         // Move
         rlState.player.x = nx;
         rlState.player.y = ny;
+
+        if(rlState.stairsActive && rlState.stairs && nx === rlState.stairs.x && ny === rlState.stairs.y) {
+            logRL("Accessing lift... descending.");
+            advanceLevel();
+            return true;
+        }
+
+        // Trap check
+        const trap = rlState.traps.find(t => t.x === nx && t.y === ny && t.active);
+        if(trap) {
+            trap.active = false;
+            const trapDmg = 6 + Math.floor(rlState.level * 1.5);
+            rlState.player.hp = Math.max(0, rlState.player.hp - trapDmg);
+            addParticle(nx, ny, `-${trapDmg}`, "#FF3333");
+            logRL("Triggered a trap!");
+            if(rlState.player.hp <= 0) {
+                rlState.player.hp = 0;
+                logRL("CRITICAL FAILURE. SYSTEM OFFLINE.");
+                submitRogueBestIfNeeded();
+            }
+        }
         
         // Item Pickup
         let itemIdx = rlState.items.findIndex(i => i.x === nx && i.y === ny);
@@ -323,6 +394,12 @@ function pickupItem(item) {
             logRL(`Scrapped weak weapon (+5 XP).`);
             gainXP(5);
         }
+    } else if(item.type === 'chip') {
+        rlState.player.maxHp += item.val;
+        rlState.player.hp = Math.min(rlState.player.maxHp, rlState.player.hp + item.val);
+        rlState.player.baseDmg += 1;
+        logRL("Installed Core Chip (+HP/+DMG).");
+        addParticle(rlState.player.x, rlState.player.y, "CHIP", "#FFD700");
     } else {
         if(item.val > rlState.player.armor.val) {
             rlState.player.armor = item;
@@ -337,24 +414,36 @@ function pickupItem(item) {
 
 function checkLevelClear() {
     if(rlState.enemies.length === 0) {
-        logRL("Sector Clear! Descending...");
-        // Heal a bit on level clear
-        rlState.player.hp = Math.min(rlState.player.maxHp, rlState.player.hp + 10);
-        setTimeout(() => {
-            rlState.level++;
-            generateLevel();
-            logRL(`Entered Depth ${rlState.level}`);
-        }, 1000);
+        if(!rlState.stairsActive) {
+            rlState.stairsActive = true;
+            logRL("Sector Clear. Lift online.");
+            rlState.player.hp = Math.min(rlState.player.maxHp, rlState.player.hp + 10);
+        }
     }
+}
+
+function advanceLevel() {
+    rlState.level++;
+    generateLevel();
+    rlState.stairsActive = false;
+    logRL(`Entered Depth ${rlState.level}`);
 }
 
 function moveEnemies() {
     rlState.enemies.forEach(e => {
+        if(e.moveCooldown && e.moveCooldown > 0) {
+            e.moveCooldown--;
+            return;
+        }
         let dist = Math.abs(rlState.player.x - e.x) + Math.abs(rlState.player.y - e.y);
         
-        if(dist <= 1) {
+        if((e.range && dist <= e.range) || dist <= 1) {
             // Attack
             let rawDmg = e.dmg;
+            if(e.range && dist > 1) {
+                rawDmg = e.rangedDmg || Math.max(2, Math.floor(e.dmg * 0.7));
+                logRL(`${e.name} fires from range.`);
+            }
             // Armor reduces damage
             let mitigated = Math.max(0, rawDmg - rlState.player.armor.val);
             // Minimum 1 damage if hit
@@ -368,6 +457,7 @@ function moveEnemies() {
                 logRL("CRITICAL FAILURE. SYSTEM OFFLINE.");
                 submitRogueBestIfNeeded();
             }
+            if(e.moveDelay && e.moveDelay > 1) e.moveCooldown = e.moveDelay - 1;
         } else if(dist < 8) {
             // Chase logic (simple pathfinding toward player)
             if(rlState.visible[e.x][e.y] || rlState.memory[e.x][e.y]) { // Only chase if player "woke" them or is nearby
@@ -382,6 +472,7 @@ function moveEnemies() {
                     e.x += mx;
                     e.y += my;
                 }
+                if(e.moveDelay && e.moveDelay > 1) e.moveCooldown = e.moveDelay - 1;
             }
         }
     });
@@ -542,6 +633,35 @@ function renderRL() {
             ctx.shadowBlur = 0;
         }
     });
+
+    // Render Traps
+    rlState.traps.forEach(t => {
+        if(rlState.visible[t.x][t.y]) {
+            let cx = t.x*ts + ts/2;
+            let cy = t.y*ts + ts/2;
+            ctx.strokeStyle = t.active ? "#FF3333" : "#662222";
+            ctx.beginPath();
+            ctx.moveTo(cx - 6, cy - 6);
+            ctx.lineTo(cx + 6, cy + 6);
+            ctx.moveTo(cx + 6, cy - 6);
+            ctx.lineTo(cx - 6, cy + 6);
+            ctx.stroke();
+        }
+    });
+
+    // Render Stairs / Lift
+    if(rlState.stairs) {
+        let sx = rlState.stairs.x;
+        let sy = rlState.stairs.y;
+        if(rlState.visible[sx][sy] || rlState.memory[sx][sy]) {
+            let px = sx * ts + ts/2;
+            let py = sy * ts + ts/2;
+            ctx.fillStyle = rlState.stairsActive ? "#00FFAA" : "#225544";
+            ctx.fillRect(px - 6, py - 6, 12, 12);
+            ctx.strokeStyle = "#00FFAA";
+            ctx.strokeRect(px - 6, py - 6, 12, 12);
+        }
+    }
 
     // Render Enemies
     rlState.enemies.forEach(e => {

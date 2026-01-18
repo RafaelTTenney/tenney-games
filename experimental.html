@@ -232,14 +232,6 @@
                 </div>
             </section>
 
-            <section class="card" style="border-color: #0ea5e9; box-shadow: 0 0 15px rgba(14, 165, 233, 0.25);">
-                <h3 style="color:#0ea5e9;">Tunnel Rush</h3>
-                <div class="meta">Rotate through the tunnel gaps and survive the speed surge.</div>
-                <div class="actions">
-                    <button class="btn" style="background:#0ea5e9; color:#000; border-color: white;" id="runTunnelBtn">Launch</button>
-                </div>
-            </section>
-
             <section class="card flagship">
                 <h3>Minesweeper Elite</h3>
                 <div class="meta">The First Flagship. Customizable difficulty, flood-fill, right-click flagging, and smart styling.</div>
@@ -265,14 +257,6 @@
                 <div class="meta">Classic asteroid survival. Protect the reactor core and harvest energy shards.</div>
                 <div class="actions">
                     <button class="btn" style="background:#22d3ee; color:#000; border-color: white;" id="runArcBtn">Play</button>
-                </div>
-            </section>
-
-            <section class="card" style="border-color: #f97316; box-shadow: 0 0 15px rgba(249, 115, 22, 0.25);">
-                <h3 style="color:#f97316;">Neon Rally</h3>
-                <div class="meta">Top-down arcade racer with laps, checkpoints, and tight handling.</div>
-                <div class="actions">
-                    <button class="btn" style="background:#f97316; color:#000; border-color: white;" id="runRallyBtn">Race</button>
                 </div>
             </section>
 
@@ -360,30 +344,6 @@
         </div>
     </div>
 
-    <div id="tunnelModal" class="modal-overlay">
-        <div class="modal-content" style="border-color:#0ea5e9; box-shadow:0 0 20px rgba(14,165,233,0.45);">
-            <div class="modal-header">
-                <h2 style="color:#0ea5e9;">Tunnel Rush</h2>
-                <span class="modal-close" id="tunnelModalCloseBtn">&times;</span>
-            </div>
-            <div class="meta" style="max-width:720px; margin:0 auto 10px;">
-                Rotate around the tunnel to pass through gaps. Speed ramps up as you survive.
-                Controls: Left/Right arrows to rotate.
-            </div>
-            <canvas id="tunnel-canvas" width="600" height="600" style="background:#010b14; border:2px solid #0ea5e9;"></canvas>
-            <div id="tunnel-hud" style="display:flex; justify-content:space-between; margin-top:8px; color:#e0f2fe; font-family:monospace;">
-                <div id="tunnel-score">Score: 0</div>
-                <div id="tunnel-speed">Speed: 1.0x</div>
-                <div id="tunnel-gap">Gap: 120°</div>
-            </div>
-            <div class="modal-controls">
-                <button id="startTunnelBtn" class="btn">Start</button>
-                <button id="pauseTunnelBtn" class="btn secondary">Pause</button>
-                <button id="resetTunnelBtn" class="btn secondary">Reset</button>
-            </div>
-        </div>
-    </div>
-    
     <div id="rogueModal" class="modal-overlay">
         <div class="modal-content" style="border-color: #FF00FF; box-shadow: 0 0 30px #FF00FF; min-width: 520px;">
             <div class="modal-header">
@@ -403,6 +363,7 @@
             <div style="margin-top:10px; color:#aaa; font-size:0.85em; display:flex; justify-content:space-between;">
                 <span>ARROWS: Move/Attack</span>
                 <span>SPACE: Drink Potion</span>
+                <span>Clear sector to unlock lift</span>
             </div>
             
             <div id="rl-log" style="height:50px; overflow:hidden; color:#EE82EE; font-family:monospace; border-top: 1px solid #550055; margin-top:5px; padding-top:5px; font-size: 0.9em;">
@@ -454,32 +415,6 @@
         </div>
     </div>
 
-    <div id="rallyModal" class="modal-overlay">
-        <div class="modal-content" style="border-color:#f97316; box-shadow:0 0 20px rgba(249,115,22,0.45);">
-            <div class="modal-header">
-                <h2 style="color:#f97316;">Neon Rally</h2>
-                <span class="modal-close" id="rallyModalCloseBtn">&times;</span>
-            </div>
-            <div class="meta" style="max-width:720px; margin:0 auto 10px;">
-                Top-down arcade racing. Hit checkpoints in order and complete laps.
-                Controls: Arrow keys to steer and accelerate.
-            </div>
-            <canvas id="rally-canvas" width="900" height="600" style="background:#0a0502; border:2px solid #f97316;"></canvas>
-            <div id="rally-hud" style="display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; margin-top:8px; color:#fff5eb; font-family:monospace;">
-                <div id="rally-lap">Lap: 1</div>
-                <div id="rally-time">Time: 0.0s</div>
-                <div id="rally-best">Best: --</div>
-                <div id="rally-checkpoint">Checkpoint: 1/4</div>
-                <div id="rally-speed">Speed: 0</div>
-            </div>
-            <div class="modal-controls">
-                <button id="startRallyBtn" class="btn">Start</button>
-                <button id="pauseRallyBtn" class="btn secondary">Pause</button>
-                <button id="resetRallyBtn" class="btn secondary">Reset</button>
-            </div>
-        </div>
-    </div>
-
     <div id="tanksModal" class="modal-overlay">
         <div class="modal-content" style="border-color:#a855f7; box-shadow:0 0 20px rgba(168,85,247,0.45);">
             <div class="modal-header">
@@ -511,38 +446,19 @@
     <script type="module" src="minesweeper-elite.js"></script>
     <script type="module" src="rogue-dungeon.js"></script>
     <script type="module" src="arc-reactor.js"></script>
-    <script type="module" src="neon-rally.js"></script>
     <script type="module" src="vector-tanks.js"></script>
-    <script type="module" src="tunnel-rush.js"></script>
 
     <script type="module">
         // Racer Hookup
-        document.getElementById('runRacerBtn').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('racerModal').style.display = 'flex'; });
+        document.getElementById('runRacerBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('racerModal').style.display = 'flex';
+            if (typeof window.initRacerGame === 'function') window.initRacerGame();
+        });
         document.getElementById('racerModalCloseBtn').addEventListener('click', () => document.getElementById('racerModal').style.display = 'none');
         document.getElementById('startRacerBtn').addEventListener('click', () => { if(typeof window.startRacer === 'function') window.startRacer(); });
         document.getElementById('pauseRacerBtn').addEventListener('click', () => { if(typeof window.pauseRacer === 'function') window.pauseRacer(); });
         document.getElementById('resetRacerBtn').addEventListener('click', () => { if(typeof window.resetRacer === 'function') window.resetRacer(); });
-
-        // Tunnel Rush Hookup
-        const tunnelModal = document.getElementById('tunnelModal');
-        document.getElementById('runTunnelBtn').addEventListener('click', () => {
-            tunnelModal.style.display = 'flex';
-            if (typeof window.initTunnelRushGame === 'function') window.initTunnelRushGame();
-            if (typeof window.resetTunnelRush === 'function') window.resetTunnelRush();
-        });
-        document.getElementById('tunnelModalCloseBtn').addEventListener('click', () => {
-            tunnelModal.style.display = 'none';
-            if (typeof window.pauseTunnelRush === 'function') window.pauseTunnelRush();
-        });
-        tunnelModal.addEventListener('click', (e) => {
-            if (e.target === tunnelModal) {
-                tunnelModal.style.display = 'none';
-                if (typeof window.pauseTunnelRush === 'function') window.pauseTunnelRush();
-            }
-        });
-        document.getElementById('startTunnelBtn').addEventListener('click', () => { if (typeof window.startTunnelRush === 'function') window.startTunnelRush(); });
-        document.getElementById('pauseTunnelBtn').addEventListener('click', () => { if (typeof window.pauseTunnelRush === 'function') window.pauseTunnelRush(); });
-        document.getElementById('resetTunnelBtn').addEventListener('click', () => { if (typeof window.resetTunnelRush === 'function') window.resetTunnelRush(); });
 
         // Arc Reactor Hookup
         const arcModal = document.getElementById('arcModal');
@@ -564,27 +480,6 @@
         document.getElementById('startArcBtn').addEventListener('click', () => { if (typeof window.startArcReactor === 'function') window.startArcReactor(); });
         document.getElementById('pauseArcBtn').addEventListener('click', () => { if (typeof window.pauseArcReactor === 'function') window.pauseArcReactor(); });
         document.getElementById('resetArcBtn').addEventListener('click', () => { if (typeof window.resetArcReactor === 'function') window.resetArcReactor(); });
-
-        // Neon Rally Hookup
-        const rallyModal = document.getElementById('rallyModal');
-        document.getElementById('runRallyBtn').addEventListener('click', () => {
-            rallyModal.style.display = 'flex';
-            if (typeof window.initNeonRallyGame === 'function') window.initNeonRallyGame();
-            if (typeof window.resetNeonRally === 'function') window.resetNeonRally();
-        });
-        document.getElementById('rallyModalCloseBtn').addEventListener('click', () => {
-            rallyModal.style.display = 'none';
-            if (typeof window.pauseNeonRally === 'function') window.pauseNeonRally();
-        });
-        rallyModal.addEventListener('click', (e) => {
-            if (e.target === rallyModal) {
-                rallyModal.style.display = 'none';
-                if (typeof window.pauseNeonRally === 'function') window.pauseNeonRally();
-            }
-        });
-        document.getElementById('startRallyBtn').addEventListener('click', () => { if (typeof window.startNeonRally === 'function') window.startNeonRally(); });
-        document.getElementById('pauseRallyBtn').addEventListener('click', () => { if (typeof window.pauseNeonRally === 'function') window.pauseNeonRally(); });
-        document.getElementById('resetRallyBtn').addEventListener('click', () => { if (typeof window.resetNeonRally === 'function') window.resetNeonRally(); });
 
         // Vector Tanks Hookup
         const tanksModal = document.getElementById('tanksModal');
@@ -658,15 +553,13 @@
         // Close modal on ESC
         document.addEventListener('keydown', (e) => {
             if(e.key === 'Escape') {
-                ['racerModal','superMinesweeperModal','rogueModal','tdModal','arcModal','rallyModal','tanksModal','tunnelModal'].forEach(id => {
+                ['racerModal','superMinesweeperModal','rogueModal','tdModal','arcModal','tanksModal'].forEach(id => {
                     const el = document.getElementById(id);
                     if(el && el.style.display === 'flex') {
                         el.style.display = 'none';
                         if(id === 'tdModal') document.getElementById('td-iframe').src = 'about:blank';
                         if(id === 'arcModal' && typeof window.pauseArcReactor === 'function') window.pauseArcReactor();
-                        if(id === 'rallyModal' && typeof window.pauseNeonRally === 'function') window.pauseNeonRally();
                         if(id === 'tanksModal' && typeof window.pauseVectorTanks === 'function') window.pauseVectorTanks();
-                        if(id === 'tunnelModal' && typeof window.pauseTunnelRush === 'function') window.pauseTunnelRush();
                     }
                 });
             }
