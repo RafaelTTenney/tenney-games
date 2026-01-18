@@ -23,9 +23,9 @@ async function submitRogueBestIfNeeded() {
 let rlState = {
     canvas: null,
     ctx: null,
-    tileSize: 22,
-    cols: 26,
-    rows: 26,
+    tileSize: 20,
+    cols: 30,
+    rows: 30,
     map: [],        // 1 = Wall, 0 = Floor
     memory: [],     // True if player has visited this tile (Fog of War)
     visible: [],    // True if currently in FOV
@@ -118,9 +118,9 @@ function generateLevel() {
     rlState.stairsActive = false;
 
     const rooms = [];
-    const maxRooms = 12;
+    const maxRooms = 14;
     const minSize = 4;
-    const maxSize = 8;
+    const maxSize = 9;
 
     for (let i = 0; i < maxRooms; i++) {
         // Random dimensions
@@ -797,7 +797,7 @@ function revealMemoryPulse(cx, cy, radius) {
 // --- Visuals & Rendering ---
 
 function updateFOV() {
-    let r = 7;
+    let r = 8;
     // Clear visible
     rlState.visible = Array(rlState.cols).fill().map(() => Array(rlState.rows).fill(false));
     

@@ -64,18 +64,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
       shield: 0,
       boostTimer: 0,
       obstacles: [],
-      aiCars: [],
-      aiSpawnTimer: 0,
-      aiSpawnStartTime: 1600,
       pickups: [],
       speedLines: [],
       stars: [],
-      spawnTimer: 0,
       animationFrame: null,
-      spawnStartTime: 2100,
-      spawnMinTime: 760,
-      spawnTimeVariance: 200,
-      spawnTimeTightenRate: 20,
       obstacleDepth: 4,
       spawnSpacing: 150,
       initialSpawnOffset: 20,
@@ -518,28 +510,6 @@ import { getHighScore, submitHighScore } from './score-store.js';
       });
   }
 
-  function drawAICars() {
-      if (!racerCtx) return;
-      racerState.aiCars.forEach(ai => {
-          const scale = getPerspectiveScale(ai.y);
-          if (scale < 0.02) return;
-          const centerX = laneCenterAtY(ai.lanePos, ai.y, ai.roadWidthAtPlayer);
-          const w = playerCar.baseWidth * scale * 0.9;
-          const h = playerCar.height * scale * 0.9;
-          racerCtx.save();
-          racerCtx.translate(centerX, ai.y + h * 0.2);
-          racerCtx.fillStyle = ai.color;
-          racerCtx.beginPath();
-          racerCtx.moveTo(-w * 0.35, h * 0.2);
-          racerCtx.lineTo(w * 0.35, h * 0.2);
-          racerCtx.lineTo(w * 0.25, -h * 0.4);
-          racerCtx.lineTo(-w * 0.25, -h * 0.4);
-          racerCtx.closePath();
-          racerCtx.fill();
-          racerCtx.restore();
-      });
-  }
-
   function drawPickups() {
       if (!racerCtx) return;
       racerState.pickups.forEach(pick => {
@@ -558,7 +528,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
       });
   }
 
-  function spawnObstacle(startY, skipTimer) {
+  function spawnObstacle(startY) {
       const lanes = [-1, 0, 1];
       const gapLane = lanes[Math.floor(Math.random() * lanes.length)];
       const colorHue = Math.floor(Math.random() * 360);
@@ -608,14 +578,6 @@ import { getHighScore, submitHighScore } from './score-store.js';
           });
       }
 
-      if (!skipTimer) {
-          const dynamicForwardTime = Math.max(
-              racerState.spawnMinTime,
-              racerState.spawnStartTime - racerState.dodged * racerState.spawnTimeTightenRate
-          );
-          racerState.spawnTimer = dynamicForwardTime + Math.random() * racerState.spawnTimeVariance;
-      }
-
       racerState.edgeFlash = 20;
   }
 
@@ -623,11 +585,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
       seedObstacles();
       const spacing = racerState.spawnSpacing;
       const offset = racerState.initialSpawnOffset;
-      const maxY = canvasHeight - 80;
+      const maxY = canvasHeight - 20;
       for (let i = 0; i < racerState.obstacleDepth; i++) {
           const y = horizonY + offset + (i * spacing);
           if (y > maxY) break;
-          spawnObstacle(y, true);
+          spawnObstacle(y);
       }
   }
 
@@ -635,39 +597,18 @@ import { getHighScore, submitHighScore } from './score-store.js';
       if (racerState.obstacles.length >= racerState.obstacleDepth) return;
       const spacing = racerState.spawnSpacing;
       const offset = racerState.initialSpawnOffset;
-      let topY = horizonY + offset + spacing;
+      const spawnLine = horizonY + offset;
+      let topY = Infinity;
       racerState.obstacles.forEach(ob => {
           if (ob.y < topY) topY = ob.y;
       });
-      while (racerState.obstacles.length < racerState.obstacleDepth) {
-          const spawnY = Math.max(horizonY + offset, topY - spacing);
-          if (Math.abs(spawnY - topY) < 12) break;
-          spawnObstacle(spawnY, true);
-          topY = spawnY;
-      }
+      if (topY === Infinity || topY >= spawnLine + spacing) {
+          spawnObstacle(spawnLine);
   }
-
-  function spawnAICar(startY) {
-      const lanes = [-1, 0, 1];
-      const lane = lanes[Math.floor(Math.random() * lanes.length)];
-      const roadWidthAtPlayer = roadWidthAtY(playerCar.y);
-      const colorHue = Math.floor(Math.random() * 360);
-      const spawnY = typeof startY === 'number' ? startY : (horizonY + 140 + Math.random() * 60);
-      racerState.aiCars.push({
-          y: spawnY,
-          lane,
-          lanePos: lane,
-          laneTarget: lane,
-          roadWidthAtPlayer,
-          speedFactor: 0.85 + Math.random() * 0.35,
-          shiftTimer: 600 + Math.random() * 600,
-          color: `hsl(${colorHue}, 90%, 58%)`
-      });
   }
 
   function resetObstacles() {
       racerState.obstacles = [];
-      racerState.spawnTimer = 0;
   }
 
   function ensureSpeedLines() {
@@ -730,21 +671,6 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerState.speed = Math.min(560, baseSpeed + boostBonus);
       racerState.distance += traveled;
 
-      racerState.spawnTimer -= delta;
-      if (racerState.spawnTimer <= 0) {
-          if (racerState.obstacles.length < racerState.obstacleDepth) {
-              spawnObstacle();
-          } else {
-              racerState.spawnTimer = 200;
-          }
-      }
-
-      racerState.aiSpawnTimer -= delta;
-      if (racerState.aiSpawnTimer <= 0) {
-          spawnAICar();
-          racerState.aiSpawnTimer = Math.max(900, racerState.aiSpawnStartTime - Math.min(1100, racerState.dodged * 35));
-      }
-
       racerState.obstacles.forEach(ob => {
           ob.y += traveled;
           if (ob.shiftSpeed) {
@@ -776,18 +702,6 @@ import { getHighScore, submitHighScore } from './score-store.js';
           return true;
       });
       fillObstacleDepth();
-
-      racerState.aiCars.forEach(ai => {
-          ai.y += traveled * ai.speedFactor;
-          ai.shiftTimer -= delta;
-          if (ai.shiftTimer <= 0) {
-              const shift = Math.random() < 0.5 ? -1 : 1;
-              ai.laneTarget = Math.max(-1, Math.min(1, ai.laneTarget + shift));
-              ai.shiftTimer = 500 + Math.random() * 800;
-          }
-          ai.lanePos += (ai.laneTarget - ai.lanePos) * 0.06;
-      });
-      racerState.aiCars = racerState.aiCars.filter(ai => ai.y < racerCanvas.height + 80);
 
       racerState.pickups.forEach(pick => {
           pick.y += traveled;
@@ -926,44 +840,6 @@ import { getHighScore, submitHighScore } from './score-store.js';
           }
       }
 
-      for (let i = 0; i < racerState.aiCars.length; i++) {
-          const ai = racerState.aiCars[i];
-          const scale = getPerspectiveScale(ai.y);
-          if (scale < 0.02) continue;
-          const centerX = laneCenterAtY(ai.lanePos, ai.y, ai.roadWidthAtPlayer);
-          const aiW = playerCar.baseWidth * scale * 0.9;
-          const aiH = playerCar.height * scale * 0.9;
-          const aiLeft = centerX - aiW / 2;
-          const aiRight = centerX + aiW / 2;
-          const aiTop = ai.y - aiH * 0.7;
-          const aiBottom = ai.y + aiH * 0.3;
-          if (carBottom <= aiTop || carTop >= aiBottom) continue;
-
-          if (carRight > aiLeft && carLeft < aiRight) {
-              if (racerState.shield > 0) {
-                  racerState.shield -= 1;
-                  racerState.flash.alpha = 0.6;
-                  racerState.shake.intensity = Math.max(racerState.shake.intensity, 0.2);
-                  spawnParticles(centerX, ai.y, '#7dd3fc', 22);
-                  racerState.aiCars.splice(i, 1);
-                  i -= 1;
-                  if (racerMessageEl) racerMessageEl.textContent = 'Shield blocked rival.';
-                  continue;
-              }
-              if (racerState.animationFrame) {
-                  cancelAnimationFrame(racerState.animationFrame);
-                  racerState.animationFrame = null;
-              }
-              saveRacerHighScore();
-              spawnCrash(playerCar.x, playerCar.y + playerCar.height / 2);
-              racerState.running = false;
-              startCrashAnimation();
-              if (racerMessageEl) {
-                  racerMessageEl.textContent = 'Collision! Reset to roll out again.';
-              }
-              return;
-          }
-      }
   }
 
   function renderRacer(delta) {
@@ -976,7 +852,6 @@ import { getHighScore, submitHighScore } from './score-store.js';
       drawSpeedLines();
       drawGlow();
       drawObstacles();
-      drawAICars();
       drawPickups();
       drawPlayer();
       drawParticles();
@@ -1022,8 +897,6 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerState.running = true;
       racerState.crashed = false;
       racerState.lastTimestamp = performance.now();
-      racerState.spawnTimer = racerState.spawnStartTime;
-
       if (racerState.animationFrame) {
           cancelAnimationFrame(racerState.animationFrame);
       }
@@ -1078,11 +951,6 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerState.crashed = false;
 
       resetObstacles();
-      racerState.aiCars = [];
-      for (let i = 0; i < 2; i++) {
-          spawnAICar(horizonY + 160 + i * 90);
-      }
-      racerState.aiSpawnTimer = racerState.aiSpawnStartTime;
       ensureSpeedLines();
       ensureStars();
 
