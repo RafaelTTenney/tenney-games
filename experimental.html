@@ -252,14 +252,27 @@
                 </div>
             </section>
 
-            <section class="card flagship" style="border-color: #38bdf8; box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);">
-                <h3 style="color:#38bdf8;">Assault Protocols</h3>
-                <div class="meta">Reverse tower defense trilogy. Command attackers, counter-build the AI, and break the core.</div>
-                <pre class="demo">// Breach Duel: Competitive core fight
-// Overdrive: High-chaos assault
-// Siege Ops: Tactical slow burn</pre>
+            <section class="card" style="border-color: #22d3ee; box-shadow: 0 0 15px rgba(34, 211, 238, 0.25);">
+                <h3 style="color:#22d3ee;">Arc Reactor</h3>
+                <div class="meta">Classic asteroid survival. Protect the reactor core and harvest energy shards.</div>
                 <div class="actions">
-                    <a class="btn" href="assault-protocols.html" style="background:#38bdf8; color:#000; border-color: white;" id="openAssaultBtn">Play Assault</a>
+                    <button class="btn" style="background:#22d3ee; color:#000; border-color: white;" id="runArcBtn">Play</button>
+                </div>
+            </section>
+
+            <section class="card" style="border-color: #f97316; box-shadow: 0 0 15px rgba(249, 115, 22, 0.25);">
+                <h3 style="color:#f97316;">Neon Rally</h3>
+                <div class="meta">Top-down arcade racer with laps, checkpoints, and tight handling.</div>
+                <div class="actions">
+                    <button class="btn" style="background:#f97316; color:#000; border-color: white;" id="runRallyBtn">Race</button>
+                </div>
+            </section>
+
+            <section class="card" style="border-color: #a855f7; box-shadow: 0 0 15px rgba(168, 85, 247, 0.25);">
+                <h3 style="color:#a855f7;">Vector Tanks</h3>
+                <div class="meta">Classic artillery duel. Wind, angle, and power decide the win.</div>
+                <div class="actions">
+                    <button class="btn" style="background:#a855f7; color:#000; border-color: white;" id="runTanksBtn">Duel</button>
                 </div>
             </section>
 
@@ -379,10 +392,88 @@
         </div>
     </div>
 
+    <div id="arcModal" class="modal-overlay">
+        <div class="modal-content" style="border-color:#22d3ee; box-shadow:0 0 20px rgba(34,211,238,0.5);">
+            <div class="modal-header">
+                <h2 style="color:#22d3ee;">Arc Reactor</h2>
+                <span class="modal-close" id="arcModalCloseBtn">&times;</span>
+            </div>
+            <div class="meta" style="max-width:720px; margin:0 auto 10px;">
+                Classic asteroid survival. Protect the reactor core, clear debris, and advance waves.
+                Controls: Arrow keys to fly, Space to fire.
+            </div>
+            <canvas id="arc-canvas" width="900" height="600" style="background:#020508; border:2px solid #22d3ee;"></canvas>
+            <div id="arc-hud" style="display:flex; justify-content:space-between; margin-top:8px; color:#e2f2ff; font-family:monospace;">
+                <div id="arc-score">Score: 0</div>
+                <div id="arc-core">Core: 100%</div>
+                <div id="arc-lives">Lives: 3</div>
+                <div id="arc-wave">Wave: 1</div>
+            </div>
+            <div class="modal-controls">
+                <button id="startArcBtn" class="btn">Start</button>
+                <button id="pauseArcBtn" class="btn secondary">Pause</button>
+                <button id="resetArcBtn" class="btn secondary">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="rallyModal" class="modal-overlay">
+        <div class="modal-content" style="border-color:#f97316; box-shadow:0 0 20px rgba(249,115,22,0.45);">
+            <div class="modal-header">
+                <h2 style="color:#f97316;">Neon Rally</h2>
+                <span class="modal-close" id="rallyModalCloseBtn">&times;</span>
+            </div>
+            <div class="meta" style="max-width:720px; margin:0 auto 10px;">
+                Top-down arcade racing. Hit checkpoints in order and complete laps.
+                Controls: Arrow keys to steer and accelerate.
+            </div>
+            <canvas id="rally-canvas" width="900" height="600" style="background:#0a0502; border:2px solid #f97316;"></canvas>
+            <div id="rally-hud" style="display:flex; justify-content:space-between; margin-top:8px; color:#fff5eb; font-family:monospace;">
+                <div id="rally-lap">Lap: 1</div>
+                <div id="rally-time">Time: 0.0s</div>
+                <div id="rally-speed">Speed: 0</div>
+            </div>
+            <div class="modal-controls">
+                <button id="startRallyBtn" class="btn">Start</button>
+                <button id="pauseRallyBtn" class="btn secondary">Pause</button>
+                <button id="resetRallyBtn" class="btn secondary">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tanksModal" class="modal-overlay">
+        <div class="modal-content" style="border-color:#a855f7; box-shadow:0 0 20px rgba(168,85,247,0.45);">
+            <div class="modal-header">
+                <h2 style="color:#a855f7;">Vector Tanks</h2>
+                <span class="modal-close" id="tanksModalCloseBtn">&times;</span>
+            </div>
+            <div class="meta" style="max-width:720px; margin:0 auto 10px;">
+                Turn-based artillery duel. Adjust angle and power, then fire. Wind changes each turn.
+                Controls: A/D angle, W/S power, Space to fire.
+            </div>
+            <canvas id="tanks-canvas" width="900" height="600" style="background:#0b0714; border:2px solid #a855f7;"></canvas>
+            <div id="tanks-hud" style="display:flex; justify-content:space-between; margin-top:8px; color:#f5e8ff; font-family:monospace;">
+                <div id="tanks-player">Player: 100</div>
+                <div id="tanks-ai">AI: 100</div>
+                <div id="tanks-wind">Wind: 0</div>
+                <div id="tanks-angle">Angle: 45</div>
+                <div id="tanks-power">Power: 40</div>
+            </div>
+            <div class="modal-controls">
+                <button id="startTanksBtn" class="btn">Start</button>
+                <button id="pauseTanksBtn" class="btn secondary">Pause</button>
+                <button id="resetTanksBtn" class="btn secondary">Reset</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="login.js?v=7"></script>
     <script type="module" src="neon-racer-plus.js"></script>
     <script type="module" src="minesweeper-elite.js"></script>
     <script type="module" src="rogue-dungeon.js"></script>
+    <script type="module" src="arc-reactor.js"></script>
+    <script type="module" src="neon-rally.js"></script>
+    <script type="module" src="vector-tanks.js"></script>
 
     <script type="module">
         // Racer Hookup
@@ -391,6 +482,69 @@
         document.getElementById('startRacerBtn').addEventListener('click', () => { if(typeof window.startRacer === 'function') window.startRacer(); });
         document.getElementById('pauseRacerBtn').addEventListener('click', () => { if(typeof window.pauseRacer === 'function') window.pauseRacer(); });
         document.getElementById('resetRacerBtn').addEventListener('click', () => { if(typeof window.resetRacer === 'function') window.resetRacer(); });
+
+        // Arc Reactor Hookup
+        const arcModal = document.getElementById('arcModal');
+        document.getElementById('runArcBtn').addEventListener('click', () => {
+            arcModal.style.display = 'flex';
+            if (typeof window.initArcReactorGame === 'function') window.initArcReactorGame();
+            if (typeof window.resetArcReactor === 'function') window.resetArcReactor();
+        });
+        document.getElementById('arcModalCloseBtn').addEventListener('click', () => {
+            arcModal.style.display = 'none';
+            if (typeof window.pauseArcReactor === 'function') window.pauseArcReactor();
+        });
+        arcModal.addEventListener('click', (e) => {
+            if (e.target === arcModal) {
+                arcModal.style.display = 'none';
+                if (typeof window.pauseArcReactor === 'function') window.pauseArcReactor();
+            }
+        });
+        document.getElementById('startArcBtn').addEventListener('click', () => { if (typeof window.startArcReactor === 'function') window.startArcReactor(); });
+        document.getElementById('pauseArcBtn').addEventListener('click', () => { if (typeof window.pauseArcReactor === 'function') window.pauseArcReactor(); });
+        document.getElementById('resetArcBtn').addEventListener('click', () => { if (typeof window.resetArcReactor === 'function') window.resetArcReactor(); });
+
+        // Neon Rally Hookup
+        const rallyModal = document.getElementById('rallyModal');
+        document.getElementById('runRallyBtn').addEventListener('click', () => {
+            rallyModal.style.display = 'flex';
+            if (typeof window.initNeonRallyGame === 'function') window.initNeonRallyGame();
+            if (typeof window.resetNeonRally === 'function') window.resetNeonRally();
+        });
+        document.getElementById('rallyModalCloseBtn').addEventListener('click', () => {
+            rallyModal.style.display = 'none';
+            if (typeof window.pauseNeonRally === 'function') window.pauseNeonRally();
+        });
+        rallyModal.addEventListener('click', (e) => {
+            if (e.target === rallyModal) {
+                rallyModal.style.display = 'none';
+                if (typeof window.pauseNeonRally === 'function') window.pauseNeonRally();
+            }
+        });
+        document.getElementById('startRallyBtn').addEventListener('click', () => { if (typeof window.startNeonRally === 'function') window.startNeonRally(); });
+        document.getElementById('pauseRallyBtn').addEventListener('click', () => { if (typeof window.pauseNeonRally === 'function') window.pauseNeonRally(); });
+        document.getElementById('resetRallyBtn').addEventListener('click', () => { if (typeof window.resetNeonRally === 'function') window.resetNeonRally(); });
+
+        // Vector Tanks Hookup
+        const tanksModal = document.getElementById('tanksModal');
+        document.getElementById('runTanksBtn').addEventListener('click', () => {
+            tanksModal.style.display = 'flex';
+            if (typeof window.initVectorTanksGame === 'function') window.initVectorTanksGame();
+            if (typeof window.resetVectorTanks === 'function') window.resetVectorTanks();
+        });
+        document.getElementById('tanksModalCloseBtn').addEventListener('click', () => {
+            tanksModal.style.display = 'none';
+            if (typeof window.pauseVectorTanks === 'function') window.pauseVectorTanks();
+        });
+        tanksModal.addEventListener('click', (e) => {
+            if (e.target === tanksModal) {
+                tanksModal.style.display = 'none';
+                if (typeof window.pauseVectorTanks === 'function') window.pauseVectorTanks();
+            }
+        });
+        document.getElementById('startTanksBtn').addEventListener('click', () => { if (typeof window.startVectorTanks === 'function') window.startVectorTanks(); });
+        document.getElementById('pauseTanksBtn').addEventListener('click', () => { if (typeof window.pauseVectorTanks === 'function') window.pauseVectorTanks(); });
+        document.getElementById('resetTanksBtn').addEventListener('click', () => { if (typeof window.resetVectorTanks === 'function') window.resetVectorTanks(); });
 
         // Minesweeper Hookup
         document.getElementById('runSuperMinesweeperBtn').addEventListener('click', () => document.getElementById('superMinesweeperModal').style.display = 'flex');
@@ -443,11 +597,14 @@
         // Close modal on ESC
         document.addEventListener('keydown', (e) => {
             if(e.key === 'Escape') {
-                ['racerModal','superMinesweeperModal','rogueModal','tdModal'].forEach(id => {
+                ['racerModal','superMinesweeperModal','rogueModal','tdModal','arcModal','rallyModal','tanksModal'].forEach(id => {
                     const el = document.getElementById(id);
                     if(el && el.style.display === 'flex') {
                         el.style.display = 'none';
                         if(id === 'tdModal') document.getElementById('td-iframe').src = 'about:blank';
+                        if(id === 'arcModal' && typeof window.pauseArcReactor === 'function') window.pauseArcReactor();
+                        if(id === 'rallyModal' && typeof window.pauseNeonRally === 'function') window.pauseNeonRally();
+                        if(id === 'tanksModal' && typeof window.pauseVectorTanks === 'function') window.pauseVectorTanks();
                     }
                 });
             }
