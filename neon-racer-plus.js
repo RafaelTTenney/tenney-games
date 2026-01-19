@@ -69,11 +69,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
       stars: [],
       animationFrame: null,
       obstacleDepth: 3,
-      spawnSpacing: 220,
-      initialSpawnOffset: 20,
-      gapWidthStartMultiplier: 2.2,
-      gapWidthMinMultiplier: 1.6,
-      gapWidthTightenRate: 0.015,
+      spawnSpacing: 300,
+      initialSpawnOffset: 50,
+      gapWidthStartMultiplier: 1.7,
+      gapWidthMinMultiplier: 1.25,
+      gapWidthTightenRate: 0.012,
       particles: [],
       explosionParticles: [],
       laneLerpSpeed: 0.2,
@@ -587,9 +587,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const playerScale = getPerspectiveScale(playerCar.y);
       const roadWidthAtPlayer = (roadWidthAtBottom - roadWidthTop) * playerScale + roadWidthTop;
       const laneWidthAtPlayer = roadWidthAtPlayer / 3;
-      let gapWidthAtPlayer = (laneWidthAtPlayer * 0.65) * currentGapMultiplier;
+      let gapWidthAtPlayer = (laneWidthAtPlayer * 0.55) * currentGapMultiplier;
 
-      const minSafeGap = Math.max(playerCar.width * 1.25, playerCar.baseWidth * 1.05, laneWidthAtPlayer * 0.65);
+      const minSafeGap = Math.max(playerCar.width * 1.1, playerCar.baseWidth, laneWidthAtPlayer * 0.5);
       if (gapWidthAtPlayer < minSafeGap) {
           gapWidthAtPlayer = minSafeGap;
       }
