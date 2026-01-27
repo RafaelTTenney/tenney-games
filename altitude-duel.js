@@ -1,3 +1,5 @@
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
 (function () {
   const canvas = document.getElementById('duel-canvas');
   if (!canvas) {
@@ -5,9 +7,6 @@
     window.stopDuel = function () {};
     return;
   }
-
-  const ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled = true;
 
   const controlsSelect = document.getElementById('duel-controls');
   const hudHp = document.getElementById('duel-hp');
@@ -19,37 +18,39 @@
   const pauseBtn = document.getElementById('duel-pause');
   const resetBtn = document.getElementById('duel-reset');
 
-  const input = { keys: {}, mouse: { x: canvas.width / 2, y: canvas.height / 2 } };
+  const input = { keys: {} };
 
   const SETTINGS = {
     player: {
-      thrust: 620,
-      reverseThrust: 360,
-      turnRate: 0.0052,
-      maxSpeed: 560,
-      drag: 0.982,
-      fireCooldown: 110
+      thrust: 26,
+      reverseThrust: 14,
+      turnRate: 1.15,
+      pitchRate: 1.05,
+      rollRate: 1.6,
+      maxSpeed: 80,
+      drag: 0.985,
+      fireCooldown: 0.14
     },
     bullets: {
-      speed: 900,
-      life: 1100
+      speed: 180,
+      life: 2.8
     },
     enemies: {
       baseCount: 3,
-      maxCount: 12,
-      thrust: 210,
-      thrustVar: 120,
-      maxSpeed: 260,
-      maxSpeedVar: 120,
-      fireBase: 640,
-      fireVar: 320,
-      bulletSpeed: 340
+      maxCount: 11,
+      thrust: 16,
+      thrustVar: 10,
+      maxSpeed: 46,
+      maxSpeedVar: 14,
+      fireBase: 1.4,
+      fireVar: 0.8,
+      bulletSpeed: 120
     },
-    shieldRegenDelay: 780,
-    shieldRegenRate: 32,
-    lookAhead: 320,
-    starTile: 2600,
-    intermission: 2000
+    shieldRegenDelay: 0.9,
+    shieldRegenRate: 20,
+    lookAhead: 42,
+    starField: 1600,
+    intermission: 2.1
   };
 
   const MAX_WAVES = 6;
@@ -67,28 +68,51 @@
     bullets: [],
     enemyBullets: [],
     enemies: [],
-    particles: [],
-    background: {
-      stars: []
-    },
-    camera: {
-      x: 0,
-      y: 0
-    },
+    stars: [],
     player: {
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      angle: -Math.PI / 2,
+      position: new THREE.Vector3(0, 0, 0),
+      velocity: new THREE.Vector3(0, 0, 0),
+      yaw: 0,
+      pitch: 0,
+      roll: 0,
       hp: 120,
       maxHp: 120,
-      shield: 80,
-      maxShield: 80,
+      shield: 90,
+      maxShield: 90,
       lastHit: 0,
       fireCooldown: 0
     }
   };
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x05070d);
+  scene.fog = new THREE.Fog(0x05070d, 200, 2800);
+
+  const camera = new THREE.PerspectiveCamera(70, canvas.width / canvas.height, 0.1, 5000);
+
+  const playerGroup = new THREE.Group();
+  scene.add(playerGroup);
+  playerGroup.add(camera);
+  camera.position.set(0, 1.35, 2.8);
+
+  const cockpit = buildCockpit();
+  playerGroup.add(cockpit.group);
+
+  const ambient = new THREE.AmbientLight(0x7dafff, 0.35);
+  const rimLight = new THREE.DirectionalLight(0xffffff, 0.7);
+  rimLight.position.set(4, 6, 8);
+  const glowLight = new THREE.PointLight(0x5ceaff, 0.6, 20);
+  glowLight.position.set(0, 1.2, -3);
+  scene.add(ambient, rimLight, glowLight);
+
+  const stars = buildStarfield();
+  scene.add(stars);
+
+  const reticle = buildReticle();
+  camera.add(reticle);
 
   function rand(min, max) {
     return min + Math.random() * (max - min);
@@ -98,69 +122,8 @@
     return Math.max(min, Math.min(max, value));
   }
 
-  function wrapOffset(value, size) {
-    return ((value % size) + size) % size;
-  }
-
-  function normalizeAngle(angle) {
-    while (angle > Math.PI) angle -= Math.PI * 2;
-    while (angle < -Math.PI) angle += Math.PI * 2;
-    return angle;
-  }
-
-  function buildBackground() {
-    state.background.stars = [];
-    const layers = [
-      { count: 160, sizeMin: 0.6, sizeMax: 1.6, alphaMin: 0.25, alphaMax: 0.7, color: '210,240,255' },
-      { count: 110, sizeMin: 1.0, sizeMax: 2.3, alphaMin: 0.3, alphaMax: 0.85, color: '135,210,255' },
-      { count: 70, sizeMin: 1.6, sizeMax: 3.0, alphaMin: 0.4, alphaMax: 1, color: '255,190,110' }
-    ];
-    layers.forEach(layer => {
-      for (let i = 0; i < layer.count; i++) {
-        state.background.stars.push({
-          x: Math.random() * SETTINGS.starTile,
-          y: Math.random() * SETTINGS.starTile,
-          size: rand(layer.sizeMin, layer.sizeMax),
-          alpha: rand(layer.alphaMin, layer.alphaMax),
-          color: layer.color
-        });
-      }
-    });
-  }
-
-  function resetDuel() {
-    state.running = false;
-    state.lastTime = 0;
-    state.wave = 1;
-    state.kills = 0;
-    state.spawnTimer = 0;
-    state.spawnInterval = 0;
-    state.waveSpawnsRemaining = 0;
-    state.intermission = 0;
-    state.completed = false;
-    state.bullets = [];
-    state.enemyBullets = [];
-    state.enemies = [];
-    state.particles = [];
-    buildBackground();
-    state.player = {
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      angle: -Math.PI / 2,
-      hp: 120,
-      maxHp: 120,
-      shield: 80,
-      maxShield: 80,
-      lastHit: 0,
-      fireCooldown: 0
-    };
-    state.camera.x = state.player.x;
-    state.camera.y = state.player.y;
-    spawnWave();
-    updateHud();
-    render();
+  function getAssistMode() {
+    return controlsSelect ? controlsSelect.value : 'assist';
   }
 
   function updateHud() {
@@ -169,79 +132,281 @@
     if (hudBoss) hudBoss.textContent = `Kills: ${state.kills}`;
     if (hudCooldown) {
       hudCooldown.textContent = state.intermission > 0
-        ? `Next Wave: ${Math.ceil(state.intermission / 1000)}s`
+        ? `Next Wave: ${Math.ceil(state.intermission)}s`
         : `Enemies: ${state.enemies.length}`;
     }
     if (hudPhase) hudPhase.textContent = `Wave: ${Math.min(state.wave, MAX_WAVES)}/${MAX_WAVES}`;
   }
 
-  function getAssistMode() {
-    return controlsSelect ? controlsSelect.value : 'assist';
-  }
-
-  function spawnParticle(x, y, color) {
-    state.particles.push({
-      x,
-      y,
-      vx: rand(-120, 120),
-      vy: rand(-120, 120),
-      size: rand(1.5, 3.5),
-      life: rand(280, 520),
-      maxLife: 520,
-      color: color || '255,180,120'
+  function buildStarfield() {
+    const starCount = 1200;
+    const positions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      positions[i * 3] = rand(-SETTINGS.starField, SETTINGS.starField);
+      positions[i * 3 + 1] = rand(-SETTINGS.starField, SETTINGS.starField);
+      positions[i * 3 + 2] = rand(-SETTINGS.starField, SETTINGS.starField);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({
+      color: 0xbad9ff,
+      size: 2.2,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.8
     });
+    const points = new THREE.Points(geo, mat);
+    state.stars = positions;
+    return points;
   }
 
-  function spawnExplosion(x, y, color) {
-    for (let i = 0; i < 16; i++) spawnParticle(x, y, color);
+  function wrapStars() {
+    const range = SETTINGS.starField;
+    const pos = state.stars;
+    const px = state.player.position.x;
+    const py = state.player.position.y;
+    const pz = state.player.position.z;
+    for (let i = 0; i < pos.length; i += 3) {
+      let x = pos[i] - px;
+      let y = pos[i + 1] - py;
+      let z = pos[i + 2] - pz;
+      if (x > range) pos[i] -= range * 2;
+      if (x < -range) pos[i] += range * 2;
+      if (y > range) pos[i + 1] -= range * 2;
+      if (y < -range) pos[i + 1] += range * 2;
+      if (z > range) pos[i + 2] -= range * 2;
+      if (z < -range) pos[i + 2] += range * 2;
+    }
+  }
+
+  function buildReticle() {
+    const ring = new THREE.RingGeometry(0.012, 0.018, 32);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x7dfc9a, transparent: true, opacity: 0.8 });
+    const mesh = new THREE.Mesh(ring, mat);
+    mesh.position.set(0, 0, -2.4);
+    return mesh;
+  }
+
+  function buildCockpit() {
+    const group = new THREE.Group();
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x0a111c, metalness: 0.45, roughness: 0.65 });
+    const panelMat = new THREE.MeshStandardMaterial({ color: 0x121c2a, metalness: 0.25, roughness: 0.8 });
+    const glowMat = new THREE.MeshStandardMaterial({
+      color: 0x102234,
+      emissive: 0x35f0ff,
+      emissiveIntensity: 0.7,
+      metalness: 0.2,
+      roughness: 0.4
+    });
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: 0x88caff,
+      transparent: true,
+      opacity: 0.08,
+      roughness: 0.2,
+      metalness: 0,
+      side: THREE.DoubleSide
+    });
+
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(4.5, 0.12, 12, 44), frameMat);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.set(0, 1.7, -7.2);
+
+    const dash = new THREE.Mesh(new THREE.BoxGeometry(7, 0.6, 2.8), panelMat);
+    dash.position.set(0, 0.35, -2.8);
+
+    const leftPanel = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1, 2.4), panelMat);
+    leftPanel.position.set(-3.7, 0.25, -2.2);
+
+    const rightPanel = leftPanel.clone();
+    rightPanel.position.set(3.7, 0.25, -2.2);
+
+    const strutGeo = new THREE.CylinderGeometry(0.08, 0.08, 4.4, 12);
+    const leftStrut = new THREE.Mesh(strutGeo, frameMat);
+    leftStrut.position.set(-2.1, 1.8, -5.2);
+    leftStrut.rotation.z = 0.38;
+    leftStrut.rotation.x = 0.2;
+
+    const rightStrut = leftStrut.clone();
+    rightStrut.position.set(2.1, 1.8, -5.2);
+    rightStrut.rotation.z = -0.38;
+
+    const glass = new THREE.Mesh(new THREE.CylinderGeometry(4.7, 5.0, 6.2, 20, 1, true), glassMat);
+    glass.rotation.x = Math.PI / 2;
+    glass.position.set(0, 2.2, -6.4);
+
+    const screenLeft = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.8), glowMat);
+    screenLeft.position.set(-2.9, 0.55, -1.8);
+    screenLeft.rotation.x = -0.35;
+    const screenRight = screenLeft.clone();
+    screenRight.position.set(2.9, 0.55, -1.8);
+
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 1.4, 10), frameMat);
+    stick.position.set(0, 0, -1.4);
+    stick.rotation.x = 0.4;
+
+    group.add(rim, dash, leftPanel, rightPanel, leftStrut, rightStrut, glass, screenLeft, screenRight, stick);
+
+    return { group, stick, screens: [screenLeft, screenRight], glowMat };
+  }
+
+  function createEnemyMesh(type) {
+    const group = new THREE.Group();
+    const color = type === 'ace' ? 0xff7bff : type === 'strafer' ? 0xffa94d : 0xff6b6b;
+    const bodyMat = new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.5 });
+    const glowMat = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: color, emissiveIntensity: 0.8 });
+
+    const nose = new THREE.ConeGeometry(1.6, 4.8, 12);
+    nose.rotateX(Math.PI / 2);
+    const body = new THREE.Mesh(nose, bodyMat);
+
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.4, 1.6), bodyMat);
+    wing.position.set(0, 0, -0.5);
+
+    const engine = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 10), glowMat);
+    engine.position.set(0, 0, 2.2);
+
+    group.add(body, wing, engine);
+    group.userData = { engine, glowMat };
+    return group;
   }
 
   function spawnEnemy() {
     const player = state.player;
-    const forward = { x: Math.cos(player.angle), y: Math.sin(player.angle) };
-    const biasFront = Math.random() < 0.9;
-    const offset = biasFront ? rand(-Math.PI * 0.35, Math.PI * 0.35) : rand(Math.PI * 0.7, Math.PI * 1.3);
-    const spawnAngle = Math.atan2(forward.y, forward.x) + offset;
-    const radius = rand(540, 880);
-    const x = player.x + Math.cos(spawnAngle) * radius;
-    const y = player.y + Math.sin(spawnAngle) * radius;
+    const forward = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(player.pitch, player.yaw, player.roll, 'YXZ'));
+    const biasFront = Math.random() < 0.88;
+    const offset = biasFront ? rand(-Math.PI * 0.32, Math.PI * 0.32) : rand(Math.PI * 0.7, Math.PI * 1.3);
+    const spawnAngle = Math.atan2(forward.z, forward.x) + offset;
+    const radius = rand(260, 420);
+    const height = rand(-120, 120);
+    const x = player.position.x + Math.cos(spawnAngle) * radius;
+    const z = player.position.z + Math.sin(spawnAngle) * radius;
+    const y = player.position.y + height;
 
     const typeRoll = Math.random();
     const type = typeRoll > 0.75 ? 'ace' : typeRoll > 0.4 ? 'strafer' : 'chaser';
-    const skill = type === 'ace' ? 1.2 : type === 'strafer' ? 1.05 : 0.9;
+    const skill = type === 'ace' ? 1.25 : type === 'strafer' ? 1.05 : 0.9;
+
+    const mesh = createEnemyMesh(type);
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+
     state.enemies.push({
-      x,
-      y,
-      vx: 0,
-      vy: 0,
-      hp: (type === 'ace' ? 28 : type === 'strafer' ? 24 : 20) + Math.floor((state.wave - 1) * 1.6),
-      angle: rand(0, Math.PI * 2),
+      mesh,
+      position: mesh.position,
+      velocity: new THREE.Vector3(),
+      hp: (type === 'ace' ? 30 : type === 'strafer' ? 24 : 20) + Math.floor((state.wave - 1) * 1.6),
       type,
-      turnRate: (0.0028 + Math.random() * 0.0012) * skill,
-      thrust: (SETTINGS.enemies.thrust + Math.random() * SETTINGS.enemies.thrustVar) * skill,
-      maxSpeed: (SETTINGS.enemies.maxSpeed + Math.random() * SETTINGS.enemies.maxSpeedVar) * skill,
-      orbit: Math.random() > 0.5 ? 1 : -1,
+      thrust: (SETTINGS.enemies.thrust + rand(-SETTINGS.enemies.thrustVar, SETTINGS.enemies.thrustVar)) * skill,
+      maxSpeed: (SETTINGS.enemies.maxSpeed + rand(-SETTINGS.enemies.maxSpeedVar, SETTINGS.enemies.maxSpeedVar)) * skill,
       fireTimer: getEnemyFireDelay(type),
       skill,
       behindTime: 0,
-      lastSeen: 0
+      radius: 3.6
     });
   }
 
   function spawnWave() {
+    state.enemies.forEach(enemy => scene.remove(enemy.mesh));
     state.enemies = [];
-    const initialCount = Math.min(SETTINGS.enemies.baseCount + Math.floor((state.wave - 1) * 0.8), SETTINGS.enemies.maxCount);
-    const waveBudget = Math.min(SETTINGS.enemies.baseCount + 2 + Math.floor(state.wave * 1.1), SETTINGS.enemies.maxCount + 4);
+    const initialCount = Math.min(SETTINGS.enemies.baseCount + Math.floor((state.wave - 1) * 0.7), SETTINGS.enemies.maxCount);
+    const waveBudget = Math.min(SETTINGS.enemies.baseCount + 2 + Math.floor(state.wave * 1.1), SETTINGS.enemies.maxCount + 3);
     state.waveSpawnsRemaining = Math.max(0, waveBudget - initialCount);
-    state.spawnInterval = Math.max(820, 1600 - state.wave * 130);
+    state.spawnInterval = Math.max(0.85, 1.7 - state.wave * 0.14);
     state.spawnTimer = state.spawnInterval;
     for (let i = 0; i < initialCount; i++) spawnEnemy();
   }
 
   function getEnemyFireDelay(type) {
-    const typeOffset = type === 'ace' ? -120 : type === 'chaser' ? 0 : 80;
+    const typeOffset = type === 'ace' ? -0.18 : type === 'chaser' ? 0 : 0.2;
     const variance = type === 'ace' ? SETTINGS.enemies.fireVar * 0.7 : SETTINGS.enemies.fireVar;
-    return SETTINGS.enemies.fireBase + typeOffset + Math.random() * variance;
+    return Math.max(0.4, SETTINGS.enemies.fireBase + typeOffset + Math.random() * variance);
+  }
+
+  function findAssistTarget() {
+    const player = state.player;
+    const forward = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(player.pitch, player.yaw, player.roll, 'YXZ'));
+    let best = null;
+    let bestScore = Infinity;
+    state.enemies.forEach(enemy => {
+      const toEnemy = enemy.position.clone().sub(player.position);
+      const dist = toEnemy.length();
+      if (dist > 650) return;
+      const dir = toEnemy.clone().normalize();
+      const angle = forward.angleTo(dir);
+      if (angle > 0.75) return;
+      const score = dist + angle * 200;
+      if (score < bestScore) {
+        bestScore = score;
+        best = enemy;
+      }
+    });
+    return best;
+  }
+
+  function computeLeadDirection(enemy) {
+    const player = state.player;
+    const toEnemy = enemy.position.clone().sub(player.position);
+    const dist = toEnemy.length();
+    const t = dist / SETTINGS.bullets.speed;
+    const lead = enemy.position.clone().addScaledVector(enemy.velocity, t);
+    return lead.sub(player.position).normalize();
+  }
+
+  function firePlayer() {
+    if (state.player.fireCooldown > 0) return;
+    const player = state.player;
+    let direction = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(player.pitch, player.yaw, player.roll, 'YXZ'));
+
+    if (getAssistMode() === 'assist') {
+      const target = findAssistTarget();
+      if (target) direction = computeLeadDirection(target);
+    }
+
+    const geometry = new THREE.SphereGeometry(0.3, 8, 8);
+    const material = new THREE.MeshBasicMaterial({ color: 0xbfe8ff });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(player.position).addScaledVector(direction, 3);
+    scene.add(mesh);
+
+    state.bullets.push({
+      mesh,
+      position: mesh.position,
+      velocity: direction.clone().multiplyScalar(SETTINGS.bullets.speed),
+      life: SETTINGS.bullets.life
+    });
+
+    state.player.fireCooldown = SETTINGS.player.fireCooldown;
+  }
+
+  function fireEnemy(enemy) {
+    const toPlayer = state.player.position.clone().sub(enemy.position).normalize();
+    const geometry = new THREE.SphereGeometry(0.35, 8, 8);
+    const material = new THREE.MeshBasicMaterial({ color: 0xffb37b });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(enemy.position).addScaledVector(toPlayer, 2.8);
+    scene.add(mesh);
+
+    state.enemyBullets.push({
+      mesh,
+      position: mesh.position,
+      velocity: toPlayer.clone().multiplyScalar(SETTINGS.enemies.bulletSpeed + enemy.skill * 18),
+      life: 3
+    });
+  }
+
+  function repositionEnemyAhead(enemy) {
+    const player = state.player;
+    const forward = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(player.pitch, player.yaw, player.roll, 'YXZ'));
+    const offset = rand(-Math.PI * 0.28, Math.PI * 0.28);
+    const spawnAngle = Math.atan2(forward.z, forward.x) + offset;
+    const radius = rand(320, 480);
+    enemy.position.set(
+      player.position.x + Math.cos(spawnAngle) * radius,
+      player.position.y + rand(-110, 110),
+      player.position.z + Math.sin(spawnAngle) * radius
+    );
+    enemy.velocity.set(0, 0, 0);
+    enemy.behindTime = 0;
   }
 
   function applyDamage(amount) {
@@ -254,238 +419,145 @@
     if (amount > 0) state.player.hp -= amount;
   }
 
-  function firePlayer() {
-    if (state.player.fireCooldown > 0) return;
-    const player = state.player;
-    let fireAngle = player.angle;
-
-    if (getAssistMode() === 'assist') {
-      const target = findAssistTarget();
-      if (target) {
-        const lead = computeLeadPoint(target);
-        fireAngle = Math.atan2(lead.y - player.y, lead.x - player.x);
-      }
-    }
-
-    state.bullets.push({
-      x: player.x + Math.cos(fireAngle) * 20,
-      y: player.y + Math.sin(fireAngle) * 20,
-      vx: Math.cos(fireAngle) * SETTINGS.bullets.speed,
-      vy: Math.sin(fireAngle) * SETTINGS.bullets.speed,
-      life: SETTINGS.bullets.life,
-      damage: 12
-    });
-
-    state.player.fireCooldown = SETTINGS.player.fireCooldown;
-  }
-
-  function enemyFire(enemy) {
-    const dx = state.player.x - enemy.x;
-    const dy = state.player.y - enemy.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const speed = SETTINGS.enemies.bulletSpeed + enemy.skill * 40;
-    state.enemyBullets.push({
-      x: enemy.x + Math.cos(enemy.angle) * 16,
-      y: enemy.y + Math.sin(enemy.angle) * 16,
-      vx: (dx / len) * speed,
-      vy: (dy / len) * speed,
-      life: 1200
-    });
-  }
-
-  function findAssistTarget() {
-    const player = state.player;
-    let best = null;
-    let bestScore = Infinity;
-    state.enemies.forEach(enemy => {
-      const dx = enemy.x - player.x;
-      const dy = enemy.y - player.y;
-      const dist = Math.hypot(dx, dy);
-      const angleTo = Math.atan2(dy, dx);
-      const diff = Math.abs(normalizeAngle(angleTo - player.angle));
-      if (dist > 1100 || diff > 0.75) return;
-      const score = dist + diff * 380;
-      if (score < bestScore) {
-        bestScore = score;
-        best = enemy;
-      }
-    });
-    return best;
-  }
-
-  function computeLeadPoint(enemy) {
-    const player = state.player;
-    const dx = enemy.x - player.x;
-    const dy = enemy.y - player.y;
-    const dist = Math.hypot(dx, dy) || 1;
-    const t = dist / SETTINGS.bullets.speed;
-    return {
-      x: enemy.x + enemy.vx * t,
-      y: enemy.y + enemy.vy * t
-    };
-  }
-
-  function repositionEnemyAhead(enemy) {
-    const player = state.player;
-    const forward = { x: Math.cos(player.angle), y: Math.sin(player.angle) };
-    const offset = rand(-Math.PI * 0.35, Math.PI * 0.35);
-    const spawnAngle = Math.atan2(forward.y, forward.x) + offset;
-    const radius = rand(640, 900);
-    enemy.x = player.x + Math.cos(spawnAngle) * radius;
-    enemy.y = player.y + Math.sin(spawnAngle) * radius;
-    enemy.vx = 0;
-    enemy.vy = 0;
-    enemy.behindTime = 0;
-  }
-
   function update(dt) {
-    const dtSec = dt / 1000;
     const player = state.player;
+    const dtSec = dt;
 
-    const left = input.keys['ArrowLeft'] || input.keys['KeyA'];
-    const right = input.keys['ArrowRight'] || input.keys['KeyD'];
-    const forward = input.keys['ArrowUp'] || input.keys['KeyW'];
-    const reverse = input.keys['ArrowDown'] || input.keys['KeyS'];
+    const yawInput = (input.keys['KeyD'] ? 1 : 0) - (input.keys['KeyA'] ? 1 : 0);
+    const pitchInput = (input.keys['KeyW'] ? 1 : 0) - (input.keys['KeyS'] ? 1 : 0);
+    const rollInput = (input.keys['KeyE'] ? 1 : 0) - (input.keys['KeyQ'] ? 1 : 0);
 
-    if (left) player.angle -= SETTINGS.player.turnRate * dt;
-    if (right) player.angle += SETTINGS.player.turnRate * dt;
+    player.yaw += yawInput * SETTINGS.player.turnRate * dtSec;
+    player.pitch += pitchInput * SETTINGS.player.pitchRate * dtSec;
+    player.roll += rollInput * SETTINGS.player.rollRate * dtSec;
+    player.pitch = clamp(player.pitch, -1.3, 1.3);
+    player.roll *= 0.98;
 
-    if (forward) {
-      player.vx += Math.cos(player.angle) * SETTINGS.player.thrust * dtSec;
-      player.vy += Math.sin(player.angle) * SETTINGS.player.thrust * dtSec;
-    }
-    if (reverse) {
-      player.vx -= Math.cos(player.angle) * SETTINGS.player.reverseThrust * dtSec;
-      player.vy -= Math.sin(player.angle) * SETTINGS.player.reverseThrust * dtSec;
-    }
+    const orientation = new THREE.Euler(player.pitch, player.yaw, player.roll, 'YXZ');
+    const forward = new THREE.Vector3(0, 0, -1).applyEuler(orientation);
 
-    const forwardX = Math.cos(player.angle);
-    const forwardY = Math.sin(player.angle);
-    const rightX = -forwardY;
-    const rightY = forwardX;
-    const lateral = player.vx * rightX + player.vy * rightY;
-    const lateralDamp = 4.8 * dtSec;
-    player.vx -= rightX * lateral * lateralDamp;
-    player.vy -= rightY * lateral * lateralDamp;
-
-    player.vx *= Math.pow(SETTINGS.player.drag, dt / 16.67);
-    player.vy *= Math.pow(SETTINGS.player.drag, dt / 16.67);
-    const speed = Math.hypot(player.vx, player.vy);
-    if (speed > SETTINGS.player.maxSpeed) {
-      const scale = SETTINGS.player.maxSpeed / speed;
-      player.vx *= scale;
-      player.vy *= scale;
+    const thrustInput = (input.keys['ArrowUp'] ? 1 : 0) - (input.keys['ArrowDown'] ? 1 : 0);
+    if (thrustInput > 0) {
+      player.velocity.addScaledVector(forward, SETTINGS.player.thrust * dtSec);
+    } else if (thrustInput < 0) {
+      player.velocity.addScaledVector(forward, -SETTINGS.player.reverseThrust * dtSec);
     }
 
-    player.x += player.vx * dtSec;
-    player.y += player.vy * dtSec;
+    player.velocity.multiplyScalar(Math.pow(SETTINGS.player.drag, dtSec * 60));
+    if (player.velocity.length() > SETTINGS.player.maxSpeed) {
+      player.velocity.setLength(SETTINGS.player.maxSpeed);
+    }
 
-    const targetCamX = player.x + Math.cos(player.angle) * SETTINGS.lookAhead;
-    const targetCamY = player.y + Math.sin(player.angle) * SETTINGS.lookAhead;
-    state.camera.x += (targetCamX - state.camera.x) * 0.085;
-    state.camera.y += (targetCamY - state.camera.y) * 0.085;
+    player.position.addScaledVector(player.velocity, dtSec);
 
-    if (performance.now() - player.lastHit > SETTINGS.shieldRegenDelay) {
+    playerGroup.position.copy(player.position);
+    playerGroup.rotation.set(player.pitch, player.yaw, player.roll, 'YXZ');
+
+    cockpit.stick.rotation.x = 0.5 + pitchInput * 0.2;
+    cockpit.stick.rotation.z = -yawInput * 0.2;
+    cockpit.screens.forEach((screen, idx) => {
+      const pulse = 0.5 + Math.sin(performance.now() * 0.002 + idx) * 0.15;
+      screen.material.emissiveIntensity = 0.6 + pulse;
+    });
+
+    if (performance.now() / 1000 - player.lastHit > SETTINGS.shieldRegenDelay) {
       player.shield = Math.min(player.maxShield, player.shield + SETTINGS.shieldRegenRate * dtSec);
     }
     if (state.intermission > 0) {
-      player.shield = Math.min(player.maxShield, player.shield + 20 * dtSec);
+      player.shield = Math.min(player.maxShield, player.shield + 26 * dtSec);
     }
 
-    if (player.fireCooldown > 0) player.fireCooldown -= dt;
-
+    if (player.fireCooldown > 0) player.fireCooldown -= dtSec;
     if (input.keys['Space']) firePlayer();
 
-    state.bullets.forEach(b => {
-      b.x += b.vx * dtSec;
-      b.y += b.vy * dtSec;
-      b.life -= dt;
+    state.bullets.forEach(bullet => {
+      bullet.position.addScaledVector(bullet.velocity, dtSec);
+      bullet.life -= dtSec;
     });
-    state.bullets = state.bullets.filter(b => b.life > 0);
+    state.bullets = state.bullets.filter(bullet => {
+      if (bullet.life <= 0) {
+        scene.remove(bullet.mesh);
+        return false;
+      }
+      return true;
+    });
 
-    state.enemyBullets.forEach(b => {
-      b.x += b.vx * dtSec;
-      b.y += b.vy * dtSec;
-      b.life -= dt;
+    state.enemyBullets.forEach(bullet => {
+      bullet.position.addScaledVector(bullet.velocity, dtSec);
+      bullet.life -= dtSec;
     });
-    state.enemyBullets = state.enemyBullets.filter(b => b.life > 0);
+    state.enemyBullets = state.enemyBullets.filter(bullet => {
+      if (bullet.life <= 0) {
+        scene.remove(bullet.mesh);
+        return false;
+      }
+      return true;
+    });
 
     state.enemies.forEach(enemy => {
-      const dx = player.x - enemy.x;
-      const dy = player.y - enemy.y;
-      const dist = Math.hypot(dx, dy) || 1;
-      const angleTo = Math.atan2(dy, dx);
-      const rel = normalizeAngle(angleTo - player.angle);
-      if (Math.abs(rel) > 1.25) {
-        enemy.behindTime = (enemy.behindTime || 0) + dt;
-      } else {
-        enemy.behindTime = Math.max(0, (enemy.behindTime || 0) - dt * 0.6);
-      }
-      if (enemy.behindTime > 2600 || dist > 1500) {
-        repositionEnemyAhead(enemy);
-      }
-      let desired = Math.atan2(dy, dx);
-      if (enemy.type === 'strafer' && dist < 260) desired += enemy.orbit * Math.PI / 2;
-      if (enemy.type === 'ace' && dist < 180) desired -= enemy.orbit * Math.PI / 2;
-      if (Math.abs(rel) > 1.1) desired = angleTo + (rel > 0 ? 0.4 : -0.4);
-      const diff = normalizeAngle(desired - enemy.angle);
-      const turnStep = enemy.turnRate * dt;
-      enemy.angle += clamp(diff, -turnStep, turnStep);
+      const toPlayer = player.position.clone().sub(enemy.position);
+      const dist = toPlayer.length();
+      const dirToPlayer = toPlayer.clone().normalize();
+      const angleTo = forward.angleTo(dirToPlayer);
+      if (angleTo > 1.3) enemy.behindTime += dtSec;
+      else enemy.behindTime = Math.max(0, enemy.behindTime - dtSec * 0.4);
 
-      enemy.vx += Math.cos(enemy.angle) * enemy.thrust * dtSec;
-      enemy.vy += Math.sin(enemy.angle) * enemy.thrust * dtSec;
+      if (enemy.behindTime > 2.5 || dist > 900) repositionEnemyAhead(enemy);
 
-      const eSpeed = Math.hypot(enemy.vx, enemy.vy);
-      if (eSpeed > enemy.maxSpeed) {
-        const scale = enemy.maxSpeed / eSpeed;
-        enemy.vx *= scale;
-        enemy.vy *= scale;
+      let desired = dirToPlayer.clone();
+      if (enemy.type === 'strafer') {
+        const side = new THREE.Vector3().crossVectors(dirToPlayer, new THREE.Vector3(0, 1, 0)).normalize();
+        desired.addScaledVector(side, enemy.orbit || 0.6).normalize();
+      }
+      if (enemy.type === 'ace' && dist < 140) {
+        desired.addScaledVector(forward, 0.6).normalize();
       }
 
-      enemy.vx *= Math.pow(0.988, dt / 16.67);
-      enemy.vy *= Math.pow(0.988, dt / 16.67);
-      enemy.x += enemy.vx * dtSec;
-      enemy.y += enemy.vy * dtSec;
+      enemy.velocity.addScaledVector(desired, enemy.thrust * dtSec);
+      if (enemy.velocity.length() > enemy.maxSpeed) enemy.velocity.setLength(enemy.maxSpeed);
+      enemy.velocity.multiplyScalar(0.985);
+      enemy.position.addScaledVector(enemy.velocity, dtSec);
 
-      enemy.fireTimer -= dt;
-      if (enemy.fireTimer <= 0) {
-        enemyFire(enemy);
+      enemy.mesh.lookAt(enemy.position.clone().add(enemy.velocity));
+
+      enemy.fireTimer -= dtSec;
+      if (enemy.fireTimer <= 0 && dist < 520 && angleTo < 0.7) {
+        fireEnemy(enemy);
         enemy.fireTimer = getEnemyFireDelay(enemy.type);
       }
+
+      const glow = enemy.mesh.userData.glowMat;
+      if (glow) glow.emissiveIntensity = 0.6 + Math.sin(performance.now() * 0.004 + dist) * 0.2;
     });
 
     state.bullets.forEach(bullet => {
       state.enemies.forEach(enemy => {
         if (enemy.hp <= 0) return;
-        if (Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y) < 16) {
-          enemy.hp -= bullet.damage || 12;
+        if (bullet.position.distanceTo(enemy.position) < enemy.radius) {
+          enemy.hp -= 12;
           bullet.life = 0;
-          spawnParticle(enemy.x, enemy.y, '255,200,160');
           if (enemy.hp <= 0) {
             state.kills += 1;
-            spawnExplosion(enemy.x, enemy.y, enemy.type === 'ace' ? '255,120,255' : '255,170,110');
+            scene.remove(enemy.mesh);
           }
         }
       });
     });
 
     state.enemyBullets.forEach(bullet => {
-      if (Math.hypot(bullet.x - player.x, bullet.y - player.y) < 18) {
+      if (bullet.position.distanceTo(player.position) < 4) {
         applyDamage(10);
-        spawnParticle(player.x, player.y, '120,200,255');
         bullet.life = 0;
       }
     });
 
-    state.enemies = state.enemies.filter(e => e.hp > 0);
+    state.enemies = state.enemies.filter(enemy => enemy.hp > 0);
 
     if (state.intermission > 0) {
-      state.intermission = Math.max(0, state.intermission - dt);
-      if (state.intermission === 0 && !state.completed) {
-        spawnWave();
-      }
+      state.intermission = Math.max(0, state.intermission - dtSec);
+      if (state.intermission === 0 && !state.completed) spawnWave();
     } else {
-      state.spawnTimer -= dt;
+      state.spawnTimer -= dtSec;
       if (state.waveSpawnsRemaining > 0 && state.spawnTimer <= 0 && state.enemies.length < SETTINGS.enemies.maxCount) {
         spawnEnemy();
         state.waveSpawnsRemaining -= 1;
@@ -505,234 +577,18 @@
 
     if (player.hp <= 0) state.running = false;
 
-    state.particles.forEach(p => {
-      p.x += p.vx * dtSec;
-      p.y += p.vy * dtSec;
-      p.life -= dt;
-    });
-    state.particles = state.particles.filter(p => p.life > 0);
-
+    wrapStars();
+    stars.geometry.attributes.position.needsUpdate = true;
     updateHud();
   }
 
-  function worldToScreen(x, y, camX, camY, rot, centerX, centerY) {
-    const dx = x - camX;
-    const dy = y - camY;
-    const cosR = Math.cos(rot);
-    const sinR = Math.sin(rot);
-    const rx = dx * cosR - dy * sinR;
-    const ry = dx * sinR + dy * cosR;
-    return { x: centerX + rx, y: centerY + ry };
-  }
-
-  function drawEnemyBrackets(x, y, color) {
-    const size = 10;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(x - size, y - size / 2);
-    ctx.lineTo(x - size / 2, y - size / 2);
-    ctx.lineTo(x - size / 2, y - size);
-    ctx.moveTo(x + size, y - size / 2);
-    ctx.lineTo(x + size / 2, y - size / 2);
-    ctx.lineTo(x + size / 2, y - size);
-    ctx.moveTo(x - size, y + size / 2);
-    ctx.lineTo(x - size / 2, y + size / 2);
-    ctx.lineTo(x - size / 2, y + size);
-    ctx.moveTo(x + size, y + size / 2);
-    ctx.lineTo(x + size / 2, y + size / 2);
-    ctx.lineTo(x + size / 2, y + size);
-    ctx.stroke();
-  }
-
-  function drawEdgeIndicator(screen, centerX, centerY, color) {
-    const margin = 26;
-    const dx = screen.x - centerX;
-    const dy = screen.y - centerY;
-    if (dx === 0 && dy === 0) return;
-    const tx = dx === 0 ? Infinity : (dx > 0 ? (canvas.width - margin - centerX) / dx : (margin - centerX) / dx);
-    const ty = dy === 0 ? Infinity : (dy > 0 ? (canvas.height - margin - centerY) / dy : (margin - centerY) / dy);
-    const t = Math.min(Math.abs(tx), Math.abs(ty));
-    const x = centerX + dx * t;
-    const y = centerY + dy * t;
-    const ang = Math.atan2(dy, dx);
-    const size = 8;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x - Math.cos(ang - 0.5) * size, y - Math.sin(ang - 0.5) * size);
-    ctx.lineTo(x - Math.cos(ang + 0.5) * size, y - Math.sin(ang + 0.5) * size);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  function drawCockpitFrame(centerX, centerY) {
-    const w = canvas.width;
-    const h = canvas.height;
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = 'rgba(71,245,255,0.35)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(w * 0.08, h * 0.1);
-    ctx.lineTo(w * 0.26, h * 0.72);
-    ctx.lineTo(w * 0.74, h * 0.72);
-    ctx.lineTo(w * 0.92, h * 0.1);
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(6,12,20,0.35)';
-    ctx.fillRect(0, h * 0.74, w, h * 0.26);
-    ctx.strokeStyle = 'rgba(71,245,255,0.25)';
-    ctx.strokeRect(0, h * 0.74, w, h * 0.26);
-
-    ctx.strokeStyle = 'rgba(125,252,154,0.65)';
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 34, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(centerX - 50, centerY);
-    ctx.lineTo(centerX + 50, centerY);
-    ctx.moveTo(centerX, centerY - 50);
-    ctx.lineTo(centerX, centerY + 50);
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(125,252,154,0.9)';
-    ctx.font = '11px monospace';
-    ctx.fillText(`SPD ${Math.round(Math.hypot(state.player.vx, state.player.vy))}`, 16, h * 0.77 + 20);
-    ctx.fillText(`SHD ${Math.round(state.player.shield)}`, 16, h * 0.77 + 38);
-    ctx.fillText(`HULL ${Math.round(state.player.hp)}`, 16, h * 0.77 + 56);
-    ctx.fillText(`WAVE ${Math.min(state.wave, MAX_WAVES)}`, w - 110, h * 0.77 + 20);
-    ctx.fillText(`KILLS ${state.kills}`, w - 110, h * 0.77 + 38);
-
-    ctx.restore();
-  }
-
   function render() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const player = state.player;
-    const rot = -player.angle - Math.PI / 2;
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height * 0.62;
-
-    ctx.fillStyle = '#05070d';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const camX = state.camera.x;
-    const camY = state.camera.y;
-    const tile = SETTINGS.starTile;
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rot);
-    ctx.translate(-camX, -camY);
-
-    state.background.stars.forEach(star => {
-      const offsetX = wrapOffset(star.x - camX + tile * 0.5, tile) - tile * 0.5;
-      const offsetY = wrapOffset(star.y - camY + tile * 0.5, tile) - tile * 0.5;
-      const sx = camX + offsetX;
-      const sy = camY + offsetY;
-      ctx.fillStyle = `rgba(${star.color},${star.alpha})`;
-      ctx.fillRect(sx, sy, star.size, star.size);
-    });
-
-    state.enemies.forEach(enemy => {
-      ctx.save();
-      ctx.translate(enemy.x, enemy.y);
-      ctx.rotate(enemy.angle);
-      const bodyColor = enemy.type === 'ace' ? '#ff7bff' : enemy.type === 'strafer' ? '#ffa94d' : '#ff6b6b';
-      ctx.fillStyle = bodyColor;
-      ctx.shadowColor = bodyColor;
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.moveTo(16, 0);
-      ctx.lineTo(-10, 8);
-      ctx.lineTo(-6, 0);
-      ctx.lineTo(-10, -8);
-      ctx.closePath();
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.restore();
-    });
-
-    ctx.fillStyle = '#bfe8ff';
-    state.bullets.forEach(b => {
-      ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
-    });
-    ctx.fillStyle = '#ffb37b';
-    state.enemyBullets.forEach(b => {
-      ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
-    });
-
-    state.particles.forEach(p => {
-      const alpha = Math.max(0, p.life / p.maxLife);
-      ctx.fillStyle = `rgba(${p.color},${alpha})`;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    ctx.restore();
-
-    state.enemies.forEach(enemy => {
-      const screen = worldToScreen(enemy.x, enemy.y, camX, camY, rot, centerX, centerY);
-      if (screen.x < -40 || screen.x > canvas.width + 40 || screen.y < -40 || screen.y > canvas.height + 40) return;
-      const color = enemy.type === 'ace' ? 'rgba(255,120,255,0.9)' : enemy.type === 'strafer' ? 'rgba(255,170,90,0.9)' : 'rgba(255,110,110,0.9)';
-      drawEnemyBrackets(screen.x, screen.y, color);
-    });
-
-    const target = getAssistMode() === 'assist' ? findAssistTarget() : null;
-    if (target) {
-      const lead = computeLeadPoint(target);
-      const leadScreen = worldToScreen(lead.x, lead.y, camX, camY, rot, centerX, centerY);
-      if (leadScreen.x > 0 && leadScreen.x < canvas.width && leadScreen.y > 0 && leadScreen.y < canvas.height) {
-        ctx.strokeStyle = 'rgba(125,252,154,0.9)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(leadScreen.x, leadScreen.y, 8, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(leadScreen.x - 12, leadScreen.y);
-        ctx.lineTo(leadScreen.x + 12, leadScreen.y);
-        ctx.stroke();
-      }
-    }
-
-    const offscreen = state.enemies.map(enemy => {
-      const screen = worldToScreen(enemy.x, enemy.y, camX, camY, rot, centerX, centerY);
-      const dist = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y);
-      return { enemy, screen, dist };
-    }).filter(item => {
-      return item.screen.x < 0 || item.screen.x > canvas.width || item.screen.y < 0 || item.screen.y > canvas.height;
-    }).sort((a, b) => a.dist - b.dist).slice(0, 6);
-
-    offscreen.forEach(item => {
-      const color = item.enemy.type === 'ace' ? 'rgba(255,120,255,0.8)' : item.enemy.type === 'strafer' ? 'rgba(255,170,90,0.8)' : 'rgba(255,110,110,0.8)';
-      drawEdgeIndicator(item.screen, centerX, centerY, color);
-    });
-
-    drawCockpitFrame(centerX, centerY);
-
-    if (!state.running) {
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#e6f2ff';
-      ctx.font = '20px monospace';
-      ctx.textAlign = 'center';
-      const label = state.completed
-        ? 'Mission Complete - Press Reset'
-        : state.player.hp <= 0
-          ? 'Ship Destroyed - Press Reset'
-          : 'Paused';
-      ctx.fillText(label, canvas.width / 2, canvas.height / 2);
-    }
+    renderer.render(scene, camera);
   }
 
   function loop(timestamp) {
     if (!state.running) return;
-    const dt = Math.min(36, timestamp - state.lastTime);
+    const dt = Math.min(0.033, (timestamp - state.lastTime) / 1000);
     state.lastTime = timestamp;
     update(dt);
     render();
@@ -752,24 +608,63 @@
     render();
   }
 
+  function resetDuel() {
+    state.running = false;
+    state.lastTime = 0;
+    state.wave = 1;
+    state.kills = 0;
+    state.spawnTimer = 0;
+    state.spawnInterval = 0;
+    state.waveSpawnsRemaining = 0;
+    state.intermission = 0;
+    state.completed = false;
+    state.bullets.forEach(bullet => scene.remove(bullet.mesh));
+    state.enemyBullets.forEach(bullet => scene.remove(bullet.mesh));
+    state.enemies.forEach(enemy => scene.remove(enemy.mesh));
+    state.bullets = [];
+    state.enemyBullets = [];
+    state.enemies = [];
+    state.player.position.set(0, 0, 0);
+    state.player.velocity.set(0, 0, 0);
+    state.player.yaw = 0;
+    state.player.pitch = 0;
+    state.player.roll = 0;
+    state.player.hp = state.player.maxHp;
+    state.player.shield = state.player.maxShield;
+    state.player.lastHit = performance.now();
+    state.player.fireCooldown = 0;
+    playerGroup.position.copy(state.player.position);
+    playerGroup.rotation.set(0, 0, 0);
+    spawnWave();
+    updateHud();
+    render();
+  }
+
+  function resize() {
+    const width = canvas.clientWidth || canvas.width;
+    const height = canvas.clientHeight || canvas.height;
+    if (canvas.width !== width || canvas.height !== height) {
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    }
+  }
+
   function bindInput() {
     if (window.__duelBound) return;
     window.__duelBound = true;
     document.addEventListener('keydown', (e) => {
-      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE'].includes(e.code)) {
         e.preventDefault();
       }
       input.keys[e.code] = true;
     });
     document.addEventListener('keyup', (e) => { input.keys[e.code] = false; });
-    canvas.addEventListener('mousemove', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      input.mouse.x = e.clientX - rect.left;
-      input.mouse.y = e.clientY - rect.top;
-    });
+    window.addEventListener('resize', resize);
   }
 
   function initDuel() {
+    resize();
     bindInput();
     resetDuel();
   }
