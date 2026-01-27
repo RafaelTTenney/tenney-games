@@ -91,7 +91,7 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
   scene.background = new THREE.Color(0x05070d);
   scene.fog = new THREE.Fog(0x05070d, 200, 2800);
 
-  const camera = new THREE.PerspectiveCamera(70, canvas.width / canvas.height, 0.1, 5000);
+  const camera = new THREE.PerspectiveCamera(66, canvas.width / canvas.height, 0.1, 5000);
 
   const playerGroup = new THREE.Group();
   scene.add(playerGroup);
@@ -101,10 +101,10 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
   const cockpit = buildCockpit();
   playerGroup.add(cockpit.group);
 
-  const ambient = new THREE.AmbientLight(0x7dafff, 0.35);
-  const rimLight = new THREE.DirectionalLight(0xffffff, 0.7);
+  const ambient = new THREE.AmbientLight(0xa8c8ff, 0.48);
+  const rimLight = new THREE.DirectionalLight(0xffffff, 0.85);
   rimLight.position.set(4, 6, 8);
-  const glowLight = new THREE.PointLight(0x5ceaff, 0.6, 20);
+  const glowLight = new THREE.PointLight(0x5ceaff, 0.7, 24);
   glowLight.position.set(0, 1.2, -3);
   scene.add(ambient, rimLight, glowLight);
 
@@ -123,7 +123,7 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
   }
 
   function getAssistMode() {
-    return controlsSelect ? controlsSelect.value : 'assist';
+    return controlsSelect ? controlsSelect.value : 'manual';
   }
 
   function updateHud() {
@@ -180,7 +180,7 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
   }
 
   function buildReticle() {
-    const ring = new THREE.RingGeometry(0.012, 0.018, 32);
+    const ring = new THREE.RingGeometry(0.014, 0.022, 32);
     const mat = new THREE.MeshBasicMaterial({ color: 0x7dfc9a, transparent: true, opacity: 0.8 });
     const mesh = new THREE.Mesh(ring, mat);
     mesh.position.set(0, 0, -2.4);
@@ -252,32 +252,68 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
   function createEnemyMesh(type) {
     const group = new THREE.Group();
     const color = type === 'ace' ? 0xff7bff : type === 'strafer' ? 0xffa94d : 0xff6b6b;
-    const bodyMat = new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.5 });
-    const glowMat = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: color, emissiveIntensity: 0.8 });
+    const bodyMat = new THREE.MeshStandardMaterial({ color, metalness: 0.25, roughness: 0.45 });
+    const glowMat = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: color, emissiveIntensity: 1.0 });
 
-    const nose = new THREE.ConeGeometry(1.6, 4.8, 12);
+    const nose = new THREE.ConeGeometry(2.1, 5.8, 14);
     nose.rotateX(Math.PI / 2);
     const body = new THREE.Mesh(nose, bodyMat);
 
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.4, 1.6), bodyMat);
-    wing.position.set(0, 0, -0.5);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.5, 2.0), bodyMat);
+    wing.position.set(0, 0, -0.6);
 
-    const engine = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 10), glowMat);
-    engine.position.set(0, 0, 2.2);
+    const engine = new THREE.Mesh(new THREE.SphereGeometry(0.8, 12, 12), glowMat);
+    engine.position.set(0, 0, 2.8);
 
-    group.add(body, wing, engine);
-    group.userData = { engine, glowMat };
+    const outlineMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35 });
+    const outline = new THREE.Mesh(nose, outlineMat);
+    outline.scale.set(1.08, 1.08, 1.08);
+
+    const marker = buildTargetMarker(color);
+    marker.position.set(0, 0.6, -2.6);
+
+    group.add(body, wing, engine, outline, marker);
+    group.userData = { engine, glowMat, marker };
     return group;
+  }
+
+  function buildTargetMarker(color) {
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.strokeStyle = '#ffffff';
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, 18, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = `#${color.toString(16).padStart(6, '0')}`;
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, 12, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(size / 2 - 8, size / 2);
+    ctx.lineTo(size / 2 + 8, size / 2);
+    ctx.stroke();
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0.9, depthTest: false });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(6, 6, 1);
+    return sprite;
   }
 
   function spawnEnemy() {
     const player = state.player;
     const forward = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(player.pitch, player.yaw, player.roll, 'YXZ'));
-    const biasFront = Math.random() < 0.88;
+    const biasFront = Math.random() < 0.92;
     const offset = biasFront ? rand(-Math.PI * 0.32, Math.PI * 0.32) : rand(Math.PI * 0.7, Math.PI * 1.3);
     const spawnAngle = Math.atan2(forward.z, forward.x) + offset;
-    const radius = rand(260, 420);
-    const height = rand(-120, 120);
+    const radius = rand(220, 340);
+    const height = rand(-90, 90);
     const x = player.position.x + Math.cos(spawnAngle) * radius;
     const z = player.position.z + Math.sin(spawnAngle) * radius;
     const y = player.position.y + height;
@@ -301,7 +337,7 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
       fireTimer: getEnemyFireDelay(type),
       skill,
       behindTime: 0,
-      radius: 3.6
+      radius: 4.6
     });
   }
 
@@ -322,45 +358,10 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
     return Math.max(0.4, SETTINGS.enemies.fireBase + typeOffset + Math.random() * variance);
   }
 
-  function findAssistTarget() {
-    const player = state.player;
-    const forward = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(player.pitch, player.yaw, player.roll, 'YXZ'));
-    let best = null;
-    let bestScore = Infinity;
-    state.enemies.forEach(enemy => {
-      const toEnemy = enemy.position.clone().sub(player.position);
-      const dist = toEnemy.length();
-      if (dist > 650) return;
-      const dir = toEnemy.clone().normalize();
-      const angle = forward.angleTo(dir);
-      if (angle > 0.75) return;
-      const score = dist + angle * 200;
-      if (score < bestScore) {
-        bestScore = score;
-        best = enemy;
-      }
-    });
-    return best;
-  }
-
-  function computeLeadDirection(enemy) {
-    const player = state.player;
-    const toEnemy = enemy.position.clone().sub(player.position);
-    const dist = toEnemy.length();
-    const t = dist / SETTINGS.bullets.speed;
-    const lead = enemy.position.clone().addScaledVector(enemy.velocity, t);
-    return lead.sub(player.position).normalize();
-  }
-
   function firePlayer() {
     if (state.player.fireCooldown > 0) return;
     const player = state.player;
-    let direction = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(player.pitch, player.yaw, player.roll, 'YXZ'));
-
-    if (getAssistMode() === 'assist') {
-      const target = findAssistTarget();
-      if (target) direction = computeLeadDirection(target);
-    }
+    const direction = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(player.pitch, player.yaw, player.roll, 'YXZ'));
 
     const geometry = new THREE.SphereGeometry(0.3, 8, 8);
     const material = new THREE.MeshBasicMaterial({ color: 0xbfe8ff });
@@ -521,13 +522,19 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
       enemy.mesh.lookAt(enemy.position.clone().add(enemy.velocity));
 
       enemy.fireTimer -= dtSec;
-      if (enemy.fireTimer <= 0 && dist < 520 && angleTo < 0.7) {
+      if (enemy.fireTimer <= 0 && dist < 520 && angleTo < 0.85) {
         fireEnemy(enemy);
         enemy.fireTimer = getEnemyFireDelay(enemy.type);
       }
 
       const glow = enemy.mesh.userData.glowMat;
-      if (glow) glow.emissiveIntensity = 0.6 + Math.sin(performance.now() * 0.004 + dist) * 0.2;
+      if (glow) glow.emissiveIntensity = 0.8 + Math.sin(performance.now() * 0.004 + dist) * 0.25;
+      const marker = enemy.mesh.userData.marker;
+      if (marker) {
+        const scale = clamp(24 / Math.max(24, dist), 0.9, 1.8);
+        marker.scale.set(6 * scale, 6 * scale, 1);
+        marker.material.opacity = clamp(1.2 - dist / 520, 0.4, 0.9);
+      }
     });
 
     state.bullets.forEach(bullet => {
