@@ -25,25 +25,25 @@
       reverseThrust: 420,
       maxSpeed: 560,
       drag: 0.992,
-      fireCooldown: 80
+      fireCooldown: 70
     },
     bullets: {
       speed: 780,
-      life: 900
+      life: 1050
     },
     enemies: {
-      baseCount: 6,
-      maxCount: 14,
-      thrust: 280,
+      baseCount: 4,
+      maxCount: 18,
+      thrust: 240,
       thrustVar: 120,
-      maxSpeed: 330,
-      maxSpeedVar: 90,
-      fireBase: 280,
-      fireVar: 260,
-      bulletSpeed: 420
+      maxSpeed: 300,
+      maxSpeedVar: 110,
+      fireBase: 420,
+      fireVar: 320,
+      bulletSpeed: 380
     },
-    shieldRegenDelay: 1200,
-    shieldRegenRate: 32,
+    shieldRegenDelay: 1100,
+    shieldRegenRate: 36,
     background: {
       starLayers: [
         { count: 140, sizeMin: 0.6, sizeMax: 1.6, alphaMin: 0.3, alphaMax: 0.75, speed: 0.18, color: '215,240,255' },
@@ -87,6 +87,18 @@
 
   function rand(min, max) {
     return min + Math.random() * (max - min);
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function getWaveSpeedScale() {
+    return clamp(1 + (state.wave - 1) * 0.04, 1, 1.8);
+  }
+
+  function getWaveAggroScale() {
+    return clamp(1 + (state.wave - 1) * 0.06, 1, 2);
   }
 
   function buildBackground() {
@@ -147,6 +159,8 @@
   }
 
   function spawnEnemy() {
+    const waveSpeed = getWaveSpeedScale();
+    const waveAggro = getWaveAggroScale();
     const edge = Math.floor(Math.random() * 4);
     let x = 0;
     let y = 0;
@@ -157,20 +171,21 @@
 
     const typeRoll = Math.random();
     const type = typeRoll > 0.78 ? 'ace' : typeRoll > 0.45 ? 'strafer' : 'chaser';
-    const skill = type === 'ace' ? 1.25 : type === 'strafer' ? 1 : 0.85;
+    const skill = type === 'ace' ? 1.2 : type === 'strafer' ? 1 : 0.85;
+    const hpBase = type === 'ace' ? 30 : type === 'chaser' ? 22 : 26;
     state.enemies.push({
       x,
       y,
       vx: 0,
       vy: 0,
-      hp: type === 'ace' ? 38 : type === 'chaser' ? 28 : 32,
+      hp: hpBase + Math.floor((state.wave - 1) * 2),
       type,
       angle: Math.random() * Math.PI * 2,
-      turnRate: (0.0034 + Math.random() * 0.0018) * skill,
-      thrust: (SETTINGS.enemies.thrust + Math.random() * SETTINGS.enemies.thrustVar) * skill,
-      maxSpeed: SETTINGS.enemies.maxSpeed + Math.random() * SETTINGS.enemies.maxSpeedVar * skill,
+      turnRate: (0.0032 + Math.random() * 0.0016) * skill * waveAggro,
+      thrust: (SETTINGS.enemies.thrust + Math.random() * SETTINGS.enemies.thrustVar) * skill * waveSpeed,
+      maxSpeed: (SETTINGS.enemies.maxSpeed + Math.random() * SETTINGS.enemies.maxSpeedVar) * waveSpeed,
       orbit: Math.random() > 0.5 ? 1 : -1,
-      fireTimer: SETTINGS.enemies.fireBase + Math.random() * SETTINGS.enemies.fireVar,
+      fireTimer: (SETTINGS.enemies.fireBase + Math.random() * SETTINGS.enemies.fireVar) / waveAggro,
       skill
     });
   }
@@ -240,6 +255,7 @@
   }
 
   function enemyFire(enemy) {
+    const waveAggro = getWaveAggroScale();
     const dx = state.player.x - enemy.x;
     const dy = state.player.y - enemy.y;
     const dist = Math.hypot(dx, dy) || 1;
@@ -249,7 +265,7 @@
     const lx = targetX - enemy.x;
     const ly = targetY - enemy.y;
     const len = Math.hypot(lx, ly) || 1;
-    const speed = SETTINGS.enemies.bulletSpeed + enemy.skill * 60;
+    const speed = (SETTINGS.enemies.bulletSpeed + enemy.skill * 50) * waveAggro;
     state.enemyBullets.push({
       x: enemy.x + Math.cos(enemy.angle) * 16,
       y: enemy.y + Math.sin(enemy.angle) * 16,
@@ -315,6 +331,13 @@
       life: rand(220, 420),
       color: reverse ? '120,200,255' : '71,245,255'
     });
+  }
+
+  function getEnemyFireDelay(enemy) {
+    const waveAggro = getWaveAggroScale();
+    const base = enemy.type === 'ace' ? 380 : enemy.type === 'chaser' ? 460 : 520;
+    const variance = enemy.type === 'ace' ? 240 : 280;
+    return (base + Math.random() * variance) / waveAggro;
   }
 
   function applyDamage(amount) {
@@ -439,8 +462,7 @@
       enemy.fireTimer -= dt;
       if (enemy.fireTimer <= 0) {
         enemyFire(enemy);
-        const base = enemy.type === 'ace' ? 240 : enemy.type === 'chaser' ? 320 : 380;
-        enemy.fireTimer = base + Math.random() * 260;
+        enemy.fireTimer = getEnemyFireDelay(enemy);
       }
     });
 
@@ -458,7 +480,7 @@
         const dx = bullet.x - enemy.x;
         const dy = bullet.y - enemy.y;
         if (Math.hypot(dx, dy) < 16) {
-          enemy.hp -= 12;
+          enemy.hp -= 14;
           bullet.life = 0;
           spawnSparks(enemy.x, enemy.y, '255,200,160');
           if (enemy.hp <= 0) {
@@ -473,7 +495,7 @@
       const dx = bullet.x - player.x;
       const dy = bullet.y - player.y;
       if (Math.hypot(dx, dy) < 18) {
-        applyDamage(14);
+        applyDamage(12);
         spawnSparks(player.x, player.y, '120,200,255');
         bullet.life = 0;
       }
@@ -488,7 +510,7 @@
     state.spawnTimer -= dt;
     if (state.spawnTimer <= 0 && state.enemies.length < SETTINGS.enemies.maxCount) {
       spawnEnemy();
-      state.spawnTimer = 1200 - Math.min(600, state.wave * 40);
+      state.spawnTimer = 1600 - Math.min(800, state.wave * 50);
     }
 
     if (player.hp <= 0) {
