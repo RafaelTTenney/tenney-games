@@ -32,26 +32,28 @@
       life: 1050
     },
     enemies: {
-      baseCount: 3,
-      maxCount: 17,
-      thrust: 225,
+      baseCount: 4,
+      maxCount: 18,
+      thrust: 250,
       thrustVar: 120,
-      maxSpeed: 285,
+      maxSpeed: 305,
       maxSpeedVar: 110,
-      fireBase: 520,
-      fireVar: 360,
-      bulletSpeed: 360
+      fireBase: 460,
+      fireVar: 320,
+      bulletSpeed: 390
     },
-    shieldRegenDelay: 1000,
-    shieldRegenRate: 38,
+    shieldRegenDelay: 1050,
+    shieldRegenRate: 36,
     background: {
       starLayers: [
-        { count: 140, sizeMin: 0.6, sizeMax: 1.6, alphaMin: 0.3, alphaMax: 0.75, speed: 0.18, color: '215,240,255' },
-        { count: 90, sizeMin: 1.0, sizeMax: 2.3, alphaMin: 0.35, alphaMax: 0.9, speed: 0.38, color: '140,210,255' },
-        { count: 45, sizeMin: 1.5, sizeMax: 3.4, alphaMin: 0.4, alphaMax: 1, speed: 0.62, color: '125,252,154' }
+        { count: 210, sizeMin: 0.6, sizeMax: 1.6, alphaMin: 0.3, alphaMax: 0.75, speed: 0.18, color: '215,240,255' },
+        { count: 140, sizeMin: 1.0, sizeMax: 2.3, alphaMin: 0.35, alphaMax: 0.9, speed: 0.38, color: '140,210,255' },
+        { count: 70, sizeMin: 1.5, sizeMax: 3.4, alphaMin: 0.4, alphaMax: 1, speed: 0.62, color: '125,252,154' }
       ]
     }
   };
+  const MAX_WAVES = 8;
+  const VIEW_SCALE = 0.9;
 
   const state = {
     running: false,
@@ -59,6 +61,9 @@
     kills: 0,
     wave: 1,
     spawnTimer: 0,
+    spawnInterval: 0,
+    waveSpawnsRemaining: 0,
+    completed: false,
     enemies: [],
     bullets: [],
     enemyBullets: [],
@@ -102,19 +107,19 @@
   }
 
   function getWaveSpeedScale() {
-    return clamp(0.85 + (state.wave - 1) * 0.05, 0.85, 1.7);
+    return clamp(0.9 + (state.wave - 1) * 0.05, 0.9, 1.7);
   }
 
   function getWaveAggroScale() {
-    return clamp(0.8 + (state.wave - 1) * 0.06, 0.8, 2);
+    return clamp(0.88 + (state.wave - 1) * 0.06, 0.88, 2);
   }
 
   function buildBackground() {
     state.background.stars = [];
     state.background.nebulae = [];
     state.background.comets = [];
-    state.background.tileW = Math.max(canvas.width * 2.2, 2200);
-    state.background.tileH = Math.max(canvas.height * 2.2, 1600);
+    state.background.tileW = Math.max(canvas.width * 2.7, 2600);
+    state.background.tileH = Math.max(canvas.height * 2.7, 1900);
 
     const tileW = state.background.tileW;
     const tileH = state.background.tileH;
@@ -173,27 +178,27 @@
     const waveSpeed = getWaveSpeedScale();
     const waveAggro = getWaveAggroScale();
     const angle = Math.random() * Math.PI * 2;
-    const radius = rand(520, 820);
+    const radius = rand(640, 980);
     const x = state.player.x + Math.cos(angle) * radius;
     const y = state.player.y + Math.sin(angle) * radius;
 
     const typeRoll = Math.random();
     const type = typeRoll > 0.78 ? 'ace' : typeRoll > 0.45 ? 'strafer' : 'chaser';
-    const skill = type === 'ace' ? 1.15 : type === 'strafer' ? 0.98 : 0.82;
-    const hpBase = type === 'ace' ? 26 : type === 'chaser' ? 18 : 22;
+    const skill = type === 'ace' ? 1.18 : type === 'strafer' ? 1 : 0.85;
+    const hpBase = type === 'ace' ? 28 : type === 'chaser' ? 20 : 24;
     state.enemies.push({
       x,
       y,
       vx: 0,
       vy: 0,
-      hp: hpBase + Math.floor((state.wave - 1) * 1.6),
+      hp: hpBase + Math.floor((state.wave - 1) * 1.8),
       type,
       angle: Math.random() * Math.PI * 2,
-      turnRate: (0.0032 + Math.random() * 0.0016) * skill * waveAggro,
+      turnRate: (0.0033 + Math.random() * 0.0016) * skill * waveAggro,
       thrust: (SETTINGS.enemies.thrust + Math.random() * SETTINGS.enemies.thrustVar) * skill * waveSpeed,
       maxSpeed: (SETTINGS.enemies.maxSpeed + Math.random() * SETTINGS.enemies.maxSpeedVar) * waveSpeed,
       orbit: Math.random() > 0.5 ? 1 : -1,
-      fireTimer: (SETTINGS.enemies.fireBase + Math.random() * SETTINGS.enemies.fireVar) / waveAggro,
+      fireTimer: getEnemyFireDelayForType(type),
       skill
     });
   }
@@ -203,7 +208,10 @@
     state.lastTime = 0;
     state.kills = 0;
     state.wave = 1;
-    state.spawnTimer = 900;
+    state.spawnTimer = 0;
+    state.spawnInterval = 0;
+    state.waveSpawnsRemaining = 0;
+    state.completed = false;
     state.enemies = [];
     state.bullets = [];
     state.enemyBullets = [];
@@ -231,9 +239,12 @@
 
   function spawnWave() {
     state.enemies = [];
-    state.spawnTimer = 1400;
-    const count = Math.min(SETTINGS.enemies.baseCount + Math.floor((state.wave - 1) * 1.05), SETTINGS.enemies.maxCount);
-    for (let i = 0; i < count; i++) {
+    const initialCount = Math.min(SETTINGS.enemies.baseCount + Math.floor((state.wave - 1) * 0.9), SETTINGS.enemies.maxCount);
+    const waveBudget = Math.min(SETTINGS.enemies.baseCount + 2 + Math.floor(state.wave * 1.1), SETTINGS.enemies.maxCount + 4);
+    state.waveSpawnsRemaining = Math.max(0, waveBudget - initialCount);
+    state.spawnInterval = Math.max(900, 1900 - state.wave * 110);
+    state.spawnTimer = state.spawnInterval;
+    for (let i = 0; i < initialCount; i++) {
       spawnEnemy();
     }
   }
@@ -244,7 +255,7 @@
     const speed = Math.hypot(state.player.vx, state.player.vy);
     if (hudBoost) hudBoost.textContent = `Speed: ${Math.round(speed)}`;
     if (hudKills) hudKills.textContent = `Kills: ${state.kills}`;
-    if (hudWave) hudWave.textContent = `Wave: ${state.wave}`;
+    if (hudWave) hudWave.textContent = `Wave: ${Math.min(state.wave, MAX_WAVES)}/${MAX_WAVES}`;
   }
 
   function getFireMode() {
@@ -275,7 +286,7 @@
     const lx = targetX - enemy.x;
     const ly = targetY - enemy.y;
     const len = Math.hypot(lx, ly) || 1;
-    const speed = (SETTINGS.enemies.bulletSpeed + enemy.skill * 50) * waveAggro;
+    const speed = (SETTINGS.enemies.bulletSpeed + enemy.skill * 55) * waveAggro;
     state.enemyBullets.push({
       x: enemy.x + Math.cos(enemy.angle) * 16,
       y: enemy.y + Math.sin(enemy.angle) * 16,
@@ -343,11 +354,11 @@
     });
   }
 
-  function getEnemyFireDelay(enemy) {
+  function getEnemyFireDelayForType(type) {
     const waveAggro = getWaveAggroScale();
-    const base = enemy.type === 'ace' ? 380 : enemy.type === 'chaser' ? 460 : 520;
-    const variance = enemy.type === 'ace' ? 240 : 280;
-    return (base + Math.random() * variance) / waveAggro;
+    const typeOffset = type === 'ace' ? -80 : type === 'chaser' ? 0 : 70;
+    const variance = type === 'ace' ? SETTINGS.enemies.fireVar * 0.7 : SETTINGS.enemies.fireVar;
+    return (SETTINGS.enemies.fireBase + typeOffset + Math.random() * variance) / waveAggro;
   }
 
   function applyDamage(amount) {
@@ -423,9 +434,12 @@
     });
     const camX = state.camera.x;
     const camY = state.camera.y;
+    const viewRadius = Math.max(canvas.width, canvas.height) / VIEW_SCALE;
+    const bulletCull = viewRadius * 1.4;
+    const enemyCull = viewRadius * 1.9;
     state.bullets = state.bullets.filter(b => {
       if (b.life <= 0) return false;
-      return Math.hypot(b.x - camX, b.y - camY) < 1800;
+      return Math.hypot(b.x - camX, b.y - camY) < bulletCull;
     });
 
     state.enemyBullets.forEach(b => {
@@ -435,7 +449,7 @@
     });
     state.enemyBullets = state.enemyBullets.filter(b => {
       if (b.life <= 0) return false;
-      return Math.hypot(b.x - camX, b.y - camY) < 1900;
+      return Math.hypot(b.x - camX, b.y - camY) < bulletCull * 1.05;
     });
 
     state.enemies.forEach(enemy => {
@@ -472,7 +486,7 @@
       enemy.fireTimer -= dt;
       if (enemy.fireTimer <= 0) {
         enemyFire(enemy);
-        enemy.fireTimer = getEnemyFireDelay(enemy);
+        enemy.fireTimer = getEnemyFireDelayForType(enemy.type);
       }
     });
 
@@ -490,7 +504,7 @@
         const dx = bullet.x - enemy.x;
         const dy = bullet.y - enemy.y;
         if (Math.hypot(dx, dy) < 16) {
-          enemy.hp -= 15;
+          enemy.hp -= 14;
           bullet.life = 0;
           spawnSparks(enemy.x, enemy.y, '255,200,160');
           if (enemy.hp <= 0) {
@@ -505,22 +519,29 @@
       const dx = bullet.x - player.x;
       const dy = bullet.y - player.y;
       if (Math.hypot(dx, dy) < 18) {
-        applyDamage(10);
+        applyDamage(11);
         spawnSparks(player.x, player.y, '120,200,255');
         bullet.life = 0;
       }
     });
 
-    state.enemies = state.enemies.filter(e => e.hp > 0 && Math.hypot(e.x - camX, e.y - camY) < 2400);
-    if (state.enemies.length === 0) {
-      state.wave += 1;
-      spawnWave();
-    }
+    state.enemies = state.enemies.filter(e => e.hp > 0 && Math.hypot(e.x - camX, e.y - camY) < enemyCull);
 
     state.spawnTimer -= dt;
-    if (state.spawnTimer <= 0 && state.enemies.length < SETTINGS.enemies.maxCount) {
+    if (state.waveSpawnsRemaining > 0 && state.spawnTimer <= 0 && state.enemies.length < SETTINGS.enemies.maxCount) {
       spawnEnemy();
-      state.spawnTimer = 1900 - Math.min(900, state.wave * 55);
+      state.waveSpawnsRemaining -= 1;
+      state.spawnTimer = state.spawnInterval * (0.75 + Math.random() * 0.5);
+    }
+
+    if (state.enemies.length === 0 && state.waveSpawnsRemaining <= 0) {
+      if (state.wave >= MAX_WAVES) {
+        state.completed = true;
+        state.running = false;
+      } else {
+        state.wave += 1;
+        spawnWave();
+      }
     }
 
     if (player.hp <= 0) {
@@ -629,7 +650,9 @@
     const px = player.x;
     const py = player.y;
     ctx.save();
-    ctx.translate(canvas.width / 2 - camX, canvas.height / 2 - camY);
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(VIEW_SCALE, VIEW_SCALE);
+    ctx.translate(-camX, -camY);
     ctx.save();
     ctx.translate(px, py);
     ctx.rotate(player.angle);
@@ -728,7 +751,11 @@
       ctx.fillStyle = '#e6f2ff';
       ctx.font = '20px monospace';
       ctx.textAlign = 'center';
-      const label = state.player.hp <= 0 ? 'Ship Destroyed - Press Reset' : 'Paused';
+      const label = state.completed
+        ? 'Mission Complete - Press Reset'
+        : state.player.hp <= 0
+          ? 'Ship Destroyed - Press Reset'
+          : 'Paused';
       ctx.fillText(label, canvas.width / 2, canvas.height / 2);
     }
   }
@@ -758,7 +785,7 @@
     if (window.__skygridBound) return;
     window.__skygridBound = true;
     document.addEventListener('keydown', (e) => {
-      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
         e.preventDefault();
       }
       input.keys[e.code] = true;
