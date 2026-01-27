@@ -55,7 +55,9 @@
     </div>
   </div>
   <script type="module">
-    import { supabase, hasSupabaseConfig } from './supabase.js';
+    import { auth, db, hasFirebaseConfig } from './firebase.js';
+    import { createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
     const form = document.getElementById('applyForm');
     const statusEl = document.getElementById('applyStatus');
@@ -67,8 +69,8 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       statusEl.textContent = '';
-      if (!hasSupabaseConfig()) {
-        statusEl.textContent = 'Supabase is not configured.';
+      if (!hasFirebaseConfig()) {
+        statusEl.textContent = 'Firebase is not configured.';
         return;
       }
       const firstName = document.getElementById('name').value.trim();
@@ -82,40 +84,35 @@
         return;
       }
 
-      const { data: existing, error: existingError } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('username', username)
-        .limit(1);
-      if (existingError) {
-        statusEl.textContent = existingError.message;
-        return;
-      }
-      if (existing && existing.length) {
+      const usernameRef = doc(db, 'usernames', username);
+      const usernameSnap = await getDoc(usernameRef);
+      if (usernameSnap.exists()) {
         statusEl.textContent = `Username ${username} is already taken.`;
         return;
       }
 
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            username,
-            first_name: firstName,
-            last_name: lastName
-          }
-        }
-      });
-
-      if (error) {
-        statusEl.textContent = error.message;
-        return;
+      try {
+        const { user } = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, 'profiles', user.uid), {
+          email,
+          username,
+          first_name: firstName,
+          last_name: lastName,
+          account_status: 'standard',
+          createdAt: serverTimestamp()
+        }, { merge: true });
+        await setDoc(usernameRef, {
+          uid: user.uid,
+          createdAt: serverTimestamp()
+        });
+        await signOut(auth);
+        statusEl.textContent = `Account created for ${username}. You can log in now.`;
+        setTimeout(() => {
+          window.location.href = 'login.html';
+        }, 1200);
+      } catch (error) {
+        statusEl.textContent = error.message || 'Unable to create account.';
       }
-      statusEl.textContent = `Account created for ${username}. Check your email if confirmation is required, then log in.`;
-      setTimeout(() => {
-        window.location.href = 'login.html';
-      }, 1200);
     });
   </script>
 </body>

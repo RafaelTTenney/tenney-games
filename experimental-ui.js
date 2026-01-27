@@ -4,7 +4,8 @@
 (function () {
   const win = typeof window !== 'undefined' ? window : globalThis;
 
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (win.whenAuthReady) await win.whenAuthReady;
     // preserve previous access-check behavior (login.js may provide enforcePageAccess)
     if (typeof win.enforcePageAccess === 'function' && !win.enforcePageAccess('experimental.html')) {
       return;

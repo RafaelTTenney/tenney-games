@@ -15,6 +15,9 @@
     ul { color:var(--muted); }
     .btn { background:var(--primary); color:#fff; padding:8px 12px; border-radius:8px; text-decoration:none; font-weight:700; display:inline-block; margin-top:12px; }
     .btn.secondary { background:#fff; color:var(--primary); border:1px solid #99ccff; }
+    table { width:100%; border-collapse: collapse; margin-top:12px; }
+    th, td { text-align:left; padding:8px; border-bottom:1px solid #e6eefc; color:#254a99; }
+    .score-muted { color: var(--muted); font-size: 0.95em; }
   </style>
 </head>
 <body>
@@ -30,22 +33,76 @@
         <ul id="capabilitiesList"></ul>
       </div>
 
+      <div style="margin-top:18px;">
+        <h2 style="color:var(--primary); margin-bottom:6px;">Your High Scores</h2>
+        <div class="score-muted" id="scoreStatus">Loading scores...</div>
+        <table id="scoreTable" style="display:none;">
+          <thead>
+            <tr><th>Game</th><th>High Score</th><th>Updated</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
       <a id="upgradeBtn" class="btn" href="upgrade-request.html">Request an upgrade</a>
       <a id="backBtn" class="btn secondary" href="loggedIn.html" style="margin-left:12px;">Back to Dashboard</a>
     </div>
   </div>
 
-  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="questions.html">Questions & Comments</a></footer>
+  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="questions-dashboard.html">Questions & Comments</a></footer>
 
   <script type="module" src="login.js?v=7"></script>
   <script type="module">
-    document.addEventListener('DOMContentLoaded', function() {
+    import { auth, db, hasFirebaseConfig } from './firebase.js';
+    import { collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+    function formatTimestamp(ts) {
+      if (!ts) return '-';
+      const date = ts.toDate ? ts.toDate() : new Date(ts);
+      return date.toLocaleString();
+    }
+
+    async function loadScores(user) {
+      const statusEl = document.getElementById('scoreStatus');
+      const table = document.getElementById('scoreTable');
+      const tbody = document.querySelector('#scoreTable tbody');
+      if (!hasFirebaseConfig()) {
+        statusEl.textContent = 'Firebase is not configured.';
+        return;
+      }
+      if (!user) {
+        statusEl.textContent = 'Log in to see your scores.';
+        return;
+      }
+      const snap = await getDocs(query(
+        collection(db, 'highScores'),
+        where('uid', '==', user.uid)
+      ));
+      const scores = snap.docs.map(doc => doc.data());
+      scores.sort((a, b) => (b.score || 0) - (a.score || 0));
+      if (!scores.length) {
+        statusEl.textContent = 'No scores yet. Play a game to set one!';
+        return;
+      }
+      tbody.innerHTML = scores.map(score => `
+        <tr>
+          <td>${score.gameId || '-'}</td>
+          <td>${score.score ?? '-'}</td>
+          <td>${formatTimestamp(score.updatedAt)}</td>
+        </tr>
+      `).join('');
+      statusEl.textContent = '';
+      table.style.display = '';
+    }
+
+    document.addEventListener('DOMContentLoaded', async function() {
+      if (window.whenAuthReady) await window.whenAuthReady;
       if (!window.enforcePageAccess('profile.html')) return;
-      const username = localStorage.getItem('username') || 'Unknown';
-      document.getElementById('profileUser').textContent = username;
-      const firstname = localStorage.getItem('firstName') || 'Unknown';
-      document.getElementById('profileName').textContent = firstname;
-      const status = getAccountStatus() || 'standard';
+
+      const profile = window.getProfile ? window.getProfile() : {};
+      document.getElementById('profileUser').textContent = profile.username || profile.email || 'Unknown';
+      document.getElementById('profileName').textContent = profile.first_name || profile.firstName || 'Unknown';
+      const status = window.getAccountStatus ? window.getAccountStatus() : 'standard';
       document.getElementById('accountStatus').textContent = status.charAt(0).toUpperCase() + status.slice(1);
 
       const capabilities = {
@@ -67,7 +124,8 @@
       };
 
       const list = document.getElementById('capabilitiesList');
-      list.innerHTML = capabilities[status].map(s => `<li>${s}</li>`).join('');
+      list.innerHTML = (capabilities[status] || capabilities.standard).map(s => `<li>${s}</li>`).join('');
+      await loadScores(auth.currentUser);
     });
   </script>
 </body>

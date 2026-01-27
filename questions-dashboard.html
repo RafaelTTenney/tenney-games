@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Questions & Comments Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --primary-blue: #3366cc;
+      --dark-blue: #254a99;
+      --light-blue: #e6f0ff;
+      --accent-blue: #99ccff;
+      --background: #f6f8fb;
+      --text-main: #222;
+      --text-light: #fff;
+    }
+    body { background: var(--background); font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }
+    .container { max-width: 720px; margin: 60px auto 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 16px rgba(51,102,204,0.08); padding: 36px 28px 24px 28px; }
+    h1 { color: var(--primary-blue); font-size: 2em; margin-bottom: 12px; text-align: center; }
+    h2 { color: var(--primary-blue); font-size: 1.3em; margin: 18px 0 10px; }
+    label { display: block; margin-bottom: 7px; color: var(--primary-blue); font-weight: 500; }
+    input[type="text"], input[type="email"], textarea {
+      width: 100%;
+      padding: 11px 9px;
+      margin-bottom: 18px;
+      border: 1px solid var(--accent-blue);
+      border-radius: 4px;
+      background: var(--light-blue);
+      font-size: 1em;
+      color: var(--text-main);
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+    textarea { min-height: 120px; resize: vertical; }
+    input[type="text"]:focus, input[type="email"]:focus, textarea:focus { border-color: var(--primary-blue); outline: none; }
+    button {
+      width: 100%;
+      padding: 13px 0;
+      font-size: 1em;
+      background: var(--primary-blue);
+      color: var(--text-light);
+      border: none;
+      border-radius: 4px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.2s;
+    }
+    button:hover, button:focus { background: var(--dark-blue); }
+    button:disabled { background: #9db4e6; cursor: not-allowed; }
+    .note { color: #666; font-size: 0.97em; margin-top: 12px; text-align: center; }
+    .btn-home {
+      display: inline-block;
+      margin-top: 18px;
+      padding: 0.6em 1.3em;
+      background: #3366cc;
+      color: #fff;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: bold;
+      font-size: 1em;
+      letter-spacing: 1px;
+      text-align: center;
+    }
+    .btn-home:hover { background: #254a99; }
+    .history {
+      margin-top: 20px;
+      background: #f4f7ff;
+      border: 1px solid #d7e3ff;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .history-item {
+      padding: 10px 0;
+      border-bottom: 1px solid #dbe5ff;
+      color: #254a99;
+    }
+    .history-item:last-child { border-bottom: none; }
+    .history-meta { font-size: 0.9em; color: #5b6f9e; }
+    .status-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.82em;
+      font-weight: 600;
+      margin-left: 6px;
+      background: #e6f0ff;
+      color: #254a99;
+    }
+    .status-pill.resolved { background: #d9f5e1; color: #1d7d3f; }
+    .auth-warning { color: #b34747; font-weight: 600; }
+    @media (max-width: 640px) { .container { margin: 24px 8px; padding: 20px 12px; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Questions & Comments</h1>
+    <div class="note" id="authNotice"></div>
+    <form id="supportForm">
+      <label for="name">Name</label>
+      <input type="text" id="name" name="name" required>
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" placeholder="you@example.com">
+      <label for="message">Message</label>
+      <textarea id="message" name="message" required></textarea>
+      <button type="submit" id="submitBtn">Send</button>
+    </form>
+    <div class="note" id="status" aria-live="polite"></div>
+
+    <div class="history" id="historySection" style="display:none;">
+      <h2>Your submissions</h2>
+      <div id="historyList"></div>
+    </div>
+
+    <a href="index.html" class="btn-home">Home</a>
+  </div>
+
+  <script type="module">
+    import { auth, db, hasFirebaseConfig } from './firebase.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { addDoc, collection, getDocs, serverTimestamp, query, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+    const form = document.getElementById('supportForm');
+    const statusEl = document.getElementById('status');
+    const authNotice = document.getElementById('authNotice');
+    const submitBtn = document.getElementById('submitBtn');
+    const historySection = document.getElementById('historySection');
+    const historyList = document.getElementById('historyList');
+
+    let currentUser = null;
+
+    function formatTimestamp(ts) {
+      if (!ts) return 'Unknown time';
+      const date = ts.toDate ? ts.toDate() : new Date(ts);
+      return date.toLocaleString();
+    }
+
+    function renderHistory(items) {
+      if (!items.length) {
+        historyList.innerHTML = '<div class="history-item">No submissions yet.</div>';
+        return;
+      }
+      historyList.innerHTML = items.map(item => {
+        const status = item.status || 'open';
+        return `
+          <div class="history-item">
+            <div><strong>${item.message}</strong></div>
+            <div class="history-meta">
+              ${formatTimestamp(item.createdAt)}
+              <span class="status-pill ${status === 'resolved' ? 'resolved' : ''}">${status}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function loadHistory(user) {
+      const snap = await getDocs(query(
+        collection(db, 'supportRequests'),
+        where('uid', '==', user.uid)
+      ));
+      const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      items.sort((a, b) => {
+        const at = a.createdAt?.seconds || 0;
+        const bt = b.createdAt?.seconds || 0;
+        return bt - at;
+      });
+      renderHistory(items);
+      historySection.style.display = '';
+    }
+
+    function setFormEnabled(enabled) {
+      form.querySelectorAll('input, textarea, button').forEach(el => {
+        el.disabled = !enabled;
+      });
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      statusEl.textContent = '';
+      if (!hasFirebaseConfig()) {
+        statusEl.textContent = 'Firebase is not configured.';
+        return;
+      }
+      if (!currentUser) {
+        statusEl.textContent = 'Please log in to send a message.';
+        return;
+      }
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const message = document.getElementById('message').value.trim();
+      if (!name || !message) {
+        statusEl.textContent = 'Please complete the required fields.';
+        return;
+      }
+      try {
+        await addDoc(collection(db, 'supportRequests'), {
+          uid: currentUser.uid,
+          name,
+          email: email || currentUser.email || null,
+          message,
+          status: 'open',
+          createdAt: serverTimestamp()
+        });
+        form.reset();
+        statusEl.textContent = 'Thanks! Your message was sent to the admin panel.';
+        await loadHistory(currentUser);
+      } catch (error) {
+        statusEl.textContent = error.message || 'Unable to send message.';
+      }
+    });
+
+    if (!hasFirebaseConfig()) {
+      authNotice.textContent = 'Firebase is not configured.';
+      authNotice.classList.add('auth-warning');
+      setFormEnabled(false);
+    } else {
+      onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        if (!user) {
+          authNotice.innerHTML = 'Please <a href="login.html">log in</a> to send questions or comments.';
+          authNotice.classList.add('auth-warning');
+          setFormEnabled(false);
+          historySection.style.display = 'none';
+          return;
+        }
+        authNotice.textContent = 'You are signed in. Your message will be linked to your account.';
+        setFormEnabled(true);
+        const emailInput = document.getElementById('email');
+        if (emailInput && !emailInput.value) {
+          emailInput.value = user.email || '';
+        }
+        loadHistory(user);
+      });
+    }
+  </script>
+</body>
+</html>

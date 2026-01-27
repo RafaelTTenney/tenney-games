@@ -4,83 +4,19 @@
   <meta charset="UTF-8">
   <title>Questions & Comments</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="0; url=questions-dashboard.html">
   <style>
-    :root {
-      --primary-blue: #3366cc;
-      --dark-blue: #254a99;
-      --light-blue: #e6f0ff;
-      --accent-blue: #99ccff;
-      --background: #f6f8fb;
-      --text-main: #222;
-      --text-light: #fff;
-    }
-    body { background: var(--background); font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 60px auto 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 16px rgba(51,102,204,0.08); padding: 36px 28px 24px 28px; }
-    h1 { color: var(--primary-blue); font-size: 2em; margin-bottom: 20px; text-align: center; }
-    label { display: block; margin-bottom: 7px; color: var(--primary-blue); font-weight: 500; }
-    input[type="text"], input[type="email"], textarea { width: 100%; padding: 11px 9px; margin-bottom: 18px; border: 1px solid var(--accent-blue); border-radius: 4px; background: var(--light-blue); font-size: 1em; color: var(--text-main); box-sizing: border-box; transition: border-color 0.2s; }
-    textarea { min-height: 120px; resize: vertical; }
-    input[type="text"]:focus, input[type="email"]:focus, textarea:focus { border-color: var(--primary-blue); outline: none; }
-    button { width: 100%; padding: 13px 0; font-size: 1em; background: var(--primary-blue); color: var(--text-light); border: none; border-radius: 4px; font-weight: 600; cursor: pointer; margin-top: 8px; transition: background 0.2s; }
-    button:hover, button:focus { background: var(--dark-blue); }
-    .note { color: #666; font-size: 0.97em; margin-top: 14px; text-align: center; }
-    .btn-home { display: inline-block; margin-top: 18px; padding: 0.6em 1.3em; background: #3366cc; color: #fff; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 1em; letter-spacing: 1px; text-align: center; }
-    .btn-home:hover { background: #254a99; }
-    @media (max-width: 500px) { .container { margin: 24px 8px; padding: 20px 8px; } }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f6f8fb; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 60px auto 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 16px rgba(51,102,204,0.08); padding: 36px 28px; text-align: center; }
+    h1 { color: #3366cc; margin-bottom: 10px; }
+    a { color: #3366cc; font-weight: 600; text-decoration: none; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Questions & Comments</h1>
-    <form id="supportForm">
-      <label for="name">Name</label>
-      <input type="text" id="name" name="name" required>
-      <label for="email">Email (optional)</label>
-      <input type="email" id="email" name="email" placeholder="you@example.com">
-      <label for="message">Message</label>
-      <textarea id="message" name="message" required></textarea>
-      <button type="submit">Send</button>
-    </form>
-    <div class="note" id="status" aria-live="polite"></div>
-    <a href="index.html" class="btn-home">Home</a>
+    <p>This page moved.</p>
+    <p><a href="questions-dashboard.html">Go to the Questions & Comments Dashboard</a></p>
   </div>
-  <script type="module">
-    import { supabase, hasSupabaseConfig } from './supabase.js';
-
-    const form = document.getElementById('supportForm');
-    const statusEl = document.getElementById('status');
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      statusEl.textContent = '';
-      if (!hasSupabaseConfig()) {
-        statusEl.textContent = 'Supabase is not configured.';
-        return;
-      }
-      const name = document.getElementById('name').value.trim();
-      const email = document.getElementById('email').value.trim();
-      const message = document.getElementById('message').value.trim();
-      if (!name || !message) {
-        statusEl.textContent = 'Please complete the required fields.';
-        return;
-      }
-      const { data } = await supabase.auth.getSession();
-      const userId = data.session?.user?.id || null;
-      const { error } = await supabase
-        .from('support_requests')
-        .insert({
-          name,
-          email: email || null,
-          message,
-          user_id: userId
-        });
-      if (error) {
-        statusEl.textContent = error.message;
-        return;
-      }
-      form.reset();
-      statusEl.textContent = 'Thanks! Your message was sent to the admin panel.';
-    });
-  </script>
 </body>
 </html>

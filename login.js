@@ -1,29 +1,37 @@
-// login.js (Hardcoded accounts)
-import { sha256 } from './sha256.js';
+import { auth, db, hasFirebaseConfig, waitForAuth } from './firebase.js';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
-const users = [
-  { username: 'admin', hash: '02079b31824a4d18a105f16b9d45e751a114ce5b4ff3d49c6f19633aed25abbc', accountStatus: 'admin', firstName: 'admin' },
-  { username: 'amagee', hash: 'e52a1359297822655226696b53192f9085c5f161d1bda5cbaed8e9ceb64c904b', accountStatus: 'admin', firstName: 'Andrew' },
-  { username: 'ccarty', hash: 'e3bd890850be9d6ffc4568c23a497e84fc8ed079ed196ce6d978a24a731f1de8', accountStatus: 'standard', firstName: 'Colleen' },
-  { username: 'smartinez', hash: 'cfadedad585d18910973603153c102a1ab83edd78886db527315b07d0630281e', accountStatus: 'admin', firstName: 'Santi' },
-  { username: 'rtenney', hash: 'd2809be3fe85fcf081294d173edc0580b93d17b8c6df3ccabc8b56d5b4f62714', accountStatus: 'advance', firstName: 'Robert' },
-  { username: 'cdillon', hash: '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8', accountStatus: 'standard', firstName: 'Calvin' }
-];
+let currentProfile = null;
+let authReadyResolve = null;
+let authReadyResolved = false;
+const whenAuthReady = new Promise((resolve) => {
+  authReadyResolve = resolve;
+});
 
-function normalizeUsername(value) {
-  return (value || '').trim().toLowerCase();
+function normalizeUsernameFromEmail(email) {
+  if (!email) return '';
+  return email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 }
 
-function findUser(username) {
-  const normalized = normalizeUsername(username);
-  return users.find(u => u.username.toLowerCase() === normalized) || null;
-}
-
-function setSessionProfile(user) {
+function setSessionProfile(profile, user) {
+  const username = profile?.username || normalizeUsernameFromEmail(user?.email);
+  const firstName = profile?.first_name || profile?.firstName || '';
+  const status = profile?.account_status || 'standard';
   localStorage.setItem('loggedIn', 'true');
-  localStorage.setItem('username', user.username || '');
-  localStorage.setItem('firstName', user.firstName || '');
-  localStorage.setItem('accountStatus', user.accountStatus || 'standard');
+  localStorage.setItem('username', username || '');
+  localStorage.setItem('firstName', firstName || '');
+  localStorage.setItem('accountStatus', status);
+  localStorage.setItem('email', user?.email || profile?.email || '');
 }
 
 function clearSessionProfile() {
@@ -31,19 +39,51 @@ function clearSessionProfile() {
   localStorage.removeItem('username');
   localStorage.removeItem('accountStatus');
   localStorage.removeItem('firstName');
+  localStorage.removeItem('email');
+}
+
+function resolveAuthReady(user) {
+  if (authReadyResolved) return;
+  authReadyResolved = true;
+  if (authReadyResolve) authReadyResolve(user || null);
+}
+
+async function ensureProfile(user) {
+  if (!user) return null;
+  const profileRef = doc(db, 'profiles', user.uid);
+  const snap = await getDoc(profileRef);
+  if (snap.exists()) {
+    return { uid: user.uid, email: user.email || '', ...snap.data() };
+  }
+  const fallback = {
+    email: user.email || '',
+    username: normalizeUsernameFromEmail(user.email),
+    first_name: '',
+    last_name: '',
+    account_status: 'standard',
+    createdAt: serverTimestamp()
+  };
+  await setDoc(profileRef, fallback, { merge: true });
+  return { uid: user.uid, ...fallback };
+}
+
+function getProfile() {
+  if (currentProfile) return currentProfile;
+  return {
+    username: localStorage.getItem('username') || '',
+    first_name: localStorage.getItem('firstName') || '',
+    account_status: localStorage.getItem('accountStatus') || 'standard',
+    email: localStorage.getItem('email') || ''
+  };
 }
 
 function isLoggedIn() {
-  return localStorage.getItem('loggedIn') === 'true';
-}
-
-async function logout() {
-  clearSessionProfile();
-  window.location.replace('index.html');
+  return !!auth.currentUser || localStorage.getItem('loggedIn') === 'true';
 }
 
 function getAccountStatus() {
-  return localStorage.getItem('accountStatus') || null;
+  const profile = getProfile();
+  return profile.account_status || 'standard';
 }
 
 function isAdmin() { return getAccountStatus() === 'admin'; }
@@ -96,55 +136,66 @@ function enforcePageAccess(pathOrName) {
   return true;
 }
 
-function adminSetAccountStatus(username, newStatus) {
-  const user = findUser(username);
-  if (!user) return false;
-  user.accountStatus = newStatus;
-  const current = localStorage.getItem('username');
-  if (current === user.username) {
-    localStorage.setItem('accountStatus', newStatus);
+async function logout() {
+  clearSessionProfile();
+  if (hasFirebaseConfig()) {
+    try { await signOut(auth); } catch (err) {}
   }
-  return true;
+  window.location.replace('index.html');
 }
 
-function getHardcodedUsers() {
-  return users.map(u => ({
-    username: u.username,
-    account_status: u.accountStatus || 'standard'
-  }));
-}
+onAuthStateChanged(auth, async (user) => {
+  if (!user || !hasFirebaseConfig()) {
+    currentProfile = null;
+    clearSessionProfile();
+    resolveAuthReady(null);
+    return;
+  }
+  try {
+    const profile = await ensureProfile(user);
+    currentProfile = profile;
+    setSessionProfile(profile, user);
+  } catch (err) {
+    currentProfile = null;
+    clearSessionProfile();
+  }
+  resolveAuthReady(user);
+});
 
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
   const loginForm = document.getElementById('loginForm');
   if (!loginForm) return;
-
   const loginError = document.getElementById('loginError');
+
   loginForm.addEventListener('submit', async function (e) {
     e.preventDefault();
     if (loginError) loginError.textContent = 'Signing in...';
-
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    const user = findUser(username);
-    if (!user) {
-      if (loginError) loginError.textContent = 'No account found for that username.';
+    if (!hasFirebaseConfig()) {
+      if (loginError) loginError.textContent = 'Firebase is not configured.';
+      return;
+    }
+    const email = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+    if (!email || !password) {
+      if (loginError) loginError.textContent = 'Email and password are required.';
       return;
     }
 
     try {
-      const hash = await sha256(password);
-      if (hash !== user.hash) {
-        if (loginError) loginError.textContent = 'Incorrect password.';
-        return;
-      }
-      setSessionProfile(user);
+      const { user } = await signInWithEmailAndPassword(auth, email, password);
+      const profile = await ensureProfile(user);
+      currentProfile = profile;
+      setSessionProfile(profile, user);
       window.location.replace('loggedIn.html');
     } catch (err) {
-      if (loginError) loginError.textContent = 'Login failed. Please try again.';
+      if (loginError) loginError.textContent = err.message || 'Login failed. Please try again.';
     }
   });
 });
 
+window.whenAuthReady = whenAuthReady;
+window.waitForAuth = waitForAuth;
+window.getProfile = getProfile;
 window.isLoggedIn = isLoggedIn;
 window.logout = logout;
 window.getAccountStatus = getAccountStatus;
@@ -153,5 +204,3 @@ window.isAdvance = isAdvance;
 window.isStandard = isStandard;
 window.canAccessPage = canAccessPage;
 window.enforcePageAccess = enforcePageAccess;
-window.adminSetAccountStatus = adminSetAccountStatus;
-window.getHardcodedUsers = getHardcodedUsers;

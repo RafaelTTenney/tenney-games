@@ -1,20 +1,24 @@
-import { supabase, hasSupabaseConfig } from './supabase.js';
+import { auth, db, hasFirebaseConfig, waitForAuth } from './firebase.js';
+import {
+  doc,
+  getDoc,
+  runTransaction,
+  serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 async function getUserId() {
-  if (!hasSupabaseConfig()) return null;
-  const { data } = await supabase.auth.getSession();
-  return data.session?.user?.id || null;
+  if (!hasFirebaseConfig()) return null;
+  if (auth.currentUser) return auth.currentUser.uid;
+  const user = await waitForAuth();
+  return user?.uid || null;
 }
 
 async function fetchHighScore(userId, gameId) {
-  const { data, error } = await supabase
-    .from('game_high_scores')
-    .select('score')
-    .eq('user_id', userId)
-    .eq('game_id', gameId)
-    .maybeSingle();
-  if (error) return 0;
-  return data?.score || 0;
+  const docId = `${userId}_${gameId}`;
+  const snap = await getDoc(doc(db, 'highScores', docId));
+  if (!snap.exists()) return 0;
+  const score = snap.data()?.score;
+  return typeof score === 'number' ? score : 0;
 }
 
 export async function getHighScore(gameId) {
@@ -26,29 +30,47 @@ export async function getHighScore(gameId) {
 export async function submitHighScore(gameId, score) {
   const userId = await getUserId();
   if (!userId) return null;
-  const current = await fetchHighScore(userId, gameId);
-  if (score <= current) return current;
-  const { error } = await supabase
-    .from('game_high_scores')
-    .upsert(
-      { user_id: userId, game_id: gameId, score },
-      { onConflict: 'user_id,game_id' }
-    );
-  if (error) return current;
-  return score;
+  const docId = `${userId}_${gameId}`;
+  const docRef = doc(db, 'highScores', docId);
+  let result = score;
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(docRef);
+    const current = snap.exists() ? snap.data()?.score || 0 : 0;
+    if (score <= current) {
+      result = current;
+      return;
+    }
+    tx.set(docRef, {
+      uid: userId,
+      gameId,
+      score,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    result = score;
+  });
+  return result;
 }
 
 export async function submitLowScore(gameId, score) {
   const userId = await getUserId();
   if (!userId) return null;
-  const current = await fetchHighScore(userId, gameId);
-  if (current > 0 && score >= current) return current;
-  const { error } = await supabase
-    .from('game_high_scores')
-    .upsert(
-      { user_id: userId, game_id: gameId, score },
-      { onConflict: 'user_id,game_id' }
-    );
-  if (error) return current;
-  return score;
+  const docId = `${userId}_${gameId}`;
+  const docRef = doc(db, 'highScores', docId);
+  let result = score;
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(docRef);
+    const current = snap.exists() ? snap.data()?.score || 0 : 0;
+    if (current > 0 && score >= current) {
+      result = current;
+      return;
+    }
+    tx.set(docRef, {
+      uid: userId,
+      gameId,
+      score,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    result = score;
+  });
+  return result;
 }

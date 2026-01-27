@@ -23,7 +23,7 @@
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <div>
         <h2 style="margin:0;color:var(--primary);">Account Monitor</h2>
-        <div class="help">View and manage account statuses. Changes are local for this session.</div>
+        <div class="help">View and manage Firebase account statuses.</div>
       </div>
       <div>
         <a class="btn" href="loggedIn.html">Dashboard</a>
@@ -42,56 +42,149 @@
 
   <div class="container" style="margin-top:18px;">
     <h2 style="margin:0;color:var(--primary);">Questions & Comments</h2>
-    <div class="help">Supabase is disabled, so messages are not loaded here.</div>
+    <div class="help" id="supportHelp">Loading messages...</div>
+    <table id="supportTable" aria-live="polite" style="margin-top:12px;">
+      <thead>
+        <tr>
+          <th>Submitted</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Message</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="help" id="supportEmpty" style="display:none;margin-top:8px;">No messages yet.</div>
   </div>
 
-  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="questions.html">Questions & Comments</a></footer>
+  <footer style="text-align:center;padding:12px;color:#999;">&copy; 2025 Games & Programs | Contact: <a href="questions-dashboard.html">Questions & Comments</a></footer>
 
   <script type="module" src="login.js?v=7"></script>
   <script type="module">
-    // Admin-only page to view and change account statuses
-    document.addEventListener('DOMContentLoaded', function() {
-      if (!window.enforcePageAccess('admin.html')) return;
+    import { db, hasFirebaseConfig } from './firebase.js';
+    import { collection, doc, getDocs, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+    function escapeHtml(value) {
+      return (value || '').replace(/[&<>"']/g, (m) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[m]));
+    }
+
+    function formatTimestamp(ts) {
+      if (!ts) return '-';
+      const date = ts.toDate ? ts.toDate() : new Date(ts);
+      return date.toLocaleString();
+    }
+
+    async function renderUsers() {
       const tbody = document.querySelector('#usersTable tbody');
+      tbody.innerHTML = '';
+      const snap = await getDocs(collection(db, 'profiles'));
+      const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      users.sort((a, b) => {
+        const aName = (a.username || a.email || '').toLowerCase();
+        const bName = (b.username || b.email || '').toLowerCase();
+        return aName.localeCompare(bName);
+      });
+      users.forEach(u => {
+        const tr = document.createElement('tr');
+        const currentStatus = u.account_status || 'standard';
+        tr.innerHTML = `
+          <td>${escapeHtml(u.username || u.email || u.id)}</td>
+          <td>${escapeHtml(currentStatus)}</td>
+          <td>
+            <select data-user="${u.id}">
+              <option value="standard" ${currentStatus==='standard'?'selected':''}>Standard</option>
+              <option value="advance" ${currentStatus==='advance'?'selected':''}>Advance</option>
+              <option value="admin" ${currentStatus==='admin'?'selected':''}>Admin</option>
+            </select>
+          </td>
+          <td><button class="btn apply" data-user="${u.id}">Apply</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.querySelectorAll('button.apply').forEach(btn => {
+        btn.onclick = async () => {
+          const uid = btn.dataset.user;
+          const sel = document.querySelector(`select[data-user="${uid}"]`);
+          const newStatus = sel.value;
+          try {
+            await updateDoc(doc(db, 'profiles', uid), { account_status: newStatus });
+            await renderUsers();
+          } catch (err) {
+            alert('Error saving the status. Check console for details.');
+          }
+        };
+      });
+    }
 
-      async function render() {
-        const baseUsers = window.getHardcodedUsers ? window.getHardcodedUsers() : [];
-        tbody.innerHTML = '';
-        baseUsers.forEach(u => {
-          const tr = document.createElement('tr');
-          const currentStatus = u.account_status || 'standard';
-          tr.innerHTML = `
-            <td>${u.username}</td>
-            <td>${currentStatus}</td>
-            <td>
-              <select data-user="${u.username}">
-                <option value="standard" ${currentStatus==='standard'?'selected':''}>Standard</option>
-                <option value="advance" ${currentStatus==='advance'?'selected':''}>Advance</option>
-                <option value="admin" ${currentStatus==='admin'?'selected':''}>Admin</option>
-              </select>
-            </td>
-            <td><button class="btn apply" data-user="${u.username}">Apply</button></td>
-          `;
-          tbody.appendChild(tr);
-        });
-        // Bind buttons
-        document.querySelectorAll('button.apply').forEach(btn => {
-          btn.onclick = async () => {
-            const uname = btn.dataset.user;
-            const sel = document.querySelector(`select[data-user="${uname}"]`);
-            const newStatus = sel.value;
-            const ok = window.adminSetAccountStatus(uname, newStatus);
-            if (ok) {
-              alert(`Status for ${uname} set to ${newStatus}.`);
-              await render();
-            } else {
-              alert('Error saving the status. Check console for details.');
-            }
-          };
-        });
+    async function renderSupport() {
+      const tbody = document.querySelector('#supportTable tbody');
+      const emptyEl = document.getElementById('supportEmpty');
+      const helpEl = document.getElementById('supportHelp');
+      tbody.innerHTML = '';
+      const snap = await getDocs(collection(db, 'supportRequests'));
+      const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      items.sort((a, b) => {
+        const at = a.createdAt?.seconds || 0;
+        const bt = b.createdAt?.seconds || 0;
+        return bt - at;
+      });
+      if (!items.length) {
+        emptyEl.style.display = '';
+        helpEl.textContent = 'No messages yet.';
+        return;
       }
+      emptyEl.style.display = 'none';
+      helpEl.textContent = `Loaded ${items.length} message(s).`;
+      items.forEach(item => {
+        const tr = document.createElement('tr');
+        const status = item.status || 'open';
+        tr.innerHTML = `
+          <td>${escapeHtml(formatTimestamp(item.createdAt))}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(item.email)}</td>
+          <td>${escapeHtml(item.message)}</td>
+          <td>${escapeHtml(status)}</td>
+          <td>
+            <button class="btn resolve" data-id="${item.id}" ${status === 'resolved' ? 'disabled' : ''}>
+              ${status === 'resolved' ? 'Resolved' : 'Resolve'}
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.querySelectorAll('button.resolve').forEach(btn => {
+        btn.onclick = async () => {
+          const id = btn.dataset.id;
+          try {
+            await updateDoc(doc(db, 'supportRequests', id), {
+              status: 'resolved',
+              resolvedAt: serverTimestamp()
+            });
+            await renderSupport();
+          } catch (err) {
+            alert('Unable to update message status.');
+          }
+        };
+      });
+    }
 
-      render();
+    document.addEventListener('DOMContentLoaded', async function() {
+      if (window.whenAuthReady) await window.whenAuthReady;
+      if (!window.enforcePageAccess('admin.html')) return;
+      if (!hasFirebaseConfig()) {
+        document.getElementById('supportHelp').textContent = 'Firebase is not configured.';
+        return;
+      }
+      await renderUsers();
+      await renderSupport();
     });
   </script>
 </body>
