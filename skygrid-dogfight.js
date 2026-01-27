@@ -32,18 +32,18 @@
       life: 1050
     },
     enemies: {
-      baseCount: 4,
-      maxCount: 18,
-      thrust: 240,
+      baseCount: 3,
+      maxCount: 17,
+      thrust: 225,
       thrustVar: 120,
-      maxSpeed: 300,
+      maxSpeed: 285,
       maxSpeedVar: 110,
-      fireBase: 420,
-      fireVar: 320,
-      bulletSpeed: 380
+      fireBase: 520,
+      fireVar: 360,
+      bulletSpeed: 360
     },
-    shieldRegenDelay: 1100,
-    shieldRegenRate: 36,
+    shieldRegenDelay: 1000,
+    shieldRegenRate: 38,
     background: {
       starLayers: [
         { count: 140, sizeMin: 0.6, sizeMax: 1.6, alphaMin: 0.3, alphaMax: 0.75, speed: 0.18, color: '215,240,255' },
@@ -67,8 +67,12 @@
       stars: [],
       nebulae: [],
       comets: [],
-      offsetX: 0,
-      offsetY: 0
+      tileW: 0,
+      tileH: 0
+    },
+    camera: {
+      x: world.width / 2,
+      y: world.height / 2
     },
     player: {
       x: world.width / 2,
@@ -93,26 +97,33 @@
     return Math.max(min, Math.min(max, value));
   }
 
+  function wrapOffset(value, size) {
+    return ((value % size) + size) % size;
+  }
+
   function getWaveSpeedScale() {
-    return clamp(1 + (state.wave - 1) * 0.04, 1, 1.8);
+    return clamp(0.85 + (state.wave - 1) * 0.05, 0.85, 1.7);
   }
 
   function getWaveAggroScale() {
-    return clamp(1 + (state.wave - 1) * 0.06, 1, 2);
+    return clamp(0.8 + (state.wave - 1) * 0.06, 0.8, 2);
   }
 
   function buildBackground() {
     state.background.stars = [];
     state.background.nebulae = [];
     state.background.comets = [];
-    state.background.offsetX = 0;
-    state.background.offsetY = 0;
+    state.background.tileW = Math.max(canvas.width * 2.2, 2200);
+    state.background.tileH = Math.max(canvas.height * 2.2, 1600);
+
+    const tileW = state.background.tileW;
+    const tileH = state.background.tileH;
 
     SETTINGS.background.starLayers.forEach(layer => {
       for (let i = 0; i < layer.count; i++) {
         state.background.stars.push({
-          x: Math.random() * world.width,
-          y: Math.random() * world.height,
+          x: Math.random() * tileW,
+          y: Math.random() * tileH,
           size: rand(layer.sizeMin, layer.sizeMax),
           alpha: rand(layer.alphaMin, layer.alphaMax),
           speed: layer.speed,
@@ -129,8 +140,8 @@
     const nebulaCount = 3;
     for (let i = 0; i < nebulaCount; i++) {
       state.background.nebulae.push({
-        x: Math.random() * world.width,
-        y: Math.random() * world.height,
+        x: Math.random() * tileW,
+        y: Math.random() * tileH,
         radius: rand(180, 320),
         color: nebulaColors[i % nebulaColors.length],
         alpha: rand(0.18, 0.28)
@@ -161,24 +172,21 @@
   function spawnEnemy() {
     const waveSpeed = getWaveSpeedScale();
     const waveAggro = getWaveAggroScale();
-    const edge = Math.floor(Math.random() * 4);
-    let x = 0;
-    let y = 0;
-    if (edge === 0) { x = Math.random() * world.width; y = -40; }
-    if (edge === 1) { x = world.width + 40; y = Math.random() * world.height; }
-    if (edge === 2) { x = Math.random() * world.width; y = world.height + 40; }
-    if (edge === 3) { x = -40; y = Math.random() * world.height; }
+    const angle = Math.random() * Math.PI * 2;
+    const radius = rand(520, 820);
+    const x = state.player.x + Math.cos(angle) * radius;
+    const y = state.player.y + Math.sin(angle) * radius;
 
     const typeRoll = Math.random();
     const type = typeRoll > 0.78 ? 'ace' : typeRoll > 0.45 ? 'strafer' : 'chaser';
-    const skill = type === 'ace' ? 1.2 : type === 'strafer' ? 1 : 0.85;
-    const hpBase = type === 'ace' ? 30 : type === 'chaser' ? 22 : 26;
+    const skill = type === 'ace' ? 1.15 : type === 'strafer' ? 0.98 : 0.82;
+    const hpBase = type === 'ace' ? 26 : type === 'chaser' ? 18 : 22;
     state.enemies.push({
       x,
       y,
       vx: 0,
       vy: 0,
-      hp: hpBase + Math.floor((state.wave - 1) * 2),
+      hp: hpBase + Math.floor((state.wave - 1) * 1.6),
       type,
       angle: Math.random() * Math.PI * 2,
       turnRate: (0.0032 + Math.random() * 0.0016) * skill * waveAggro,
@@ -214,6 +222,8 @@
       fireCooldown: 0,
       angle: -Math.PI / 2
     };
+    state.camera.x = state.player.x;
+    state.camera.y = state.player.y;
     spawnWave();
     updateHud();
     render();
@@ -221,8 +231,8 @@
 
   function spawnWave() {
     state.enemies = [];
-    state.spawnTimer = 1000;
-    const count = Math.min(SETTINGS.enemies.baseCount + Math.floor(state.wave * 1.2), SETTINGS.enemies.maxCount);
+    state.spawnTimer = 1400;
+    const count = Math.min(SETTINGS.enemies.baseCount + Math.floor((state.wave - 1) * 1.05), SETTINGS.enemies.maxCount);
     for (let i = 0; i < count; i++) {
       spawnEnemy();
     }
@@ -390,7 +400,8 @@
 
     player.x += player.vx * dtSec;
     player.y += player.vy * dtSec;
-    wrap(player);
+    state.camera.x = player.x;
+    state.camera.y = player.y;
 
     if (performance.now() - player.lastHit > SETTINGS.shieldRegenDelay) {
       player.shield = Math.min(player.maxShield, player.shield + SETTINGS.shieldRegenRate * dt / 1000);
@@ -403,14 +414,6 @@
       fireBullet();
     }
 
-    state.background.offsetX += -player.vx * dtSec * 0.12;
-    state.background.offsetY += -player.vy * dtSec * 0.12;
-    if (Math.abs(state.background.offsetX) > world.width) {
-      state.background.offsetX %= world.width;
-    }
-    if (Math.abs(state.background.offsetY) > world.height) {
-      state.background.offsetY %= world.height;
-    }
     if (Math.random() < dtSec * 0.18) spawnComet();
 
     state.bullets.forEach(b => {
@@ -418,14 +421,22 @@
       b.y += b.vy * dt / 1000;
       b.life -= dt;
     });
-    state.bullets = state.bullets.filter(b => b.life > 0 && b.x > -80 && b.x < world.width + 80 && b.y > -80 && b.y < world.height + 80);
+    const camX = state.camera.x;
+    const camY = state.camera.y;
+    state.bullets = state.bullets.filter(b => {
+      if (b.life <= 0) return false;
+      return Math.hypot(b.x - camX, b.y - camY) < 1800;
+    });
 
     state.enemyBullets.forEach(b => {
       b.x += b.vx * dt / 1000;
       b.y += b.vy * dt / 1000;
       b.life -= dt;
     });
-    state.enemyBullets = state.enemyBullets.filter(b => b.life > 0 && b.x > -120 && b.x < world.width + 120 && b.y > -120 && b.y < world.height + 120);
+    state.enemyBullets = state.enemyBullets.filter(b => {
+      if (b.life <= 0) return false;
+      return Math.hypot(b.x - camX, b.y - camY) < 1900;
+    });
 
     state.enemies.forEach(enemy => {
       const dx = player.x - enemy.x;
@@ -457,7 +468,6 @@
       enemy.vy *= Math.pow(0.987, dt / 16.67);
       enemy.x += enemy.vx * dtSec;
       enemy.y += enemy.vy * dtSec;
-      wrap(enemy);
 
       enemy.fireTimer -= dt;
       if (enemy.fireTimer <= 0) {
@@ -480,7 +490,7 @@
         const dx = bullet.x - enemy.x;
         const dy = bullet.y - enemy.y;
         if (Math.hypot(dx, dy) < 16) {
-          enemy.hp -= 14;
+          enemy.hp -= 15;
           bullet.life = 0;
           spawnSparks(enemy.x, enemy.y, '255,200,160');
           if (enemy.hp <= 0) {
@@ -495,13 +505,13 @@
       const dx = bullet.x - player.x;
       const dy = bullet.y - player.y;
       if (Math.hypot(dx, dy) < 18) {
-        applyDamage(12);
+        applyDamage(10);
         spawnSparks(player.x, player.y, '120,200,255');
         bullet.life = 0;
       }
     });
 
-    state.enemies = state.enemies.filter(e => e.hp > 0);
+    state.enemies = state.enemies.filter(e => e.hp > 0 && Math.hypot(e.x - camX, e.y - camY) < 2400);
     if (state.enemies.length === 0) {
       state.wave += 1;
       spawnWave();
@@ -510,7 +520,7 @@
     state.spawnTimer -= dt;
     if (state.spawnTimer <= 0 && state.enemies.length < SETTINGS.enemies.maxCount) {
       spawnEnemy();
-      state.spawnTimer = 1600 - Math.min(800, state.wave * 50);
+      state.spawnTimer = 1900 - Math.min(900, state.wave * 55);
     }
 
     if (player.hp <= 0) {
@@ -541,6 +551,11 @@
   }
 
   function drawBackground() {
+    const tileW = state.background.tileW;
+    const tileH = state.background.tileH;
+    const camX = state.camera.x;
+    const camY = state.camera.y;
+
     const baseGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
     baseGradient.addColorStop(0, '#04060f');
     baseGradient.addColorStop(0.6, '#060a16');
@@ -551,8 +566,12 @@
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     state.background.nebulae.forEach(nebula => {
-      const x = nebula.x + state.background.offsetX * 0.05;
-      const y = nebula.y + state.background.offsetY * 0.05;
+      const offsetX = wrapOffset(camX * 0.08, tileW);
+      const offsetY = wrapOffset(camY * 0.08, tileH);
+      let x = nebula.x - offsetX;
+      let y = nebula.y - offsetY;
+      if (x < -nebula.radius) x += tileW;
+      if (y < -nebula.radius) y += tileH;
       const gradient = ctx.createRadialGradient(x, y, 0, x, y, nebula.radius);
       gradient.addColorStop(0, `rgba(${nebula.color},${nebula.alpha})`);
       gradient.addColorStop(1, 'rgba(0,0,0,0)');
@@ -564,10 +583,12 @@
     ctx.restore();
 
     state.background.stars.forEach(star => {
-      let sx = (star.x + state.background.offsetX * star.speed) % world.width;
-      let sy = (star.y + state.background.offsetY * star.speed) % world.height;
-      if (sx < 0) sx += world.width;
-      if (sy < 0) sy += world.height;
+      const offsetX = wrapOffset(camX * star.speed, tileW);
+      const offsetY = wrapOffset(camY * star.speed, tileH);
+      let sx = star.x - offsetX;
+      let sy = star.y - offsetY;
+      if (sx < -star.size) sx += tileW;
+      if (sy < -star.size) sy += tileH;
       ctx.fillStyle = `rgba(${star.color},${star.alpha})`;
       ctx.fillRect(sx, sy, star.size, star.size);
     });
@@ -603,8 +624,12 @@
 
     // Draw player
     const player = state.player;
+    const camX = state.camera.x;
+    const camY = state.camera.y;
     const px = player.x;
     const py = player.y;
+    ctx.save();
+    ctx.translate(canvas.width / 2 - camX, canvas.height / 2 - camY);
     ctx.save();
     ctx.translate(px, py);
     ctx.rotate(player.angle);
@@ -695,6 +720,7 @@
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
     });
+    ctx.restore();
 
     if (!state.running) {
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
