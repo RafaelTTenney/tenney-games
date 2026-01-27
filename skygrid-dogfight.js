@@ -291,7 +291,7 @@
   }
 
   function getViewScale() {
-    return state.viewMode === 'cockpit' ? VIEW_SCALE * 0.85 : VIEW_SCALE;
+    return state.viewMode === 'cockpit' ? VIEW_SCALE * 0.92 : VIEW_SCALE;
   }
 
   function setView(view) {
@@ -1386,13 +1386,13 @@
     const rightY = Math.cos(state.player.angle);
     const vForward = state.player.vx * forwardX + state.player.vy * forwardY;
     const vRight = state.player.vx * rightX + state.player.vy * rightY;
-    const driftX = clamp(vRight / Math.max(1, stats.maxSpeed), -1, 1) * 12;
-    const driftY = clamp(-vForward / Math.max(1, stats.maxSpeed), -1, 1) * 8;
+    const driftX = clamp(vRight / Math.max(1, stats.maxSpeed), -1, 1) * 14;
+    const driftY = clamp(-vForward / Math.max(1, stats.maxSpeed), -1, 1) * 10;
 
-    const winTop = h * 0.08 + driftY * 0.2;
-    const winBottom = h * 0.62 + driftY * 0.3;
-    const topW = w * 0.42;
-    const bottomW = w * 0.68;
+    const winTop = h * 0.05 + driftY * 0.15;
+    const winBottom = h * 0.7 + driftY * 0.22;
+    const topW = w * 0.56;
+    const bottomW = w * 0.9;
     const cx = w / 2 + driftX * 0.25;
     const windowPoly = [
       { x: cx - topW / 2, y: winTop },
@@ -1410,13 +1410,13 @@
 
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
-    const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.18, w / 2, h / 2, w * 0.75);
+    const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.22, w / 2, h / 2, w * 0.78);
     vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, 'rgba(3,7,12,0.82)');
+    vignette.addColorStop(1, 'rgba(3,7,12,0.7)');
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, w, h);
 
-    ctx.fillStyle = 'rgba(6,12,20,0.92)';
+    ctx.fillStyle = 'rgba(6,12,20,0.8)';
     ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'destination-out';
     tracePoly(windowPoly);
@@ -1427,20 +1427,20 @@
     tracePoly(windowPoly);
     ctx.clip();
     const glass = ctx.createLinearGradient(0, winTop, 0, winBottom);
-    glass.addColorStop(0, 'rgba(130,220,255,0.08)');
-    glass.addColorStop(0.5, 'rgba(60,120,180,0.05)');
+    glass.addColorStop(0, 'rgba(130,220,255,0.06)');
+    glass.addColorStop(0.5, 'rgba(60,120,180,0.04)');
     glass.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = glass;
     ctx.fillRect(0, 0, w, h);
 
     ctx.strokeStyle = 'rgba(125,252,154,0.18)';
     ctx.lineWidth = 1;
-    const gridLines = 6;
+    const gridLines = 4;
     for (let i = 1; i <= gridLines; i++) {
-      const y = winTop + (winBottom - winTop) * (i / (gridLines + 1)) + Math.sin(t * 0.6 + i) * 1.4;
+      const y = winTop + (winBottom - winTop) * (i / (gridLines + 1)) + Math.sin(t * 0.6 + i) * 1.1;
       ctx.beginPath();
-      ctx.moveTo(windowPoly[0].x + 12, y);
-      ctx.lineTo(windowPoly[1].x - 12, y);
+      ctx.moveTo(windowPoly[0].x + 18, y);
+      ctx.lineTo(windowPoly[1].x - 18, y);
       ctx.stroke();
     }
     const sweepX = (t * 120) % w;
@@ -1451,16 +1451,16 @@
     ctx.stroke();
     ctx.restore();
 
-    ctx.strokeStyle = 'rgba(71,245,255,0.35)';
-    ctx.lineWidth = 8;
+    ctx.strokeStyle = 'rgba(71,245,255,0.32)';
+    ctx.lineWidth = 6;
     tracePoly(windowPoly);
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
     ctx.lineWidth = 2;
     tracePoly(windowPoly);
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.moveTo(cx, winTop + 4);
     ctx.lineTo(cx, winBottom - 8);
@@ -1473,33 +1473,33 @@
     ctx.lineTo(cx + 40, winBottom - 18);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(6,12,20,0.96)';
+    ctx.fillStyle = 'rgba(6,12,20,0.9)';
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(w * 0.2, 0);
-    ctx.lineTo(w * 0.34, h * 0.62);
-    ctx.lineTo(w * 0.25, h);
+    ctx.lineTo(w * 0.16, 0);
+    ctx.lineTo(w * 0.3, h * 0.66);
+    ctx.lineTo(w * 0.22, h);
     ctx.lineTo(0, h);
     ctx.closePath();
     ctx.fill();
     ctx.beginPath();
     ctx.moveTo(w, 0);
-    ctx.lineTo(w * 0.8, 0);
-    ctx.lineTo(w * 0.66, h * 0.62);
-    ctx.lineTo(w * 0.75, h);
+    ctx.lineTo(w * 0.84, 0);
+    ctx.lineTo(w * 0.7, h * 0.66);
+    ctx.lineTo(w * 0.78, h);
     ctx.lineTo(w, h);
     ctx.closePath();
     ctx.fill();
     ctx.fillRect(0, 0, w, h * 0.08);
-    ctx.fillRect(0, h * 0.74, w, h * 0.26);
+    ctx.fillRect(0, h * 0.72, w, h * 0.28);
 
-    ctx.strokeStyle = 'rgba(71,245,255,0.25)';
-    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = 'rgba(71,245,255,0.22)';
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(w * 0.2, h * 0.08);
-    ctx.lineTo(w * 0.34, h * 0.62);
-    ctx.lineTo(w * 0.66, h * 0.62);
-    ctx.lineTo(w * 0.8, h * 0.08);
+    ctx.moveTo(w * 0.16, h * 0.08);
+    ctx.lineTo(w * 0.3, h * 0.66);
+    ctx.lineTo(w * 0.7, h * 0.66);
+    ctx.lineTo(w * 0.84, h * 0.08);
     ctx.stroke();
 
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
@@ -1535,7 +1535,7 @@
     const heading = (Math.atan2(forwardY, forwardX) * 180 / Math.PI + 360) % 360;
     ctx.fillStyle = 'rgba(125,252,154,0.9)';
     ctx.font = '12px monospace';
-    ctx.fillText(`HDG ${heading.toFixed(0)}`, w * 0.46, h * 0.06);
+    ctx.fillText(`HDG ${heading.toFixed(0)}`, w * 0.45, h * 0.06);
     ctx.fillText(`WAVE ${Math.min(state.wave, MAX_WAVES)}`, w * 0.58, h * 0.06);
 
     drawMfd(28, h * 0.76 + 14, 240, 120, 'ENGINE', [
