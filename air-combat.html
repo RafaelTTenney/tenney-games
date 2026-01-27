@@ -235,19 +235,19 @@
         <span class="modal-close" data-close="skygridModal">&times;</span>
       </div>
       <div class="controls">
-        <label>Control Mode
+        <label>Fire Mode
           <select id="sky-controls">
-            <option value="mouse">Mouse Aim</option>
-            <option value="keyboard">Keyboard Aim</option>
+            <option value="space">Space Only</option>
+            <option value="mouse">Mouse + Space</option>
           </select>
         </label>
-        <span>WASD to move, Shift to boost, Space/Click to fire</span>
+        <span>Arrow/WASD: rotate + thrust (Asteroids-style). Down/S to reverse. Space to fire.</span>
       </div>
       <canvas id="skygrid-canvas" width="900" height="540"></canvas>
       <div class="hud">
         <span id="sky-hp">HP: 120</span>
         <span id="sky-shield">Shield: 100</span>
-        <span id="sky-boost">Boost: 100</span>
+        <span id="sky-boost">Speed: 0</span>
         <span id="sky-kills">Kills: 0</span>
         <span id="sky-wave">Wave: 1</span>
       </div>
@@ -326,9 +326,9 @@
 
   <div class="footer">Aerial Combat Labs &copy; 2026</div>
 
-  <script type="module" src="air-combat-ui.js"></script>
-  <script type="module" src="skygrid-dogfight.js"></script>
-  <script type="module" src="altitude-duel.js"></script>
-  <script type="module" src="swarm-breaker.js"></script>
+  <script type="module" src="air-combat-ui.js?v=20260126a"></script>
+  <script type="module" src="skygrid-dogfight.js?v=20260126c"></script>
+  <script type="module" src="altitude-duel.js?v=20260126a"></script>
+  <script type="module" src="swarm-breaker.js?v=20260126a"></script>
 </body>
 </html>

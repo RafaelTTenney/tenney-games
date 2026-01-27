@@ -16,8 +16,42 @@
   const pauseBtn = document.getElementById('sky-pause');
   const resetBtn = document.getElementById('sky-reset');
 
-  const world = { width: 1600, height: 1000 };
+  const world = { width: canvas.width, height: canvas.height };
   const input = { keys: {}, mouse: { x: canvas.width / 2, y: canvas.height / 2, down: false } };
+  const SETTINGS = {
+    player: {
+      turnRate: 0.0064,
+      thrust: 760,
+      reverseThrust: 420,
+      maxSpeed: 560,
+      drag: 0.992,
+      fireCooldown: 80
+    },
+    bullets: {
+      speed: 780,
+      life: 900
+    },
+    enemies: {
+      baseCount: 6,
+      maxCount: 14,
+      thrust: 280,
+      thrustVar: 120,
+      maxSpeed: 330,
+      maxSpeedVar: 90,
+      fireBase: 280,
+      fireVar: 260,
+      bulletSpeed: 420
+    },
+    shieldRegenDelay: 1200,
+    shieldRegenRate: 32,
+    background: {
+      starLayers: [
+        { count: 140, sizeMin: 0.6, sizeMax: 1.6, alphaMin: 0.3, alphaMax: 0.75, speed: 0.18, color: '215,240,255' },
+        { count: 90, sizeMin: 1.0, sizeMax: 2.3, alphaMin: 0.35, alphaMax: 0.9, speed: 0.38, color: '140,210,255' },
+        { count: 45, sizeMin: 1.5, sizeMax: 3.4, alphaMin: 0.4, alphaMax: 1, speed: 0.62, color: '125,252,154' }
+      ]
+    }
+  };
 
   const state = {
     running: false,
@@ -29,6 +63,13 @@
     bullets: [],
     enemyBullets: [],
     particles: [],
+    background: {
+      stars: [],
+      nebulae: [],
+      comets: [],
+      offsetX: 0,
+      offsetY: 0
+    },
     player: {
       x: world.width / 2,
       y: world.height / 2,
@@ -38,25 +79,113 @@
       maxHp: 120,
       shield: 100,
       maxShield: 100,
-      boost: 100,
-      maxBoost: 100,
       lastHit: 0,
       fireCooldown: 0,
-      aimX: 1,
-      aimY: 0
+      angle: -Math.PI / 2
     }
   };
+
+  function rand(min, max) {
+    return min + Math.random() * (max - min);
+  }
+
+  function buildBackground() {
+    state.background.stars = [];
+    state.background.nebulae = [];
+    state.background.comets = [];
+    state.background.offsetX = 0;
+    state.background.offsetY = 0;
+
+    SETTINGS.background.starLayers.forEach(layer => {
+      for (let i = 0; i < layer.count; i++) {
+        state.background.stars.push({
+          x: Math.random() * world.width,
+          y: Math.random() * world.height,
+          size: rand(layer.sizeMin, layer.sizeMax),
+          alpha: rand(layer.alphaMin, layer.alphaMax),
+          speed: layer.speed,
+          color: layer.color
+        });
+      }
+    });
+
+    const nebulaColors = [
+      '70,180,255',
+      '255,120,90',
+      '110,255,200'
+    ];
+    const nebulaCount = 3;
+    for (let i = 0; i < nebulaCount; i++) {
+      state.background.nebulae.push({
+        x: Math.random() * world.width,
+        y: Math.random() * world.height,
+        radius: rand(180, 320),
+        color: nebulaColors[i % nebulaColors.length],
+        alpha: rand(0.18, 0.28)
+      });
+    }
+  }
+
+  function spawnComet() {
+    const edge = Math.floor(Math.random() * 4);
+    let x = 0;
+    let y = 0;
+    if (edge === 0) { x = -80; y = rand(0, world.height); }
+    if (edge === 1) { x = world.width + 80; y = rand(0, world.height); }
+    if (edge === 2) { x = rand(0, world.width); y = -80; }
+    if (edge === 3) { x = rand(0, world.width); y = world.height + 80; }
+
+    const angle = rand(0, Math.PI * 2);
+    const speed = rand(220, 420);
+    state.background.comets.push({
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: rand(800, 1400)
+    });
+  }
+
+  function spawnEnemy() {
+    const edge = Math.floor(Math.random() * 4);
+    let x = 0;
+    let y = 0;
+    if (edge === 0) { x = Math.random() * world.width; y = -40; }
+    if (edge === 1) { x = world.width + 40; y = Math.random() * world.height; }
+    if (edge === 2) { x = Math.random() * world.width; y = world.height + 40; }
+    if (edge === 3) { x = -40; y = Math.random() * world.height; }
+
+    const typeRoll = Math.random();
+    const type = typeRoll > 0.78 ? 'ace' : typeRoll > 0.45 ? 'strafer' : 'chaser';
+    const skill = type === 'ace' ? 1.25 : type === 'strafer' ? 1 : 0.85;
+    state.enemies.push({
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      hp: type === 'ace' ? 38 : type === 'chaser' ? 28 : 32,
+      type,
+      angle: Math.random() * Math.PI * 2,
+      turnRate: (0.0034 + Math.random() * 0.0018) * skill,
+      thrust: (SETTINGS.enemies.thrust + Math.random() * SETTINGS.enemies.thrustVar) * skill,
+      maxSpeed: SETTINGS.enemies.maxSpeed + Math.random() * SETTINGS.enemies.maxSpeedVar * skill,
+      orbit: Math.random() > 0.5 ? 1 : -1,
+      fireTimer: SETTINGS.enemies.fireBase + Math.random() * SETTINGS.enemies.fireVar,
+      skill
+    });
+  }
 
   function resetSkygrid() {
     state.running = false;
     state.lastTime = 0;
     state.kills = 0;
     state.wave = 1;
-    state.spawnTimer = 0;
+    state.spawnTimer = 900;
     state.enemies = [];
     state.bullets = [];
     state.enemyBullets = [];
     state.particles = [];
+    buildBackground();
     state.player = {
       x: world.width / 2,
       y: world.height / 2,
@@ -66,12 +195,9 @@
       maxHp: 120,
       shield: 100,
       maxShield: 100,
-      boost: 100,
-      maxBoost: 100,
       lastHit: 0,
       fireCooldown: 0,
-      aimX: 1,
-      aimY: 0
+      angle: -Math.PI / 2
     };
     spawnWave();
     updateHud();
@@ -80,95 +206,114 @@
 
   function spawnWave() {
     state.enemies = [];
-    const count = Math.min(3 + state.wave, 8);
+    state.spawnTimer = 1000;
+    const count = Math.min(SETTINGS.enemies.baseCount + Math.floor(state.wave * 1.2), SETTINGS.enemies.maxCount);
     for (let i = 0; i < count; i++) {
-      const edge = Math.floor(Math.random() * 4);
-      const offset = 80 + Math.random() * 120;
-      let x = 0;
-      let y = 0;
-      if (edge === 0) { x = offset; y = -offset; }
-      if (edge === 1) { x = world.width + offset; y = Math.random() * world.height; }
-      if (edge === 2) { x = Math.random() * world.width; y = world.height + offset; }
-      if (edge === 3) { x = -offset; y = Math.random() * world.height; }
-
-      const type = Math.random() > 0.6 ? 'strafer' : 'chaser';
-      state.enemies.push({
-        x,
-        y,
-        vx: 0,
-        vy: 0,
-        hp: type === 'chaser' ? 22 : 28,
-        type,
-        fireTimer: 600 + Math.random() * 800
-      });
+      spawnEnemy();
     }
   }
 
   function updateHud() {
     if (hudHp) hudHp.textContent = `HP: ${Math.max(0, Math.round(state.player.hp))}`;
     if (hudShield) hudShield.textContent = `Shield: ${Math.round(state.player.shield)}`;
-    if (hudBoost) hudBoost.textContent = `Boost: ${Math.round(state.player.boost)}`;
+    const speed = Math.hypot(state.player.vx, state.player.vy);
+    if (hudBoost) hudBoost.textContent = `Speed: ${Math.round(speed)}`;
     if (hudKills) hudKills.textContent = `Kills: ${state.kills}`;
     if (hudWave) hudWave.textContent = `Wave: ${state.wave}`;
   }
 
-  function getControlMode() {
-    return controlsSelect ? controlsSelect.value : 'mouse';
-  }
-
-  function aimFromKeyboard() {
-    let ax = 0;
-    let ay = 0;
-    if (input.keys['ArrowUp']) ay -= 1;
-    if (input.keys['ArrowDown']) ay += 1;
-    if (input.keys['ArrowLeft']) ax -= 1;
-    if (input.keys['ArrowRight']) ax += 1;
-    if (ax !== 0 || ay !== 0) {
-      const len = Math.hypot(ax, ay) || 1;
-      state.player.aimX = ax / len;
-      state.player.aimY = ay / len;
-    }
-  }
-
-  function aimFromMouse(camera) {
-    const worldX = camera.x + input.mouse.x;
-    const worldY = camera.y + input.mouse.y;
-    const dx = worldX - state.player.x;
-    const dy = worldY - state.player.y;
-    const len = Math.hypot(dx, dy) || 1;
-    state.player.aimX = dx / len;
-    state.player.aimY = dy / len;
+  function getFireMode() {
+    return controlsSelect ? controlsSelect.value : 'space';
   }
 
   function fireBullet() {
     if (state.player.fireCooldown > 0) return;
-    const speed = 520;
+    const speed = SETTINGS.bullets.speed;
     state.bullets.push({
-      x: state.player.x + state.player.aimX * 18,
-      y: state.player.y + state.player.aimY * 18,
-      vx: state.player.aimX * speed,
-      vy: state.player.aimY * speed,
-      life: 900
+      x: state.player.x + Math.cos(state.player.angle) * 18,
+      y: state.player.y + Math.sin(state.player.angle) * 18,
+      vx: Math.cos(state.player.angle) * speed,
+      vy: Math.sin(state.player.angle) * speed,
+      life: SETTINGS.bullets.life
     });
-    state.player.fireCooldown = 140;
+    state.player.fireCooldown = SETTINGS.player.fireCooldown;
   }
 
   function enemyFire(enemy) {
     const dx = state.player.x - enemy.x;
     const dy = state.player.y - enemy.y;
     const dist = Math.hypot(dx, dy) || 1;
-    const lead = 0.12;
-    const targetX = state.player.x + state.player.vx * lead * dist;
-    const targetY = state.player.y + state.player.vy * lead * dist;
+    const lead = 0.35 + enemy.skill * 0.2;
+    const targetX = state.player.x + state.player.vx * lead;
+    const targetY = state.player.y + state.player.vy * lead;
     const lx = targetX - enemy.x;
     const ly = targetY - enemy.y;
     const len = Math.hypot(lx, ly) || 1;
+    const speed = SETTINGS.enemies.bulletSpeed + enemy.skill * 60;
     state.enemyBullets.push({
-      x: enemy.x,
-      y: enemy.y,
-      vx: (lx / len) * 280,
-      vy: (ly / len) * 280,
-      life: 1400
+      x: enemy.x + Math.cos(enemy.angle) * 16,
+      y: enemy.y + Math.sin(enemy.angle) * 16,
+      vx: (lx / len) * speed,
+      vy: (ly / len) * speed,
+      life: 1200
+    });
+  }
+
+  function spawnParticle(x, y, opts) {
+    state.particles.push({
+      x,
+      y,
+      vx: opts.vx || 0,
+      vy: opts.vy || 0,
+      size: opts.size || 2,
+      color: opts.color || '255,200,120',
+      life: opts.life || 400,
+      maxLife: opts.life || 400
+    });
+  }
+
+  function spawnExplosion(x, y, hue) {
+    const baseColor = hue || '255,190,120';
+    for (let i = 0; i < 18; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = rand(80, 320);
+      spawnParticle(x, y, {
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: rand(2, 5),
+        life: rand(400, 720),
+        color: baseColor
+      });
+    }
+  }
+
+  function spawnSparks(x, y, hue) {
+    const sparkColor = hue || '255,240,180';
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = rand(40, 160);
+      spawnParticle(x, y, {
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: rand(1, 3),
+        life: rand(200, 380),
+        color: sparkColor
+      });
+    }
+  }
+
+  function emitThruster(player, reverse) {
+    const angle = player.angle + Math.PI + rand(-0.4, 0.4);
+    const speed = rand(80, 200);
+    const offset = reverse ? -14 : 16;
+    const baseX = player.x - Math.cos(player.angle) * offset;
+    const baseY = player.y - Math.sin(player.angle) * offset;
+    spawnParticle(baseX, baseY, {
+      vx: Math.cos(angle) * speed + player.vx * 0.2,
+      vy: Math.sin(angle) * speed + player.vy * 0.2,
+      size: rand(1.5, 3.5),
+      life: rand(220, 420),
+      color: reverse ? '120,200,255' : '71,245,255'
     });
   }
 
@@ -186,98 +331,125 @@
 
   function update(dt) {
     const player = state.player;
-    const accel = 280;
-    const maxSpeed = 320;
-    const friction = 0.88;
-    const boostActive = input.keys['Shift'] && player.boost > 0;
-    const boostMultiplier = boostActive ? 1.6 : 1.0;
+    const dtSec = dt / 1000;
+    const rotSpeed = SETTINGS.player.turnRate;
+    const thrust = SETTINGS.player.thrust;
+    const reverseThrust = SETTINGS.player.reverseThrust;
+    const maxSpeed = SETTINGS.player.maxSpeed;
+    const drag = Math.pow(SETTINGS.player.drag, dt / 16.67);
 
-    let ax = 0;
-    let ay = 0;
-    if (input.keys['KeyW']) ay -= 1;
-    if (input.keys['KeyS']) ay += 1;
-    if (input.keys['KeyA']) ax -= 1;
-    if (input.keys['KeyD']) ax += 1;
+    const left = input.keys['ArrowLeft'] || input.keys['KeyA'];
+    const right = input.keys['ArrowRight'] || input.keys['KeyD'];
+    const forward = input.keys['ArrowUp'] || input.keys['KeyW'];
+    const reverse = input.keys['ArrowDown'] || input.keys['KeyS'];
 
-    if (ax !== 0 || ay !== 0) {
-      const len = Math.hypot(ax, ay) || 1;
-      player.vx += (ax / len) * accel * (dt / 1000) * boostMultiplier;
-      player.vy += (ay / len) * accel * (dt / 1000) * boostMultiplier;
+    if (left) player.angle -= rotSpeed * dt;
+    if (right) player.angle += rotSpeed * dt;
+    if (forward) {
+      player.vx += Math.cos(player.angle) * thrust * dtSec;
+      player.vy += Math.sin(player.angle) * thrust * dtSec;
+      emitThruster(player, false);
+    }
+    if (reverse) {
+      player.vx -= Math.cos(player.angle) * reverseThrust * dtSec;
+      player.vy -= Math.sin(player.angle) * reverseThrust * dtSec;
+      emitThruster(player, true);
     }
 
-    player.vx *= friction;
-    player.vy *= friction;
+    player.vx *= drag;
+    player.vy *= drag;
     const speed = Math.hypot(player.vx, player.vy);
-    if (speed > maxSpeed * boostMultiplier) {
-      const scale = (maxSpeed * boostMultiplier) / speed;
+    if (speed > maxSpeed) {
+      const scale = maxSpeed / speed;
       player.vx *= scale;
       player.vy *= scale;
     }
 
-    player.x = Math.max(0, Math.min(world.width, player.x + player.vx * dt / 1000));
-    player.y = Math.max(0, Math.min(world.height, player.y + player.vy * dt / 1000));
+    player.x += player.vx * dtSec;
+    player.y += player.vy * dtSec;
+    wrap(player);
 
-    if (boostActive) {
-      player.boost = Math.max(0, player.boost - 30 * dt / 1000);
-    } else {
-      player.boost = Math.min(player.maxBoost, player.boost + 20 * dt / 1000);
-    }
-
-    if (performance.now() - player.lastHit > 1400) {
-      player.shield = Math.min(player.maxShield, player.shield + 25 * dt / 1000);
+    if (performance.now() - player.lastHit > SETTINGS.shieldRegenDelay) {
+      player.shield = Math.min(player.maxShield, player.shield + SETTINGS.shieldRegenRate * dt / 1000);
     }
 
     if (player.fireCooldown > 0) player.fireCooldown -= dt;
 
-    const controlMode = getControlMode();
-    const camera = getCamera();
-    if (controlMode === 'mouse') {
-      aimFromMouse(camera);
-    } else {
-      aimFromKeyboard();
-    }
-
-    if (input.mouse.down || input.keys['Space']) {
+    const fireMode = getFireMode();
+    if (input.keys['Space'] || (fireMode === 'mouse' && input.mouse.down)) {
       fireBullet();
     }
+
+    state.background.offsetX += -player.vx * dtSec * 0.12;
+    state.background.offsetY += -player.vy * dtSec * 0.12;
+    if (Math.abs(state.background.offsetX) > world.width) {
+      state.background.offsetX %= world.width;
+    }
+    if (Math.abs(state.background.offsetY) > world.height) {
+      state.background.offsetY %= world.height;
+    }
+    if (Math.random() < dtSec * 0.18) spawnComet();
 
     state.bullets.forEach(b => {
       b.x += b.vx * dt / 1000;
       b.y += b.vy * dt / 1000;
       b.life -= dt;
     });
-    state.bullets = state.bullets.filter(b => b.life > 0 && b.x > -200 && b.x < world.width + 200 && b.y > -200 && b.y < world.height + 200);
+    state.bullets = state.bullets.filter(b => b.life > 0 && b.x > -80 && b.x < world.width + 80 && b.y > -80 && b.y < world.height + 80);
 
     state.enemyBullets.forEach(b => {
       b.x += b.vx * dt / 1000;
       b.y += b.vy * dt / 1000;
       b.life -= dt;
     });
-    state.enemyBullets = state.enemyBullets.filter(b => b.life > 0 && b.x > -200 && b.x < world.width + 200 && b.y > -200 && b.y < world.height + 200);
+    state.enemyBullets = state.enemyBullets.filter(b => b.life > 0 && b.x > -120 && b.x < world.width + 120 && b.y > -120 && b.y < world.height + 120);
 
     state.enemies.forEach(enemy => {
       const dx = player.x - enemy.x;
       const dy = player.y - enemy.y;
       const dist = Math.hypot(dx, dy) || 1;
-      const ux = dx / dist;
-      const uy = dy / dist;
-      if (enemy.type === 'chaser') {
-        enemy.vx += ux * 120 * dt / 1000;
-        enemy.vy += uy * 120 * dt / 1000;
-      } else {
-        enemy.vx += (ux * 80 - uy * 60) * dt / 1000;
-        enemy.vy += (uy * 80 + ux * 60) * dt / 1000;
+      let desired = Math.atan2(dy, dx);
+      if (enemy.type === 'strafer' && dist < 220) {
+        desired += enemy.orbit * Math.PI / 2;
       }
-      enemy.vx *= 0.92;
-      enemy.vy *= 0.92;
-      enemy.x += enemy.vx * dt / 1000;
-      enemy.y += enemy.vy * dt / 1000;
+      if (enemy.type === 'ace' && dist < 140) {
+        desired -= enemy.orbit * Math.PI / 2;
+      }
+      const diff = normalizeAngle(desired - enemy.angle);
+      const turnStep = enemy.turnRate * dt;
+      enemy.angle += Math.max(-turnStep, Math.min(turnStep, diff));
+
+      const thrustPower = enemy.type === 'strafer' && dist < 180 ? enemy.thrust * 0.7 : enemy.thrust;
+      enemy.vx += Math.cos(enemy.angle) * thrustPower * dtSec;
+      enemy.vy += Math.sin(enemy.angle) * thrustPower * dtSec;
+
+      const eSpeed = Math.hypot(enemy.vx, enemy.vy);
+      if (eSpeed > enemy.maxSpeed) {
+        const scale = enemy.maxSpeed / eSpeed;
+        enemy.vx *= scale;
+        enemy.vy *= scale;
+      }
+
+      enemy.vx *= Math.pow(0.987, dt / 16.67);
+      enemy.vy *= Math.pow(0.987, dt / 16.67);
+      enemy.x += enemy.vx * dtSec;
+      enemy.y += enemy.vy * dtSec;
+      wrap(enemy);
+
       enemy.fireTimer -= dt;
       if (enemy.fireTimer <= 0) {
         enemyFire(enemy);
-        enemy.fireTimer = 800 + Math.random() * 600;
+        const base = enemy.type === 'ace' ? 240 : enemy.type === 'chaser' ? 320 : 380;
+        enemy.fireTimer = base + Math.random() * 260;
       }
     });
+
+    state.background.comets.forEach(comet => {
+      comet.x += comet.vx * dtSec;
+      comet.y += comet.vy * dtSec;
+      comet.life -= dt;
+    });
+    state.background.comets = state.background.comets.filter(comet => comet.life > 0);
 
     // Collisions
     state.bullets.forEach(bullet => {
@@ -288,9 +460,10 @@
         if (Math.hypot(dx, dy) < 16) {
           enemy.hp -= 12;
           bullet.life = 0;
+          spawnSparks(enemy.x, enemy.y, '255,200,160');
           if (enemy.hp <= 0) {
             state.kills += 1;
-            state.particles.push({ x: enemy.x, y: enemy.y, life: 500 });
+            spawnExplosion(enemy.x, enemy.y, enemy.type === 'ace' ? '255,120,255' : enemy.type === 'chaser' ? '255,110,110' : '255,170,80');
           }
         }
       });
@@ -300,7 +473,8 @@
       const dx = bullet.x - player.x;
       const dy = bullet.y - player.y;
       if (Math.hypot(dx, dy) < 18) {
-        applyDamage(12);
+        applyDamage(14);
+        spawnSparks(player.x, player.y, '120,200,255');
         bullet.life = 0;
       }
     });
@@ -311,56 +485,110 @@
       spawnWave();
     }
 
+    state.spawnTimer -= dt;
+    if (state.spawnTimer <= 0 && state.enemies.length < SETTINGS.enemies.maxCount) {
+      spawnEnemy();
+      state.spawnTimer = 1200 - Math.min(600, state.wave * 40);
+    }
+
     if (player.hp <= 0) {
       state.running = false;
     }
 
+    state.particles.forEach(p => {
+      p.x += p.vx * dtSec;
+      p.y += p.vy * dtSec;
+      p.life -= dt;
+    });
+    state.particles = state.particles.filter(p => p.life > 0);
+
     updateHud();
   }
 
-  function getCamera() {
-    const camX = Math.max(0, Math.min(world.width - canvas.width, state.player.x - canvas.width / 2));
-    const camY = Math.max(0, Math.min(world.height - canvas.height, state.player.y - canvas.height / 2));
-    return { x: camX, y: camY };
+  function normalizeAngle(angle) {
+    while (angle > Math.PI) angle -= Math.PI * 2;
+    while (angle < -Math.PI) angle += Math.PI * 2;
+    return angle;
   }
 
-  function drawGrid(camera) {
-    const spacing = 80;
-    ctx.strokeStyle = 'rgba(71,245,255,0.18)';
-    ctx.lineWidth = 1;
-    for (let x = - (camera.x % spacing); x < canvas.width; x += spacing) {
+  function wrap(entity) {
+    if (entity.x < 0) entity.x += world.width;
+    if (entity.x > world.width) entity.x -= world.width;
+    if (entity.y < 0) entity.y += world.height;
+    if (entity.y > world.height) entity.y -= world.height;
+  }
+
+  function drawBackground() {
+    const baseGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    baseGradient.addColorStop(0, '#04060f');
+    baseGradient.addColorStop(0.6, '#060a16');
+    baseGradient.addColorStop(1, '#050814');
+    ctx.fillStyle = baseGradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    state.background.nebulae.forEach(nebula => {
+      const x = nebula.x + state.background.offsetX * 0.05;
+      const y = nebula.y + state.background.offsetY * 0.05;
+      const gradient = ctx.createRadialGradient(x, y, 0, x, y, nebula.radius);
+      gradient.addColorStop(0, `rgba(${nebula.color},${nebula.alpha})`);
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
-      ctx.stroke();
-    }
-    for (let y = - (camera.y % spacing); y < canvas.height; y += spacing) {
+      ctx.arc(x, y, nebula.radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+
+    state.background.stars.forEach(star => {
+      let sx = (star.x + state.background.offsetX * star.speed) % world.width;
+      let sy = (star.y + state.background.offsetY * star.speed) % world.height;
+      if (sx < 0) sx += world.width;
+      if (sy < 0) sy += world.height;
+      ctx.fillStyle = `rgba(${star.color},${star.alpha})`;
+      ctx.fillRect(sx, sy, star.size, star.size);
+    });
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(200,230,255,0.6)';
+    ctx.lineWidth = 1.4;
+    state.background.comets.forEach(comet => {
       ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
+      ctx.moveTo(comet.x, comet.y);
+      ctx.lineTo(comet.x - comet.vx * 0.06, comet.y - comet.vy * 0.06);
       ctx.stroke();
-    }
+    });
+    ctx.restore();
+
+    const vignette = ctx.createRadialGradient(
+      canvas.width / 2,
+      canvas.height / 2,
+      canvas.width * 0.2,
+      canvas.width / 2,
+      canvas.height / 2,
+      canvas.width * 0.7
+    );
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.55)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
   function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#050814';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const camera = getCamera();
-    drawGrid(camera);
+    drawBackground();
 
     // Draw player
     const player = state.player;
-    const px = player.x - camera.x;
-    const py = player.y - camera.y;
+    const px = player.x;
+    const py = player.y;
     ctx.save();
     ctx.translate(px, py);
-    const angle = Math.atan2(player.aimY, player.aimX);
-    ctx.rotate(angle);
+    ctx.rotate(player.angle);
     ctx.fillStyle = '#4af0ff';
     ctx.shadowColor = '#4af0ff';
-    ctx.shadowBlur = 18;
+    ctx.shadowBlur = 22;
     ctx.beginPath();
     ctx.moveTo(18, 0);
     ctx.lineTo(-12, 10);
@@ -368,31 +596,60 @@
     ctx.lineTo(-12, -10);
     ctx.closePath();
     ctx.fill();
+    const forward = input.keys['ArrowUp'] || input.keys['KeyW'];
+    const reverse = input.keys['ArrowDown'] || input.keys['KeyS'];
+    if (forward || reverse) {
+      ctx.fillStyle = forward ? 'rgba(71,245,255,0.85)' : 'rgba(120,200,255,0.8)';
+      ctx.beginPath();
+      ctx.moveTo(-16, 0);
+      ctx.lineTo(-26, 6);
+      ctx.lineTo(-26, -6);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.restore();
 
     if (player.shield > 10) {
       ctx.beginPath();
-      ctx.strokeStyle = 'rgba(90,200,255,0.5)';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(90,200,255,0.55)';
+      ctx.lineWidth = 2.2;
       ctx.arc(px, py, 24, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    const hitGlow = 1 - Math.min(1, (performance.now() - player.lastHit) / 400);
+    if (hitGlow > 0) {
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(255,120,120,${0.6 * hitGlow})`;
+      ctx.lineWidth = 3;
+      ctx.arc(px, py, 28, 0, Math.PI * 2);
       ctx.stroke();
     }
 
     // Enemies
     state.enemies.forEach(enemy => {
-      const ex = enemy.x - camera.x;
-      const ey = enemy.y - camera.y;
+      const ex = enemy.x;
+      const ey = enemy.y;
       ctx.save();
       ctx.translate(ex, ey);
-      ctx.rotate(Math.atan2(player.y - enemy.y, player.x - enemy.x));
-      ctx.fillStyle = enemy.type === 'chaser' ? '#ff6b6b' : '#ffa94d';
-      ctx.shadowColor = ctx.fillStyle;
-      ctx.shadowBlur = 10;
+      ctx.rotate(enemy.angle);
+      const bodyColor = enemy.type === 'ace' ? '#ff7bff' : enemy.type === 'chaser' ? '#ff6b6b' : '#ffa94d';
+      ctx.fillStyle = bodyColor;
+      ctx.shadowColor = bodyColor;
+      ctx.shadowBlur = 12;
       ctx.beginPath();
       ctx.moveTo(16, 0);
       ctx.lineTo(-10, 8);
       ctx.lineTo(-6, 0);
       ctx.lineTo(-10, -8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.beginPath();
+      ctx.moveTo(-8, 0);
+      ctx.lineTo(-16, 4);
+      ctx.lineTo(-16, -4);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
@@ -401,22 +658,21 @@
     // Bullets
     ctx.fillStyle = '#c6f6ff';
     state.bullets.forEach(b => {
-      ctx.fillRect(b.x - camera.x - 2, b.y - camera.y - 2, 4, 4);
+      ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
     });
     ctx.fillStyle = '#ffb37b';
     state.enemyBullets.forEach(b => {
-      ctx.fillRect(b.x - camera.x - 2, b.y - camera.y - 2, 4, 4);
+      ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
     });
 
     // Particles
     state.particles.forEach(p => {
-      ctx.fillStyle = 'rgba(255,200,120,0.6)';
+      const alpha = Math.max(0, p.life / p.maxLife);
+      ctx.fillStyle = `rgba(${p.color},${alpha})`;
       ctx.beginPath();
-      ctx.arc(p.x - camera.x, p.y - camera.y, 12, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
-      p.life -= 16;
     });
-    state.particles = state.particles.filter(p => p.life > 0);
 
     if (!state.running) {
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -424,7 +680,8 @@
       ctx.fillStyle = '#e6f2ff';
       ctx.font = '20px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('Paused', canvas.width / 2, canvas.height / 2);
+      const label = state.player.hp <= 0 ? 'Ship Destroyed - Press Reset' : 'Paused';
+      ctx.fillText(label, canvas.width / 2, canvas.height / 2);
     }
   }
 
@@ -452,7 +709,12 @@
   function bindInput() {
     if (window.__skygridBound) return;
     window.__skygridBound = true;
-    document.addEventListener('keydown', (e) => { input.keys[e.code] = true; });
+    document.addEventListener('keydown', (e) => {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) {
+        e.preventDefault();
+      }
+      input.keys[e.code] = true;
+    });
     document.addEventListener('keyup', (e) => { input.keys[e.code] = false; });
     canvas.addEventListener('mousemove', (e) => {
       const rect = canvas.getBoundingClientRect();
