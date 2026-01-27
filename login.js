@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded', async function () {
       if (loginError) loginError.textContent = 'Firebase is not configured.';
       return;
     }
-    const email = document.getElementById('username').value.trim();
+    const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value.trim();
     if (!email || !password) {
       if (loginError) loginError.textContent = 'Email and password are required.';
