@@ -23,32 +23,33 @@
 
   const SETTINGS = {
     player: {
-      thrust: 560,
-      reverseThrust: 340,
-      turnRate: 0.0044,
-      maxSpeed: 520,
-      drag: 0.985,
-      fireCooldown: 120
+      thrust: 620,
+      reverseThrust: 360,
+      turnRate: 0.0052,
+      maxSpeed: 560,
+      drag: 0.982,
+      fireCooldown: 110
     },
     bullets: {
-      speed: 860,
+      speed: 900,
       life: 1100
     },
     enemies: {
-      baseCount: 4,
-      maxCount: 14,
-      thrust: 230,
-      thrustVar: 140,
-      maxSpeed: 290,
-      maxSpeedVar: 130,
-      fireBase: 540,
-      fireVar: 300,
-      bulletSpeed: 380
+      baseCount: 3,
+      maxCount: 12,
+      thrust: 210,
+      thrustVar: 120,
+      maxSpeed: 260,
+      maxSpeedVar: 120,
+      fireBase: 640,
+      fireVar: 320,
+      bulletSpeed: 340
     },
-    shieldRegenDelay: 900,
-    shieldRegenRate: 28,
-    lookAhead: 260,
-    starTile: 2400
+    shieldRegenDelay: 780,
+    shieldRegenRate: 32,
+    lookAhead: 320,
+    starTile: 2600,
+    intermission: 2000
   };
 
   const MAX_WAVES = 6;
@@ -61,6 +62,7 @@
     spawnTimer: 0,
     spawnInterval: 0,
     waveSpawnsRemaining: 0,
+    intermission: 0,
     completed: false,
     bullets: [],
     enemyBullets: [],
@@ -134,6 +136,7 @@
     state.spawnTimer = 0;
     state.spawnInterval = 0;
     state.waveSpawnsRemaining = 0;
+    state.intermission = 0;
     state.completed = false;
     state.bullets = [];
     state.enemyBullets = [];
@@ -164,7 +167,11 @@
     if (hudHp) hudHp.textContent = `Hull: ${Math.max(0, Math.round(state.player.hp))}`;
     if (hudShield) hudShield.textContent = `Shield: ${Math.round(state.player.shield)}`;
     if (hudBoss) hudBoss.textContent = `Kills: ${state.kills}`;
-    if (hudCooldown) hudCooldown.textContent = `Enemies: ${state.enemies.length}`;
+    if (hudCooldown) {
+      hudCooldown.textContent = state.intermission > 0
+        ? `Next Wave: ${Math.ceil(state.intermission / 1000)}s`
+        : `Enemies: ${state.enemies.length}`;
+    }
     if (hudPhase) hudPhase.textContent = `Wave: ${Math.min(state.wave, MAX_WAVES)}/${MAX_WAVES}`;
   }
 
@@ -192,10 +199,10 @@
   function spawnEnemy() {
     const player = state.player;
     const forward = { x: Math.cos(player.angle), y: Math.sin(player.angle) };
-    const biasFront = Math.random() < 0.72;
-    const offset = biasFront ? rand(-Math.PI * 0.45, Math.PI * 0.45) : rand(Math.PI * 0.6, Math.PI * 1.4);
+    const biasFront = Math.random() < 0.9;
+    const offset = biasFront ? rand(-Math.PI * 0.35, Math.PI * 0.35) : rand(Math.PI * 0.7, Math.PI * 1.3);
     const spawnAngle = Math.atan2(forward.y, forward.x) + offset;
-    const radius = rand(520, 860);
+    const radius = rand(540, 880);
     const x = player.x + Math.cos(spawnAngle) * radius;
     const y = player.y + Math.sin(spawnAngle) * radius;
 
@@ -215,7 +222,9 @@
       maxSpeed: (SETTINGS.enemies.maxSpeed + Math.random() * SETTINGS.enemies.maxSpeedVar) * skill,
       orbit: Math.random() > 0.5 ? 1 : -1,
       fireTimer: getEnemyFireDelay(type),
-      skill
+      skill,
+      behindTime: 0,
+      lastSeen: 0
     });
   }
 
@@ -224,7 +233,7 @@
     const initialCount = Math.min(SETTINGS.enemies.baseCount + Math.floor((state.wave - 1) * 0.8), SETTINGS.enemies.maxCount);
     const waveBudget = Math.min(SETTINGS.enemies.baseCount + 2 + Math.floor(state.wave * 1.1), SETTINGS.enemies.maxCount + 4);
     state.waveSpawnsRemaining = Math.max(0, waveBudget - initialCount);
-    state.spawnInterval = Math.max(820, 1600 - state.wave * 120);
+    state.spawnInterval = Math.max(820, 1600 - state.wave * 130);
     state.spawnTimer = state.spawnInterval;
     for (let i = 0; i < initialCount; i++) spawnEnemy();
   }
@@ -251,21 +260,11 @@
     let fireAngle = player.angle;
 
     if (getAssistMode() === 'assist') {
-      let closest = null;
-      let closestDist = Infinity;
-      state.enemies.forEach(enemy => {
-        const dx = enemy.x - player.x;
-        const dy = enemy.y - player.y;
-        const dist = Math.hypot(dx, dy);
-        const angleTo = Math.atan2(dy, dx);
-        const diff = Math.abs(normalizeAngle(angleTo - player.angle));
-        if (dist < 900 && diff < 0.6 && dist < closestDist) {
-          closestDist = dist;
-          closest = enemy;
-          fireAngle = angleTo;
-        }
-      });
-      if (!closest) fireAngle = player.angle;
+      const target = findAssistTarget();
+      if (target) {
+        const lead = computeLeadPoint(target);
+        fireAngle = Math.atan2(lead.y - player.y, lead.x - player.x);
+      }
     }
 
     state.bullets.push({
@@ -294,6 +293,51 @@
     });
   }
 
+  function findAssistTarget() {
+    const player = state.player;
+    let best = null;
+    let bestScore = Infinity;
+    state.enemies.forEach(enemy => {
+      const dx = enemy.x - player.x;
+      const dy = enemy.y - player.y;
+      const dist = Math.hypot(dx, dy);
+      const angleTo = Math.atan2(dy, dx);
+      const diff = Math.abs(normalizeAngle(angleTo - player.angle));
+      if (dist > 1100 || diff > 0.75) return;
+      const score = dist + diff * 380;
+      if (score < bestScore) {
+        bestScore = score;
+        best = enemy;
+      }
+    });
+    return best;
+  }
+
+  function computeLeadPoint(enemy) {
+    const player = state.player;
+    const dx = enemy.x - player.x;
+    const dy = enemy.y - player.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const t = dist / SETTINGS.bullets.speed;
+    return {
+      x: enemy.x + enemy.vx * t,
+      y: enemy.y + enemy.vy * t
+    };
+  }
+
+  function repositionEnemyAhead(enemy) {
+    const player = state.player;
+    const forward = { x: Math.cos(player.angle), y: Math.sin(player.angle) };
+    const offset = rand(-Math.PI * 0.35, Math.PI * 0.35);
+    const spawnAngle = Math.atan2(forward.y, forward.x) + offset;
+    const radius = rand(640, 900);
+    enemy.x = player.x + Math.cos(spawnAngle) * radius;
+    enemy.y = player.y + Math.sin(spawnAngle) * radius;
+    enemy.vx = 0;
+    enemy.vy = 0;
+    enemy.behindTime = 0;
+  }
+
   function update(dt) {
     const dtSec = dt / 1000;
     const player = state.player;
@@ -315,6 +359,15 @@
       player.vy -= Math.sin(player.angle) * SETTINGS.player.reverseThrust * dtSec;
     }
 
+    const forwardX = Math.cos(player.angle);
+    const forwardY = Math.sin(player.angle);
+    const rightX = -forwardY;
+    const rightY = forwardX;
+    const lateral = player.vx * rightX + player.vy * rightY;
+    const lateralDamp = 4.8 * dtSec;
+    player.vx -= rightX * lateral * lateralDamp;
+    player.vy -= rightY * lateral * lateralDamp;
+
     player.vx *= Math.pow(SETTINGS.player.drag, dt / 16.67);
     player.vy *= Math.pow(SETTINGS.player.drag, dt / 16.67);
     const speed = Math.hypot(player.vx, player.vy);
@@ -329,11 +382,14 @@
 
     const targetCamX = player.x + Math.cos(player.angle) * SETTINGS.lookAhead;
     const targetCamY = player.y + Math.sin(player.angle) * SETTINGS.lookAhead;
-    state.camera.x += (targetCamX - state.camera.x) * 0.08;
-    state.camera.y += (targetCamY - state.camera.y) * 0.08;
+    state.camera.x += (targetCamX - state.camera.x) * 0.085;
+    state.camera.y += (targetCamY - state.camera.y) * 0.085;
 
     if (performance.now() - player.lastHit > SETTINGS.shieldRegenDelay) {
       player.shield = Math.min(player.maxShield, player.shield + SETTINGS.shieldRegenRate * dtSec);
+    }
+    if (state.intermission > 0) {
+      player.shield = Math.min(player.maxShield, player.shield + 20 * dtSec);
     }
 
     if (player.fireCooldown > 0) player.fireCooldown -= dt;
@@ -358,9 +414,20 @@
       const dx = player.x - enemy.x;
       const dy = player.y - enemy.y;
       const dist = Math.hypot(dx, dy) || 1;
+      const angleTo = Math.atan2(dy, dx);
+      const rel = normalizeAngle(angleTo - player.angle);
+      if (Math.abs(rel) > 1.25) {
+        enemy.behindTime = (enemy.behindTime || 0) + dt;
+      } else {
+        enemy.behindTime = Math.max(0, (enemy.behindTime || 0) - dt * 0.6);
+      }
+      if (enemy.behindTime > 2600 || dist > 1500) {
+        repositionEnemyAhead(enemy);
+      }
       let desired = Math.atan2(dy, dx);
       if (enemy.type === 'strafer' && dist < 260) desired += enemy.orbit * Math.PI / 2;
       if (enemy.type === 'ace' && dist < 180) desired -= enemy.orbit * Math.PI / 2;
+      if (Math.abs(rel) > 1.1) desired = angleTo + (rel > 0 ? 0.4 : -0.4);
       const diff = normalizeAngle(desired - enemy.angle);
       const turnStep = enemy.turnRate * dt;
       enemy.angle += clamp(diff, -turnStep, turnStep);
@@ -412,20 +479,27 @@
 
     state.enemies = state.enemies.filter(e => e.hp > 0);
 
-    state.spawnTimer -= dt;
-    if (state.waveSpawnsRemaining > 0 && state.spawnTimer <= 0 && state.enemies.length < SETTINGS.enemies.maxCount) {
-      spawnEnemy();
-      state.waveSpawnsRemaining -= 1;
-      state.spawnTimer = state.spawnInterval * (0.7 + Math.random() * 0.5);
+    if (state.intermission > 0) {
+      state.intermission = Math.max(0, state.intermission - dt);
+      if (state.intermission === 0 && !state.completed) {
+        spawnWave();
+      }
+    } else {
+      state.spawnTimer -= dt;
+      if (state.waveSpawnsRemaining > 0 && state.spawnTimer <= 0 && state.enemies.length < SETTINGS.enemies.maxCount) {
+        spawnEnemy();
+        state.waveSpawnsRemaining -= 1;
+        state.spawnTimer = state.spawnInterval * (0.7 + Math.random() * 0.5);
+      }
     }
 
-    if (state.enemies.length === 0 && state.waveSpawnsRemaining <= 0) {
+    if (state.enemies.length === 0 && state.waveSpawnsRemaining <= 0 && state.intermission <= 0) {
       if (state.wave >= MAX_WAVES) {
         state.completed = true;
         state.running = false;
       } else {
         state.wave += 1;
-        spawnWave();
+        state.intermission = SETTINGS.intermission;
       }
     }
 
@@ -469,6 +543,27 @@
     ctx.lineTo(x + size / 2, y + size / 2);
     ctx.lineTo(x + size / 2, y + size);
     ctx.stroke();
+  }
+
+  function drawEdgeIndicator(screen, centerX, centerY, color) {
+    const margin = 26;
+    const dx = screen.x - centerX;
+    const dy = screen.y - centerY;
+    if (dx === 0 && dy === 0) return;
+    const tx = dx === 0 ? Infinity : (dx > 0 ? (canvas.width - margin - centerX) / dx : (margin - centerX) / dx);
+    const ty = dy === 0 ? Infinity : (dy > 0 ? (canvas.height - margin - centerY) / dy : (margin - centerY) / dy);
+    const t = Math.min(Math.abs(tx), Math.abs(ty));
+    const x = centerX + dx * t;
+    const y = centerY + dy * t;
+    const ang = Math.atan2(dy, dx);
+    const size = 8;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - Math.cos(ang - 0.5) * size, y - Math.sin(ang - 0.5) * size);
+    ctx.lineTo(x - Math.cos(ang + 0.5) * size, y - Math.sin(ang + 0.5) * size);
+    ctx.closePath();
+    ctx.fill();
   }
 
   function drawCockpitFrame(centerX, centerY) {
@@ -586,6 +681,36 @@
       if (screen.x < -40 || screen.x > canvas.width + 40 || screen.y < -40 || screen.y > canvas.height + 40) return;
       const color = enemy.type === 'ace' ? 'rgba(255,120,255,0.9)' : enemy.type === 'strafer' ? 'rgba(255,170,90,0.9)' : 'rgba(255,110,110,0.9)';
       drawEnemyBrackets(screen.x, screen.y, color);
+    });
+
+    const target = getAssistMode() === 'assist' ? findAssistTarget() : null;
+    if (target) {
+      const lead = computeLeadPoint(target);
+      const leadScreen = worldToScreen(lead.x, lead.y, camX, camY, rot, centerX, centerY);
+      if (leadScreen.x > 0 && leadScreen.x < canvas.width && leadScreen.y > 0 && leadScreen.y < canvas.height) {
+        ctx.strokeStyle = 'rgba(125,252,154,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(leadScreen.x, leadScreen.y, 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(leadScreen.x - 12, leadScreen.y);
+        ctx.lineTo(leadScreen.x + 12, leadScreen.y);
+        ctx.stroke();
+      }
+    }
+
+    const offscreen = state.enemies.map(enemy => {
+      const screen = worldToScreen(enemy.x, enemy.y, camX, camY, rot, centerX, centerY);
+      const dist = Math.hypot(enemy.x - state.player.x, enemy.y - state.player.y);
+      return { enemy, screen, dist };
+    }).filter(item => {
+      return item.screen.x < 0 || item.screen.x > canvas.width || item.screen.y < 0 || item.screen.y > canvas.height;
+    }).sort((a, b) => a.dist - b.dist).slice(0, 6);
+
+    offscreen.forEach(item => {
+      const color = item.enemy.type === 'ace' ? 'rgba(255,120,255,0.8)' : item.enemy.type === 'strafer' ? 'rgba(255,170,90,0.8)' : 'rgba(255,110,110,0.8)';
+      drawEdgeIndicator(item.screen, centerX, centerY, color);
     });
 
     drawCockpitFrame(centerX, centerY);
