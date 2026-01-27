@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Arcade Hub: Snake, Simple Tetris, Paper-io, Classic Racer</title>
+  <title>Arcade Hub: Snake, Tetris, Paper-io, Racer, Invaders, Minesweeper</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     :root {
@@ -13,7 +13,6 @@
       --card-bg: #161b22;
       --text-dark: #e6e6e6;
       --text-light: #fff;
-      --modified-gradient: linear-gradient(135deg, #663399, #ff00ff);
     }
     body {
       background: var(--bg);
@@ -97,19 +96,6 @@
       font-size: 1em;
       margin-bottom: 0.7em;
     }
-    /* Special Style for Modified Games Card */
-    .game-card.modified-folder {
-        border: 2px solid #ff00ff;
-        background: radial-gradient(circle at top right, #2a0e36, #161b22);
-    }
-    .game-card.modified-folder .card-title {
-        color: #ff00ff;
-        text-shadow: 0 0 5px #ff00ff;
-    }
-    .game-card.modified-folder:hover {
-        box-shadow: 0 0 25px rgba(255, 0, 255, 0.4);
-        transform: scale(1.02);
-    }
     
     .primary-btn {
       background: var(--primary);
@@ -137,14 +123,34 @@
       transform: translateY(2px);
       box-shadow: 0 2px #1b6f2e;
     }
-    .btn-modified {
-        background: var(--modified-gradient);
-        box-shadow: 0 4px #4b0082;
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      justify-content: center;
+      align-items: center;
     }
-    .btn-modified:hover {
-        filter: brightness(1.2);
-        box-shadow: 0 6px #4b0082;
+    .modal-content {
+      background: #000;
+      padding: 24px 18px;
+      border-radius: 10px;
+      border: 4px solid #fff;
+      box-shadow: 0 0 30px #111;
+      text-align: center;
     }
+    #minesweeper-grid { display: grid; border: 1px solid #333; margin: 10px auto; background: #ccc;}
+    .minesweeper-cell { width: 30px; height: 30px; background-color: #555; border: 1px solid #777; cursor: pointer; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 1.1em; user-select: none; color: #eee; }
+    .minesweeper-cell.revealed { background-color: #222; border: 1px solid #333; cursor: default; color: #00FFFF; }
+    .minesweeper-cell.mine { background-color: #F00; color: #FFF; }
+    .minesweeper-cell.flagged { background-color: #00AAAA; color: #FF0; }
+    .minesweeper-cell[data-adjacent="1"] { color: #00F; }
+    .minesweeper-cell[data-adjacent="2"] { color: #080; }
+    .minesweeper-cell[data-adjacent="3"] { color: #F00; }
 
     .game-container, #simple-tetris-modal {
         display: none;
@@ -197,14 +203,6 @@
   <div class="container">
     <h1>Arcade Hub: Select a Game</h1>
     <div class="game-grid">
-      <div class="game-card modified-folder">
-        <div>
-          <div class="card-title">Modified Games</div>
-          <p>A collection of heavily modified, neon-infused, and experimental versions of classic games.</p>
-        </div>
-        <a href="modifiedgames.html" class="primary-btn btn-modified">Open Folder</a>
-      </div>
-
       <div class="game-card">
         <div>
           <div class="card-title">Classic Snake</div>
@@ -232,6 +230,20 @@
           <p>A high-speed endless runner. Dodge obstacles across multiple lanes.</p>
         </div>
         <button type="button" class="primary-btn" data-game-target="racer" aria-pressed="false" aria-controls="racer-game">Play Classic Racer</button>
+      </div>
+      <div class="game-card">
+        <div>
+          <div class="card-title">Space Invaders Plus</div>
+          <p>Progressive waves with escalating invaders. Classic arcade action.</p>
+        </div>
+        <button type="button" class="primary-btn" id="runInvadersBtn">Play Invaders</button>
+      </div>
+      <div class="game-card">
+        <div>
+          <div class="card-title">Minesweeper (Classic)</div>
+          <p>Clear the grid without hitting mines. Right-click to flag.</p>
+        </div>
+        <button type="button" class="primary-btn" id="runMinesweeperBtn">Play Minesweeper</button>
       </div>
     </div>
     <div id="snake-game" class="game-container" aria-hidden="true">
@@ -284,6 +296,37 @@
       </div>
       <button class="primary-btn" style="margin-top:1em;" onclick="location.reload()">Back to Hub</button>
     </div>
+
+    <div id="invadersModal" class="modal">
+      <div class="modal-content">
+        <h2 style="color:#fff; margin-top:0;">Space Invaders Plus</h2>
+        <canvas id="invaders-canvas" width="420" height="420" style="background:#000; border: 2px solid #3366cc;"></canvas>
+        <div style="display: flex; justify-content: space-between; padding: 0 10px; margin-top: 10px;">
+             <p id="invaders-score" style="color:#FFD700; font-weight: 700; margin: 0;">Score: 0</p>
+             <p id="invaders-message" style="color:#eee; min-height: 1.2em; margin: 0;">Press Start!</p>
+        </div>
+        <div style="display:flex; justify-content:center; gap:10px; margin-top:10px;">
+            <button id="startInvadersBtn" class="primary-btn" style="background:#00FF00; color:#000;">Start</button>
+            <button id="closeInvadersModalBtn" class="primary-btn" style="background:red;">Close Game</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="minesweeperModal" class="modal">
+        <div class="modal-content" style="background: #111; border-color: #3366cc;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h2 style="color:#3366cc; margin:0;">Minesweeper</h2>
+                <button id="minesweeperModalCloseBtn" class="primary-btn" style="background:transparent; border:1px solid #555;">X</button>
+            </div>
+            <div id="minesweeper-hud" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 5px; color:#fff;">
+                <div id="mine-count" style="color: #FF0; font-weight: 700;">Mines: 10</div>
+                <button id="newGameMinesweeperBtn" class="primary-btn" style="padding: 6px 10px; font-size: 0.9em;">New Game</button>
+                <div id="minesweeper-timer" style="color: #3366cc; font-weight: 700;">Time: 0</div>
+            </div>
+            <div id="minesweeper-grid" oncontextmenu="return false;"></div>
+            <p id="minesweeper-message" style="color:#3366cc; min-height: 1.2em; margin: 10px 0 0 0;">Click 'New Game' to start!</p>
+        </div>
+    </div>
   </div>
   <footer>
     &copy; 2025 Games & Programs | Contact: <a href="questions-dashboard.html">Questions & Comments</a>
@@ -293,6 +336,8 @@
   <script type="module" src="simple-tetris.js"></script>
   <script type="module" src="paperio.js"></script>
   <script type="module" src="racer.js"></script>
+  <script type="module" src="minesweeper.js"></script>
+  <script type="module" src="space-invaders-plus.js"></script>
   <script type="module">
     // Card container logic
     const gameCards = document.querySelectorAll('.primary-btn[data-game-target]');
@@ -375,6 +420,29 @@
     });
     document.getElementById('racerResetBtn')?.addEventListener('click', () => {
       if (typeof window.resetRacer === 'function') window.resetRacer();
+    });
+
+    // Space Invaders Plus Modal
+    document.getElementById('runInvadersBtn')?.addEventListener('click', () => {
+      const modal = document.getElementById('invadersModal');
+      if (modal) modal.style.display = 'flex';
+      if (typeof window.initInvadersPlus === 'function') window.initInvadersPlus();
+    });
+    document.getElementById('closeInvadersModalBtn')?.addEventListener('click', () => {
+      const modal = document.getElementById('invadersModal');
+      if (modal) modal.style.display = 'none';
+      if (typeof window.stopInvaders === 'function') window.stopInvaders();
+    });
+
+    // Minesweeper Classic Modal
+    document.getElementById('runMinesweeperBtn')?.addEventListener('click', () => {
+      const modal = document.getElementById('minesweeperModal');
+      if (modal) modal.style.display = 'flex';
+      if (typeof window.initMinesweeperGame === 'function') window.initMinesweeperGame();
+    });
+    document.getElementById('minesweeperModalCloseBtn')?.addEventListener('click', () => {
+      const modal = document.getElementById('minesweeperModal');
+      if (modal) modal.style.display = 'none';
     });
   </script>
 </body>

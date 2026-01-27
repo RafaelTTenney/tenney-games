@@ -232,33 +232,6 @@
                 </div>
             </section>
 
-            <section class="card flagship">
-                <h3>Minesweeper Elite</h3>
-                <div class="meta">The First Flagship. Customizable difficulty, flood-fill, right-click flagging, and smart styling.</div>
-                <div class="actions">
-                    <button class="btn" style="background:var(--flagship); color:#000; border-color: white;" id="runSuperMinesweeperBtn">Play Elite</button>
-                </div>
-            </section>
-            
-            <section class="card flagship" style="border-color: #00FF00; box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);">
-                <h3 style="color:#00FF00;">Tower Defence Collection</h3>
-                <div class="meta">Three premium strategy games in one. Featuring "Vector Valley" (Classic), "Neon Citadel" (Maze Builder), and "Sentinel Grid" (Original).</div>
-                <pre class="demo">// 3 Unique Game Engines
-// Vector Valley: Path Defense
-// Neon Citadel: Open Field
-// Sentinel Grid: Tactical Grid</pre>
-                <div class="actions">
-                    <a class="btn" href="tower-defence.html" style="background:var(--td-green); color:#000; border-color: white;" id="openTdBtn">Play Collection</a>
-                </div>
-            </section>
-
-            <section class="card" style="border-color: #22d3ee; box-shadow: 0 0 15px rgba(34, 211, 238, 0.25);">
-                <h3 style="color:#22d3ee;">Arc Reactor</h3>
-                <div class="meta">Classic asteroid survival. Protect the reactor core and harvest energy shards.</div>
-                <div class="actions">
-                    <button class="btn" style="background:#22d3ee; color:#000; border-color: white;" id="runArcBtn">Play</button>
-                </div>
-            </section>
 
             <section class="card" style="border-color: #a855f7; box-shadow: 0 0 15px rgba(168, 85, 247, 0.25);">
                 <h3 style="color:#a855f7;">Vector Tanks</h3>
@@ -276,17 +249,6 @@
 // Permadeath mechanics</pre>
                 <div class="actions">
                     <button class="btn" style="background:#FF00FF; color:#000; border-color: white;" id="runRogueBtn">Play Rogue</button>
-                </div>
-            </section>
-
-            <section class="card" style="border-color: #47f5ff; box-shadow: 0 0 15px rgba(71, 245, 255, 0.2);">
-                <h3 style="color:#47f5ff;">Aerial Combat Labs</h3>
-                <div class="meta">Three new dogfight prototypes: Skygrid Dogfight, High-Altitude Duel, and Swarm Breaker.</div>
-                <pre class="demo">// Multi-camera aerial combat
-// Control modes per game
-// Shield + health systems</pre>
-                <div class="actions">
-                    <a class="btn" href="air-combat.html" style="background:#47f5ff; color:#000; border-color: white;">Open Dashboard</a>
                 </div>
             </section>
 
@@ -318,43 +280,6 @@
             </div>
         </div>
     </div>
-    <div id="superMinesweeperModal" class="modal-overlay">
-        <div class="modal-content" style="border-color: var(--flagship); box-shadow: 0 0 30px var(--flagship);">
-            <div class="modal-header">
-                <h2 style="color:var(--flagship);">Minesweeper Elite</h2>
-                <span class="modal-close" id="superMsCloseBtn">&times;</span>
-            </div>
-            <div id="ms-menu" class="ms-menu">
-                <h4 style="margin:0; color:#fff;">Select Difficulty</h4>
-                <div class="ms-row">
-                    <button class="ms-btn selected" onclick="setMsDiff('easy', this)">Easy (10%)</button>
-                    <button class="ms-btn" onclick="setMsDiff('med', this)">Med (15%)</button>
-                    <button class="ms-btn" onclick="setMsDiff('hard', this)">Hard (20%)</button>
-                </div>
-                <h4 style="margin:5px 0 0 0; color:#fff;">Grid Size</h4>
-                <div class="ms-row">
-                    <button class="ms-btn selected" onclick="setMsSize(10, this)">10x10</button>
-                    <button class="ms-btn" onclick="setMsSize(15, this)">15x15</button>
-                    <button class="ms-btn" onclick="setMsSize(20, this)">20x20</button>
-                </div>
-                <button class="btn" style="margin-top:10px; border-color:var(--flagship); color:var(--flagship);" onclick="startEliteMinesweeper()">START GAME</button>
-            </div>
-            <div id="ms-game-area" style="display:none;">
-                <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
-                    <span id="ms-flags-left" style="color:red; font-weight:bold;">Flags: 10</span>
-                    <span id="ms-timer" style="color:var(--flagship); font-weight:bold;">000</span>
-                </div>
-                <div id="ms-game-container">
-                    <div id="ms-grid"></div>
-                </div>
-                <div id="ms-status" style="margin-top:10px; font-weight:bold; min-height:20px; color:#fff;"></div>
-                <div class="modal-controls">
-                    <button class="btn secondary" onclick="showMsMenu()">Back to Menu</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div id="rogueModal" class="modal-overlay">
         <div class="modal-content" style="border-color: #FF00FF; box-shadow: 0 0 30px #FF00FF; min-width: 680px; max-width: 96vw;">
             <div class="modal-header">
@@ -390,45 +315,6 @@
         </div>
     </div>
 
-    <div id="tdModal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 1150px; width: calc(100% - 48px);">
-            <div class="modal-header">
-                <h2 style="color:var(--td-green);">Tower Defence Collection</h2>
-                <span class="modal-close" id="tdModalCloseBtn">&times;</span>
-            </div>
-            <iframe id="td-iframe" class="td-iframe" src="" title="Tower Defence Collection"></iframe>
-            <div class="modal-controls">
-                <button class="btn secondary" id="tdReloadBtn">Reload</button>
-                <button class="btn" id="tdOpenNewTabBtn">Open in New Tab</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="arcModal" class="modal-overlay">
-        <div class="modal-content" style="border-color:#22d3ee; box-shadow:0 0 20px rgba(34,211,238,0.5);">
-            <div class="modal-header">
-                <h2 style="color:#22d3ee;">Arc Reactor</h2>
-                <span class="modal-close" id="arcModalCloseBtn">&times;</span>
-            </div>
-            <div class="meta" style="max-width:720px; margin:0 auto 10px;">
-                Classic asteroid survival. Protect the reactor core, clear debris, and advance waves.
-                Controls: Arrow keys to fly, Space to fire.
-            </div>
-            <canvas id="arc-canvas" width="900" height="600" style="background:#020508; border:2px solid #22d3ee;"></canvas>
-            <div id="arc-hud" style="display:flex; justify-content:space-between; margin-top:8px; color:#e2f2ff; font-family:monospace;">
-                <div id="arc-score">Score: 0</div>
-                <div id="arc-core">Core: 100%</div>
-                <div id="arc-lives">Lives: 3</div>
-                <div id="arc-wave">Wave: 1</div>
-            </div>
-            <div class="modal-controls">
-                <button id="startArcBtn" class="btn">Start</button>
-                <button id="pauseArcBtn" class="btn secondary">Pause</button>
-                <button id="resetArcBtn" class="btn secondary">Reset</button>
-            </div>
-        </div>
-    </div>
-
     <div id="tanksModal" class="modal-overlay">
         <div class="modal-content" style="border-color:#a855f7; box-shadow:0 0 20px rgba(168,85,247,0.45);">
             <div class="modal-header">
@@ -457,9 +343,7 @@
 
     <script type="module" src="login.js?v=7"></script>
     <script type="module" src="neon-racer-plus.js"></script>
-    <script type="module" src="minesweeper-elite.js"></script>
     <script type="module" src="rogue-dungeon.js"></script>
-    <script type="module" src="arc-reactor.js"></script>
     <script type="module" src="vector-tanks.js"></script>
 
     <script type="module">
@@ -473,27 +357,6 @@
         document.getElementById('startRacerBtn').addEventListener('click', () => { if(typeof window.startRacer === 'function') window.startRacer(); });
         document.getElementById('pauseRacerBtn').addEventListener('click', () => { if(typeof window.pauseRacer === 'function') window.pauseRacer(); });
         document.getElementById('resetRacerBtn').addEventListener('click', () => { if(typeof window.resetRacer === 'function') window.resetRacer(); });
-
-        // Arc Reactor Hookup
-        const arcModal = document.getElementById('arcModal');
-        document.getElementById('runArcBtn').addEventListener('click', () => {
-            arcModal.style.display = 'flex';
-            if (typeof window.initArcReactorGame === 'function') window.initArcReactorGame();
-            if (typeof window.resetArcReactor === 'function') window.resetArcReactor();
-        });
-        document.getElementById('arcModalCloseBtn').addEventListener('click', () => {
-            arcModal.style.display = 'none';
-            if (typeof window.pauseArcReactor === 'function') window.pauseArcReactor();
-        });
-        arcModal.addEventListener('click', (e) => {
-            if (e.target === arcModal) {
-                arcModal.style.display = 'none';
-                if (typeof window.pauseArcReactor === 'function') window.pauseArcReactor();
-            }
-        });
-        document.getElementById('startArcBtn').addEventListener('click', () => { if (typeof window.startArcReactor === 'function') window.startArcReactor(); });
-        document.getElementById('pauseArcBtn').addEventListener('click', () => { if (typeof window.pauseArcReactor === 'function') window.pauseArcReactor(); });
-        document.getElementById('resetArcBtn').addEventListener('click', () => { if (typeof window.resetArcReactor === 'function') window.resetArcReactor(); });
 
         // Vector Tanks Hookup
         const tanksModal = document.getElementById('tanksModal');
@@ -516,13 +379,6 @@
         document.getElementById('pauseTanksBtn').addEventListener('click', () => { if (typeof window.pauseVectorTanks === 'function') window.pauseVectorTanks(); });
         document.getElementById('resetTanksBtn').addEventListener('click', () => { if (typeof window.resetVectorTanks === 'function') window.resetVectorTanks(); });
 
-        // Minesweeper Hookup
-        document.getElementById('runSuperMinesweeperBtn').addEventListener('click', () => document.getElementById('superMinesweeperModal').style.display = 'flex');
-        document.getElementById('superMsCloseBtn').addEventListener('click', () => {
-             document.getElementById('superMinesweeperModal').style.display = 'none';
-             if(typeof window.msState !== 'undefined' && window.msState.interval) clearInterval(window.msState.interval);
-        });
-
         // Rogue Dungeon Hookup
         document.getElementById('runRogueBtn').addEventListener('click', () => {
             document.getElementById('rogueModal').style.display = 'flex';
@@ -533,46 +389,13 @@
             if(typeof window.stopRogue === 'function') window.stopRogue();
         });
 
-        // Tower Defence modal hookup (Modal code remains, but anchor tag now goes directly to the page)
-        // Note: Since the anchor tag <a id="openTdBtn" href="tower-defence.html"> is changed to route directly,
-        // the original JS to open the modal (document.getElementById('openTdBtn').addEventListener('click', (e) => { e.preventDefault(); ... }))
-        // is no longer needed, but we keep the modal-related functions for completeness in case other parts of the app use them.
-        
-        // Old TD button handler is commented out/removed because the HTML anchor tag now links directly:
-        /*
-        document.getElementById('openTdBtn').addEventListener('click', (e) => {
-            e.preventDefault();
-            const m = document.getElementById('tdModal');
-            const iframe = document.getElementById('td-iframe');
-            iframe.src = 'tower-defence.html';
-            m.style.display = 'flex';
-        });
-        */
-        
-        document.getElementById('tdModalCloseBtn').addEventListener('click', () => {
-            const m = document.getElementById('tdModal');
-            const iframe = document.getElementById('td-iframe');
-            m.style.display = 'none';
-            // unload iframe to stop running scripts inside it
-            iframe.src = 'about:blank';
-        });
-        document.getElementById('tdReloadBtn').addEventListener('click', () => {
-            const iframe = document.getElementById('td-iframe');
-            iframe.contentWindow.location.reload();
-        });
-        document.getElementById('tdOpenNewTabBtn').addEventListener('click', () => {
-            window.open('tower-defence.html', '_blank');
-        });
-
         // Close modal on ESC
         document.addEventListener('keydown', (e) => {
             if(e.key === 'Escape') {
-                ['racerModal','superMinesweeperModal','rogueModal','tdModal','arcModal','tanksModal'].forEach(id => {
+                ['racerModal','rogueModal','tanksModal'].forEach(id => {
                     const el = document.getElementById(id);
                     if(el && el.style.display === 'flex') {
                         el.style.display = 'none';
-                        if(id === 'tdModal') document.getElementById('td-iframe').src = 'about:blank';
-                        if(id === 'arcModal' && typeof window.pauseArcReactor === 'function') window.pauseArcReactor();
                         if(id === 'tanksModal' && typeof window.pauseVectorTanks === 'function') window.pauseVectorTanks();
                     }
                 });

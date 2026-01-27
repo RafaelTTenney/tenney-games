@@ -30,15 +30,22 @@
     .report textarea { min-height:120px; resize:vertical; }
     #reportMessage { margin-top:10px;color:var(--muted); font-weight:600; }
     
-    /* Minesweeper Styles (Classic) */
-    #minesweeper-grid { display: grid; border: 1px solid #333; margin: 10px auto; background: #ccc;}
-    .minesweeper-cell { width: 30px; height: 30px; background-color: #555; border: 1px solid #777; cursor: pointer; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 1.1em; user-select: none; color: #eee; }
-    .minesweeper-cell.revealed { background-color: #222; border: 1px solid #333; cursor: default; color: #00FFFF; }
-    .minesweeper-cell.mine { background-color: #F00; color: #FFF; }
-    .minesweeper-cell.flagged { background-color: #00AAAA; color: #FF0; }
-    .minesweeper-cell[data-adjacent="1"] { color: #00F; } 
-    .minesweeper-cell[data-adjacent="2"] { color: #080; } 
-    .minesweeper-cell[data-adjacent="3"] { color: #F00; }
+    /* Minesweeper Elite Styles */
+    .ms-menu { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
+    .ms-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .ms-btn { padding: 8px 16px; background: #333; border: 1px solid #555; color: #fff; cursor: pointer; }
+    .ms-btn.selected { background: var(--neon); color: #000; font-weight: bold; border-color: #fff;}
+    #ms-game-container { margin-top: 15px; display: inline-block; background: #222; padding: 10px; border: 2px solid #555; border-radius: 5px; }
+    #ms-grid { display: grid; gap: 1px; background: #000; }
+    .ms-cell { width: 25px; height: 25px; background: #888; display: flex; justify-content: center; align-items: center; font-weight: bold; font-family: monospace; cursor: pointer; user-select: none; }
+    .ms-cell.revealed { background: #333; border: 1px solid #222; color: #eee; }
+    .ms-cell.flag { background: #333; color: #ff0000; }
+    .ms-cell.mine { background: #f00; color: #000; }
+    .ms-c1 { color: #5555ff; } .ms-c2 { color: #00aa00; } .ms-c3 { color: #ff5555; }
+    .arc-hud { display:flex; justify-content:space-between; gap:10px; color:#e2f2ff; font-weight:700; margin-top:10px; }
+    .arc-controls { display:flex; justify-content:center; gap:10px; margin-top:12px; flex-wrap:wrap; }
+    .arc-controls .btn { min-width:90px; }
+    .arc-tip { color:#9cc7d9; margin-top:8px; font-size:0.9rem; }
   </style>
 </head>
 <body>
@@ -51,48 +58,91 @@
     <div class="game-grid" id="previewGrid">
       
       <div class="card">
-        <h3>Space Invaders Plus</h3>
-        <p>The "Plus" version with progressive waves and difficulty.</p>
-        <button class="btn" id="runInvadersBtn">Play Now</button>
+        <h3>Tower Defence Collection</h3>
+        <p>Vector Valley, Neon Citadel, and Sentinel Grid in one strategic package.</p>
+        <a class="btn" href="tower-defence.html">Open Collection</a>
       </div>
 
       <div class="card">
-        <h3>Minesweeper (Classic)</h3>
-        <p>The simple logic game: clear a rectangular board containing hidden "mines".</p>
-        <button class="btn" id="runMinesweeperBtn">Play Now</button>
+        <h3>Aerial Combat Labs</h3>
+        <p>Skygrid Dogfight, High-Altitude Duel, and Swarm Breaker prototypes.</p>
+        <a class="btn" href="air-combat.html">Open Labs</a>
+      </div>
+
+      <div class="card">
+        <h3>Minesweeper Elite</h3>
+        <p>Flagship minesweeper with customizable difficulty and smart UI.</p>
+        <button class="btn" id="runSuperMinesweeperBtn">Play Elite</button>
+      </div>
+
+      <div class="card">
+        <h3>Arc Reactor</h3>
+        <p>Asteroid survival. Protect the reactor core and clear debris.</p>
+        <button class="btn" id="runArcBtn">Play Arc</button>
       </div>
 
     </div>
 
-    <div id="invadersModal" class="modal">
-      <div class="modal-content">
-        <h2>Space Invaders Plus</h2>
-        <canvas id="invaders-canvas" width="420" height="420" style="background:#000; border: 2px solid #3366cc;"></canvas>
-        <div style="display: flex; justify-content: space-between; padding: 0 10px; margin-top: 10px;">
-             <p id="invaders-score" style="color:var(--primary); font-weight: 700; margin: 0; color: #FFD700;">Score: 0</p>
-             <p id="invaders-message" style="color:#eee; min-height: 1.2em; margin: 0;">Press Start!</p>
+    <div id="superMinesweeperModal" class="modal">
+      <div class="modal-content" style="background:#0b0b0b; border-color: var(--neon);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h2 style="color:var(--neon); margin:0;">Minesweeper Elite</h2>
+          <button id="superMinesweeperCloseBtn" class="btn secondary" style="background:transparent; border:1px solid #555;">Close</button>
         </div>
-        <div style="display:flex; justify-content:center; gap:10px; margin-top:10px;">
-            <button id="startInvadersBtn" class="btn" style="background:#00FF00; color:#000;">Start</button>
-            <button id="closeInvadersModalBtn" class="btn" style="background:red;">Close Game</button>
+        <div id="ms-menu" class="ms-menu">
+          <div class="ms-row" style="color:#fff; font-weight:700;">Difficulty</div>
+          <div class="ms-row">
+            <button class="ms-btn selected" onclick="setMsDiff('easy', this)">Easy</button>
+            <button class="ms-btn" onclick="setMsDiff('med', this)">Medium</button>
+            <button class="ms-btn" onclick="setMsDiff('hard', this)">Hard</button>
+          </div>
+          <div class="ms-row" style="color:#fff; font-weight:700; margin-top:6px;">Board Size</div>
+          <div class="ms-row">
+            <button class="ms-btn selected" onclick="setMsSize(10, this)">10x10</button>
+            <button class="ms-btn" onclick="setMsSize(14, this)">14x14</button>
+            <button class="ms-btn" onclick="setMsSize(18, this)">18x18</button>
+          </div>
+          <div class="ms-row" style="margin-top:8px;">
+            <button class="btn" style="background:var(--neon); color:#000;" onclick="startEliteMinesweeper()">Start Mission</button>
+          </div>
+        </div>
+        <div id="ms-game-area" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; color:#fff;">
+            <div id="ms-flags-left" style="color:#FF0; font-weight:700;">Flags: 0</div>
+            <button class="btn secondary" style="padding:6px 10px;" onclick="showMsMenu()">Menu</button>
+            <div id="ms-timer" style="color:var(--neon); font-weight:700;">Time: 0</div>
+          </div>
+          <div id="ms-game-container">
+            <div id="ms-grid" oncontextmenu="return false;"></div>
+          </div>
+          <div id="ms-status" style="margin-top:8px; min-height:1.2em; font-weight:700;"></div>
+          <div style="margin-top:10px;">
+            <button class="btn secondary" onclick="startEliteMinesweeper()">Restart</button>
+          </div>
         </div>
       </div>
     </div>
 
-    <div id="minesweeperModal" class="modal">
-        <div class="modal-content" style="background: #111; border-color: #3366cc;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <h2 style="color:#3366cc; margin:0;">Minesweeper</h2>
-                <button id="minesweeperModalCloseBtn" class="btn" style="background:transparent; border:1px solid #555;">X</button>
-            </div>
-            <div id="minesweeper-hud" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 5px; color:#fff;">
-                <div id="mine-count" style="color: #FF0; font-weight: 700;">Mines: 10</div>
-                <button id="newGameMinesweeperBtn" class="btn secondary" style="padding: 6px 10px; font-size: 0.9em;">New Game</button>
-                <div id="minesweeper-timer" style="color: #3366cc; font-weight: 700;">Time: 0</div>
-            </div>
-            <div id="minesweeper-grid" oncontextmenu="return false;"></div>
-            <p id="minesweeper-message" style="color:#3366cc; min-height: 1.2em; margin: 10px 0 0 0;">Click 'New Game' to start!</p>
+    <div id="arcModal" class="modal">
+      <div class="modal-content" style="background:#050b12; border-color:#22d3ee;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <h2 style="color:#22d3ee; margin:0;">Arc Reactor</h2>
+          <button id="arcModalCloseBtn" class="btn secondary" style="background:transparent; border:1px solid #555;">Close</button>
         </div>
+        <canvas id="arc-canvas" width="520" height="360" style="background:#000; border:2px solid #22d3ee;"></canvas>
+        <div class="arc-hud">
+          <span id="arc-score">Score: 0</span>
+          <span id="arc-core">Core: 100%</span>
+          <span id="arc-lives">Lives: 3</span>
+          <span id="arc-wave">Wave: 1</span>
+        </div>
+        <div class="arc-controls">
+          <button id="arcStartBtn" class="btn" style="background:#00ff87; color:#000;">Start</button>
+          <button id="arcPauseBtn" class="btn secondary">Pause</button>
+          <button id="arcResetBtn" class="btn secondary">Reset</button>
+        </div>
+        <div class="arc-tip">Arrow keys to steer, Space to fire.</div>
+      </div>
     </div>
 
      <section class="report card" aria-label="Report a bug">
@@ -112,38 +162,52 @@
   </footer>
 
   <script type="module" src="login.js?v=7"></script>
-  <script type="module" src="minesweeper.js"></script>
-  <script type="module" src="space-invaders-plus.js"></script>
+  <script type="module" src="minesweeper-elite.js"></script>
+  <script type="module" src="arc-reactor.js"></script>
   <script type="module">
-    // Space Invaders Plus Hookup
-    document.getElementById('runInvadersBtn').addEventListener('click', () => {
-        // Open the modal corresponding to the ID in the original experimental logic
-        const modal = document.getElementById('invadersModal');
-        modal.style.display = 'flex';
-        
-        // If the script exposes an init function, call it.
-        // space-invaders-plus.js usually auto-binds to the IDs (invaders-canvas, startInvadersBtn)
-        // providing the elements exist when the script loaded. If they didn't exist then, we might need a manual start.
-        if (typeof window.initInvadersPlus === 'function') window.initInvadersPlus();
-    });
+    const msOpenBtn = document.getElementById('runSuperMinesweeperBtn');
+    const msModal = document.getElementById('superMinesweeperModal');
+    const msCloseBtn = document.getElementById('superMinesweeperCloseBtn');
+    if (msOpenBtn) {
+      msOpenBtn.addEventListener('click', () => {
+        if (msModal) msModal.style.display = 'flex';
+        if (typeof window.showMsMenu === 'function') window.showMsMenu();
+      });
+    }
+    if (msCloseBtn) {
+      msCloseBtn.addEventListener('click', () => {
+        if (msModal) msModal.style.display = 'none';
+        if (typeof window.showMsMenu === 'function') window.showMsMenu();
+      });
+    }
 
-    document.getElementById('closeInvadersModalBtn').addEventListener('click', () => {
-        document.getElementById('invadersModal').style.display = 'none';
-        // Try to stop if function exists
-        if (typeof window.stopInvaders === 'function') window.stopInvaders();
+    const arcOpenBtn = document.getElementById('runArcBtn');
+    const arcModal = document.getElementById('arcModal');
+    const arcCloseBtn = document.getElementById('arcModalCloseBtn');
+    const arcStartBtn = document.getElementById('arcStartBtn');
+    const arcPauseBtn = document.getElementById('arcPauseBtn');
+    const arcResetBtn = document.getElementById('arcResetBtn');
+    if (arcOpenBtn) {
+      arcOpenBtn.addEventListener('click', () => {
+        if (arcModal) arcModal.style.display = 'flex';
+        if (typeof window.initArcReactorGame === 'function') window.initArcReactorGame();
+        if (typeof window.resetArcReactor === 'function') window.resetArcReactor();
+      });
+    }
+    if (arcCloseBtn) {
+      arcCloseBtn.addEventListener('click', () => {
+        if (arcModal) arcModal.style.display = 'none';
+        if (typeof window.pauseArcReactor === 'function') window.pauseArcReactor();
+      });
+    }
+    if (arcStartBtn) arcStartBtn.addEventListener('click', () => {
+      if (typeof window.startArcReactor === 'function') window.startArcReactor();
     });
-
-    // Minesweeper Hookup
-    document.getElementById('runMinesweeperBtn').addEventListener('click', () => {
-        const modal = document.getElementById('minesweeperModal');
-        modal.style.display = 'flex';
-        if(typeof window.initMinesweeperGame === 'function') {
-            window.initMinesweeperGame();
-        }
+    if (arcPauseBtn) arcPauseBtn.addEventListener('click', () => {
+      if (typeof window.pauseArcReactor === 'function') window.pauseArcReactor();
     });
-
-    document.getElementById('minesweeperModalCloseBtn').addEventListener('click', () => {
-        document.getElementById('minesweeperModal').style.display = 'none';
+    if (arcResetBtn) arcResetBtn.addEventListener('click', () => {
+      if (typeof window.resetArcReactor === 'function') window.resetArcReactor();
     });
     
     // Report Form Logic

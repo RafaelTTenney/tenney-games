@@ -24,6 +24,8 @@
   const cockpitBtn = document.getElementById('sky-cockpit');
   const gameView = document.getElementById('skygrid-game-view');
   const hangarView = document.getElementById('skygrid-hangar-view');
+  const hangarCanvas = document.getElementById('sky-hangar-canvas');
+  const hangarCtx = hangarCanvas ? hangarCanvas.getContext('2d') : null;
   const hangarCredits = document.getElementById('sky-hangar-credits');
   const hangarWave = document.getElementById('sky-hangar-wave');
   const shipName = document.getElementById('sky-ship-name');
@@ -198,6 +200,13 @@
     }
   };
 
+  const hangarScene = {
+    running: false,
+    lastTime: 0,
+    t: 0,
+    drones: []
+  };
+
   function rand(min, max) {
     return min + Math.random() * (max - min);
   }
@@ -282,13 +291,19 @@
   }
 
   function getViewScale() {
-    return state.viewMode === 'cockpit' ? VIEW_SCALE * 0.92 : VIEW_SCALE;
+    return state.viewMode === 'cockpit' ? VIEW_SCALE * 0.88 : VIEW_SCALE;
   }
 
   function setView(view) {
     state.view = view;
     if (gameView) gameView.classList.toggle('active', view === 'combat');
     if (hangarView) hangarView.classList.toggle('active', view === 'hangar');
+    if (view === 'hangar') {
+      startHangarAnim();
+      renderHangar();
+    } else {
+      stopHangarAnim();
+    }
   }
 
   function openHangar(nextWave) {
@@ -368,6 +383,173 @@
       vy: Math.sin(angle) * speed,
       life: rand(800, 1400)
     });
+  }
+
+  function initHangarScene() {
+    if (!hangarCtx) return;
+    hangarScene.t = 0;
+    hangarScene.drones = [];
+    for (let i = 0; i < 6; i++) {
+      hangarScene.drones.push({
+        angle: rand(0, Math.PI * 2),
+        radius: rand(40, 120),
+        speed: rand(0.35, 0.9),
+        size: rand(2.2, 4.2),
+        phase: rand(0, Math.PI * 2)
+      });
+    }
+    renderHangar();
+  }
+
+  function startHangarAnim() {
+    if (!hangarCtx || hangarScene.running) return;
+    hangarScene.running = true;
+    hangarScene.lastTime = performance.now();
+    requestAnimationFrame(hangarLoop);
+  }
+
+  function stopHangarAnim() {
+    hangarScene.running = false;
+  }
+
+  function hangarLoop(timestamp) {
+    if (!hangarScene.running) return;
+    const dt = Math.min(40, timestamp - hangarScene.lastTime);
+    hangarScene.lastTime = timestamp;
+    updateHangar(dt);
+    renderHangar();
+    requestAnimationFrame(hangarLoop);
+  }
+
+  function updateHangar(dt) {
+    hangarScene.t += dt / 1000;
+  }
+
+  function drawHangarGrid(ctx, w, h, t) {
+    ctx.save();
+    ctx.translate(w / 2, h * 0.6);
+    ctx.strokeStyle = 'rgba(110,200,255,0.12)';
+    ctx.lineWidth = 1;
+    const depth = h * 0.4;
+    for (let i = -9; i <= 9; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * 26, 0);
+      ctx.lineTo(i * 95, depth);
+      ctx.stroke();
+    }
+    const offset = (t * 26) % 22;
+    for (let y = 0; y < depth; y += 22) {
+      const yy = y + offset;
+      ctx.beginPath();
+      ctx.moveTo(-w, yy);
+      ctx.lineTo(w, yy);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawHangarShip(ctx, x, y, t) {
+    const bob = Math.sin(t * 1.6) * 5;
+    const tilt = Math.sin(t * 0.7) * 0.08;
+    const shipColor = (state.playerStats && state.playerStats.color) || getShipTier().color;
+    ctx.save();
+    ctx.translate(x, y + bob);
+    ctx.rotate(tilt);
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(0, 28, 70, 16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowColor = shipColor;
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = shipColor;
+    ctx.beginPath();
+    ctx.moveTo(0, -34);
+    ctx.lineTo(46, 10);
+    ctx.lineTo(12, 18);
+    ctx.lineTo(-12, 18);
+    ctx.lineTo(-46, 10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.fillRect(-6, -8, 12, 26);
+    const glow = 0.6 + Math.sin(t * 4.2) * 0.2;
+    ctx.fillStyle = `rgba(71,245,255,${glow})`;
+    ctx.beginPath();
+    ctx.moveTo(-18, 20);
+    ctx.lineTo(-32, 32);
+    ctx.lineTo(-8, 28);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(18, 20);
+    ctx.lineTo(32, 32);
+    ctx.lineTo(8, 28);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function renderHangar() {
+    if (!hangarCtx) return;
+    const w = hangarCanvas.width;
+    const h = hangarCanvas.height;
+    const t = hangarScene.t;
+
+    const bg = hangarCtx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, '#0b1220');
+    bg.addColorStop(0.55, '#0a111d');
+    bg.addColorStop(1, '#05090f');
+    hangarCtx.fillStyle = bg;
+    hangarCtx.fillRect(0, 0, w, h);
+
+    const beamX = ((t * 42) % (w + 220)) - 220;
+    hangarCtx.fillStyle = 'rgba(71,245,255,0.12)';
+    hangarCtx.fillRect(beamX, 0, 160, h * 0.5);
+    hangarCtx.fillStyle = 'rgba(255,122,71,0.08)';
+    hangarCtx.fillRect(w - beamX - 140, 0, 120, h * 0.4);
+
+    drawHangarGrid(hangarCtx, w, h, t);
+
+    hangarCtx.strokeStyle = 'rgba(71,245,255,0.25)';
+    hangarCtx.lineWidth = 2;
+    hangarCtx.beginPath();
+    hangarCtx.arc(w / 2, h * 0.6, 90, 0, Math.PI * 2);
+    hangarCtx.stroke();
+    hangarCtx.beginPath();
+    hangarCtx.arc(w / 2, h * 0.6, 54, 0, Math.PI * 2);
+    hangarCtx.stroke();
+
+    drawHangarShip(hangarCtx, w / 2, h * 0.42, t);
+
+    hangarScene.drones.forEach((drone, idx) => {
+      const angle = drone.angle + t * drone.speed;
+      const radius = drone.radius + Math.sin(t * 0.9 + drone.phase) * 6;
+      const dx = Math.cos(angle) * radius;
+      const dy = Math.sin(angle) * radius * 0.35;
+      const x = w / 2 + dx;
+      const y = h * 0.32 + dy;
+      const pulse = 0.4 + Math.sin(t * 3 + idx) * 0.2;
+      hangarCtx.fillStyle = `rgba(125,252,154,${pulse})`;
+      hangarCtx.beginPath();
+      hangarCtx.arc(x, y, drone.size, 0, Math.PI * 2);
+      hangarCtx.fill();
+      hangarCtx.strokeStyle = 'rgba(125,252,154,0.2)';
+      hangarCtx.beginPath();
+      hangarCtx.moveTo(x, y);
+      hangarCtx.lineTo(x - dx * 0.2, y - dy * 0.2);
+      hangarCtx.stroke();
+    });
+
+    hangarCtx.strokeStyle = 'rgba(255,255,255,0.08)';
+    hangarCtx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      const y = h * (0.18 + i * 0.08) + Math.sin(t * 0.6 + i) * 2;
+      hangarCtx.beginPath();
+      hangarCtx.moveTo(w * 0.1, y);
+      hangarCtx.lineTo(w * 0.9, y);
+      hangarCtx.stroke();
+    }
   }
 
   function spawnEnemy() {
@@ -1096,44 +1278,203 @@
     }
   }
 
+  function drawCockpitPanel(x, y, w, h, title, lines) {
+    const panelGrad = ctx.createLinearGradient(x, y, x, y + h);
+    panelGrad.addColorStop(0, 'rgba(8,18,30,0.9)');
+    panelGrad.addColorStop(1, 'rgba(6,10,18,0.95)');
+    ctx.fillStyle = panelGrad;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = 'rgba(71,245,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = 'rgba(125,252,154,0.9)';
+    ctx.font = '11px monospace';
+    ctx.fillText(title, x + 10, y + 16);
+    ctx.fillStyle = '#e6f2ff';
+    lines.forEach((line, idx) => {
+      ctx.fillText(line, x + 10, y + 34 + idx * 16);
+    });
+  }
+
+  function drawRadar(cx, cy, r) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(125,252,154,0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.65, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - r, cy);
+    ctx.lineTo(cx + r, cy);
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx, cy + r);
+    ctx.stroke();
+
+    const range = 520;
+    let nearest = null;
+    let nearestDist = Infinity;
+    state.enemies.forEach(enemy => {
+      const dx = enemy.x - state.player.x;
+      const dy = enemy.y - state.player.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = enemy;
+      }
+      if (dist > range) return;
+      const px = cx + (dx / range) * r;
+      const py = cy + (dy / range) * r;
+      ctx.fillStyle = enemy.type === 'ace' ? '#ff7bff' : enemy.type === 'strafer' ? '#ffa94d' : '#ff6b6b';
+      ctx.beginPath();
+      ctx.arc(px, py, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    if (nearest && nearestDist < range) {
+      const dx = nearest.x - state.player.x;
+      const dy = nearest.y - state.player.y;
+      const px = cx + (dx / range) * r;
+      const py = cy + (dy / range) * r;
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.beginPath();
+      ctx.arc(px, py, 6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#7dfc9a';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   function drawCockpitOverlay() {
     const w = canvas.width;
     const h = canvas.height;
+    const stats = getPlayerStats();
+    const speed = Math.hypot(state.player.vx, state.player.vy);
+    const speedRatio = clamp(speed / Math.max(1, stats.maxSpeed), 0, 1);
+    const hpRatio = clamp(state.player.hp / Math.max(1, state.player.maxHp), 0, 1);
+    const shieldRatio = clamp(state.player.shield / Math.max(1, state.player.maxShield), 0, 1);
+    const t = performance.now() / 1000;
+
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
-    const edgeGradient = ctx.createLinearGradient(0, 0, 0, h);
-    edgeGradient.addColorStop(0, 'rgba(4,8,14,0.65)');
-    edgeGradient.addColorStop(0.2, 'rgba(4,8,14,0.15)');
-    edgeGradient.addColorStop(0.8, 'rgba(4,8,14,0.2)');
-    edgeGradient.addColorStop(1, 'rgba(4,8,14,0.7)');
-    ctx.fillStyle = edgeGradient;
+    const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.15, w / 2, h / 2, w * 0.75);
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, 'rgba(4,8,14,0.75)');
+    ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, w, h);
 
-    ctx.strokeStyle = 'rgba(71,245,255,0.2)';
+    ctx.fillStyle = 'rgba(6,12,20,0.86)';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(w * 0.18, 0);
+    ctx.lineTo(w * 0.36, h * 0.55);
+    ctx.lineTo(w * 0.26, h);
+    ctx.lineTo(0, h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(w, 0);
+    ctx.lineTo(w * 0.82, 0);
+    ctx.lineTo(w * 0.64, h * 0.55);
+    ctx.lineTo(w * 0.74, h);
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillRect(0, 0, w, h * 0.08);
+    ctx.fillRect(0, h * 0.78, w, h * 0.22);
+
+    ctx.strokeStyle = 'rgba(71,245,255,0.25)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(80, h - 120);
-    ctx.lineTo(260, h - 40);
-    ctx.lineTo(w - 260, h - 40);
-    ctx.lineTo(w - 80, h - 120);
+    ctx.moveTo(w * 0.18, h * 0.08);
+    ctx.lineTo(w * 0.36, h * 0.55);
+    ctx.lineTo(w * 0.64, h * 0.55);
+    ctx.lineTo(w * 0.82, h * 0.08);
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(125,252,154,0.25)';
-    ctx.lineWidth = 1.2;
+    const glass = ctx.createLinearGradient(0, h * 0.1, 0, h * 0.6);
+    glass.addColorStop(0, 'rgba(125,252,154,0.08)');
+    glass.addColorStop(1, 'rgba(71,245,255,0.02)');
+    ctx.fillStyle = glass;
+    ctx.fillRect(w * 0.22, h * 0.1, w * 0.56, h * 0.55);
+
+    const hudX = w / 2;
+    const hudY = h * 0.42;
+    ctx.strokeStyle = 'rgba(125,252,154,0.6)';
+    ctx.lineWidth = 1.4;
     ctx.beginPath();
-    ctx.arc(w / 2, h - 40, 120, Math.PI, 0);
+    ctx.arc(hudX, hudY, 38, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(hudX - 50, hudY);
+    ctx.lineTo(hudX + 50, hudY);
+    ctx.moveTo(hudX, hudY - 50);
+    ctx.lineTo(hudX, hudY + 50);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(125,252,154,0.25)';
+    ctx.beginPath();
+    ctx.arc(hudX, hudY, 68, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(10,18,30,0.8)';
-    ctx.fillRect(30, h - 160, 220, 120);
-    ctx.fillRect(w - 250, h - 160, 220, 120);
-    ctx.fillStyle = '#7dfc9a';
-    ctx.font = '12px monospace';
-    ctx.fillText('ENGINE', 46, h - 132);
-    ctx.fillText('WEAPON', w - 230, h - 132);
-    ctx.fillStyle = '#e6f2ff';
-    ctx.fillText(`SPD ${Math.round(Math.hypot(state.player.vx, state.player.vy))}`, 46, h - 108);
-    ctx.fillText(`DMG ${getPlayerStats().damage}`, w - 230, h - 108);
+    drawCockpitPanel(26, h * 0.78 + 16, 240, 120, 'ENGINE', [
+      `SPD ${Math.round(speed)}`,
+      `THR ${Math.round(speedRatio * 100)}%`,
+      `TEMP ${(30 + speedRatio * 55).toFixed(0)}C`,
+      `BOOST ${stats.maxSpeed}`
+    ]);
+    drawCockpitPanel(w - 266, h * 0.78 + 16, 240, 120, 'WEAPON', [
+      `DMG ${stats.damage}`,
+      `COOLD ${Math.round(stats.fireCooldown)}ms`,
+      `AMMO INF`,
+      `KILLS ${state.kills}`
+    ]);
+
+    const throttleX = w * 0.5 - 6;
+    const throttleY = h * 0.78 + 26;
+    const throttleH = 100;
+    ctx.fillStyle = 'rgba(10,18,30,0.9)';
+    ctx.fillRect(throttleX, throttleY, 12, throttleH);
+    ctx.fillStyle = 'rgba(71,245,255,0.8)';
+    ctx.fillRect(throttleX, throttleY + throttleH * (1 - speedRatio), 12, throttleH * speedRatio);
+    ctx.strokeStyle = 'rgba(71,245,255,0.4)';
+    ctx.strokeRect(throttleX, throttleY, 12, throttleH);
+
+    const barY = h * 0.76;
+    ctx.fillStyle = 'rgba(10,18,30,0.9)';
+    ctx.fillRect(w * 0.3, barY, w * 0.4, 8);
+    ctx.fillStyle = 'rgba(125,252,154,0.8)';
+    ctx.fillRect(w * 0.3, barY, w * 0.4 * shieldRatio, 8);
+    ctx.strokeStyle = 'rgba(125,252,154,0.35)';
+    ctx.strokeRect(w * 0.3, barY, w * 0.4, 8);
+
+    const hpY = h * 0.74;
+    ctx.fillStyle = 'rgba(10,18,30,0.9)';
+    ctx.fillRect(w * 0.3, hpY, w * 0.4, 8);
+    ctx.fillStyle = 'rgba(255,122,71,0.85)';
+    ctx.fillRect(w * 0.3, hpY, w * 0.4 * hpRatio, 8);
+    ctx.strokeStyle = 'rgba(255,122,71,0.4)';
+    ctx.strokeRect(w * 0.3, hpY, w * 0.4, 8);
+
+    ctx.fillStyle = 'rgba(125,252,154,0.9)';
+    ctx.font = '11px monospace';
+    ctx.fillText(`SHIELD ${Math.round(state.player.shield)}`, w * 0.3, barY - 6);
+    ctx.fillText(`HULL ${Math.round(state.player.hp)}`, w * 0.3, hpY - 6);
+
+    drawRadar(w / 2, h * 0.78 + 65, 58);
+
+    if (hpRatio < 0.3) {
+      const pulse = 0.3 + Math.sin(t * 6) * 0.25;
+      ctx.strokeStyle = `rgba(255,80,80,${pulse})`;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(6, 6, w - 12, h - 12);
+    }
+
     ctx.restore();
   }
 
@@ -1163,6 +1504,7 @@
   function pause() {
     state.running = false;
     if (state.mode !== 'hangar') state.mode = 'paused';
+    stopHangarAnim();
     render();
   }
 
@@ -1231,6 +1573,7 @@
       upgradesBound = true;
     }
     resetSkygrid();
+    initHangarScene();
   }
 
   startBtn?.addEventListener('click', start);
