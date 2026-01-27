@@ -291,7 +291,7 @@
   }
 
   function getViewScale() {
-    return state.viewMode === 'cockpit' ? VIEW_SCALE * 0.88 : VIEW_SCALE;
+    return state.viewMode === 'cockpit' ? VIEW_SCALE * 0.85 : VIEW_SCALE;
   }
 
   function setView(view) {
@@ -1278,25 +1278,33 @@
     }
   }
 
-  function drawCockpitPanel(x, y, w, h, title, lines) {
+  function drawMfd(x, y, w, h, title, lines, accent) {
     const panelGrad = ctx.createLinearGradient(x, y, x, y + h);
-    panelGrad.addColorStop(0, 'rgba(8,18,30,0.9)');
-    panelGrad.addColorStop(1, 'rgba(6,10,18,0.95)');
+    panelGrad.addColorStop(0, 'rgba(8,16,28,0.95)');
+    panelGrad.addColorStop(1, 'rgba(5,8,14,0.98)');
     ctx.fillStyle = panelGrad;
     ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = 'rgba(71,245,255,0.3)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = accent || 'rgba(71,245,255,0.45)';
+    ctx.lineWidth = 1.2;
     ctx.strokeRect(x, y, w, h);
-    ctx.fillStyle = 'rgba(125,252,154,0.9)';
+    ctx.fillStyle = accent || 'rgba(125,252,154,0.9)';
     ctx.font = '11px monospace';
     ctx.fillText(title, x + 10, y + 16);
     ctx.fillStyle = '#e6f2ff';
     lines.forEach((line, idx) => {
       ctx.fillText(line, x + 10, y + 34 + idx * 16);
     });
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    for (let i = 0; i < 5; i++) {
+      const yy = y + 28 + i * 16;
+      ctx.beginPath();
+      ctx.moveTo(x + 8, yy);
+      ctx.lineTo(x + w - 8, yy);
+      ctx.stroke();
+    }
   }
 
-  function drawRadar(cx, cy, r) {
+  function drawRadar(cx, cy, r, t) {
     ctx.save();
     ctx.strokeStyle = 'rgba(125,252,154,0.35)';
     ctx.lineWidth = 1;
@@ -1348,6 +1356,18 @@
     ctx.beginPath();
     ctx.arc(cx, cy, 3, 0, Math.PI * 2);
     ctx.fill();
+    const sweep = (t || performance.now() / 1000) * 0.9;
+    ctx.strokeStyle = 'rgba(125,252,154,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(sweep) * r, cy + Math.sin(sweep) * r);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(125,252,154,0.08)';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, sweep - 0.25, sweep + 0.25);
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
   }
 
@@ -1360,105 +1380,201 @@
     const hpRatio = clamp(state.player.hp / Math.max(1, state.player.maxHp), 0, 1);
     const shieldRatio = clamp(state.player.shield / Math.max(1, state.player.maxShield), 0, 1);
     const t = performance.now() / 1000;
+    const forwardX = Math.cos(state.player.angle);
+    const forwardY = Math.sin(state.player.angle);
+    const rightX = -Math.sin(state.player.angle);
+    const rightY = Math.cos(state.player.angle);
+    const vForward = state.player.vx * forwardX + state.player.vy * forwardY;
+    const vRight = state.player.vx * rightX + state.player.vy * rightY;
+    const driftX = clamp(vRight / Math.max(1, stats.maxSpeed), -1, 1) * 12;
+    const driftY = clamp(-vForward / Math.max(1, stats.maxSpeed), -1, 1) * 8;
+
+    const winTop = h * 0.08 + driftY * 0.2;
+    const winBottom = h * 0.62 + driftY * 0.3;
+    const topW = w * 0.42;
+    const bottomW = w * 0.68;
+    const cx = w / 2 + driftX * 0.25;
+    const windowPoly = [
+      { x: cx - topW / 2, y: winTop },
+      { x: cx + topW / 2, y: winTop },
+      { x: cx + bottomW / 2, y: winBottom },
+      { x: cx - bottomW / 2, y: winBottom }
+    ];
+
+    function tracePoly(poly) {
+      ctx.beginPath();
+      ctx.moveTo(poly[0].x, poly[0].y);
+      for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
+      ctx.closePath();
+    }
 
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
-    const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.15, w / 2, h / 2, w * 0.75);
+    const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.18, w / 2, h / 2, w * 0.75);
     vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, 'rgba(4,8,14,0.75)');
+    vignette.addColorStop(1, 'rgba(3,7,12,0.82)');
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, w, h);
 
-    ctx.fillStyle = 'rgba(6,12,20,0.86)';
+    ctx.fillStyle = 'rgba(6,12,20,0.92)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'destination-out';
+    tracePoly(windowPoly);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+
+    ctx.save();
+    tracePoly(windowPoly);
+    ctx.clip();
+    const glass = ctx.createLinearGradient(0, winTop, 0, winBottom);
+    glass.addColorStop(0, 'rgba(130,220,255,0.08)');
+    glass.addColorStop(0.5, 'rgba(60,120,180,0.05)');
+    glass.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glass;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = 'rgba(125,252,154,0.18)';
+    ctx.lineWidth = 1;
+    const gridLines = 6;
+    for (let i = 1; i <= gridLines; i++) {
+      const y = winTop + (winBottom - winTop) * (i / (gridLines + 1)) + Math.sin(t * 0.6 + i) * 1.4;
+      ctx.beginPath();
+      ctx.moveTo(windowPoly[0].x + 12, y);
+      ctx.lineTo(windowPoly[1].x - 12, y);
+      ctx.stroke();
+    }
+    const sweepX = (t * 120) % w;
+    ctx.strokeStyle = 'rgba(125,252,154,0.25)';
+    ctx.beginPath();
+    ctx.moveTo(sweepX, winTop);
+    ctx.lineTo(sweepX + 30, winBottom);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.strokeStyle = 'rgba(71,245,255,0.35)';
+    ctx.lineWidth = 8;
+    tracePoly(windowPoly);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 2;
+    tracePoly(windowPoly);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx, winTop + 4);
+    ctx.lineTo(cx, winBottom - 8);
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(windowPoly[0].x + 26, winTop + 8);
+    ctx.lineTo(cx - 40, winBottom - 18);
+    ctx.moveTo(windowPoly[1].x - 26, winTop + 8);
+    ctx.lineTo(cx + 40, winBottom - 18);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(6,12,20,0.96)';
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(w * 0.18, 0);
-    ctx.lineTo(w * 0.36, h * 0.55);
-    ctx.lineTo(w * 0.26, h);
+    ctx.lineTo(w * 0.2, 0);
+    ctx.lineTo(w * 0.34, h * 0.62);
+    ctx.lineTo(w * 0.25, h);
     ctx.lineTo(0, h);
     ctx.closePath();
     ctx.fill();
     ctx.beginPath();
     ctx.moveTo(w, 0);
-    ctx.lineTo(w * 0.82, 0);
-    ctx.lineTo(w * 0.64, h * 0.55);
-    ctx.lineTo(w * 0.74, h);
+    ctx.lineTo(w * 0.8, 0);
+    ctx.lineTo(w * 0.66, h * 0.62);
+    ctx.lineTo(w * 0.75, h);
     ctx.lineTo(w, h);
     ctx.closePath();
     ctx.fill();
     ctx.fillRect(0, 0, w, h * 0.08);
-    ctx.fillRect(0, h * 0.78, w, h * 0.22);
+    ctx.fillRect(0, h * 0.74, w, h * 0.26);
 
     ctx.strokeStyle = 'rgba(71,245,255,0.25)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(w * 0.18, h * 0.08);
-    ctx.lineTo(w * 0.36, h * 0.55);
-    ctx.lineTo(w * 0.64, h * 0.55);
-    ctx.lineTo(w * 0.82, h * 0.08);
-    ctx.stroke();
-
-    const glass = ctx.createLinearGradient(0, h * 0.1, 0, h * 0.6);
-    glass.addColorStop(0, 'rgba(125,252,154,0.08)');
-    glass.addColorStop(1, 'rgba(71,245,255,0.02)');
-    ctx.fillStyle = glass;
-    ctx.fillRect(w * 0.22, h * 0.1, w * 0.56, h * 0.55);
-
-    const hudX = w / 2;
-    const hudY = h * 0.42;
-    ctx.strokeStyle = 'rgba(125,252,154,0.6)';
     ctx.lineWidth = 1.4;
     ctx.beginPath();
-    ctx.arc(hudX, hudY, 38, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(hudX - 50, hudY);
-    ctx.lineTo(hudX + 50, hudY);
-    ctx.moveTo(hudX, hudY - 50);
-    ctx.lineTo(hudX, hudY + 50);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(125,252,154,0.25)';
-    ctx.beginPath();
-    ctx.arc(hudX, hudY, 68, 0, Math.PI * 2);
+    ctx.moveTo(w * 0.2, h * 0.08);
+    ctx.lineTo(w * 0.34, h * 0.62);
+    ctx.lineTo(w * 0.66, h * 0.62);
+    ctx.lineTo(w * 0.8, h * 0.08);
     ctx.stroke();
 
-    drawCockpitPanel(26, h * 0.78 + 16, 240, 120, 'ENGINE', [
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    for (let i = 0; i < 8; i++) {
+      const boltX = windowPoly[0].x + (i / 7) * (windowPoly[1].x - windowPoly[0].x);
+      ctx.beginPath();
+      ctx.arc(boltX, winTop - 4, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const hudX = w / 2 + driftX * 0.4;
+    const hudY = h * 0.42 + driftY * 0.5;
+    ctx.strokeStyle = 'rgba(125,252,154,0.75)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(hudX, hudY, 36, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(hudX - 52, hudY);
+    ctx.lineTo(hudX - 18, hudY);
+    ctx.moveTo(hudX + 18, hudY);
+    ctx.lineTo(hudX + 52, hudY);
+    ctx.moveTo(hudX, hudY - 52);
+    ctx.lineTo(hudX, hudY - 18);
+    ctx.moveTo(hudX, hudY + 18);
+    ctx.lineTo(hudX, hudY + 52);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(125,252,154,0.2)';
+    ctx.beginPath();
+    ctx.arc(hudX, hudY, 70, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const heading = (Math.atan2(forwardY, forwardX) * 180 / Math.PI + 360) % 360;
+    ctx.fillStyle = 'rgba(125,252,154,0.9)';
+    ctx.font = '12px monospace';
+    ctx.fillText(`HDG ${heading.toFixed(0)}`, w * 0.46, h * 0.06);
+    ctx.fillText(`WAVE ${Math.min(state.wave, MAX_WAVES)}`, w * 0.58, h * 0.06);
+
+    drawMfd(28, h * 0.76 + 14, 240, 120, 'ENGINE', [
       `SPD ${Math.round(speed)}`,
       `THR ${Math.round(speedRatio * 100)}%`,
       `TEMP ${(30 + speedRatio * 55).toFixed(0)}C`,
       `BOOST ${stats.maxSpeed}`
-    ]);
-    drawCockpitPanel(w - 266, h * 0.78 + 16, 240, 120, 'WEAPON', [
+    ], 'rgba(125,252,154,0.6)');
+    drawMfd(w - 268, h * 0.76 + 14, 240, 120, 'WEAPON', [
       `DMG ${stats.damage}`,
       `COOLD ${Math.round(stats.fireCooldown)}ms`,
       `AMMO INF`,
       `KILLS ${state.kills}`
-    ]);
+    ], 'rgba(255,170,90,0.6)');
 
-    const throttleX = w * 0.5 - 6;
-    const throttleY = h * 0.78 + 26;
+    const throttleX = w * 0.5 - 7;
+    const throttleY = h * 0.76 + 26;
     const throttleH = 100;
-    ctx.fillStyle = 'rgba(10,18,30,0.9)';
-    ctx.fillRect(throttleX, throttleY, 12, throttleH);
-    ctx.fillStyle = 'rgba(71,245,255,0.8)';
-    ctx.fillRect(throttleX, throttleY + throttleH * (1 - speedRatio), 12, throttleH * speedRatio);
-    ctx.strokeStyle = 'rgba(71,245,255,0.4)';
-    ctx.strokeRect(throttleX, throttleY, 12, throttleH);
+    ctx.fillStyle = 'rgba(10,18,30,0.95)';
+    ctx.fillRect(throttleX, throttleY, 14, throttleH);
+    ctx.fillStyle = 'rgba(71,245,255,0.85)';
+    ctx.fillRect(throttleX, throttleY + throttleH * (1 - speedRatio), 14, throttleH * speedRatio);
+    ctx.strokeStyle = 'rgba(71,245,255,0.45)';
+    ctx.strokeRect(throttleX, throttleY, 14, throttleH);
 
-    const barY = h * 0.76;
-    ctx.fillStyle = 'rgba(10,18,30,0.9)';
+    const barY = h * 0.72;
+    ctx.fillStyle = 'rgba(10,18,30,0.95)';
     ctx.fillRect(w * 0.3, barY, w * 0.4, 8);
-    ctx.fillStyle = 'rgba(125,252,154,0.8)';
+    ctx.fillStyle = 'rgba(125,252,154,0.85)';
     ctx.fillRect(w * 0.3, barY, w * 0.4 * shieldRatio, 8);
-    ctx.strokeStyle = 'rgba(125,252,154,0.35)';
+    ctx.strokeStyle = 'rgba(125,252,154,0.45)';
     ctx.strokeRect(w * 0.3, barY, w * 0.4, 8);
 
-    const hpY = h * 0.74;
-    ctx.fillStyle = 'rgba(10,18,30,0.9)';
+    const hpY = h * 0.7;
+    ctx.fillStyle = 'rgba(10,18,30,0.95)';
     ctx.fillRect(w * 0.3, hpY, w * 0.4, 8);
-    ctx.fillStyle = 'rgba(255,122,71,0.85)';
+    ctx.fillStyle = 'rgba(255,122,71,0.9)';
     ctx.fillRect(w * 0.3, hpY, w * 0.4 * hpRatio, 8);
-    ctx.strokeStyle = 'rgba(255,122,71,0.4)';
+    ctx.strokeStyle = 'rgba(255,122,71,0.45)';
     ctx.strokeRect(w * 0.3, hpY, w * 0.4, 8);
 
     ctx.fillStyle = 'rgba(125,252,154,0.9)';
@@ -1466,13 +1582,13 @@
     ctx.fillText(`SHIELD ${Math.round(state.player.shield)}`, w * 0.3, barY - 6);
     ctx.fillText(`HULL ${Math.round(state.player.hp)}`, w * 0.3, hpY - 6);
 
-    drawRadar(w / 2, h * 0.78 + 65, 58);
+    drawRadar(w / 2, h * 0.78 + 62, 56, t);
 
     if (hpRatio < 0.3) {
       const pulse = 0.3 + Math.sin(t * 6) * 0.25;
       ctx.strokeStyle = `rgba(255,80,80,${pulse})`;
       ctx.lineWidth = 3;
-      ctx.strokeRect(6, 6, w - 12, h - 12);
+      ctx.strokeRect(8, 8, w - 16, h - 16);
     }
 
     ctx.restore();
