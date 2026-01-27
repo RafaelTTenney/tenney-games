@@ -12,9 +12,15 @@
   const hudBoost = document.getElementById('sky-boost');
   const hudKills = document.getElementById('sky-kills');
   const hudWave = document.getElementById('sky-wave');
+  const hudCredits = document.getElementById('sky-credits');
+  const hudShip = document.getElementById('sky-ship');
   const startBtn = document.getElementById('sky-start');
   const pauseBtn = document.getElementById('sky-pause');
   const resetBtn = document.getElementById('sky-reset');
+  const upgradeNote = document.getElementById('sky-upgrade-note');
+  const upgradeButtons = Array.from(document.querySelectorAll('[data-upgrade]'));
+  const shipButtons = Array.from(document.querySelectorAll('[data-ship]'));
+  let upgradesBound = false;
 
   const world = { width: canvas.width, height: canvas.height };
   const input = { keys: {}, mouse: { x: canvas.width / 2, y: canvas.height / 2, down: false } };
@@ -54,6 +60,51 @@
   };
   const MAX_WAVES = 8;
   const VIEW_SCALE = 0.9;
+  const SHIP_TIERS = [
+    {
+      name: 'Cadet',
+      color: '#4af0ff',
+      thrust: 620,
+      maxSpeed: 470,
+      turnRate: 0.0058,
+      fireCooldown: 100,
+      damage: 11,
+      maxShield: 70,
+      maxHp: 100
+    },
+    {
+      name: 'Interceptor',
+      color: '#7dfc9a',
+      thrust: 720,
+      maxSpeed: 530,
+      turnRate: 0.0064,
+      fireCooldown: 86,
+      damage: 13,
+      maxShield: 90,
+      maxHp: 115
+    },
+    {
+      name: 'Vanguard',
+      color: '#ffb347',
+      thrust: 820,
+      maxSpeed: 600,
+      turnRate: 0.0069,
+      fireCooldown: 76,
+      damage: 15,
+      maxShield: 110,
+      maxHp: 130
+    }
+  ];
+  const UPGRADE_DEFS = {
+    damage: { label: 'Damage', max: 5, baseCost: 140, costStep: 110, value: 2 },
+    speed: { label: 'Engines', max: 5, baseCost: 160, costStep: 120, value: 1 },
+    fireRate: { label: 'Fire Rate', max: 4, baseCost: 180, costStep: 140, value: 1 },
+    shield: { label: 'Shields', max: 5, baseCost: 150, costStep: 120, value: 1 }
+  };
+  const SHIP_UPGRADES = [
+    { tier: 1, wave: 3, cost: 420 },
+    { tier: 2, wave: 5, cost: 780 }
+  ];
 
   const state = {
     running: false,
@@ -64,6 +115,16 @@
     spawnInterval: 0,
     waveSpawnsRemaining: 0,
     completed: false,
+    credits: 0,
+    shipTier: 0,
+    upgrades: {
+      damage: 0,
+      speed: 0,
+      fireRate: 0,
+      shield: 0
+    },
+    pendingWave: null,
+    mode: 'combat',
     enemies: [],
     bullets: [],
     enemyBullets: [],
@@ -112,6 +173,70 @@
 
   function getWaveAggroScale() {
     return clamp(0.88 + (state.wave - 1) * 0.06, 0.88, 2);
+  }
+
+  function getUpgradeCost(id) {
+    const def = UPGRADE_DEFS[id];
+    if (!def) return Infinity;
+    const level = state.upgrades[id] || 0;
+    return def.baseCost + def.costStep * level;
+  }
+
+  function getShipTier() {
+    return SHIP_TIERS[state.shipTier] || SHIP_TIERS[0];
+  }
+
+  function getPlayerStats() {
+    const base = getShipTier();
+    const stats = {
+      thrust: base.thrust,
+      maxSpeed: base.maxSpeed,
+      turnRate: base.turnRate,
+      fireCooldown: base.fireCooldown,
+      damage: base.damage,
+      maxShield: base.maxShield,
+      maxHp: base.maxHp,
+      shieldRegenRate: SETTINGS.shieldRegenRate,
+      shieldRegenDelay: SETTINGS.shieldRegenDelay,
+      color: base.color
+    };
+
+    const dmgLevel = state.upgrades.damage || 0;
+    const speedLevel = state.upgrades.speed || 0;
+    const fireLevel = state.upgrades.fireRate || 0;
+    const shieldLevel = state.upgrades.shield || 0;
+
+    stats.damage += dmgLevel * UPGRADE_DEFS.damage.value;
+    stats.thrust += speedLevel * 60;
+    stats.maxSpeed += speedLevel * 40;
+    stats.fireCooldown = Math.max(42, stats.fireCooldown - fireLevel * 8);
+    stats.maxShield += shieldLevel * 15;
+    stats.shieldRegenRate += shieldLevel * 3;
+    stats.shieldRegenDelay = Math.max(520, stats.shieldRegenDelay - shieldLevel * 40);
+    return stats;
+  }
+
+  function syncPlayerStats() {
+    const stats = getPlayerStats();
+    const player = state.player;
+    player.maxShield = stats.maxShield;
+    if (player.shield > player.maxShield) player.shield = player.maxShield;
+    player.maxHp = stats.maxHp;
+    if (player.hp > player.maxHp) player.hp = player.maxHp;
+    state.playerStats = stats;
+  }
+
+  function addCredits(amount) {
+    state.credits += amount;
+  }
+
+  function openHangar(nextWave) {
+    state.mode = 'hangar';
+    state.pendingWave = nextWave;
+    state.running = false;
+    state.lastTime = 0;
+    updateHud();
+    render();
   }
 
   function buildBackground() {
@@ -212,6 +337,11 @@
     state.spawnInterval = 0;
     state.waveSpawnsRemaining = 0;
     state.completed = false;
+    state.credits = 0;
+    state.shipTier = 0;
+    state.upgrades = { damage: 0, speed: 0, fireRate: 0, shield: 0 };
+    state.pendingWave = null;
+    state.mode = 'combat';
     state.enemies = [];
     state.bullets = [];
     state.enemyBullets = [];
@@ -222,14 +352,15 @@
       y: world.height / 2,
       vx: 0,
       vy: 0,
-      hp: 120,
-      maxHp: 120,
-      shield: 100,
-      maxShield: 100,
+      hp: SHIP_TIERS[0].maxHp,
+      maxHp: SHIP_TIERS[0].maxHp,
+      shield: SHIP_TIERS[0].maxShield,
+      maxShield: SHIP_TIERS[0].maxShield,
       lastHit: 0,
       fireCooldown: 0,
       angle: -Math.PI / 2
     };
+    syncPlayerStats();
     state.camera.x = state.player.x;
     state.camera.y = state.player.y;
     spawnWave();
@@ -247,6 +378,7 @@
     for (let i = 0; i < initialCount; i++) {
       spawnEnemy();
     }
+    state.mode = 'combat';
   }
 
   function updateHud() {
@@ -256,6 +388,20 @@
     if (hudBoost) hudBoost.textContent = `Speed: ${Math.round(speed)}`;
     if (hudKills) hudKills.textContent = `Kills: ${state.kills}`;
     if (hudWave) hudWave.textContent = `Wave: ${Math.min(state.wave, MAX_WAVES)}/${MAX_WAVES}`;
+    if (hudCredits) hudCredits.textContent = `Credits: ${state.credits}`;
+    if (hudShip) hudShip.textContent = `Ship: ${getShipTier().name}`;
+    if (startBtn) {
+      if (state.completed) {
+        startBtn.textContent = 'Complete';
+      } else if (state.mode === 'hangar' && state.pendingWave) {
+        startBtn.textContent = `Launch Wave ${state.pendingWave}`;
+      } else if (!state.running) {
+        startBtn.textContent = 'Start';
+      } else {
+        startBtn.textContent = 'Running';
+      }
+    }
+    updateUpgradeUI();
   }
 
   function getFireMode() {
@@ -264,15 +410,17 @@
 
   function fireBullet() {
     if (state.player.fireCooldown > 0) return;
+    const stats = getPlayerStats();
     const speed = SETTINGS.bullets.speed;
     state.bullets.push({
       x: state.player.x + Math.cos(state.player.angle) * 18,
       y: state.player.y + Math.sin(state.player.angle) * 18,
       vx: Math.cos(state.player.angle) * speed,
       vy: Math.sin(state.player.angle) * speed,
-      life: SETTINGS.bullets.life
+      life: SETTINGS.bullets.life,
+      damage: stats.damage
     });
-    state.player.fireCooldown = SETTINGS.player.fireCooldown;
+    state.player.fireCooldown = stats.fireCooldown;
   }
 
   function enemyFire(enemy) {
@@ -354,6 +502,68 @@
     });
   }
 
+  function updateUpgradeUI() {
+    if (!upgradeButtons.length && !shipButtons.length) return;
+    const canShop = !state.running && state.mode === 'hangar' && !state.completed && state.player.hp > 0;
+    upgradeButtons.forEach(btn => {
+      const id = btn.dataset.upgrade;
+      const def = UPGRADE_DEFS[id];
+      if (!def) return;
+      const level = state.upgrades[id] || 0;
+      const cost = getUpgradeCost(id);
+      const maxed = level >= def.max;
+      btn.textContent = `${def.label} ${level}/${def.max} • ${maxed ? 'MAX' : cost + 'c'}`;
+      btn.disabled = !canShop || maxed || state.credits < cost;
+    });
+    shipButtons.forEach(btn => {
+      const tier = parseInt(btn.dataset.ship || '0', 10);
+      const shipInfo = SHIP_TIERS[tier];
+      const rule = SHIP_UPGRADES.find(item => item.tier === tier);
+      if (!shipInfo || !rule) return;
+      const owned = state.shipTier >= tier;
+      const eligible = state.wave >= rule.wave;
+      const label = `${shipInfo.name} • Wave ${rule.wave} • ${rule.cost}c`;
+      btn.textContent = owned ? `${shipInfo.name} • Owned` : label;
+      btn.disabled = !canShop || owned || !eligible || state.credits < rule.cost;
+    });
+    if (upgradeNote) {
+      if (state.mode === 'hangar') {
+        upgradeNote.textContent = state.completed
+          ? 'Mission complete.'
+          : 'Hangar open. Spend credits, then launch the next wave.';
+      } else {
+        upgradeNote.textContent = 'Upgrades unlock between waves.';
+      }
+    }
+  }
+
+  function purchaseUpgrade(id) {
+    const def = UPGRADE_DEFS[id];
+    if (!def) return;
+    const level = state.upgrades[id] || 0;
+    if (level >= def.max) return;
+    const cost = getUpgradeCost(id);
+    if (state.credits < cost) return;
+    state.credits -= cost;
+    state.upgrades[id] = level + 1;
+    syncPlayerStats();
+    updateHud();
+  }
+
+  function purchaseShip(tier) {
+    const rule = SHIP_UPGRADES.find(item => item.tier === tier);
+    if (!rule) return;
+    if (state.shipTier >= tier) return;
+    if (state.credits < rule.cost) return;
+    if (state.wave < rule.wave) return;
+    state.credits -= rule.cost;
+    state.shipTier = tier;
+    syncPlayerStats();
+    state.player.hp = state.player.maxHp;
+    state.player.shield = state.player.maxShield;
+    updateHud();
+  }
+
   function getEnemyFireDelayForType(type) {
     const waveAggro = getWaveAggroScale();
     const typeOffset = type === 'ace' ? -80 : type === 'chaser' ? 0 : 70;
@@ -376,10 +586,11 @@
   function update(dt) {
     const player = state.player;
     const dtSec = dt / 1000;
-    const rotSpeed = SETTINGS.player.turnRate;
-    const thrust = SETTINGS.player.thrust;
+    const stats = getPlayerStats();
+    const rotSpeed = stats.turnRate;
+    const thrust = stats.thrust;
     const reverseThrust = SETTINGS.player.reverseThrust;
-    const maxSpeed = SETTINGS.player.maxSpeed;
+    const maxSpeed = stats.maxSpeed;
     const drag = Math.pow(SETTINGS.player.drag, dt / 16.67);
 
     const left = input.keys['ArrowLeft'] || input.keys['KeyA'];
@@ -414,8 +625,8 @@
     state.camera.x = player.x;
     state.camera.y = player.y;
 
-    if (performance.now() - player.lastHit > SETTINGS.shieldRegenDelay) {
-      player.shield = Math.min(player.maxShield, player.shield + SETTINGS.shieldRegenRate * dt / 1000);
+    if (performance.now() - player.lastHit > stats.shieldRegenDelay) {
+      player.shield = Math.min(player.maxShield, player.shield + stats.shieldRegenRate * dt / 1000);
     }
 
     if (player.fireCooldown > 0) player.fireCooldown -= dt;
@@ -504,11 +715,13 @@
         const dx = bullet.x - enemy.x;
         const dy = bullet.y - enemy.y;
         if (Math.hypot(dx, dy) < 16) {
-          enemy.hp -= 14;
+          enemy.hp -= bullet.damage || 14;
           bullet.life = 0;
           spawnSparks(enemy.x, enemy.y, '255,200,160');
           if (enemy.hp <= 0) {
             state.kills += 1;
+            const bountyBase = enemy.type === 'ace' ? 90 : enemy.type === 'strafer' ? 60 : 45;
+            addCredits(Math.round(bountyBase * (1 + state.wave * 0.08)));
             spawnExplosion(enemy.x, enemy.y, enemy.type === 'ace' ? '255,120,255' : enemy.type === 'chaser' ? '255,110,110' : '255,170,80');
           }
         }
@@ -538,9 +751,11 @@
       if (state.wave >= MAX_WAVES) {
         state.completed = true;
         state.running = false;
+        state.mode = 'hangar';
       } else {
-        state.wave += 1;
-        spawnWave();
+        const bonus = 180 + state.wave * 70;
+        addCredits(bonus);
+        openHangar(state.wave + 1);
       }
     }
 
@@ -548,6 +763,7 @@
       state.running = false;
     }
 
+    syncPlayerStats();
     state.particles.forEach(p => {
       p.x += p.vx * dtSec;
       p.y += p.vy * dtSec;
@@ -656,8 +872,9 @@
     ctx.save();
     ctx.translate(px, py);
     ctx.rotate(player.angle);
-    ctx.fillStyle = '#4af0ff';
-    ctx.shadowColor = '#4af0ff';
+    const shipColor = (state.playerStats && state.playerStats.color) || getShipTier().color;
+    ctx.fillStyle = shipColor;
+    ctx.shadowColor = shipColor;
     ctx.shadowBlur = 22;
     ctx.beginPath();
     ctx.moveTo(18, 0);
@@ -755,7 +972,9 @@
         ? 'Mission Complete - Press Reset'
         : state.player.hp <= 0
           ? 'Ship Destroyed - Press Reset'
-          : 'Paused';
+          : state.mode === 'hangar'
+            ? 'Hangar Open - Upgrade and Launch'
+            : 'Paused';
       ctx.fillText(label, canvas.width / 2, canvas.height / 2);
     }
   }
@@ -771,6 +990,12 @@
 
   function start() {
     if (state.running) return;
+    if (state.completed) return;
+    if (state.mode === 'hangar' && state.pendingWave) {
+      state.wave = state.pendingWave;
+      state.pendingWave = null;
+      spawnWave();
+    }
     state.running = true;
     state.lastTime = performance.now();
     requestAnimationFrame(loop);
@@ -778,6 +1003,7 @@
 
   function pause() {
     state.running = false;
+    if (state.mode !== 'hangar') state.mode = 'paused';
     render();
   }
 
@@ -803,6 +1029,21 @@
 
   function initSkygrid() {
     bindInput();
+    if (!upgradesBound) {
+      upgradeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.upgrade;
+          if (id) purchaseUpgrade(id);
+        });
+      });
+      shipButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tier = parseInt(btn.dataset.ship || '0', 10);
+          if (!Number.isNaN(tier)) purchaseShip(tier);
+        });
+      });
+      upgradesBound = true;
+    }
     resetSkygrid();
   }
 

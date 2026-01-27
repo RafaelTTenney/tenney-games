@@ -142,6 +142,45 @@
       color: #cce6ff;
     }
     .hud span { padding: 4px 10px; background: rgba(20,32,48,0.6); border-radius: 6px; }
+    .upgrade-panel {
+      margin-top: 14px;
+      background: rgba(12,20,32,0.7);
+      border: 1px solid #22324b;
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .upgrade-title {
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.4px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .upgrade-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
+    }
+    .btn.upgrade {
+      font-size: 12px;
+      padding: 8px 10px;
+      border-color: #2a3a52;
+      color: var(--text);
+      background: rgba(9,15,26,0.6);
+    }
+    .btn.upgrade[disabled] {
+      opacity: 0.45;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+    .upgrade-note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
     .controls {
       display: flex;
       flex-wrap: wrap;
@@ -250,6 +289,23 @@
         <span id="sky-boost">Speed: 0</span>
         <span id="sky-kills">Kills: 0</span>
         <span id="sky-wave">Wave: 1</span>
+        <span id="sky-credits">Credits: 0</span>
+        <span id="sky-ship">Ship: Cadet</span>
+      </div>
+      <div class="upgrade-panel" id="sky-upgrade-panel">
+        <div class="upgrade-title">Hangar Upgrades (between waves)</div>
+        <div class="upgrade-grid">
+          <button class="btn upgrade" data-upgrade="damage" id="sky-upgrade-damage"></button>
+          <button class="btn upgrade" data-upgrade="speed" id="sky-upgrade-speed"></button>
+          <button class="btn upgrade" data-upgrade="fireRate" id="sky-upgrade-fire"></button>
+          <button class="btn upgrade" data-upgrade="shield" id="sky-upgrade-shield"></button>
+        </div>
+        <div class="upgrade-title" style="margin-top:10px;">Ship Bay</div>
+        <div class="upgrade-grid">
+          <button class="btn upgrade" data-ship="1" id="sky-ship-1"></button>
+          <button class="btn upgrade" data-ship="2" id="sky-ship-2"></button>
+        </div>
+        <div class="upgrade-note" id="sky-upgrade-note">Earn credits from kills and wave bonuses.</div>
       </div>
       <div class="modal-buttons">
         <button class="btn" id="sky-start">Start</button>
