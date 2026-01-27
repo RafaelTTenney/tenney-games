@@ -43,8 +43,8 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
       thrustVar: 8,
       maxSpeed: 40,
       maxSpeedVar: 12,
-      fireBase: 1.7,
-      fireVar: 0.9,
+      fireBase: 1.4,
+      fireVar: 0.75,
       bulletSpeed: 110
     },
     shieldRegenDelay: 0.9,
@@ -53,8 +53,6 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
     starField: 1700,
     intermission: 2.3
   };
-
-  const MAX_WAVES = 6;
 
   const state = {
     running: false,
@@ -144,7 +142,7 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
         hudCooldown.textContent = `${TEST_MODE ? 'Mode: TEST' : 'Mode: LIVE'} • Enemies: ${state.enemies.length}`;
       }
     }
-    if (hudPhase) hudPhase.textContent = `Wave: ${Math.min(state.wave, MAX_WAVES)}/${MAX_WAVES}`;
+    if (hudPhase) hudPhase.textContent = `Wave: ${state.wave}`;
   }
 
   function buildStarfield() {
@@ -471,7 +469,11 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
       fireTimer: getEnemyFireDelay(type),
       skill,
       behindTime: 0,
-      radius: 4.6
+      radius: 4.6,
+      orbit: Math.random() > 0.5 ? 1 : -1,
+      mode: 'approach',
+      modeTimer: rand(1.2, 2.6),
+      aimTime: 0
     });
   }
 
@@ -638,34 +640,71 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
     state.enemies.forEach(enemy => {
       const toPlayer = player.position.clone().sub(enemy.position);
       const dist = toPlayer.length();
-      const dirToPlayer = toPlayer.clone().normalize();
-      const angleTo = forward.angleTo(dirToPlayer);
-      if (angleTo > 1.2) enemy.behindTime += dtSec;
-      else enemy.behindTime = Math.max(0, enemy.behindTime - dtSec * 0.4);
+      const leadTime = clamp(dist / 180, 0.35, 1.1);
+      const predicted = player.position.clone().addScaledVector(player.velocity, leadTime);
+      const toTarget = predicted.clone().sub(enemy.position);
+      const targetDir = toTarget.length() > 0 ? toTarget.normalize() : new THREE.Vector3(0, 0, -1);
+      const angleTo = forward.angleTo(targetDir);
 
-      if (enemy.behindTime > 1.8 || dist > 820) repositionEnemyAhead(enemy);
-
-      const frontBias = forward.clone().multiplyScalar(0.45);
-      let desired = dirToPlayer.clone().multiplyScalar(0.65).add(frontBias).normalize();
-      if (enemy.type === 'strafer') {
-        const side = new THREE.Vector3().crossVectors(dirToPlayer, new THREE.Vector3(0, 1, 0)).normalize();
-        desired.addScaledVector(side, enemy.orbit || 0.6).normalize();
+      enemy.modeTimer -= dtSec;
+      if (enemy.modeTimer <= 0) {
+        if (dist < 150) {
+          enemy.mode = 'break';
+          enemy.modeTimer = rand(0.8, 1.4);
+        } else if (dist < 260) {
+          enemy.mode = 'strafe';
+          enemy.modeTimer = rand(1.2, 2.2);
+        } else {
+          enemy.mode = 'approach';
+          enemy.modeTimer = rand(1.4, 2.6);
+        }
       }
-      if (enemy.type === 'ace' && dist < 140) {
-        desired.addScaledVector(forward, 0.6).normalize();
+
+      if (angleTo > 1.1) enemy.behindTime += dtSec;
+      else enemy.behindTime = Math.max(0, enemy.behindTime - dtSec * 0.6);
+
+      if (enemy.behindTime > 1.4 || dist > 900) repositionEnemyAhead(enemy);
+
+      const separation = new THREE.Vector3();
+      state.enemies.forEach(other => {
+        if (other === enemy) return;
+        const delta = enemy.position.clone().sub(other.position);
+        const d = delta.length();
+        if (d > 0 && d < 24) {
+          separation.add(delta.normalize().multiplyScalar((24 - d) / 24));
+        }
+      });
+
+      const up = new THREE.Vector3(0, 1, 0);
+      const side = new THREE.Vector3().crossVectors(targetDir, up).normalize().multiplyScalar(enemy.orbit || 1);
+      let desired = targetDir.clone();
+      if (enemy.mode === 'strafe') {
+        desired.multiplyScalar(0.55).addScaledVector(side, 0.85);
+      } else if (enemy.mode === 'break') {
+        desired.multiplyScalar(-0.7).addScaledVector(side, 0.55);
       }
 
-      enemy.velocity.addScaledVector(desired, enemy.thrust * dtSec);
+      const heightTarget = player.position.y + enemy.orbit * 18;
+      desired.y += clamp((heightTarget - enemy.position.y) / 80, -0.6, 0.6);
+
+      desired.addScaledVector(separation, 0.7).normalize();
+
+      const distScale = dist > 260 ? 1.1 : dist < 140 ? 0.72 : 0.95;
+      enemy.velocity.addScaledVector(desired, enemy.thrust * distScale * dtSec);
       if (enemy.velocity.length() > enemy.maxSpeed) enemy.velocity.setLength(enemy.maxSpeed);
-      enemy.velocity.multiplyScalar(0.985);
+      enemy.velocity.multiplyScalar(0.986);
       enemy.position.addScaledVector(enemy.velocity, dtSec);
 
       enemy.mesh.lookAt(enemy.position.clone().add(enemy.velocity));
 
+      if (angleTo < 0.7 && dist < 520) enemy.aimTime += dtSec;
+      else enemy.aimTime = Math.max(0, enemy.aimTime - dtSec * 0.7);
+
       enemy.fireTimer -= dtSec;
-      if (enemy.fireTimer <= 0 && dist < 520 && angleTo < 0.85) {
+      if (enemy.fireTimer <= 0 && enemy.aimTime > 0.25 && dist < 520) {
         fireEnemy(enemy);
         enemy.fireTimer = getEnemyFireDelay(enemy.type);
+        enemy.aimTime = 0;
       }
 
       const glow = enemy.mesh.userData.glowMat;
@@ -709,7 +748,7 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
     if (state.intermission > 0) {
       state.intermission = Math.max(0, state.intermission - dtSec);
-      if (state.intermission === 0 && !state.completed) spawnWave();
+      if (state.intermission === 0) spawnWave();
     } else {
       state.spawnTimer -= dtSec;
       if (state.waveSpawnsRemaining > 0 && state.spawnTimer <= 0 && state.enemies.length < SETTINGS.enemies.maxCount) {
@@ -720,13 +759,8 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
     }
 
     if (state.enemies.length === 0 && state.waveSpawnsRemaining <= 0 && state.intermission <= 0) {
-      if (state.wave >= MAX_WAVES) {
-        state.completed = true;
-        state.running = false;
-      } else {
-        state.wave += 1;
-        state.intermission = SETTINGS.intermission;
-      }
+      state.wave += 1;
+      state.intermission = SETTINGS.intermission;
     }
 
     if (player.hp <= 0) state.running = false;
@@ -762,7 +796,6 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
   function start() {
     if (state.running) return;
-    if (state.completed) return;
     state.running = true;
     state.lastTime = performance.now();
     requestAnimationFrame(loop);

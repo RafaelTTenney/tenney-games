@@ -75,7 +75,6 @@
       ]
     }
   };
-  const MAX_WAVES = 8;
   const VIEW_SCALE = 0.9;
   const SHIP_TIERS = [
     {
@@ -639,13 +638,13 @@
     const speed = Math.hypot(state.player.vx, state.player.vy);
     if (hudBoost) hudBoost.textContent = `Speed: ${Math.round(speed)}`;
     if (hudKills) hudKills.textContent = `Kills: ${state.kills}`;
-    if (hudWave) hudWave.textContent = `Wave: ${Math.min(state.wave, MAX_WAVES)}/${MAX_WAVES}`;
+    if (hudWave) hudWave.textContent = `Wave: ${state.wave}`;
     if (hudCredits) hudCredits.textContent = `Credits: ${state.credits}`;
     if (hudShip) hudShip.textContent = `Ship: ${getShipTier().name}`;
     if (hangarCredits) hangarCredits.textContent = `${state.credits}`;
     if (hangarWave) {
       const waveDisplay = state.pendingWave || state.wave;
-      hangarWave.textContent = `${Math.min(waveDisplay, MAX_WAVES)}/${MAX_WAVES}`;
+      hangarWave.textContent = `${waveDisplay}`;
     }
     if (shipName) shipName.textContent = getShipTier().name;
     if (shipDesc) shipDesc.textContent = getShipTier().desc || '';
@@ -1028,15 +1027,9 @@
     }
 
     if (state.enemies.length === 0 && state.waveSpawnsRemaining <= 0) {
-      if (state.wave >= MAX_WAVES) {
-        state.completed = true;
-        state.running = false;
-        state.mode = 'hangar';
-      } else {
-        const bonus = 220 + state.wave * 90;
-        addCredits(bonus);
-        openHangar(state.wave + 1);
-      }
+      const bonus = 220 + state.wave * 90;
+      addCredits(bonus);
+      openHangar(state.wave + 1);
     }
 
     if (player.hp <= 0) {
