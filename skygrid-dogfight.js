@@ -14,14 +14,12 @@
   const hudWave = document.getElementById('sky-wave');
   const hudCredits = document.getElementById('sky-credits');
   const hudShip = document.getElementById('sky-ship');
-  const hudView = document.getElementById('sky-view');
   const startBtn = document.getElementById('sky-start');
   const pauseBtn = document.getElementById('sky-pause');
   const resetBtn = document.getElementById('sky-reset');
   const hangarBtn = document.getElementById('sky-hangar');
   const launchBtn = document.getElementById('sky-launch');
   const returnBtn = document.getElementById('sky-return');
-  const cockpitBtn = document.getElementById('sky-cockpit');
   const gameView = document.getElementById('skygrid-game-view');
   const hangarView = document.getElementById('skygrid-hangar-view');
   const hangarCanvas = document.getElementById('sky-hangar-canvas');
@@ -169,7 +167,6 @@
     pendingWave: null,
     mode: 'combat',
     view: 'combat',
-    viewMode: 'external',
     enemies: [],
     bullets: [],
     enemyBullets: [],
@@ -180,10 +177,6 @@
       comets: [],
       tileW: 0,
       tileH: 0
-    },
-    cockpit: {
-      driftX: 0,
-      driftY: 0
     },
     camera: {
       x: world.width / 2,
@@ -295,7 +288,7 @@
   }
 
   function getViewScale() {
-    return state.viewMode === 'cockpit' ? VIEW_SCALE * 0.92 : VIEW_SCALE;
+    return VIEW_SCALE;
   }
 
   function setView(view) {
@@ -316,15 +309,6 @@
     state.running = false;
     state.lastTime = 0;
     setView('hangar');
-    updateHud();
-    render();
-  }
-
-  function toggleViewMode() {
-    state.viewMode = state.viewMode === 'cockpit' ? 'external' : 'cockpit';
-    if (cockpitBtn) {
-      cockpitBtn.textContent = state.viewMode === 'cockpit' ? 'External View' : 'Cockpit View';
-    }
     updateHud();
     render();
   }
@@ -627,8 +611,6 @@
       fireCooldown: 0,
       angle: -Math.PI / 2
     };
-    state.cockpit.driftX = 0;
-    state.cockpit.driftY = 0;
     syncPlayerStats();
     state.camera.x = state.player.x;
     state.camera.y = state.player.y;
@@ -660,8 +642,6 @@
     if (hudWave) hudWave.textContent = `Wave: ${Math.min(state.wave, MAX_WAVES)}/${MAX_WAVES}`;
     if (hudCredits) hudCredits.textContent = `Credits: ${state.credits}`;
     if (hudShip) hudShip.textContent = `Ship: ${getShipTier().name}`;
-    if (hudView) hudView.textContent = `View: ${state.viewMode === 'cockpit' ? 'Cockpit' : 'External'}`;
-    if (cockpitBtn) cockpitBtn.textContent = state.viewMode === 'cockpit' ? 'External View' : 'Cockpit View';
     if (hangarCredits) hangarCredits.textContent = `${state.credits}`;
     if (hangarWave) {
       const waveDisplay = state.pendingWave || state.wave;
@@ -1263,10 +1243,6 @@
     });
     ctx.restore();
 
-    if (state.viewMode === 'cockpit') {
-      drawCockpitOverlay();
-    }
-
     if (!state.running) {
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1282,329 +1258,6 @@
             : 'Paused';
       ctx.fillText(label, canvas.width / 2, canvas.height / 2);
     }
-  }
-
-  function drawMfd(x, y, w, h, title, lines, accent) {
-    const panelGrad = ctx.createLinearGradient(x, y, x, y + h);
-    panelGrad.addColorStop(0, 'rgba(8,16,28,0.95)');
-    panelGrad.addColorStop(1, 'rgba(5,8,14,0.98)');
-    ctx.fillStyle = panelGrad;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = accent || 'rgba(71,245,255,0.45)';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(x, y, w, h);
-    ctx.fillStyle = accent || 'rgba(125,252,154,0.9)';
-    ctx.font = '11px monospace';
-    ctx.fillText(title, x + 10, y + 16);
-    ctx.fillStyle = '#e6f2ff';
-    lines.forEach((line, idx) => {
-      ctx.fillText(line, x + 10, y + 34 + idx * 16);
-    });
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    for (let i = 0; i < 5; i++) {
-      const yy = y + 28 + i * 16;
-      ctx.beginPath();
-      ctx.moveTo(x + 8, yy);
-      ctx.lineTo(x + w - 8, yy);
-      ctx.stroke();
-    }
-  }
-
-  function drawRadar(cx, cy, r, t) {
-    ctx.save();
-    ctx.strokeStyle = 'rgba(125,252,154,0.35)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.65, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - r, cy);
-    ctx.lineTo(cx + r, cy);
-    ctx.moveTo(cx, cy - r);
-    ctx.lineTo(cx, cy + r);
-    ctx.stroke();
-
-    const range = 520;
-    let nearest = null;
-    let nearestDist = Infinity;
-    state.enemies.forEach(enemy => {
-      const dx = enemy.x - state.player.x;
-      const dy = enemy.y - state.player.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        nearest = enemy;
-      }
-      if (dist > range) return;
-      const px = cx + (dx / range) * r;
-      const py = cy + (dy / range) * r;
-      ctx.fillStyle = enemy.type === 'ace' ? '#ff7bff' : enemy.type === 'strafer' ? '#ffa94d' : '#ff6b6b';
-      ctx.beginPath();
-      ctx.arc(px, py, 2.4, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    if (nearest && nearestDist < range) {
-      const dx = nearest.x - state.player.x;
-      const dy = nearest.y - state.player.y;
-      const px = cx + (dx / range) * r;
-      const py = cy + (dy / range) * r;
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-      ctx.beginPath();
-      ctx.arc(px, py, 6, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = '#7dfc9a';
-    ctx.beginPath();
-    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
-    ctx.fill();
-    const sweep = (t || performance.now() / 1000) * 0.9;
-    ctx.strokeStyle = 'rgba(125,252,154,0.5)';
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.cos(sweep) * r, cy + Math.sin(sweep) * r);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(125,252,154,0.08)';
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, r, sweep - 0.25, sweep + 0.25);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function drawCockpitOverlay() {
-    const w = canvas.width;
-    const h = canvas.height;
-    const stats = getPlayerStats();
-    const speed = Math.hypot(state.player.vx, state.player.vy);
-    const speedRatio = clamp(speed / Math.max(1, stats.maxSpeed), 0, 1);
-    const hpRatio = clamp(state.player.hp / Math.max(1, state.player.maxHp), 0, 1);
-    const shieldRatio = clamp(state.player.shield / Math.max(1, state.player.maxShield), 0, 1);
-    const t = performance.now() / 1000;
-    const forwardX = Math.cos(state.player.angle);
-    const forwardY = Math.sin(state.player.angle);
-    const rightX = -Math.sin(state.player.angle);
-    const rightY = Math.cos(state.player.angle);
-    const vForward = state.player.vx * forwardX + state.player.vy * forwardY;
-    const vRight = state.player.vx * rightX + state.player.vy * rightY;
-    const targetDriftX = clamp(vRight / Math.max(1, stats.maxSpeed), -1, 1) * 14;
-    const targetDriftY = clamp(-vForward / Math.max(1, stats.maxSpeed), -1, 1) * 10;
-    const smooth = 0.08;
-    state.cockpit.driftX += (targetDriftX - state.cockpit.driftX) * smooth;
-    state.cockpit.driftY += (targetDriftY - state.cockpit.driftY) * smooth;
-    const driftX = state.cockpit.driftX;
-    const driftY = state.cockpit.driftY;
-
-    const winTop = h * 0.035 + driftY * 0.12;
-    const winBottom = h * 0.76 + driftY * 0.18;
-    const topW = w * 0.7;
-    const bottomW = w * 0.98;
-    const cx = w / 2 + driftX * 0.22;
-    const windowPoly = [
-      { x: cx - topW / 2, y: winTop },
-      { x: cx + topW / 2, y: winTop },
-      { x: cx + bottomW / 2, y: winBottom },
-      { x: cx - bottomW / 2, y: winBottom }
-    ];
-
-    function tracePoly(poly) {
-      ctx.beginPath();
-      ctx.moveTo(poly[0].x, poly[0].y);
-      for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
-      ctx.closePath();
-    }
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.24, w / 2, h / 2, w * 0.8);
-    vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, 'rgba(3,7,12,0.6)');
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, w, h);
-
-    ctx.fillStyle = 'rgba(6,12,20,0.7)';
-    ctx.fillRect(0, 0, w, h);
-    ctx.globalCompositeOperation = 'destination-out';
-    tracePoly(windowPoly);
-    ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
-
-    ctx.save();
-    tracePoly(windowPoly);
-    ctx.clip();
-    const glass = ctx.createLinearGradient(0, winTop, 0, winBottom);
-    glass.addColorStop(0, 'rgba(130,220,255,0.04)');
-    glass.addColorStop(0.5, 'rgba(60,120,180,0.03)');
-    glass.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = glass;
-    ctx.fillRect(0, 0, w, h);
-
-    ctx.strokeStyle = 'rgba(125,252,154,0.18)';
-    ctx.lineWidth = 1;
-    const gridLines = 3;
-    for (let i = 1; i <= gridLines; i++) {
-      const y = winTop + (winBottom - winTop) * (i / (gridLines + 1)) + Math.sin(t * 0.6 + i) * 1.1;
-      ctx.beginPath();
-      ctx.moveTo(windowPoly[0].x + 24, y);
-      ctx.lineTo(windowPoly[1].x - 24, y);
-      ctx.stroke();
-    }
-    const sweepX = (t * 120) % w;
-    ctx.strokeStyle = 'rgba(125,252,154,0.25)';
-    ctx.beginPath();
-    ctx.moveTo(sweepX, winTop);
-    ctx.lineTo(sweepX + 30, winBottom);
-    ctx.stroke();
-    ctx.restore();
-
-    ctx.strokeStyle = 'rgba(71,245,255,0.28)';
-    ctx.lineWidth = 4.5;
-    tracePoly(windowPoly);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = 1.6;
-    tracePoly(windowPoly);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, winTop + 4);
-    ctx.lineTo(cx, winBottom - 8);
-    ctx.stroke();
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(windowPoly[0].x + 30, winTop + 8);
-    ctx.lineTo(cx - 40, winBottom - 18);
-    ctx.moveTo(windowPoly[1].x - 30, winTop + 8);
-    ctx.lineTo(cx + 40, winBottom - 18);
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(6,12,20,0.86)';
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(w * 0.12, 0);
-    ctx.lineTo(w * 0.28, h * 0.7);
-    ctx.lineTo(w * 0.2, h);
-    ctx.lineTo(0, h);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(w, 0);
-    ctx.lineTo(w * 0.88, 0);
-    ctx.lineTo(w * 0.72, h * 0.7);
-    ctx.lineTo(w * 0.8, h);
-    ctx.lineTo(w, h);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillRect(0, 0, w, h * 0.06);
-    ctx.fillRect(0, h * 0.7, w, h * 0.3);
-
-    ctx.strokeStyle = 'rgba(71,245,255,0.2)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(w * 0.12, h * 0.06);
-    ctx.lineTo(w * 0.28, h * 0.7);
-    ctx.lineTo(w * 0.72, h * 0.7);
-    ctx.lineTo(w * 0.88, h * 0.06);
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    for (let i = 0; i < 8; i++) {
-      const boltX = windowPoly[0].x + (i / 7) * (windowPoly[1].x - windowPoly[0].x);
-      ctx.beginPath();
-      ctx.arc(boltX, winTop - 4, 2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    const hudX = w / 2 + driftX * 0.4;
-    const hudY = h * 0.42 + driftY * 0.5;
-    ctx.strokeStyle = 'rgba(125,252,154,0.75)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(hudX, hudY, 36, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(hudX - 52, hudY);
-    ctx.lineTo(hudX - 18, hudY);
-    ctx.moveTo(hudX + 18, hudY);
-    ctx.lineTo(hudX + 52, hudY);
-    ctx.moveTo(hudX, hudY - 52);
-    ctx.lineTo(hudX, hudY - 18);
-    ctx.moveTo(hudX, hudY + 18);
-    ctx.lineTo(hudX, hudY + 52);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(125,252,154,0.2)';
-    ctx.beginPath();
-    ctx.arc(hudX, hudY, 70, 0, Math.PI * 2);
-    ctx.stroke();
-
-    const heading = (Math.atan2(forwardY, forwardX) * 180 / Math.PI + 360) % 360;
-    ctx.fillStyle = 'rgba(125,252,154,0.9)';
-    ctx.font = '12px monospace';
-    ctx.fillText(`HDG ${heading.toFixed(0)}`, w * 0.45, h * 0.06);
-    ctx.fillText(`WAVE ${Math.min(state.wave, MAX_WAVES)}`, w * 0.58, h * 0.06);
-
-    drawMfd(28, h * 0.76 + 14, 240, 120, 'ENGINE', [
-      `SPD ${Math.round(speed)}`,
-      `THR ${Math.round(speedRatio * 100)}%`,
-      `TEMP ${(30 + speedRatio * 55).toFixed(0)}C`,
-      `BOOST ${stats.maxSpeed}`
-    ], 'rgba(125,252,154,0.6)');
-    drawMfd(w - 268, h * 0.76 + 14, 240, 120, 'WEAPON', [
-      `DMG ${stats.damage}`,
-      `COOLD ${Math.round(stats.fireCooldown)}ms`,
-      `AMMO INF`,
-      `KILLS ${state.kills}`
-    ], 'rgba(255,170,90,0.6)');
-
-    const throttleX = w * 0.5 - 7;
-    const throttleY = h * 0.76 + 26;
-    const throttleH = 100;
-    ctx.fillStyle = 'rgba(10,18,30,0.95)';
-    ctx.fillRect(throttleX, throttleY, 14, throttleH);
-    ctx.fillStyle = 'rgba(71,245,255,0.85)';
-    ctx.fillRect(throttleX, throttleY + throttleH * (1 - speedRatio), 14, throttleH * speedRatio);
-    ctx.strokeStyle = 'rgba(71,245,255,0.45)';
-    ctx.strokeRect(throttleX, throttleY, 14, throttleH);
-
-    const barY = h * 0.72;
-    ctx.fillStyle = 'rgba(10,18,30,0.95)';
-    ctx.fillRect(w * 0.3, barY, w * 0.4, 8);
-    ctx.fillStyle = 'rgba(125,252,154,0.85)';
-    ctx.fillRect(w * 0.3, barY, w * 0.4 * shieldRatio, 8);
-    ctx.strokeStyle = 'rgba(125,252,154,0.45)';
-    ctx.strokeRect(w * 0.3, barY, w * 0.4, 8);
-
-    const hpY = h * 0.7;
-    ctx.fillStyle = 'rgba(10,18,30,0.95)';
-    ctx.fillRect(w * 0.3, hpY, w * 0.4, 8);
-    ctx.fillStyle = 'rgba(255,122,71,0.9)';
-    ctx.fillRect(w * 0.3, hpY, w * 0.4 * hpRatio, 8);
-    ctx.strokeStyle = 'rgba(255,122,71,0.45)';
-    ctx.strokeRect(w * 0.3, hpY, w * 0.4, 8);
-
-    ctx.fillStyle = 'rgba(125,252,154,0.9)';
-    ctx.font = '11px monospace';
-    ctx.fillText(`SHIELD ${Math.round(state.player.shield)}`, w * 0.3, barY - 6);
-    ctx.fillText(`HULL ${Math.round(state.player.hp)}`, w * 0.3, hpY - 6);
-
-    drawRadar(w / 2, h * 0.78 + 62, 56, t);
-
-    if (hpRatio < 0.3) {
-      const pulse = 0.3 + Math.sin(t * 6) * 0.25;
-      ctx.strokeStyle = `rgba(255,80,80,${pulse})`;
-      ctx.lineWidth = 3;
-      ctx.strokeRect(8, 8, w - 16, h - 16);
-    }
-
-    ctx.restore();
   }
 
   function loop(timestamp) {
@@ -1677,11 +1330,6 @@
           if (state.running) pause();
           setView('hangar');
           updateHud();
-        });
-      }
-      if (cockpitBtn) {
-        cockpitBtn.addEventListener('click', () => {
-          toggleViewMode();
         });
       }
       if (returnBtn) {
