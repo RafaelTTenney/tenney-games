@@ -181,6 +181,10 @@
       tileW: 0,
       tileH: 0
     },
+    cockpit: {
+      driftX: 0,
+      driftY: 0
+    },
     camera: {
       x: world.width / 2,
       y: world.height / 2
@@ -623,6 +627,8 @@
       fireCooldown: 0,
       angle: -Math.PI / 2
     };
+    state.cockpit.driftX = 0;
+    state.cockpit.driftY = 0;
     syncPlayerStats();
     state.camera.x = state.player.x;
     state.camera.y = state.player.y;
@@ -1386,14 +1392,19 @@
     const rightY = Math.cos(state.player.angle);
     const vForward = state.player.vx * forwardX + state.player.vy * forwardY;
     const vRight = state.player.vx * rightX + state.player.vy * rightY;
-    const driftX = clamp(vRight / Math.max(1, stats.maxSpeed), -1, 1) * 14;
-    const driftY = clamp(-vForward / Math.max(1, stats.maxSpeed), -1, 1) * 10;
+    const targetDriftX = clamp(vRight / Math.max(1, stats.maxSpeed), -1, 1) * 14;
+    const targetDriftY = clamp(-vForward / Math.max(1, stats.maxSpeed), -1, 1) * 10;
+    const smooth = 0.08;
+    state.cockpit.driftX += (targetDriftX - state.cockpit.driftX) * smooth;
+    state.cockpit.driftY += (targetDriftY - state.cockpit.driftY) * smooth;
+    const driftX = state.cockpit.driftX;
+    const driftY = state.cockpit.driftY;
 
-    const winTop = h * 0.05 + driftY * 0.15;
-    const winBottom = h * 0.7 + driftY * 0.22;
-    const topW = w * 0.56;
-    const bottomW = w * 0.9;
-    const cx = w / 2 + driftX * 0.25;
+    const winTop = h * 0.035 + driftY * 0.12;
+    const winBottom = h * 0.76 + driftY * 0.18;
+    const topW = w * 0.7;
+    const bottomW = w * 0.98;
+    const cx = w / 2 + driftX * 0.22;
     const windowPoly = [
       { x: cx - topW / 2, y: winTop },
       { x: cx + topW / 2, y: winTop },
@@ -1410,13 +1421,15 @@
 
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
-    const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.22, w / 2, h / 2, w * 0.78);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    const vignette = ctx.createRadialGradient(w / 2, h / 2, w * 0.24, w / 2, h / 2, w * 0.8);
     vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, 'rgba(3,7,12,0.7)');
+    vignette.addColorStop(1, 'rgba(3,7,12,0.6)');
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, w, h);
 
-    ctx.fillStyle = 'rgba(6,12,20,0.8)';
+    ctx.fillStyle = 'rgba(6,12,20,0.7)';
     ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'destination-out';
     tracePoly(windowPoly);
@@ -1427,20 +1440,20 @@
     tracePoly(windowPoly);
     ctx.clip();
     const glass = ctx.createLinearGradient(0, winTop, 0, winBottom);
-    glass.addColorStop(0, 'rgba(130,220,255,0.06)');
-    glass.addColorStop(0.5, 'rgba(60,120,180,0.04)');
+    glass.addColorStop(0, 'rgba(130,220,255,0.04)');
+    glass.addColorStop(0.5, 'rgba(60,120,180,0.03)');
     glass.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = glass;
     ctx.fillRect(0, 0, w, h);
 
     ctx.strokeStyle = 'rgba(125,252,154,0.18)';
     ctx.lineWidth = 1;
-    const gridLines = 4;
+    const gridLines = 3;
     for (let i = 1; i <= gridLines; i++) {
       const y = winTop + (winBottom - winTop) * (i / (gridLines + 1)) + Math.sin(t * 0.6 + i) * 1.1;
       ctx.beginPath();
-      ctx.moveTo(windowPoly[0].x + 18, y);
-      ctx.lineTo(windowPoly[1].x - 18, y);
+      ctx.moveTo(windowPoly[0].x + 24, y);
+      ctx.lineTo(windowPoly[1].x - 24, y);
       ctx.stroke();
     }
     const sweepX = (t * 120) % w;
@@ -1451,55 +1464,55 @@
     ctx.stroke();
     ctx.restore();
 
-    ctx.strokeStyle = 'rgba(71,245,255,0.32)';
-    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(71,245,255,0.28)';
+    ctx.lineWidth = 4.5;
     tracePoly(windowPoly);
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1.6;
+    tracePoly(windowPoly);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
     ctx.lineWidth = 2;
-    tracePoly(windowPoly);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-    ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.moveTo(cx, winTop + 4);
     ctx.lineTo(cx, winBottom - 8);
     ctx.stroke();
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(windowPoly[0].x + 26, winTop + 8);
+    ctx.moveTo(windowPoly[0].x + 30, winTop + 8);
     ctx.lineTo(cx - 40, winBottom - 18);
-    ctx.moveTo(windowPoly[1].x - 26, winTop + 8);
+    ctx.moveTo(windowPoly[1].x - 30, winTop + 8);
     ctx.lineTo(cx + 40, winBottom - 18);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(6,12,20,0.9)';
+    ctx.fillStyle = 'rgba(6,12,20,0.86)';
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(w * 0.16, 0);
-    ctx.lineTo(w * 0.3, h * 0.66);
-    ctx.lineTo(w * 0.22, h);
+    ctx.lineTo(w * 0.12, 0);
+    ctx.lineTo(w * 0.28, h * 0.7);
+    ctx.lineTo(w * 0.2, h);
     ctx.lineTo(0, h);
     ctx.closePath();
     ctx.fill();
     ctx.beginPath();
     ctx.moveTo(w, 0);
-    ctx.lineTo(w * 0.84, 0);
-    ctx.lineTo(w * 0.7, h * 0.66);
-    ctx.lineTo(w * 0.78, h);
+    ctx.lineTo(w * 0.88, 0);
+    ctx.lineTo(w * 0.72, h * 0.7);
+    ctx.lineTo(w * 0.8, h);
     ctx.lineTo(w, h);
     ctx.closePath();
     ctx.fill();
-    ctx.fillRect(0, 0, w, h * 0.08);
-    ctx.fillRect(0, h * 0.72, w, h * 0.28);
+    ctx.fillRect(0, 0, w, h * 0.06);
+    ctx.fillRect(0, h * 0.7, w, h * 0.3);
 
-    ctx.strokeStyle = 'rgba(71,245,255,0.22)';
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(71,245,255,0.2)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(w * 0.16, h * 0.08);
-    ctx.lineTo(w * 0.3, h * 0.66);
-    ctx.lineTo(w * 0.7, h * 0.66);
-    ctx.lineTo(w * 0.84, h * 0.08);
+    ctx.moveTo(w * 0.12, h * 0.06);
+    ctx.lineTo(w * 0.28, h * 0.7);
+    ctx.lineTo(w * 0.72, h * 0.7);
+    ctx.lineTo(w * 0.88, h * 0.06);
     ctx.stroke();
 
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
