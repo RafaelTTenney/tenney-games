@@ -20,37 +20,38 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
   const input = { keys: {} };
 
+  const TEST_MODE = true;
   const SETTINGS = {
     player: {
-      thrust: 26,
-      reverseThrust: 14,
-      turnRate: 1.15,
-      pitchRate: 1.05,
-      rollRate: 1.6,
-      maxSpeed: 80,
-      drag: 0.985,
-      fireCooldown: 0.14
+      thrust: 30,
+      reverseThrust: 16,
+      turnRate: 1.2,
+      pitchRate: 1.1,
+      rollRate: 1.7,
+      maxSpeed: 86,
+      drag: 0.984,
+      fireCooldown: 0.12
     },
     bullets: {
-      speed: 180,
-      life: 2.8
+      speed: 190,
+      life: 3.0
     },
     enemies: {
-      baseCount: 3,
-      maxCount: 11,
-      thrust: 16,
-      thrustVar: 10,
-      maxSpeed: 46,
-      maxSpeedVar: 14,
-      fireBase: 1.4,
-      fireVar: 0.8,
-      bulletSpeed: 120
+      baseCount: 2,
+      maxCount: 9,
+      thrust: 14,
+      thrustVar: 8,
+      maxSpeed: 40,
+      maxSpeedVar: 12,
+      fireBase: 1.7,
+      fireVar: 0.9,
+      bulletSpeed: 110
     },
     shieldRegenDelay: 0.9,
     shieldRegenRate: 20,
-    lookAhead: 42,
-    starField: 1600,
-    intermission: 2.1
+    lookAhead: 48,
+    starField: 1700,
+    intermission: 2.3
   };
 
   const MAX_WAVES = 6;
@@ -89,9 +90,9 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x05070d);
-  scene.fog = new THREE.Fog(0x05070d, 200, 2800);
+  scene.fog = new THREE.Fog(0x05070d, 120, 2400);
 
-  const camera = new THREE.PerspectiveCamera(66, canvas.width / canvas.height, 0.1, 5000);
+  const camera = new THREE.PerspectiveCamera(68, canvas.width / canvas.height, 0.1, 5000);
 
   const playerGroup = new THREE.Group();
   scene.add(playerGroup);
@@ -101,10 +102,10 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
   const cockpit = buildCockpit();
   playerGroup.add(cockpit.group);
 
-  const ambient = new THREE.AmbientLight(0xa8c8ff, 0.48);
-  const rimLight = new THREE.DirectionalLight(0xffffff, 0.85);
+  const ambient = new THREE.AmbientLight(0xb6d6ff, 0.58);
+  const rimLight = new THREE.DirectionalLight(0xffffff, 0.95);
   rimLight.position.set(4, 6, 8);
-  const glowLight = new THREE.PointLight(0x5ceaff, 0.7, 24);
+  const glowLight = new THREE.PointLight(0x5ceaff, 0.8, 28);
   glowLight.position.set(0, 1.2, -3);
   scene.add(ambient, rimLight, glowLight);
 
@@ -113,6 +114,12 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
   const reticle = buildReticle();
   camera.add(reticle);
+
+  const speedLines = buildSpeedLines(260);
+  camera.add(speedLines.lines);
+
+  const hudArrows = buildHudArrows(6);
+  camera.add(hudArrows.group);
 
   function rand(min, max) {
     return min + Math.random() * (max - min);
@@ -131,9 +138,11 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
     if (hudShield) hudShield.textContent = `Shield: ${Math.round(state.player.shield)}`;
     if (hudBoss) hudBoss.textContent = `Kills: ${state.kills}`;
     if (hudCooldown) {
-      hudCooldown.textContent = state.intermission > 0
-        ? `Next Wave: ${Math.ceil(state.intermission)}s`
-        : `Enemies: ${state.enemies.length}`;
+      if (state.intermission > 0) {
+        hudCooldown.textContent = `Next Wave: ${Math.ceil(state.intermission)}s`;
+      } else {
+        hudCooldown.textContent = `${TEST_MODE ? 'Mode: TEST' : 'Mode: LIVE'} • Enemies: ${state.enemies.length}`;
+      }
     }
     if (hudPhase) hudPhase.textContent = `Wave: ${Math.min(state.wave, MAX_WAVES)}/${MAX_WAVES}`;
   }
@@ -158,6 +167,125 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
     const points = new THREE.Points(geo, mat);
     state.stars = positions;
     return points;
+  }
+
+  function buildSpeedLines(count) {
+    const positions = new Float32Array(count * 2 * 3);
+    const speeds = new Float32Array(count);
+    const lengths = new Float32Array(count);
+    const range = { x: 8, y: 5.2, zMin: -20, zMax: -160 };
+    for (let i = 0; i < count; i++) {
+      const x = rand(-range.x, range.x);
+      const y = rand(-range.y, range.y);
+      const z = rand(range.zMin, range.zMax);
+      const len = rand(0.6, 2.2);
+      const idx = i * 6;
+      positions[idx] = x;
+      positions[idx + 1] = y;
+      positions[idx + 2] = z;
+      positions[idx + 3] = x;
+      positions[idx + 4] = y;
+      positions[idx + 5] = z - len;
+      speeds[i] = rand(0.6, 1.4);
+      lengths[i] = len;
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.LineBasicMaterial({ color: 0x7dfc9a, transparent: true, opacity: 0.25 });
+    const lines = new THREE.LineSegments(geometry, material);
+    lines.position.set(0, 0, -2);
+    return { lines, positions, speeds, lengths, range, material };
+  }
+
+  function updateSpeedLines(dt, speedRatio) {
+    const travel = (18 + speedRatio * 110) * dt;
+    const positions = speedLines.positions;
+    const range = speedLines.range;
+    for (let i = 0; i < speedLines.speeds.length; i++) {
+      const idx = i * 6;
+      positions[idx + 2] += travel * speedLines.speeds[i];
+      positions[idx + 5] += travel * speedLines.speeds[i];
+      if (positions[idx + 2] > -1) {
+        const x = rand(-range.x, range.x);
+        const y = rand(-range.y, range.y);
+        const z = rand(range.zMin, range.zMax);
+        const len = speedLines.lengths[i];
+        positions[idx] = x;
+        positions[idx + 1] = y;
+        positions[idx + 2] = z;
+        positions[idx + 3] = x;
+        positions[idx + 4] = y;
+        positions[idx + 5] = z - len;
+      }
+    }
+    speedLines.material.opacity = 0.15 + speedRatio * 0.5;
+    speedLines.lines.geometry.attributes.position.needsUpdate = true;
+  }
+
+  function updateHudArrows() {
+    const arrows = hudArrows.arrows;
+    arrows.forEach(arrow => { arrow.visible = false; });
+    if (!state.enemies.length) return;
+
+    const candidates = state.enemies.map(enemy => {
+      const pos = enemy.position.clone();
+      const projected = pos.project(camera);
+      return { enemy, projected, dist: pos.distanceTo(state.player.position) };
+    }).sort((a, b) => a.dist - b.dist).slice(0, arrows.length);
+
+    const z = -2.2;
+    const halfHeight = Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)) * Math.abs(z);
+    const halfWidth = halfHeight * camera.aspect;
+    const margin = 0.85;
+
+    candidates.forEach((item, i) => {
+      const arrow = arrows[i];
+      const ndcX = clamp(item.projected.x, -margin, margin);
+      const ndcY = clamp(item.projected.y, -margin, margin);
+      arrow.visible = true;
+      arrow.position.set(ndcX * halfWidth, ndcY * halfHeight, z);
+      const angle = Math.atan2(item.projected.y, item.projected.x) - Math.PI / 2;
+      arrow.material.rotation = angle;
+      const alpha = clamp(1.2 - item.dist / 600, 0.35, 0.9);
+      arrow.material.opacity = alpha;
+      arrow.scale.set(0.5 + (1 - alpha) * 0.3, 0.5 + (1 - alpha) * 0.3, 1);
+    });
+  }
+
+  function buildHudArrows(count) {
+    const group = new THREE.Group();
+    const arrows = [];
+    const texture = buildArrowTexture();
+    for (let i = 0; i < count; i++) {
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0.75, depthTest: false });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(0.5, 0.5, 1);
+      sprite.visible = false;
+      group.add(sprite);
+      arrows.push(sprite);
+    }
+    group.position.set(0, 0, -2.4);
+    return { group, arrows };
+  }
+
+  function buildArrowTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, 64, 64);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath();
+    ctx.moveTo(32, 8);
+    ctx.lineTo(56, 40);
+    ctx.lineTo(42, 40);
+    ctx.lineTo(42, 56);
+    ctx.lineTo(22, 56);
+    ctx.lineTo(22, 40);
+    ctx.lineTo(8, 40);
+    ctx.closePath();
+    ctx.fill();
+    return new THREE.CanvasTexture(canvas);
   }
 
   function wrapStars() {
@@ -255,15 +383,21 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
     const bodyMat = new THREE.MeshStandardMaterial({ color, metalness: 0.25, roughness: 0.45 });
     const glowMat = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: color, emissiveIntensity: 1.0 });
 
-    const nose = new THREE.ConeGeometry(2.1, 5.8, 14);
+    const nose = new THREE.ConeGeometry(2.3, 6.2, 16);
     nose.rotateX(Math.PI / 2);
     const body = new THREE.Mesh(nose, bodyMat);
 
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.5, 2.0), bodyMat);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.55, 2.2), bodyMat);
     wing.position.set(0, 0, -0.6);
 
-    const engine = new THREE.Mesh(new THREE.SphereGeometry(0.8, 12, 12), glowMat);
-    engine.position.set(0, 0, 2.8);
+    const engine = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 12), glowMat);
+    engine.position.set(0, 0, 3.2);
+
+    const trailGeo = new THREE.ConeGeometry(0.7, 3.6, 10, 1, true);
+    const trailMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+    const trail = new THREE.Mesh(trailGeo, trailMat);
+    trail.position.set(0, 0, 4.4);
+    trail.rotation.x = Math.PI;
 
     const outlineMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35 });
     const outline = new THREE.Mesh(nose, outlineMat);
@@ -272,8 +406,8 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
     const marker = buildTargetMarker(color);
     marker.position.set(0, 0.6, -2.6);
 
-    group.add(body, wing, engine, outline, marker);
-    group.userData = { engine, glowMat, marker };
+    group.add(body, wing, engine, trail, outline, marker);
+    group.userData = { engine, glowMat, marker, trail };
     return group;
   }
 
@@ -363,8 +497,8 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
     const player = state.player;
     const direction = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(player.pitch, player.yaw, player.roll, 'YXZ'));
 
-    const geometry = new THREE.SphereGeometry(0.3, 8, 8);
-    const material = new THREE.MeshBasicMaterial({ color: 0xbfe8ff });
+    const geometry = new THREE.SphereGeometry(0.45, 10, 10);
+    const material = new THREE.MeshBasicMaterial({ color: 0xe0f4ff });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(player.position).addScaledVector(direction, 3);
     scene.add(mesh);
@@ -381,7 +515,7 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
   function fireEnemy(enemy) {
     const toPlayer = state.player.position.clone().sub(enemy.position).normalize();
-    const geometry = new THREE.SphereGeometry(0.35, 8, 8);
+    const geometry = new THREE.SphereGeometry(0.5, 10, 10);
     const material = new THREE.MeshBasicMaterial({ color: 0xffb37b });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(enemy.position).addScaledVector(toPlayer, 2.8);
@@ -495,17 +629,24 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
       return true;
     });
 
+    if (player.fireCooldown <= 0) {
+      reticle.material.opacity = 0.85;
+    } else {
+      reticle.material.opacity = 0.4 + Math.sin(performance.now() * 0.02) * 0.1;
+    }
+
     state.enemies.forEach(enemy => {
       const toPlayer = player.position.clone().sub(enemy.position);
       const dist = toPlayer.length();
       const dirToPlayer = toPlayer.clone().normalize();
       const angleTo = forward.angleTo(dirToPlayer);
-      if (angleTo > 1.3) enemy.behindTime += dtSec;
+      if (angleTo > 1.2) enemy.behindTime += dtSec;
       else enemy.behindTime = Math.max(0, enemy.behindTime - dtSec * 0.4);
 
-      if (enemy.behindTime > 2.5 || dist > 900) repositionEnemyAhead(enemy);
+      if (enemy.behindTime > 1.8 || dist > 820) repositionEnemyAhead(enemy);
 
-      let desired = dirToPlayer.clone();
+      const frontBias = forward.clone().multiplyScalar(0.45);
+      let desired = dirToPlayer.clone().multiplyScalar(0.65).add(frontBias).normalize();
       if (enemy.type === 'strafer') {
         const side = new THREE.Vector3().crossVectors(dirToPlayer, new THREE.Vector3(0, 1, 0)).normalize();
         desired.addScaledVector(side, enemy.orbit || 0.6).normalize();
@@ -534,6 +675,12 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
         const scale = clamp(24 / Math.max(24, dist), 0.9, 1.8);
         marker.scale.set(6 * scale, 6 * scale, 1);
         marker.material.opacity = clamp(1.2 - dist / 520, 0.4, 0.9);
+      }
+      const trail = enemy.mesh.userData.trail;
+      if (trail) {
+        const speedRatio = clamp(enemy.velocity.length() / Math.max(1, enemy.maxSpeed), 0.2, 1);
+        trail.scale.set(1, 1 + speedRatio * 0.9, 1);
+        trail.material.opacity = 0.35 + speedRatio * 0.5;
       }
     });
 
@@ -584,9 +731,20 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
     if (player.hp <= 0) state.running = false;
 
+    const speedRatio = clamp(player.velocity.length() / Math.max(1, SETTINGS.player.maxSpeed), 0, 1);
+    updateSpeedLines(dtSec, speedRatio);
+    updateHudArrows();
     wrapStars();
     stars.geometry.attributes.position.needsUpdate = true;
     updateHud();
+
+    const baseFov = 66;
+    const maxFov = 82;
+    const desiredFov = baseFov + (maxFov - baseFov) * speedRatio;
+    if (Math.abs(camera.fov - desiredFov) > 0.2) {
+      camera.fov += (desiredFov - camera.fov) * 0.1;
+      camera.updateProjectionMatrix();
+    }
   }
 
   function render() {
