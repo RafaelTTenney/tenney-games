@@ -17,6 +17,11 @@
   const startBtn = document.getElementById('sky-start');
   const pauseBtn = document.getElementById('sky-pause');
   const resetBtn = document.getElementById('sky-reset');
+  const hangarBtn = document.getElementById('sky-hangar');
+  const launchBtn = document.getElementById('sky-launch');
+  const returnBtn = document.getElementById('sky-return');
+  const gameView = document.getElementById('skygrid-game-view');
+  const hangarView = document.getElementById('skygrid-hangar-view');
   const upgradeNote = document.getElementById('sky-upgrade-note');
   const upgradeButtons = Array.from(document.querySelectorAll('[data-upgrade]'));
   const shipButtons = Array.from(document.querySelectorAll('[data-ship]'));
@@ -125,6 +130,7 @@
     },
     pendingWave: null,
     mode: 'combat',
+    view: 'combat',
     enemies: [],
     bullets: [],
     enemyBullets: [],
@@ -230,11 +236,18 @@
     state.credits += amount;
   }
 
+  function setView(view) {
+    state.view = view;
+    if (gameView) gameView.classList.toggle('active', view === 'combat');
+    if (hangarView) hangarView.classList.toggle('active', view === 'hangar');
+  }
+
   function openHangar(nextWave) {
     state.mode = 'hangar';
     state.pendingWave = nextWave;
     state.running = false;
     state.lastTime = 0;
+    setView('hangar');
     updateHud();
     render();
   }
@@ -342,6 +355,7 @@
     state.upgrades = { damage: 0, speed: 0, fireRate: 0, shield: 0 };
     state.pendingWave = null;
     state.mode = 'combat';
+    state.view = 'combat';
     state.enemies = [];
     state.bullets = [];
     state.enemyBullets = [];
@@ -363,6 +377,7 @@
     syncPlayerStats();
     state.camera.x = state.player.x;
     state.camera.y = state.player.y;
+    setView('combat');
     spawnWave();
     updateHud();
     render();
@@ -531,8 +546,22 @@
         upgradeNote.textContent = state.completed
           ? 'Mission complete.'
           : 'Hangar open. Spend credits, then launch the next wave.';
+      } else if (state.view === 'hangar') {
+        upgradeNote.textContent = 'Hangar locked during combat. Finish the wave to upgrade.';
       } else {
         upgradeNote.textContent = 'Upgrades unlock between waves.';
+      }
+    }
+    if (launchBtn) {
+      if (state.mode === 'hangar' && state.pendingWave) {
+        launchBtn.textContent = `Launch Wave ${state.pendingWave}`;
+        launchBtn.disabled = state.completed;
+      } else if (state.completed) {
+        launchBtn.textContent = 'Mission Complete';
+        launchBtn.disabled = true;
+      } else {
+        launchBtn.textContent = 'Return';
+        launchBtn.disabled = false;
       }
     }
   }
@@ -996,6 +1025,7 @@
       state.pendingWave = null;
       spawnWave();
     }
+    setView('combat');
     state.running = true;
     state.lastTime = performance.now();
     requestAnimationFrame(loop);
@@ -1042,6 +1072,28 @@
           if (!Number.isNaN(tier)) purchaseShip(tier);
         });
       });
+      if (hangarBtn) {
+        hangarBtn.addEventListener('click', () => {
+          if (state.running) pause();
+          setView('hangar');
+          updateHud();
+        });
+      }
+      if (returnBtn) {
+        returnBtn.addEventListener('click', () => {
+          setView('combat');
+          updateHud();
+        });
+      }
+      if (launchBtn) {
+        launchBtn.addEventListener('click', () => {
+          if (state.mode === 'hangar' && state.pendingWave) {
+            start();
+          } else {
+            setView('combat');
+          }
+        });
+      }
       upgradesBound = true;
     }
     resetSkygrid();
