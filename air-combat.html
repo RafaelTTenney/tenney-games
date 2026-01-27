@@ -163,6 +163,58 @@
       background: linear-gradient(180deg, rgba(6,12,22,0.9), rgba(8,14,26,0.95));
       box-shadow: inset 0 0 24px rgba(71,245,255,0.12);
     }
+    .hangar-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+    .hangar-title {
+      font-size: 18px;
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .hangar-sub { color: var(--muted); font-size: 13px; }
+    .hangar-metrics { display: flex; gap: 12px; }
+    .metric {
+      background: rgba(12,20,32,0.7);
+      border: 1px solid #22324b;
+      border-radius: 10px;
+      padding: 8px 12px;
+      min-width: 90px;
+      text-align: center;
+      color: var(--text);
+    }
+    .metric span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+    .metric strong { display: block; font-size: 16px; color: var(--accent-3); }
+    .hangar-body {
+      display: grid;
+      grid-template-columns: minmax(220px, 0.8fr) minmax(360px, 1.4fr);
+      gap: 16px;
+    }
+    .hangar-card {
+      background: rgba(10,18,30,0.75);
+      border: 1px solid rgba(71,245,255,0.15);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: inset 0 0 18px rgba(9,16,28,0.7);
+    }
+    .ship-name { font-size: 18px; color: var(--accent-3); font-weight: 700; }
+    .ship-desc { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .ship-stats { margin-top: 10px; display: grid; gap: 6px; font-size: 13px; color: var(--text); }
+    .ship-stats span { color: var(--accent); font-weight: 600; }
+    .upgrade-section { margin-top: 12px; }
+    .upgrade-section:first-child { margin-top: 0; }
+    .upgrade-section-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
     .upgrade-title {
       color: var(--accent);
       font-weight: 700;
@@ -306,31 +358,83 @@
           <span id="sky-wave">Wave: 1</span>
           <span id="sky-credits">Credits: 0</span>
           <span id="sky-ship">Ship: Cadet</span>
+          <span id="sky-view">View: External</span>
         </div>
         <div class="modal-buttons">
           <button class="btn" id="sky-start">Start</button>
           <button class="btn ghost" id="sky-pause">Pause</button>
           <button class="btn ghost" id="sky-reset">Reset</button>
           <button class="btn ghost" id="sky-hangar">Hangar</button>
+          <button class="btn ghost" id="sky-cockpit">Cockpit View</button>
         </div>
       </div>
 
       <div class="hangar-view" id="skygrid-hangar-view">
         <div class="hangar-frame">
-          <div class="upgrade-panel" id="sky-upgrade-panel">
-            <div class="upgrade-title">Hangar Upgrades (between waves)</div>
-            <div class="upgrade-grid">
-              <button class="btn upgrade" data-upgrade="damage" id="sky-upgrade-damage"></button>
-              <button class="btn upgrade" data-upgrade="speed" id="sky-upgrade-speed"></button>
-              <button class="btn upgrade" data-upgrade="fireRate" id="sky-upgrade-fire"></button>
-              <button class="btn upgrade" data-upgrade="shield" id="sky-upgrade-shield"></button>
+          <div class="hangar-top">
+            <div>
+              <div class="hangar-title">Skygrid Hangar</div>
+              <div class="hangar-sub">Refit between waves and prepare for the next assault.</div>
             </div>
-            <div class="upgrade-title" style="margin-top:10px;">Ship Bay</div>
-            <div class="upgrade-grid">
-              <button class="btn upgrade" data-ship="1" id="sky-ship-1"></button>
-              <button class="btn upgrade" data-ship="2" id="sky-ship-2"></button>
+            <div class="hangar-metrics">
+              <div class="metric">
+                <span>Credits</span>
+                <strong id="sky-hangar-credits">0</strong>
+              </div>
+              <div class="metric">
+                <span>Wave</span>
+                <strong id="sky-hangar-wave">1/8</strong>
+              </div>
             </div>
-            <div class="upgrade-note" id="sky-upgrade-note">Earn credits from kills and wave bonuses.</div>
+          </div>
+          <div class="hangar-body">
+            <div class="hangar-card">
+              <div class="ship-name" id="sky-ship-name">Cadet</div>
+              <div class="ship-desc" id="sky-ship-desc">Starter recon fighter.</div>
+              <div class="ship-stats">
+                <div>Damage: <span id="sky-stat-damage">-</span></div>
+                <div>Fire Rate: <span id="sky-stat-fire">-</span></div>
+                <div>Max Speed: <span id="sky-stat-speed">-</span></div>
+                <div>Turn Rate: <span id="sky-stat-turn">-</span></div>
+                <div>Shield: <span id="sky-stat-shield">-</span></div>
+                <div>Hull: <span id="sky-stat-hull">-</span></div>
+              </div>
+            </div>
+            <div class="hangar-card">
+              <div class="upgrade-panel" id="sky-upgrade-panel">
+                <div class="upgrade-title">Systems</div>
+                <div class="upgrade-section">
+                  <div class="upgrade-section-title">Weapons</div>
+                  <div class="upgrade-grid">
+                    <button class="btn upgrade" data-upgrade="damage" id="sky-upgrade-damage"></button>
+                    <button class="btn upgrade" data-upgrade="fireRate" id="sky-upgrade-fire"></button>
+                    <button class="btn upgrade" data-upgrade="projectile" id="sky-upgrade-projectile"></button>
+                  </div>
+                </div>
+                <div class="upgrade-section">
+                  <div class="upgrade-section-title">Engines</div>
+                  <div class="upgrade-grid">
+                    <button class="btn upgrade" data-upgrade="engine" id="sky-upgrade-engine"></button>
+                    <button class="btn upgrade" data-upgrade="maneuver" id="sky-upgrade-maneuver"></button>
+                  </div>
+                </div>
+                <div class="upgrade-section">
+                  <div class="upgrade-section-title">Defense</div>
+                  <div class="upgrade-grid">
+                    <button class="btn upgrade" data-upgrade="shield" id="sky-upgrade-shield"></button>
+                    <button class="btn upgrade" data-upgrade="regen" id="sky-upgrade-regen"></button>
+                    <button class="btn upgrade" data-upgrade="hull" id="sky-upgrade-hull"></button>
+                  </div>
+                </div>
+                <div class="upgrade-title" style="margin-top:10px;">Ship Bay</div>
+                <div class="upgrade-grid">
+                  <button class="btn upgrade" data-ship="1" id="sky-ship-1"></button>
+                  <button class="btn upgrade" data-ship="2" id="sky-ship-2"></button>
+                  <button class="btn upgrade" data-ship="3" id="sky-ship-3"></button>
+                </div>
+                <div class="upgrade-note" id="sky-upgrade-note">Earn credits from kills and wave bonuses.</div>
+              </div>
+            </div>
           </div>
         </div>
         <div class="modal-buttons" style="margin-top: 12px;">

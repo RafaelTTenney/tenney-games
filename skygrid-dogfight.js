@@ -14,14 +14,26 @@
   const hudWave = document.getElementById('sky-wave');
   const hudCredits = document.getElementById('sky-credits');
   const hudShip = document.getElementById('sky-ship');
+  const hudView = document.getElementById('sky-view');
   const startBtn = document.getElementById('sky-start');
   const pauseBtn = document.getElementById('sky-pause');
   const resetBtn = document.getElementById('sky-reset');
   const hangarBtn = document.getElementById('sky-hangar');
   const launchBtn = document.getElementById('sky-launch');
   const returnBtn = document.getElementById('sky-return');
+  const cockpitBtn = document.getElementById('sky-cockpit');
   const gameView = document.getElementById('skygrid-game-view');
   const hangarView = document.getElementById('skygrid-hangar-view');
+  const hangarCredits = document.getElementById('sky-hangar-credits');
+  const hangarWave = document.getElementById('sky-hangar-wave');
+  const shipName = document.getElementById('sky-ship-name');
+  const shipDesc = document.getElementById('sky-ship-desc');
+  const statDamage = document.getElementById('sky-stat-damage');
+  const statFire = document.getElementById('sky-stat-fire');
+  const statSpeed = document.getElementById('sky-stat-speed');
+  const statTurn = document.getElementById('sky-stat-turn');
+  const statShield = document.getElementById('sky-stat-shield');
+  const statHull = document.getElementById('sky-stat-hull');
   const upgradeNote = document.getElementById('sky-upgrade-note');
   const upgradeButtons = Array.from(document.querySelectorAll('[data-upgrade]'));
   const shipButtons = Array.from(document.querySelectorAll('[data-ship]'));
@@ -68,6 +80,7 @@
   const SHIP_TIERS = [
     {
       name: 'Cadet',
+      desc: 'Starter recon fighter.',
       color: '#4af0ff',
       thrust: 620,
       maxSpeed: 470,
@@ -79,6 +92,7 @@
     },
     {
       name: 'Interceptor',
+      desc: 'Balanced assault frame.',
       color: '#7dfc9a',
       thrust: 720,
       maxSpeed: 530,
@@ -90,6 +104,7 @@
     },
     {
       name: 'Vanguard',
+      desc: 'Heavy strike platform.',
       color: '#ffb347',
       thrust: 820,
       maxSpeed: 600,
@@ -98,17 +113,34 @@
       damage: 15,
       maxShield: 110,
       maxHp: 130
+    },
+    {
+      name: 'Specter',
+      desc: 'Elite experimental chassis.',
+      color: '#ff7bff',
+      thrust: 900,
+      maxSpeed: 640,
+      turnRate: 0.0074,
+      fireCooldown: 70,
+      damage: 17,
+      maxShield: 125,
+      maxHp: 145
     }
   ];
   const UPGRADE_DEFS = {
-    damage: { label: 'Damage', max: 5, baseCost: 140, costStep: 110, value: 2 },
-    speed: { label: 'Engines', max: 5, baseCost: 160, costStep: 120, value: 1 },
-    fireRate: { label: 'Fire Rate', max: 4, baseCost: 180, costStep: 140, value: 1 },
-    shield: { label: 'Shields', max: 5, baseCost: 150, costStep: 120, value: 1 }
+    damage: { label: 'Weapon Damage', max: 6, baseCost: 140, costStep: 120, value: 2 },
+    fireRate: { label: 'Fire Rate', max: 5, baseCost: 180, costStep: 150, value: 1 },
+    projectile: { label: 'Projectile Speed', max: 4, baseCost: 150, costStep: 130, value: 1 },
+    engine: { label: 'Engine Thrust', max: 5, baseCost: 160, costStep: 130, value: 1 },
+    maneuver: { label: 'Maneuvering', max: 4, baseCost: 150, costStep: 120, value: 1 },
+    shield: { label: 'Shield Capacity', max: 5, baseCost: 150, costStep: 120, value: 1 },
+    regen: { label: 'Shield Regen', max: 4, baseCost: 170, costStep: 140, value: 1 },
+    hull: { label: 'Hull Plating', max: 4, baseCost: 160, costStep: 140, value: 1 }
   };
   const SHIP_UPGRADES = [
     { tier: 1, wave: 3, cost: 420 },
-    { tier: 2, wave: 5, cost: 780 }
+    { tier: 2, wave: 5, cost: 780 },
+    { tier: 3, wave: 7, cost: 1200 }
   ];
 
   const state = {
@@ -124,13 +156,18 @@
     shipTier: 0,
     upgrades: {
       damage: 0,
-      speed: 0,
       fireRate: 0,
-      shield: 0
+      projectile: 0,
+      engine: 0,
+      maneuver: 0,
+      shield: 0,
+      regen: 0,
+      hull: 0
     },
     pendingWave: null,
     mode: 'combat',
     view: 'combat',
+    viewMode: 'external',
     enemies: [],
     bullets: [],
     enemyBullets: [],
@@ -200,6 +237,7 @@
       turnRate: base.turnRate,
       fireCooldown: base.fireCooldown,
       damage: base.damage,
+      bulletSpeed: SETTINGS.bullets.speed,
       maxShield: base.maxShield,
       maxHp: base.maxHp,
       shieldRegenRate: SETTINGS.shieldRegenRate,
@@ -208,17 +246,24 @@
     };
 
     const dmgLevel = state.upgrades.damage || 0;
-    const speedLevel = state.upgrades.speed || 0;
     const fireLevel = state.upgrades.fireRate || 0;
+    const projectileLevel = state.upgrades.projectile || 0;
+    const engineLevel = state.upgrades.engine || 0;
+    const maneuverLevel = state.upgrades.maneuver || 0;
     const shieldLevel = state.upgrades.shield || 0;
+    const regenLevel = state.upgrades.regen || 0;
+    const hullLevel = state.upgrades.hull || 0;
 
     stats.damage += dmgLevel * UPGRADE_DEFS.damage.value;
-    stats.thrust += speedLevel * 60;
-    stats.maxSpeed += speedLevel * 40;
     stats.fireCooldown = Math.max(42, stats.fireCooldown - fireLevel * 8);
-    stats.maxShield += shieldLevel * 15;
-    stats.shieldRegenRate += shieldLevel * 3;
-    stats.shieldRegenDelay = Math.max(520, stats.shieldRegenDelay - shieldLevel * 40);
+    stats.bulletSpeed += projectileLevel * 60;
+    stats.thrust += engineLevel * 70;
+    stats.maxSpeed += engineLevel * 45;
+    stats.turnRate += maneuverLevel * 0.00045;
+    stats.maxShield += shieldLevel * 14;
+    stats.shieldRegenRate += regenLevel * 3;
+    stats.shieldRegenDelay = Math.max(520, stats.shieldRegenDelay - regenLevel * 50);
+    stats.maxHp += hullLevel * 12;
     return stats;
   }
 
@@ -236,6 +281,10 @@
     state.credits += amount;
   }
 
+  function getViewScale() {
+    return state.viewMode === 'cockpit' ? VIEW_SCALE * 0.92 : VIEW_SCALE;
+  }
+
   function setView(view) {
     state.view = view;
     if (gameView) gameView.classList.toggle('active', view === 'combat');
@@ -248,6 +297,15 @@
     state.running = false;
     state.lastTime = 0;
     setView('hangar');
+    updateHud();
+    render();
+  }
+
+  function toggleViewMode() {
+    state.viewMode = state.viewMode === 'cockpit' ? 'external' : 'cockpit';
+    if (cockpitBtn) {
+      cockpitBtn.textContent = state.viewMode === 'cockpit' ? 'External View' : 'Cockpit View';
+    }
     updateHud();
     render();
   }
@@ -352,7 +410,16 @@
     state.completed = false;
     state.credits = 0;
     state.shipTier = 0;
-    state.upgrades = { damage: 0, speed: 0, fireRate: 0, shield: 0 };
+    state.upgrades = {
+      damage: 0,
+      fireRate: 0,
+      projectile: 0,
+      engine: 0,
+      maneuver: 0,
+      shield: 0,
+      regen: 0,
+      hull: 0
+    };
     state.pendingWave = null;
     state.mode = 'combat';
     state.view = 'combat';
@@ -405,6 +472,22 @@
     if (hudWave) hudWave.textContent = `Wave: ${Math.min(state.wave, MAX_WAVES)}/${MAX_WAVES}`;
     if (hudCredits) hudCredits.textContent = `Credits: ${state.credits}`;
     if (hudShip) hudShip.textContent = `Ship: ${getShipTier().name}`;
+    if (hudView) hudView.textContent = `View: ${state.viewMode === 'cockpit' ? 'Cockpit' : 'External'}`;
+    if (cockpitBtn) cockpitBtn.textContent = state.viewMode === 'cockpit' ? 'External View' : 'Cockpit View';
+    if (hangarCredits) hangarCredits.textContent = `${state.credits}`;
+    if (hangarWave) {
+      const waveDisplay = state.pendingWave || state.wave;
+      hangarWave.textContent = `${Math.min(waveDisplay, MAX_WAVES)}/${MAX_WAVES}`;
+    }
+    if (shipName) shipName.textContent = getShipTier().name;
+    if (shipDesc) shipDesc.textContent = getShipTier().desc || '';
+    const stats = getPlayerStats();
+    if (statDamage) statDamage.textContent = `${stats.damage}`;
+    if (statFire) statFire.textContent = `${Math.round(stats.fireCooldown)} ms`;
+    if (statSpeed) statSpeed.textContent = `${Math.round(stats.maxSpeed)}`;
+    if (statTurn) statTurn.textContent = `${stats.turnRate.toFixed(4)}`;
+    if (statShield) statShield.textContent = `${Math.round(stats.maxShield)} • +${Math.round(stats.shieldRegenRate)}/s`;
+    if (statHull) statHull.textContent = `${Math.round(stats.maxHp)}`;
     if (startBtn) {
       if (state.completed) {
         startBtn.textContent = 'Complete';
@@ -426,7 +509,7 @@
   function fireBullet() {
     if (state.player.fireCooldown > 0) return;
     const stats = getPlayerStats();
-    const speed = SETTINGS.bullets.speed;
+    const speed = stats.bulletSpeed || SETTINGS.bullets.speed;
     state.bullets.push({
       x: state.player.x + Math.cos(state.player.angle) * 18,
       y: state.player.y + Math.sin(state.player.angle) * 18,
@@ -674,7 +757,7 @@
     });
     const camX = state.camera.x;
     const camY = state.camera.y;
-    const viewRadius = Math.max(canvas.width, canvas.height) / VIEW_SCALE;
+    const viewRadius = Math.max(canvas.width, canvas.height) / getViewScale();
     const bulletCull = viewRadius * 1.4;
     const enemyCull = viewRadius * 1.9;
     state.bullets = state.bullets.filter(b => {
@@ -749,8 +832,8 @@
           spawnSparks(enemy.x, enemy.y, '255,200,160');
           if (enemy.hp <= 0) {
             state.kills += 1;
-            const bountyBase = enemy.type === 'ace' ? 90 : enemy.type === 'strafer' ? 60 : 45;
-            addCredits(Math.round(bountyBase * (1 + state.wave * 0.08)));
+            const bountyBase = enemy.type === 'ace' ? 110 : enemy.type === 'strafer' ? 80 : 60;
+            addCredits(Math.round(bountyBase * (1 + state.wave * 0.1)));
             spawnExplosion(enemy.x, enemy.y, enemy.type === 'ace' ? '255,120,255' : enemy.type === 'chaser' ? '255,110,110' : '255,170,80');
           }
         }
@@ -782,7 +865,7 @@
         state.running = false;
         state.mode = 'hangar';
       } else {
-        const bonus = 180 + state.wave * 70;
+        const bonus = 220 + state.wave * 90;
         addCredits(bonus);
         openHangar(state.wave + 1);
       }
@@ -895,8 +978,9 @@
     const px = player.x;
     const py = player.y;
     ctx.save();
+    const viewScale = getViewScale();
     ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.scale(VIEW_SCALE, VIEW_SCALE);
+    ctx.scale(viewScale, viewScale);
     ctx.translate(-camX, -camY);
     ctx.save();
     ctx.translate(px, py);
@@ -991,6 +1075,10 @@
     });
     ctx.restore();
 
+    if (state.viewMode === 'cockpit') {
+      drawCockpitOverlay();
+    }
+
     if (!state.running) {
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1006,6 +1094,47 @@
             : 'Paused';
       ctx.fillText(label, canvas.width / 2, canvas.height / 2);
     }
+  }
+
+  function drawCockpitOverlay() {
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    const edgeGradient = ctx.createLinearGradient(0, 0, 0, h);
+    edgeGradient.addColorStop(0, 'rgba(4,8,14,0.65)');
+    edgeGradient.addColorStop(0.2, 'rgba(4,8,14,0.15)');
+    edgeGradient.addColorStop(0.8, 'rgba(4,8,14,0.2)');
+    edgeGradient.addColorStop(1, 'rgba(4,8,14,0.7)');
+    ctx.fillStyle = edgeGradient;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = 'rgba(71,245,255,0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(80, h - 120);
+    ctx.lineTo(260, h - 40);
+    ctx.lineTo(w - 260, h - 40);
+    ctx.lineTo(w - 80, h - 120);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(125,252,154,0.25)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(w / 2, h - 40, 120, Math.PI, 0);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(10,18,30,0.8)';
+    ctx.fillRect(30, h - 160, 220, 120);
+    ctx.fillRect(w - 250, h - 160, 220, 120);
+    ctx.fillStyle = '#7dfc9a';
+    ctx.font = '12px monospace';
+    ctx.fillText('ENGINE', 46, h - 132);
+    ctx.fillText('WEAPON', w - 230, h - 132);
+    ctx.fillStyle = '#e6f2ff';
+    ctx.fillText(`SPD ${Math.round(Math.hypot(state.player.vx, state.player.vy))}`, 46, h - 108);
+    ctx.fillText(`DMG ${getPlayerStats().damage}`, w - 230, h - 108);
+    ctx.restore();
   }
 
   function loop(timestamp) {
@@ -1077,6 +1206,11 @@
           if (state.running) pause();
           setView('hangar');
           updateHud();
+        });
+      }
+      if (cockpitBtn) {
+        cockpitBtn.addEventListener('click', () => {
+          toggleViewMode();
         });
       }
       if (returnBtn) {
