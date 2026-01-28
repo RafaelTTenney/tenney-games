@@ -149,6 +149,67 @@
       border-radius: 10px;
       padding: 12px;
     }
+    .swarm-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+      gap: 12px;
+      align-items: start;
+    }
+    .swarm-main { position: relative; }
+    .swarm-status {
+      margin-top: 6px;
+      min-height: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.2px;
+    }
+    .swarm-briefing {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      border-radius: 12px;
+      background: rgba(5,10,18,0.86);
+      border: 1px solid rgba(125,252,154,0.2);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .swarm-briefing.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .briefing-card {
+      max-width: 520px;
+      background: rgba(10,18,30,0.92);
+      border: 1px solid rgba(125,252,154,0.25);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 0 22px rgba(125,252,154,0.15);
+    }
+    .briefing-kicker {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .briefing-card h3 {
+      margin: 0 0 8px;
+      color: var(--accent-3);
+    }
+    .briefing-section { margin-top: 10px; }
+    .briefing-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .briefing-card ul { margin: 6px 0 0 18px; padding: 0; }
+    .briefing-card li { margin-bottom: 4px; }
     .hangar-view {
       display: none;
       margin-top: 10px;
@@ -326,6 +387,10 @@
       font-size: 12px;
       text-align: center;
     }
+    @media (max-width: 980px) {
+      .swarm-layout { grid-template-columns: 1fr; }
+      #swarm-upgrade-panel { order: 2; }
+    }
     .controls {
       display: flex;
       flex-wrap: wrap;
@@ -414,9 +479,9 @@
 
       <section class="card" style="border-color: rgba(125,252,154,0.35);">
         <div>
-          <h3 style="color: var(--accent-3);">Swarm Breaker</h3>
-          <p>Vertical assault lane. Break drone waves, collect power cores, and survive escalation.</p>
-          <span class="tag" style="background: rgba(125,252,154,0.12); color: var(--accent-3); border-color: rgba(125,252,154,0.3);">Camera: Forward Scroller</span>
+          <h3 style="color: var(--accent-3);">Driftline Journey</h3>
+          <p>Shared narrative flight route. Clear chapters, secure checkpoints, and bank personal upgrades.</p>
+          <span class="tag" style="background: rgba(125,252,154,0.12); color: var(--accent-3); border-color: rgba(125,252,154,0.3);">Camera: Forward Flight</span>
         </div>
         <div style="margin-top:16px;">
           <button class="btn" id="openSwarm" style="border-color: var(--accent-3); color: var(--accent-3);">Launch</button>
@@ -586,26 +651,58 @@
   <div class="modal" id="swarmModal">
     <div class="modal-content" style="border-color: rgba(125,252,154,0.35);">
       <div class="modal-header">
-        <h2 style="color: var(--accent-3);">Swarm Breaker</h2>
+        <h2 style="color: var(--accent-3);">Driftline Journey</h2>
         <span class="modal-close" data-close="swarmModal">&times;</span>
       </div>
       <div class="controls">
-        <label>Control Mode
-          <select id="swarm-controls">
-            <option value="forward">Forward Aim</option>
-            <option value="mouse">Mouse Aim</option>
-          </select>
-        </label>
-        <label><input type="checkbox" id="swarm-autofire" checked /> Auto-fire</label>
-        <span>WASD to move, Space to fire, Shift for slow-mo pulse</span>
+        <span>Flight: WASD / Arrow keys to drift, Space to fire, Shift to boost. R to restart from checkpoint.</span>
+        <span class="tag" id="swarm-auth-note"></span>
       </div>
-      <canvas id="swarm-canvas" width="900" height="560"></canvas>
-      <div class="hud">
-        <span id="swarm-hp">HP: 110</span>
-        <span id="swarm-shield">Shield: 80</span>
-        <span id="swarm-power">Power: 1</span>
-        <span id="swarm-score">Score: 0</span>
-        <span id="swarm-wave">Wave: 1</span>
+      <div class="swarm-layout">
+        <div class="swarm-main">
+          <div class="swarm-briefing" id="swarm-briefing">
+            <div class="briefing-card">
+              <div class="briefing-kicker" id="swarm-brief-kicker">Chapter 1</div>
+              <h3 id="swarm-brief-title">Driftline Exodus</h3>
+              <p id="swarm-brief-body"></p>
+              <div class="briefing-section">
+                <div class="briefing-label">Primary Objective</div>
+                <div id="swarm-brief-primary"></div>
+              </div>
+              <div class="briefing-section">
+                <div class="briefing-label">Optional Challenges</div>
+                <ul id="swarm-brief-optional"></ul>
+              </div>
+              <button class="btn" id="swarm-brief-launch">Begin Chapter</button>
+            </div>
+          </div>
+          <canvas id="swarm-canvas" width="900" height="560"></canvas>
+          <div class="hud">
+            <span id="swarm-hp">Hull: 110</span>
+            <span id="swarm-shield">Shield: 80</span>
+            <span id="swarm-credits">Credits: 0</span>
+            <span id="swarm-chapter">Chapter: 1/8</span>
+            <span id="swarm-checkpoint">Checkpoint: 0/3</span>
+            <span id="swarm-score">Distance: 0</span>
+            <span id="swarm-objective">Objective: -</span>
+          </div>
+          <div class="swarm-status" id="swarm-status"></div>
+        </div>
+        <div class="upgrade-panel" id="swarm-upgrade-panel">
+          <div class="upgrade-title">Outfitter</div>
+          <div class="upgrade-section">
+            <div class="upgrade-section-title">Core Systems</div>
+            <div class="upgrade-grid">
+              <button class="btn upgrade" data-swarm-upgrade="engine" id="swarm-upgrade-engine"></button>
+              <button class="btn upgrade" data-swarm-upgrade="blaster" id="swarm-upgrade-blaster"></button>
+              <button class="btn upgrade" data-swarm-upgrade="capacitor" id="swarm-upgrade-capacitor"></button>
+              <button class="btn upgrade" data-swarm-upgrade="shield" id="swarm-upgrade-shield"></button>
+              <button class="btn upgrade" data-swarm-upgrade="hull" id="swarm-upgrade-hull"></button>
+              <button class="btn upgrade" data-swarm-upgrade="booster" id="swarm-upgrade-booster"></button>
+            </div>
+          </div>
+          <div class="upgrade-note" id="swarm-upgrade-note">Upgrades persist per user. Credits earned from objectives and challenges.</div>
+        </div>
       </div>
       <div class="modal-buttons">
         <button class="btn" id="swarm-start" style="border-color: var(--accent-3); color: var(--accent-3);">Start</button>
