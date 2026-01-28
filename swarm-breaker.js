@@ -51,9 +51,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   const BASE_STATS = {
     hp: 120,
     shield: 90,
-    accel: 240,
-    maxSpeed: 240,
-    drag: 0.95,
+    thrust: 420,
+    reverseThrust: 260,
+    turnRate: 0.0056,
+    maxSpeed: 320,
+    drag: 0.985,
     fireDelay: 200,
     damage: 13,
     bulletSpeed: 920,
@@ -276,7 +278,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       y: 0,
       vx: 0,
       vy: 0,
-      accel: BASE_STATS.accel,
+      thrust: BASE_STATS.thrust,
+      reverseThrust: BASE_STATS.reverseThrust,
+      turnRate: BASE_STATS.turnRate,
       maxSpeed: BASE_STATS.maxSpeed,
       drag: BASE_STATS.drag,
       fireDelay: BASE_STATS.fireDelay,
@@ -290,7 +294,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       boost: BASE_STATS.boostMax,
       boostMax: BASE_STATS.boostMax,
       boostRegen: BASE_STATS.boostRegen,
-      lastHit: 0
+      lastHit: 0,
+      angle: -Math.PI / 2
     },
     enemies: [],
     bullets: [],
@@ -489,8 +494,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const boosterLevel = upgrades.booster || 0;
 
     state.baseSpeed = BASE_SPEED + engineLevel * 6 + boosterLevel * 4;
-    state.player.accel = BASE_STATS.accel + engineLevel * 22;
-    state.player.maxSpeed = BASE_STATS.maxSpeed + engineLevel * 20;
+    state.player.thrust = BASE_STATS.thrust + engineLevel * 70;
+    state.player.reverseThrust = BASE_STATS.reverseThrust + engineLevel * 50;
+    state.player.turnRate = BASE_STATS.turnRate + engineLevel * 0.00025 + boosterLevel * 0.00018;
+    state.player.maxSpeed = BASE_STATS.maxSpeed + engineLevel * 26;
     state.player.fireDelay = Math.max(120, BASE_STATS.fireDelay - capacitorLevel * 20);
     state.player.damage = BASE_STATS.damage + blasterLevel * 3;
     state.player.bulletSpeed = BASE_STATS.bulletSpeed + blasterLevel * 16;
@@ -698,6 +705,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.player.y = 0;
     state.player.vx = 0;
     state.player.vy = 0;
+    state.player.angle = -Math.PI / 2;
     state.player.fireCooldown = 0;
     state.player.hp = state.player.maxHp;
     state.player.shield = state.player.maxShield;
@@ -866,12 +874,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const shotCount = (progress.upgrades.blaster || 0) >= 5 ? 2 : 1;
     for (let i = 0; i < shotCount; i++) {
       const offset = (i - (shotCount - 1) / 2) * spread;
+      const heading = player.angle + offset;
+      const lateralSpeed = 220 + (progress.upgrades.blaster || 0) * 10;
       state.bullets.push({
         x: player.x,
         y: player.y,
         z: 0,
-        vx: offset * 120,
-        vy: offset * 60,
+        vx: Math.cos(heading) * lateralSpeed + player.vx * 0.35,
+        vy: Math.sin(heading) * lateralSpeed + player.vy * 0.35,
         vz: player.bulletSpeed,
         life: 1400,
         damage: player.damage
@@ -982,6 +992,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
+  function emitThruster(reverse = false) {
+    const player = state.player;
+    const angle = player.angle + (reverse ? 0 : Math.PI);
+    const spread = 0.35;
+    const strength = reverse ? 50 : 80;
+    for (let i = 0; i < 2; i++) {
+      const jitter = randRange(-spread, spread, Math.random);
+      const dir = angle + jitter;
+      state.particles.push({
+        x: player.x + Math.cos(dir) * 16 + randRange(-3, 3, Math.random),
+        y: player.y + Math.sin(dir) * 16 + randRange(-3, 3, Math.random),
+        z: 70,
+        vx: Math.cos(dir) * strength + randRange(-20, 20, Math.random),
+        vy: Math.sin(dir) * strength + randRange(-20, 20, Math.random),
+        vz: randRange(20, 80, Math.random),
+        life: randRange(180, 320, Math.random),
+        size: randRange(2, 3.5, Math.random),
+        color: reverse ? '120,200,255' : '125,252,154'
+      });
+    }
+  }
+
   function applyDamage(amount) {
     const player = state.player;
     player.lastHit = performance.now();
@@ -1052,24 +1084,36 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.shake = Math.max(0, state.shake - dtSec * 2);
     state.hitFlash = Math.max(0, state.hitFlash - dtSec * 2.2);
 
-    let ax = 0;
-    let ay = 0;
-    if (input.keys.KeyW || input.keys.ArrowUp) ay -= 1;
-    if (input.keys.KeyS || input.keys.ArrowDown) ay += 1;
-    if (input.keys.KeyA || input.keys.ArrowLeft) ax -= 1;
-    if (input.keys.KeyD || input.keys.ArrowRight) ax += 1;
-    if (ax || ay) {
-      const len = Math.hypot(ax, ay) || 1;
-      ax /= len;
-      ay /= len;
-    }
-    const hasInput = ax !== 0 || ay !== 0;
+    const rotateLeft = input.keys.KeyA || input.keys.ArrowLeft;
+    const rotateRight = input.keys.KeyD || input.keys.ArrowRight;
+    const forward = input.keys.KeyW || input.keys.ArrowUp;
+    const reverse = input.keys.KeyS || input.keys.ArrowDown;
+    if (rotateLeft) player.angle -= player.turnRate * dt;
+    if (rotateRight) player.angle += player.turnRate * dt;
+    if (player.angle > Math.PI) player.angle -= Math.PI * 2;
+    if (player.angle < -Math.PI) player.angle += Math.PI * 2;
 
-    player.vx += ax * player.accel * dtSec;
-    player.vy += ay * player.accel * dtSec;
-    const centerPull = 0.12;
-    player.vx += (-player.x) * centerPull * dtSec;
-    player.vy += (-player.y) * centerPull * dtSec;
+    if (forward) {
+      player.vx += Math.cos(player.angle) * player.thrust * dtSec;
+      player.vy += Math.sin(player.angle) * player.thrust * dtSec;
+      if (state.rng() < 0.6) emitThruster(false);
+    }
+    if (reverse) {
+      player.vx -= Math.cos(player.angle) * player.reverseThrust * dtSec;
+      player.vy -= Math.sin(player.angle) * player.reverseThrust * dtSec;
+      if (state.rng() < 0.5) emitThruster(true);
+    }
+
+    const edgeX = VIEW.boundsX * 0.88;
+    const edgeY = VIEW.boundsY * 0.86;
+    if (Math.abs(player.x) > edgeX) {
+      const push = (Math.abs(player.x) - edgeX) / (VIEW.boundsX - edgeX);
+      player.vx += -Math.sign(player.x) * push * 260 * dtSec;
+    }
+    if (Math.abs(player.y) > edgeY) {
+      const push = (Math.abs(player.y) - edgeY) / (VIEW.boundsY - edgeY);
+      player.vy += -Math.sign(player.y) * push * 240 * dtSec;
+    }
 
     state.stormLevel = segment?.hazards?.storm || 0;
     if (state.stormLevel > 0) {
@@ -1097,15 +1141,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.vy *= scale;
     }
 
-    const dragValue = hasInput ? player.drag : Math.max(0.9, player.drag - 0.03);
+    const thrusting = forward || reverse;
+    const dragValue = thrusting ? player.drag : Math.max(0.9, player.drag - 0.05);
     const drag = Math.pow(dragValue, dtSec * 60);
     player.vx *= drag;
     player.vy *= drag;
 
     player.x += player.vx * dtSec;
     player.y += player.vy * dtSec;
-    player.x = clamp(player.x, -VIEW.boundsX, VIEW.boundsX);
-    player.y = clamp(player.y, -VIEW.boundsY, VIEW.boundsY);
+    if (player.x > VIEW.boundsX) {
+      player.x = VIEW.boundsX;
+      player.vx *= -0.35;
+    } else if (player.x < -VIEW.boundsX) {
+      player.x = -VIEW.boundsX;
+      player.vx *= -0.35;
+    }
+    if (player.y > VIEW.boundsY) {
+      player.y = VIEW.boundsY;
+      player.vy *= -0.35;
+    } else if (player.y < -VIEW.boundsY) {
+      player.y = -VIEW.boundsY;
+      player.vy *= -0.35;
+    }
 
     if (player.fireCooldown > 0) player.fireCooldown -= dt;
     if (performance.now() - player.lastHit > 1200) {
@@ -1691,11 +1748,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const shipX = VIEW.centerX + player.vx * 0.12;
     const shipY = VIEW.centerY + VIEW.shipOffsetY + player.vy * 0.12;
     const speed = Math.hypot(player.vx, player.vy);
-    const tilt = clamp(player.vx / (player.maxSpeed || 1), -1, 1) * 0.45;
+    const drift = clamp(player.vx / (player.maxSpeed || 1), -1, 1) * 0.2;
 
     ctx.save();
     ctx.translate(shipX, shipY);
-    ctx.rotate(tilt);
+    ctx.rotate(player.angle + drift);
 
     ctx.fillStyle = '#7dfc9a';
     ctx.shadowColor = '#7dfc9a';
