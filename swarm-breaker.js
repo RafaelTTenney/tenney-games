@@ -89,6 +89,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     gateBonus: 1,
     dataBoost: 1.25
   };
+  const GATE_STABILIZE_BASE = 1800;
+  const GATE_STABILIZE_STEP = 220;
+  const GATE_STABILIZE_DECAY = 0.55;
 
   const JOURNEY = [
     {
@@ -272,6 +275,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     message: '',
     route: null,
     segmentGateIndex: 0,
+    gateCharge: 0,
+    gateChargeTarget: 0,
     player: {
       x: 0,
       y: 0,
@@ -382,7 +387,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const step = segment.length / gateCount;
       const gates = [];
       for (let i = 1; i <= gateCount; i++) {
-        const lateral = (rng() - 0.5) * 200;
+        const lateral = (rng() - 0.5) * 320;
         const t = step * i;
         const gx = x + dirX * t - dirY * lateral;
         const gy = y + dirY * t + dirX * lateral;
@@ -635,6 +640,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     return 1 + state.chapterIndex * 0.2 + state.segmentIndex * 0.12;
   }
 
+  function getGateChargeTarget() {
+    const base = GATE_STABILIZE_BASE + state.chapterIndex * GATE_STABILIZE_STEP + state.segmentIndex * 140;
+    return Math.min(3400, base + state.segmentGateIndex * 140);
+  }
+
   function initChallenges() {
     const chapter = currentChapter();
     state.challenges = (chapter?.optional || []).map(def => {
@@ -663,7 +673,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
     const gateTotal = state.gates.length;
     const gateIndex = gateTotal ? Math.min(state.segmentGateIndex + 1, gateTotal) : 0;
-    const gateText = gateTotal ? ` • Gate ${gateIndex}/${gateTotal}` : '';
+    const currentGate = state.gates[state.segmentGateIndex];
+    let gateText = gateTotal ? ` • Gate ${gateIndex}/${gateTotal}` : '';
+    if (currentGate && state.gateChargeTarget > 0) {
+      const pct = Math.round((state.gateCharge / state.gateChargeTarget) * 100);
+      gateText += pct > 0 ? ` • Stabilizing ${pct}%` : ' • Hold to stabilize';
+    }
     hudObjective.textContent = `Objective: ${state.objectiveText || '-'}${gateText}`;
   }
 
@@ -768,7 +783,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.objectiveText = `${segment.name} — ${chapter.objective}`;
 
     state.segmentGateIndex = 0;
-    state.gates = routeSegment?.gates?.map(gate => ({ ...gate })) || [];
+    state.gates = routeSegment?.gates?.map(gate => ({
+      ...gate,
+      passed: false,
+      threatSpawned: false,
+      charge: 0
+    })) || [];
+    state.gateCharge = 0;
+    state.gateChargeTarget = getGateChargeTarget();
     state.player.x = routeSegment?.startX || 0;
     state.player.y = routeSegment?.startY || 0;
     state.player.vx = 0;
@@ -964,7 +986,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.fireCooldown = player.fireDelay;
   }
 
-  function spawnEnemy(type) {
+  function spawnEnemy(type, opts = {}) {
     const def = ENEMY_TYPES[type] || ENEMY_TYPES.scout;
     const diff = getDifficulty();
     const hpScale = 0.82 + diff * 0.22;
@@ -972,12 +994,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const fireScale = clamp(1.05 - diff * 0.05, 0.6, 1.05);
     const targetGate = state.gates[state.segmentGateIndex] || { x: state.player.x, y: state.player.y };
     const angleToGate = Math.atan2(targetGate.y - state.player.y, targetGate.x - state.player.x);
-    const spawnAngle = angleToGate + randRange(-1.3, 1.3);
-    const radius = randRange(420, 720);
+    const originX = opts.x ?? state.player.x;
+    const originY = opts.y ?? state.player.y;
+    let spawnAngle = angleToGate + randRange(-1.3, 1.3);
+    if (typeof opts.angle === 'number') {
+      spawnAngle = opts.angle;
+    } else if (typeof opts.angleBias === 'number') {
+      const spread = opts.angleSpread ?? 0.8;
+      spawnAngle = opts.angleBias + randRange(-spread, spread);
+    }
+    const radius = randRange(opts.radiusMin ?? 420, opts.radiusMax ?? 720);
     const enemy = {
       type,
-      x: state.player.x + Math.cos(spawnAngle) * radius,
-      y: state.player.y + Math.sin(spawnAngle) * radius,
+      x: originX + Math.cos(spawnAngle) * radius,
+      y: originY + Math.sin(spawnAngle) * radius,
       hp: def.hp * hpScale,
       maxHp: def.hp * hpScale,
       size: def.size,
@@ -992,7 +1022,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       fireCooldown: randRange(240, def.fireRate * fireScale),
       timer: randRange(0, 1000),
       pattern: state.rng() < 0.5 ? -1 : 1,
-      hitTimer: 0
+      hitTimer: 0,
+      guardGate: !!opts.guardGate,
+      anchorX: typeof opts.anchorX === 'number' ? opts.anchorX : null,
+      anchorY: typeof opts.anchorY === 'number' ? opts.anchorY : null
     };
     state.enemies.push(enemy);
     return enemy;
@@ -1023,6 +1056,39 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
+  function spawnGateAmbush(gate) {
+    const segment = currentSegment();
+    if (!segment) return;
+    const diff = getDifficulty();
+    const count = Math.min(7, 2 + Math.floor(diff) + (state.rng() < 0.45 ? 1 : 0));
+    const mix = { ...(segment.mix || { scout: 1 }) };
+    mix.raider = (mix.raider || 0) + 0.2;
+    mix.lancer = (mix.lancer || 0) + 0.15;
+    for (let i = 0; i < count; i++) {
+      const type = pickWeighted(mix);
+      spawnEnemy(type, {
+        x: gate.x,
+        y: gate.y,
+        radiusMin: 260,
+        radiusMax: 460,
+        guardGate: true,
+        anchorX: gate.x,
+        anchorY: gate.y
+      });
+    }
+    if ((segment.hazards?.turret || diff > 1.6) && state.rng() < 0.5) {
+      spawnEnemy('turret', {
+        x: gate.x,
+        y: gate.y,
+        radiusMin: 140,
+        radiusMax: 240,
+        guardGate: true,
+        anchorX: gate.x,
+        anchorY: gate.y
+      });
+    }
+  }
+
   function spawnDebris() {
     state.debris.push({
       x: state.player.x + randRange(-VIEW.boundsX, VIEW.boundsX),
@@ -1036,7 +1102,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function spawnGate() {
     const segment = state.route?.segments?.[state.segmentIndex];
     if (segment) {
-      state.gates = segment.gates.map(gate => ({ ...gate }));
+      state.gates = segment.gates.map(gate => ({
+        ...gate,
+        passed: false,
+        threatSpawned: false,
+        charge: 0
+      }));
+      state.gateCharge = 0;
+      state.gateChargeTarget = getGateChargeTarget();
     }
   }
 
@@ -1174,12 +1247,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.boost = Math.min(player.boostMax, player.boost + player.boostRegen * dtSec);
     }
 
-    const dirX = routeSegment?.dirX ?? Math.cos(player.angle);
-    const dirY = routeSegment?.dirY ?? Math.sin(player.angle);
-    const routeForce = state.baseSpeed * (state.boostActive ? 1.3 : 0.75);
-    player.vx += dirX * routeForce * dtSec;
-    player.vy += dirY * routeForce * dtSec;
-
     const speed = Math.hypot(player.vx, player.vy);
     if (speed > player.maxSpeed) {
       const scale = player.maxSpeed / speed;
@@ -1192,6 +1259,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const drag = Math.pow(dragValue, dtSec * 60);
     player.vx *= drag;
     player.vy *= drag;
+
+    const forwardX = Math.cos(player.angle);
+    const forwardY = Math.sin(player.angle);
+    const lateral = player.vx * -forwardY + player.vy * forwardX;
+    const assist = thrusting ? 0.55 : 1.1;
+    player.vx -= -forwardY * lateral * assist * dtSec;
+    player.vy -= forwardX * lateral * assist * dtSec;
 
     player.x += player.vx * dtSec;
     player.y += player.vy * dtSec;
@@ -1259,6 +1333,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
+    const currentGate = state.gates[state.segmentGateIndex];
+    const gateDistToPlayer = currentGate ? dist(player.x, player.y, currentGate.x, currentGate.y) : Infinity;
+    const gatePressure = currentGate ? clamp(1 - gateDistToPlayer / 720, 0, 1) : 0;
+
     state.enemies.forEach(enemy => {
       enemy.timer += dt;
       if (enemy.hitTimer > 0) enemy.hitTimer -= dt;
@@ -1266,28 +1344,44 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (!enemy.static) {
         let targetX = player.x;
         let targetY = player.y;
-        if (enemy.type === 'scout') {
-          targetX += Math.sin(enemy.timer / 180) * 90 * enemy.pattern;
-          targetY += Math.cos(enemy.timer / 210) * 50;
-        } else if (enemy.type === 'raider') {
-          const angle = enemy.timer / 420 * enemy.pattern;
-          targetX += Math.cos(angle) * 140;
-          targetY += Math.sin(angle) * 90;
-        } else if (enemy.type === 'lancer') {
-          targetX += player.vx * 0.45;
-          targetY += player.vy * 0.45;
+
+        if (currentGate && (enemy.guardGate || gatePressure > 0.15)) {
+          const bias = enemy.guardGate ? 0.75 : gatePressure * 0.45;
+          targetX = targetX * (1 - bias) + currentGate.x * bias;
+          targetY = targetY * (1 - bias) + currentGate.y * bias;
         }
 
-        const swayX = Math.sin(enemy.timer / 240) * 18 * enemy.pattern;
-        const swayY = Math.cos(enemy.timer / 280) * 12 * enemy.pattern;
-        targetX += swayX;
-        targetY += swayY;
+        if (enemy.guardGate && currentGate) {
+          const orbitRadius = enemy.type === 'raider' ? 220 : enemy.type === 'scout' ? 170 : 190;
+          const orbitSpeed = enemy.type === 'scout' ? 220 : 280;
+          const orbitAngle = enemy.timer / orbitSpeed * enemy.pattern;
+          targetX = currentGate.x + Math.cos(orbitAngle) * orbitRadius;
+          targetY = currentGate.y + Math.sin(orbitAngle) * orbitRadius;
+        } else {
+          if (enemy.type === 'scout') {
+            targetX += Math.sin(enemy.timer / 180) * 110 * enemy.pattern;
+            targetY += Math.cos(enemy.timer / 210) * 70;
+          } else if (enemy.type === 'raider') {
+            const angle = enemy.timer / 360 * enemy.pattern;
+            targetX += Math.cos(angle) * 170;
+            targetY += Math.sin(angle) * 120;
+          } else if (enemy.type === 'lancer') {
+            targetX += player.vx * 0.6;
+            targetY += player.vy * 0.6;
+          }
+
+          const swayX = Math.sin(enemy.timer / 240) * 18 * enemy.pattern;
+          const swayY = Math.cos(enemy.timer / 280) * 12 * enemy.pattern;
+          targetX += swayX;
+          targetY += swayY;
+        }
 
         const turnRate = enemy.turn * (enemy.type === 'lancer' ? 1.25 : 1);
-        enemy.vx += (targetX - enemy.x) * turnRate * dtSec;
-        enemy.vy += (targetY - enemy.y) * turnRate * dtSec;
+        const pressure = gatePressure > 0.35 ? 1.15 : 1;
+        enemy.vx += (targetX - enemy.x) * turnRate * pressure * dtSec;
+        enemy.vy += (targetY - enemy.y) * turnRate * pressure * dtSec;
         const sideSpeed = Math.hypot(enemy.vx, enemy.vy);
-        const maxSide = enemy.speed * (enemy.type === 'scout' ? 1.15 : 1);
+        const maxSide = enemy.speed * (enemy.type === 'scout' ? 1.18 : 1) * pressure;
         if (sideSpeed > maxSide) {
           const scale = maxSide / sideSpeed;
           enemy.vx *= scale;
@@ -1302,11 +1396,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
         const len = Math.hypot(dx, dy) || 1;
-        const jitter = randRange(-0.2, 0.2);
+        const jitter = randRange(-0.18, 0.18);
         const dirX = (dx / len) + jitter;
         const dirY = (dy / len) - jitter * 0.6;
         const dirLen = Math.hypot(dirX, dirY) || 1;
-        const bulletSpeed = 280 + getDifficulty() * 45;
+        const bulletSpeed = 300 + getDifficulty() * 48 + gatePressure * 45;
         state.enemyBullets.push({
           x: enemy.x,
           y: enemy.y,
@@ -1349,17 +1443,30 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     updateBackground(dtSec);
 
-    const currentGate = state.gates[state.segmentGateIndex];
     if (currentGate) {
-      const gateDist = dist(player.x, player.y, currentGate.x, currentGate.y);
-      if (gateDist < currentGate.radius) {
+      if (!currentGate.threatSpawned && gateDistToPlayer < currentGate.radius * 2.4) {
+        spawnGateAmbush(currentGate);
+        currentGate.threatSpawned = true;
+      }
+
+      if (gateDistToPlayer < currentGate.radius) {
+        state.gateCharge = Math.min(state.gateChargeTarget, state.gateCharge + dt);
+      } else {
+        state.gateCharge = Math.max(0, state.gateCharge - dt * GATE_STABILIZE_DECAY);
+      }
+      const chargeRatio = state.gateChargeTarget > 0 ? state.gateCharge / state.gateChargeTarget : 0;
+      currentGate.charge = clamp(chargeRatio, 0, 1);
+
+      if (state.gateCharge >= state.gateChargeTarget) {
         currentGate.passed = true;
+        state.gateCharge = 0;
         if (currentGate.checkpoint) {
           reachCheckpoint();
           return;
         }
-        addCredits(45, 'Gate cleared');
+        addCredits(65, 'Gate stabilized');
         state.segmentGateIndex += 1;
+        state.gateChargeTarget = getGateChargeTarget();
       }
     }
 
@@ -1578,6 +1685,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.beginPath();
     ctx.arc(screen.x, screen.y, radius * 0.65, 0, Math.PI * 2);
     ctx.stroke();
+
+    if (gate.charge && gate.charge > 0) {
+      ctx.strokeStyle = 'rgba(125,252,154,0.85)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(
+        screen.x,
+        screen.y,
+        radius * 0.9,
+        -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * gate.charge
+      );
+      ctx.stroke();
+    }
   }
 
   function drawDebris(debris) {
@@ -1869,8 +1990,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const gateIndex = gateTotal ? Math.min(state.segmentGateIndex + 1, gateTotal) : 0;
       const nextGate = state.gates[state.segmentGateIndex];
       const gateDist = nextGate ? Math.round(dist(player.x, player.y, nextGate.x, nextGate.y)) : 0;
+      const gatePct = state.gateChargeTarget > 0 ? Math.round((state.gateCharge / state.gateChargeTarget) * 100) : 0;
       const gateText = gateTotal ? `Gate ${gateIndex}/${gateTotal} • ${gateDist}m` : 'Gate --';
-      hudScore.textContent = `Drift: ${formatDistance(state.chapterDistance)} (${segPct}%) • ${gateText}`;
+      const stabilizeText = gatePct > 0 ? ` • Stabilize ${gatePct}%` : '';
+      hudScore.textContent = `Drift: ${formatDistance(state.chapterDistance)} (${segPct}%) • ${gateText}${stabilizeText}`;
     }
     updateObjectiveDisplay();
   }
