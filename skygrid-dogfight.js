@@ -215,6 +215,18 @@
     return ((value % size) + size) % size;
   }
 
+  function getPlayerCombatState() {
+    const player = state.player;
+    const facingX = Math.cos(player.angle);
+    const facingY = Math.sin(player.angle);
+    const speed = Math.hypot(player.vx, player.vy);
+    const dirX = speed > 1 ? player.vx / speed : facingX;
+    const dirY = speed > 1 ? player.vy / speed : facingY;
+    const forwardDot = facingX * dirX + facingY * dirY;
+    const backpedal = speed > 40 && forwardDot < -0.35;
+    return { facingX, facingY, speed, dirX, dirY, forwardDot, backpedal };
+  }
+
   function getWaveSpeedScale() {
     return clamp(0.9 + (state.wave - 1) * 0.05, 0.9, 1.7);
   }
@@ -542,7 +554,32 @@
   function spawnEnemy() {
     const waveSpeed = getWaveSpeedScale();
     const waveAggro = getWaveAggroScale();
-    const angle = Math.random() * Math.PI * 2;
+    const player = state.player;
+    const facingX = Math.cos(player.angle);
+    const facingY = Math.sin(player.angle);
+    const speed = Math.hypot(player.vx, player.vy);
+    const dirX = speed > 1 ? player.vx / speed : facingX;
+    const dirY = speed > 1 ? player.vy / speed : facingY;
+    const forwardDot = facingX * dirX + facingY * dirY;
+    const backpedal = speed > 40 && forwardDot < -0.35;
+    const forwardAngle = Math.atan2(facingY, facingX);
+    let angle = Math.random() * Math.PI * 2;
+    if (backpedal) {
+      if (Math.random() < 0.55) {
+        angle = forwardAngle + Math.PI + rand(-0.5, 0.5);
+      } else {
+        angle = forwardAngle + (Math.random() > 0.5 ? 1 : -1) * rand(0.8, 1.4);
+      }
+    } else {
+      const roll = Math.random();
+      if (roll < 0.35) {
+        angle = forwardAngle + rand(-0.9, 0.9);
+      } else if (roll < 0.7) {
+        angle = forwardAngle + (Math.random() > 0.5 ? 1 : -1) * rand(0.9, 1.6);
+      } else {
+        angle = forwardAngle + Math.PI + rand(-0.8, 0.8);
+      }
+    }
     const radius = rand(640, 980);
     const x = state.player.x + Math.cos(angle) * radius;
     const y = state.player.y + Math.sin(angle) * radius;
@@ -693,13 +730,16 @@
     const dx = state.player.x - enemy.x;
     const dy = state.player.y - enemy.y;
     const dist = Math.hypot(dx, dy) || 1;
-    const lead = 0.35 + enemy.skill * 0.2;
-    const targetX = state.player.x + state.player.vx * lead;
-    const targetY = state.player.y + state.player.vy * lead;
+    const speed = (SETTINGS.enemies.bulletSpeed + enemy.skill * 55) * waveAggro;
+    const combat = getPlayerCombatState();
+    const leadTime = clamp((dist / speed) * (0.9 + enemy.skill * 0.35) * (combat.backpedal ? 1.1 : 1), 0.18, 0.75);
+    const accuracy = clamp(0.6 + enemy.skill * 0.4 + (combat.backpedal ? 0.05 : 0), 0.6, 1);
+    const jitter = (1 - accuracy) * 26;
+    const targetX = state.player.x + state.player.vx * leadTime + rand(-jitter, jitter);
+    const targetY = state.player.y + state.player.vy * leadTime + rand(-jitter, jitter);
     const lx = targetX - enemy.x;
     const ly = targetY - enemy.y;
     const len = Math.hypot(lx, ly) || 1;
-    const speed = (SETTINGS.enemies.bulletSpeed + enemy.skill * 55) * waveAggro;
     state.enemyBullets.push({
       x: enemy.x + Math.cos(enemy.angle) * 16,
       y: enemy.y + Math.sin(enemy.angle) * 16,
@@ -942,34 +982,59 @@
       return Math.hypot(b.x - camX, b.y - camY) < bulletCull * 1.05;
     });
 
+    const combat = getPlayerCombatState();
     state.enemies.forEach(enemy => {
       const dx = player.x - enemy.x;
       const dy = player.y - enemy.y;
       const dist = Math.hypot(dx, dy) || 1;
-      let desired = Math.atan2(dy, dx);
-      if (enemy.type === 'strafer' && dist < 220) {
+
+      const leadTime = clamp((dist / (220 + enemy.maxSpeed)) * (1 + enemy.skill * 0.2), 0.18, 0.6);
+      let targetX = player.x + player.vx * leadTime;
+      let targetY = player.y + player.vy * leadTime;
+
+      const flankBase = enemy.type === 'ace' ? 170 : enemy.type === 'strafer' ? 150 : 120;
+      const flankScale = combat.backpedal ? 1.25 : dist > 360 ? 1.1 : 1;
+      targetX += -combat.facingY * flankBase * enemy.orbit * flankScale;
+      targetY += combat.facingX * flankBase * enemy.orbit * flankScale;
+
+      if (combat.backpedal) {
+        const chaseCut = 120 + dist * 0.08;
+        targetX -= combat.facingX * chaseCut;
+        targetY -= combat.facingY * chaseCut;
+      }
+
+      let desired = Math.atan2(targetY - enemy.y, targetX - enemy.x);
+      if (enemy.type === 'strafer' && dist < 240) {
+        desired += enemy.orbit * Math.PI / 2;
+      } else if (enemy.type === 'ace' && dist < 200) {
+        desired -= enemy.orbit * Math.PI / 2;
+      } else if (enemy.type === 'chaser' && dist < 200) {
         desired += enemy.orbit * Math.PI / 2;
       }
-      if (enemy.type === 'ace' && dist < 140) {
-        desired -= enemy.orbit * Math.PI / 2;
-      }
+
+      const pressure = combat.backpedal ? 1.22 : 1;
+      const chaseBoost = dist > 420 ? 1.16 : 1;
+      const agilityBoost = enemy.type === 'ace' ? 1.12 : enemy.type === 'strafer' ? 1.05 : 1;
       const diff = normalizeAngle(desired - enemy.angle);
-      const turnStep = enemy.turnRate * dt;
+      const turnStep = enemy.turnRate * dt * pressure * agilityBoost;
       enemy.angle += Math.max(-turnStep, Math.min(turnStep, diff));
 
-      const thrustPower = enemy.type === 'strafer' && dist < 180 ? enemy.thrust * 0.7 : enemy.thrust;
+      const closeThrottle = enemy.type === 'strafer' && dist < 160 ? 0.75 : 1;
+      const thrustPower = enemy.thrust * pressure * chaseBoost * closeThrottle;
       enemy.vx += Math.cos(enemy.angle) * thrustPower * dtSec;
       enemy.vy += Math.sin(enemy.angle) * thrustPower * dtSec;
 
+      const maxSpeed = enemy.maxSpeed * pressure * (dist > 360 ? 1.08 : 1);
       const eSpeed = Math.hypot(enemy.vx, enemy.vy);
-      if (eSpeed > enemy.maxSpeed) {
-        const scale = enemy.maxSpeed / eSpeed;
+      if (eSpeed > maxSpeed) {
+        const scale = maxSpeed / eSpeed;
         enemy.vx *= scale;
         enemy.vy *= scale;
       }
 
-      enemy.vx *= Math.pow(0.987, dt / 16.67);
-      enemy.vy *= Math.pow(0.987, dt / 16.67);
+      const drag = Math.pow(enemy.type === 'ace' ? 0.991 : 0.988, dt / 16.67);
+      enemy.vx *= drag;
+      enemy.vy *= drag;
       enemy.x += enemy.vx * dtSec;
       enemy.y += enemy.vy * dtSec;
 

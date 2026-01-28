@@ -38,16 +38,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   const input = { keys: {} };
 
   const VIEW = {
-    depth: 2200,
-    viewDist: 700,
+    width: canvas.width,
+    height: canvas.height,
     centerX: canvas.width / 2,
-    centerY: canvas.height * 0.54,
-    shipOffsetY: 170,
-    boundsX: 280,
-    boundsY: 200
+    centerY: canvas.height / 2,
+    boundsX: 720,
+    boundsY: 520
   };
 
-  const BASE_SPEED = 120;
+  const BASE_SPEED = 90;
   const BASE_STATS = {
     hp: 120,
     shield: 90,
@@ -262,9 +261,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     debrisTimer: 0,
     turretTimer: 0,
     dataTimer: 0,
-    nextGateAt: 0,
     baseSpeed: BASE_SPEED,
-    forwardSpeed: BASE_SPEED,
     boostActive: false,
     shake: 0,
     hitFlash: 0,
@@ -273,6 +270,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     objectiveText: '',
     statusTimer: 0,
     message: '',
+    route: null,
+    segmentGateIndex: 0,
     player: {
       x: 0,
       y: 0,
@@ -306,9 +305,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     particles: [],
     background: {
       stars: [],
-      nebulae: [],
-      streaks: [],
-      dust: []
+      nebulae: []
     },
     camera: {
       x: 0,
@@ -336,6 +333,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     return Math.max(min, Math.min(max, value));
   }
 
+  function toScreen(x, y) {
+    return {
+      x: VIEW.centerX + (x - state.camera.x),
+      y: VIEW.centerY + (y - state.camera.y)
+    };
+  }
+
+  function dist(aX, aY, bX, bY) {
+    return Math.hypot(aX - bX, aY - bY);
+  }
+
   function formatDistance(value) {
     const km = value / 1000;
     if (km >= 100) return `${Math.round(km)}k`;
@@ -355,6 +363,56 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
       return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
     };
+  }
+
+  function buildRouteForChapter(chapter) {
+    const rng = makeRng((chapter.seed || 1200) + 77);
+    const segments = [];
+    let x = 0;
+    let y = 0;
+    let distance = 0;
+    let angle = rng() * Math.PI * 2;
+
+    chapter.segments.forEach((segment, index) => {
+      const turn = (rng() - 0.5) * 0.9;
+      angle += turn;
+      const dirX = Math.cos(angle);
+      const dirY = Math.sin(angle);
+      const gateCount = Math.max(1, segment.gates || 1);
+      const step = segment.length / gateCount;
+      const gates = [];
+      for (let i = 1; i <= gateCount; i++) {
+        const lateral = (rng() - 0.5) * 200;
+        const t = step * i;
+        const gx = x + dirX * t - dirY * lateral;
+        const gy = y + dirY * t + dirX * lateral;
+        gates.push({
+          x: gx,
+          y: gy,
+          radius: 80,
+          passed: false,
+          checkpoint: i === gateCount
+        });
+      }
+      const endX = x + dirX * segment.length;
+      const endY = y + dirY * segment.length;
+      segments.push({
+        index,
+        startDistance: distance,
+        startX: x,
+        startY: y,
+        endX,
+        endY,
+        dirX,
+        dirY,
+        length: segment.length,
+        gates
+      });
+      x = endX;
+      y = endY;
+      distance += segment.length;
+    });
+    return { segments };
   }
 
   function randRange(min, max, rng = state.rng) {
@@ -603,7 +661,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       hudObjective.textContent = `Optional: ${active.text}${extra}`;
       return;
     }
-    hudObjective.textContent = `Objective: ${state.objectiveText || '-'}`;
+    const gateTotal = state.gates.length;
+    const gateIndex = gateTotal ? Math.min(state.segmentGateIndex + 1, gateTotal) : 0;
+    const gateText = gateTotal ? ` • Gate ${gateIndex}/${gateTotal}` : '';
+    hudObjective.textContent = `Objective: ${state.objectiveText || '-'}${gateText}`;
   }
 
   function completeChallenge(challenge) {
@@ -687,21 +748,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const segment = currentSegment();
     if (!chapter || !segment) return;
     state.rng = makeRng((chapter.seed || 1000) + state.segmentIndex * 97);
-    const segmentStart = chapter.segments
-      .slice(0, state.segmentIndex)
-      .reduce((sum, seg) => sum + seg.length, 0);
+    const routeSegment = state.route?.segments?.[state.segmentIndex];
 
     state.running = false;
     state.lastTime = 0;
-    state.chapterDistance = segmentStart;
+    state.chapterDistance = routeSegment?.startDistance || 0;
     state.segmentDistance = 0;
     state.segmentTimer = 0;
     state.spawnTimer = 0;
     state.debrisTimer = 0;
     state.turretTimer = 0;
     state.dataTimer = 0;
-    state.nextGateAt = segment.gates ? segment.length / (segment.gates + 1) : 0;
-    state.forwardSpeed = state.baseSpeed;
     state.boostActive = false;
     state.shake = 0;
     state.stormPhase = 0;
@@ -710,13 +767,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.boostUsed = false;
     state.objectiveText = `${segment.name} — ${chapter.objective}`;
 
-    state.player.x = 0;
-    state.player.y = 0;
+    state.segmentGateIndex = 0;
+    state.gates = routeSegment?.gates?.map(gate => ({ ...gate })) || [];
+    state.player.x = routeSegment?.startX || 0;
+    state.player.y = routeSegment?.startY || 0;
     state.player.vx = 0;
     state.player.vy = 0;
-    state.player.angle = -Math.PI / 2;
-    state.camera.x = 0;
-    state.camera.y = 0;
+    if (routeSegment) {
+      state.player.angle = Math.atan2(routeSegment.dirY, routeSegment.dirX);
+    } else {
+      state.player.angle = -Math.PI / 2;
+    }
+    state.camera.x = state.player.x;
+    state.camera.y = state.player.y;
     state.camera.vx = 0;
     state.camera.vy = 0;
     state.player.fireCooldown = 0;
@@ -730,7 +793,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.enemyBullets = [];
     state.debris = [];
     state.pickups = [];
-    state.gates = [];
     state.particles = [];
 
     initBackground();
@@ -747,6 +809,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.segmentIndex = state.checkpointIndex;
     state.objectiveText = chapter.objective;
     state.rng = makeRng((chapter.seed || 1000) + state.segmentIndex * 97);
+    state.route = buildRouteForChapter(chapter);
 
     initChallenges();
     resetRunToSegment();
@@ -892,10 +955,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.bullets.push({
         x: player.x,
         y: player.y,
-        z: 0,
         vx: Math.cos(heading) * lateralSpeed + player.vx * 0.35,
         vy: Math.sin(heading) * lateralSpeed + player.vy * 0.35,
-        vz: player.bulletSpeed,
         life: 1400,
         damage: player.damage
       });
@@ -903,17 +964,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.fireCooldown = player.fireDelay;
   }
 
-  function spawnEnemy(type, zOverride) {
+  function spawnEnemy(type) {
     const def = ENEMY_TYPES[type] || ENEMY_TYPES.scout;
     const diff = getDifficulty();
     const hpScale = 0.82 + diff * 0.22;
     const speedScale = 0.95 + diff * 0.1;
     const fireScale = clamp(1.05 - diff * 0.05, 0.6, 1.05);
+    const targetGate = state.gates[state.segmentGateIndex] || { x: state.player.x, y: state.player.y };
+    const angleToGate = Math.atan2(targetGate.y - state.player.y, targetGate.x - state.player.x);
+    const spawnAngle = angleToGate + randRange(-1.3, 1.3);
+    const radius = randRange(420, 720);
     const enemy = {
       type,
-      x: randRange(-VIEW.boundsX * 0.9, VIEW.boundsX * 0.9),
-      y: randRange(-VIEW.boundsY * 0.9, VIEW.boundsY * 0.9),
-      z: zOverride ?? VIEW.depth + 220,
+      x: state.player.x + Math.cos(spawnAngle) * radius,
+      y: state.player.y + Math.sin(spawnAngle) * radius,
       hp: def.hp * hpScale,
       maxHp: def.hp * hpScale,
       size: def.size,
@@ -922,7 +986,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       fireRate: def.fireRate * fireScale,
       damage: def.damage * (0.9 + diff * 0.2),
       static: !!def.static,
-      approach: def.approach || 1,
       vx: randRange(-40, 40),
       vy: randRange(-30, 30),
       turn: def.static ? 0 : 0.7 + diff * 0.3,
@@ -940,15 +1003,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.enemies.length > 14) return;
     const diff = getDifficulty();
     const formationRoll = state.rng();
-    if (formationRoll < 0.25) {
+    if (formationRoll < 0.3) {
       const type = pickWeighted(segment.mix);
-      const baseZ = VIEW.depth + 220;
       const spacing = 90;
-      [-1, 0, 1].forEach((offset, idx) => {
-        const enemy = spawnEnemy(type, baseZ + idx * 80);
+      [-1, 0, 1].forEach(offset => {
+        const enemy = spawnEnemy(type);
         if (enemy) {
-          enemy.x = clamp(enemy.x + offset * spacing, -VIEW.boundsX * 0.95, VIEW.boundsX * 0.95);
-          enemy.y = clamp(enemy.y + Math.abs(offset) * 30, -VIEW.boundsY * 0.85, VIEW.boundsY * 0.85);
+          enemy.x += offset * spacing;
+          enemy.y += Math.abs(offset) * 40;
         }
       });
       return;
@@ -957,48 +1019,43 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const count = 1 + (state.rng() < 0.5 ? 1 : 0) + extra;
     for (let i = 0; i < count; i++) {
       const type = pickWeighted(segment.mix);
-      spawnEnemy(type, VIEW.depth + 220 + i * 90);
+      spawnEnemy(type);
     }
   }
 
   function spawnDebris() {
     state.debris.push({
-      x: randRange(-VIEW.boundsX * 1.1, VIEW.boundsX * 1.1),
-      y: randRange(-VIEW.boundsY * 1.1, VIEW.boundsY * 1.1),
-      z: VIEW.depth + 200,
-      r: randRange(12, 28)
+      x: state.player.x + randRange(-VIEW.boundsX, VIEW.boundsX),
+      y: state.player.y + randRange(-VIEW.boundsY, VIEW.boundsY),
+      vx: randRange(-20, 20),
+      vy: randRange(-20, 20),
+      r: randRange(12, 26)
     });
   }
 
   function spawnGate() {
-    state.gates.push({
-      x: randRange(-80, 80),
-      y: randRange(-60, 60),
-      z: VIEW.depth + 260,
-      radius: randRange(80, 105),
-      passed: false
-    });
+    const segment = state.route?.segments?.[state.segmentIndex];
+    if (segment) {
+      state.gates = segment.gates.map(gate => ({ ...gate }));
+    }
   }
 
-  function spawnPickup(type, x, y, z) {
+  function spawnPickup(type, x, y) {
     state.pickups.push({
       type,
       x,
       y,
-      z,
       r: type === 'data' ? 10 : 12
     });
   }
 
-  function spawnExplosion(x, y, z, color) {
+  function spawnExplosion(x, y, color) {
     for (let i = 0; i < 12; i++) {
       state.particles.push({
         x,
         y,
-        z,
         vx: randRange(-60, 60, Math.random),
         vy: randRange(-60, 60, Math.random),
-        vz: randRange(-40, 120, Math.random),
         life: randRange(400, 900, Math.random),
         size: randRange(2, 5, Math.random),
         color: color || '255,140,90'
@@ -1017,10 +1074,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.particles.push({
         x: player.x + Math.cos(dir) * 16 + randRange(-3, 3, Math.random),
         y: player.y + Math.sin(dir) * 16 + randRange(-3, 3, Math.random),
-        z: 70,
         vx: Math.cos(dir) * strength + randRange(-20, 20, Math.random),
         vy: Math.sin(dir) * strength + randRange(-20, 20, Math.random),
-        vz: randRange(20, 80, Math.random),
         life: randRange(180, 320, Math.random),
         size: randRange(2, 3.5, Math.random),
         color: reverse ? '120,200,255' : '125,252,154'
@@ -1046,10 +1101,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.particles.push({
         x: player.x + randRange(-12, 12, Math.random),
         y: player.y + randRange(-12, 12, Math.random),
-        z: 80,
         vx: randRange(-80, 80, Math.random),
         vy: randRange(-80, 80, Math.random),
-        vz: randRange(40, 120, Math.random),
         life: randRange(260, 520, Math.random),
         size: randRange(2, 4, Math.random),
         color: '255,90,90'
@@ -1058,34 +1111,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function updateBackground(dtSec) {
-    const speed = state.forwardSpeed * dtSec;
+    const radius = 2400;
     state.background.stars.forEach(star => {
-      star.z -= speed * star.speed;
-      if (star.z < 0) {
-        star.z = VIEW.depth + randRange(50, 300, Math.random);
-        star.x = randRange(-VIEW.boundsX * 1.6, VIEW.boundsX * 1.6, Math.random);
-        star.y = randRange(-VIEW.boundsY * 1.6, VIEW.boundsY * 1.6, Math.random);
-      }
-    });
-    state.background.streaks.forEach(streak => {
-      streak.z -= speed * streak.speed;
-      if (streak.z < 0) {
-        streak.z = VIEW.depth + randRange(200, 600, Math.random);
-        streak.x = randRange(-VIEW.boundsX * 1.2, VIEW.boundsX * 1.2, Math.random);
-        streak.y = randRange(-VIEW.boundsY * 1.2, VIEW.boundsY * 1.2, Math.random);
-      }
-    });
-    state.background.dust.forEach(puff => {
-      puff.z -= speed * puff.speed;
-      if (puff.z < 0) {
-        puff.z = VIEW.depth + randRange(60, 200, Math.random);
-        puff.x = randRange(-VIEW.boundsX * 1.4, VIEW.boundsX * 1.4, Math.random);
-        puff.y = randRange(-VIEW.boundsY * 1.4, VIEW.boundsY * 1.4, Math.random);
+      if (Math.abs(star.x - state.camera.x) > radius || Math.abs(star.y - state.camera.y) > radius) {
+        star.x = state.camera.x + randRange(-radius, radius, Math.random);
+        star.y = state.camera.y + randRange(-radius, radius, Math.random);
       }
     });
     state.background.nebulae.forEach(nebula => {
-      nebula.x += Math.sin(performance.now() / 12000 + nebula.phase) * dtSec * 2;
-      nebula.y += Math.cos(performance.now() / 15000 + nebula.phase) * dtSec * 1.5;
+      if (Math.abs(nebula.x - state.camera.x) > radius * 0.8 || Math.abs(nebula.y - state.camera.y) > radius * 0.8) {
+        nebula.x = state.camera.x + randRange(-radius * 0.6, radius * 0.6, Math.random);
+        nebula.y = state.camera.y + randRange(-radius * 0.6, radius * 0.6, Math.random);
+      }
+      nebula.x += Math.sin(performance.now() / 12000 + nebula.phase) * dtSec * 1.2;
+      nebula.y += Math.cos(performance.now() / 15000 + nebula.phase) * dtSec * 1.1;
     });
   }
 
@@ -1093,6 +1132,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const dtSec = dt / 1000;
     const player = state.player;
     const segment = currentSegment();
+    const routeSegment = state.route?.segments?.[state.segmentIndex];
 
     updateStatus(dt);
     state.shake = Math.max(0, state.shake - dtSec * 2);
@@ -1118,35 +1158,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (Math.random() < 0.5) emitThruster(true);
     }
 
-    const edgeX = VIEW.boundsX * 0.88;
-    const edgeY = VIEW.boundsY * 0.86;
-    if (Math.abs(player.x) > edgeX) {
-      const push = (Math.abs(player.x) - edgeX) / (VIEW.boundsX - edgeX);
-      player.vx += -Math.sign(player.x) * push * 260 * dtSec;
-    }
-    if (Math.abs(player.y) > edgeY) {
-      const push = (Math.abs(player.y) - edgeY) / (VIEW.boundsY - edgeY);
-      player.vy += -Math.sign(player.y) * push * 240 * dtSec;
-    }
-
     state.stormLevel = segment?.hazards?.storm || 0;
     if (state.stormLevel > 0) {
       state.stormPhase += dtSec * (0.6 + state.stormLevel);
-      player.vx += Math.sin(state.stormPhase * 1.3) * state.stormLevel * 26 * dtSec;
-      player.vy += Math.cos(state.stormPhase * 1.1) * state.stormLevel * 20 * dtSec;
+      player.vx += Math.sin(state.stormPhase * 1.3) * state.stormLevel * 18 * dtSec;
+      player.vy += Math.cos(state.stormPhase * 1.1) * state.stormLevel * 14 * dtSec;
     }
 
     const boosting = input.keys.ShiftLeft || input.keys.ShiftRight;
     state.boostActive = boosting && player.boost > 0;
-    const segmentRamp = segment ? 1 + Math.min(0.18, (state.segmentDistance / segment.length) * 0.18) : 1;
     if (state.boostActive) {
-      state.forwardSpeed = state.baseSpeed * (1.7 + (progress.upgrades.booster || 0) * 0.1) * segmentRamp;
       player.boost = Math.max(0, player.boost - 36 * dtSec);
       state.boostUsed = true;
     } else {
-      state.forwardSpeed = state.baseSpeed * segmentRamp;
       player.boost = Math.min(player.boostMax, player.boost + player.boostRegen * dtSec);
     }
+
+    const dirX = routeSegment?.dirX ?? Math.cos(player.angle);
+    const dirY = routeSegment?.dirY ?? Math.sin(player.angle);
+    const routeForce = state.baseSpeed * (state.boostActive ? 1.3 : 0.75);
+    player.vx += dirX * routeForce * dtSec;
+    player.vy += dirY * routeForce * dtSec;
 
     const speed = Math.hypot(player.vx, player.vy);
     if (speed > player.maxSpeed) {
@@ -1156,27 +1188,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
 
     const thrusting = forward || reverse;
-    const dragValue = thrusting ? player.drag : Math.max(0.9, player.drag - 0.05);
+    const dragValue = thrusting ? player.drag : Math.max(0.88, player.drag - 0.06);
     const drag = Math.pow(dragValue, dtSec * 60);
     player.vx *= drag;
     player.vy *= drag;
 
     player.x += player.vx * dtSec;
     player.y += player.vy * dtSec;
-    if (player.x > VIEW.boundsX) {
-      player.x = VIEW.boundsX;
-      player.vx *= -0.35;
-    } else if (player.x < -VIEW.boundsX) {
-      player.x = -VIEW.boundsX;
-      player.vx *= -0.35;
-    }
-    if (player.y > VIEW.boundsY) {
-      player.y = VIEW.boundsY;
-      player.vy *= -0.35;
-    } else if (player.y < -VIEW.boundsY) {
-      player.y = -VIEW.boundsY;
-      player.vy *= -0.35;
-    }
 
     state.camera.x += (player.x - state.camera.x) * 0.08;
     state.camera.y += (player.y - state.camera.y) * 0.08;
@@ -1190,8 +1208,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     if (input.keys.Space) firePlayer();
 
-    state.segmentDistance += state.forwardSpeed * dtSec;
-    state.chapterDistance += state.forwardSpeed * dtSec;
+    if (routeSegment) {
+      const dx = player.x - routeSegment.startX;
+      const dy = player.y - routeSegment.startY;
+      state.segmentDistance = clamp(dx * routeSegment.dirX + dy * routeSegment.dirY, 0, routeSegment.length);
+      state.chapterDistance = routeSegment.startDistance + state.segmentDistance;
+      const lateral = Math.abs(dx * -routeSegment.dirY + dy * routeSegment.dirX);
+      if (lateral > 320) {
+        player.shield = Math.max(0, player.shield - 12 * dtSec);
+        if (state.statusTimer <= 0) setStatus('Signal drift - return to the corridor', 1200);
+      }
+    }
 
     if (segment) {
       state.spawnTimer -= dt;
@@ -1215,7 +1242,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (turretRate > 0) {
         state.turretTimer -= dt;
         if (state.turretTimer <= 0) {
-          if (state.enemies.length < 16) spawnEnemy('turret', VIEW.depth + 180);
+          if (state.enemies.length < 16) spawnEnemy('turret');
           state.turretTimer = 3200 / turretRate;
         }
       }
@@ -1225,22 +1252,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         state.dataTimer -= dt;
         if (state.dataTimer <= 0) {
           if (state.pickups.length < 10) {
-            spawnPickup('data', randRange(-120, 120), randRange(-80, 80), VIEW.depth + 140);
+            spawnPickup('data', player.x + randRange(-160, 160), player.y + randRange(-120, 120));
           }
           state.dataTimer = 2600 / dataRate;
         }
-      }
-
-      if (segment.gates && state.nextGateAt > 0 && state.segmentDistance >= state.nextGateAt) {
-        spawnGate();
-        state.nextGateAt += segment.length / (segment.gates + 1);
       }
     }
 
     state.enemies.forEach(enemy => {
       enemy.timer += dt;
       if (enemy.hitTimer > 0) enemy.hitTimer -= dt;
-      enemy.z -= state.forwardSpeed * dtSec * enemy.approach;
 
       if (!enemy.static) {
         let targetX = player.x;
@@ -1274,12 +1295,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         }
         enemy.x += enemy.vx * dtSec;
         enemy.y += enemy.vy * dtSec;
-        enemy.x = clamp(enemy.x, -VIEW.boundsX * 1.1, VIEW.boundsX * 1.1);
-        enemy.y = clamp(enemy.y, -VIEW.boundsY * 1.1, VIEW.boundsY * 1.1);
       }
 
       enemy.fireCooldown -= dt;
-      if (enemy.fireCooldown <= 0 && enemy.z < 980) {
+      if (enemy.fireCooldown <= 0 && dist(enemy.x, enemy.y, player.x, player.y) < 900) {
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
         const len = Math.hypot(dx, dy) || 1;
@@ -1291,11 +1310,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         state.enemyBullets.push({
           x: enemy.x,
           y: enemy.y,
-          z: enemy.z,
-          vx: (dirX / dirLen) * 160,
-          vy: (dirY / dirLen) * 160,
-          vz: -bulletSpeed,
-          life: 1600,
+          vx: (dirX / dirLen) * bulletSpeed,
+          vy: (dirY / dirLen) * bulletSpeed,
+          life: 1400,
           damage: enemy.damage
         });
         enemy.fireCooldown = enemy.fireRate + randRange(-250, 320);
@@ -1303,135 +1320,113 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
 
     state.debris.forEach(debris => {
-      debris.z -= state.forwardSpeed * dtSec;
+      debris.x += (debris.vx || 0) * dtSec;
+      debris.y += (debris.vy || 0) * dtSec;
     });
 
     state.pickups.forEach(pickup => {
-      pickup.z -= state.forwardSpeed * dtSec;
-    });
-
-    state.gates.forEach(gate => {
-      gate.z -= state.forwardSpeed * dtSec;
-      if (!gate.passed && gate.z < 60) {
-        const dx = gate.x - player.x;
-        const dy = gate.y - player.y;
-        if (Math.hypot(dx, dy) < gate.radius * 0.55) {
-          gate.passed = true;
-          addCredits(45, 'Gate cleared');
-        } else {
-          gate.passed = true;
-        }
-      }
+      pickup.x += (pickup.vx || 0) * dtSec;
+      pickup.y += (pickup.vy || 0) * dtSec;
     });
 
     state.bullets.forEach(bullet => {
       bullet.x += bullet.vx * dtSec;
       bullet.y += bullet.vy * dtSec;
-      bullet.z += bullet.vz * dtSec;
       bullet.life -= dt;
     });
 
     state.enemyBullets.forEach(bullet => {
       bullet.x += bullet.vx * dtSec;
       bullet.y += bullet.vy * dtSec;
-      bullet.z += bullet.vz * dtSec;
       bullet.life -= dt;
     });
 
     state.particles.forEach(p => {
       p.x += p.vx * dtSec;
       p.y += p.vy * dtSec;
-      p.z += p.vz * dtSec;
       p.life -= dt;
     });
 
     updateBackground(dtSec);
+
+    const currentGate = state.gates[state.segmentGateIndex];
+    if (currentGate) {
+      const gateDist = dist(player.x, player.y, currentGate.x, currentGate.y);
+      if (gateDist < currentGate.radius) {
+        currentGate.passed = true;
+        if (currentGate.checkpoint) {
+          reachCheckpoint();
+          return;
+        }
+        addCredits(45, 'Gate cleared');
+        state.segmentGateIndex += 1;
+      }
+    }
 
     state.bullets.forEach(bullet => {
       if (bullet.life <= 0) return;
       state.enemies.forEach(enemy => {
         if (bullet.life <= 0) return;
         if (enemy.hp <= 0) return;
-        if (Math.abs(bullet.z - enemy.z) < 60) {
-          const dx = bullet.x - enemy.x;
-          const dy = bullet.y - enemy.y;
-          if (Math.hypot(dx, dy) < enemy.size + 6) {
-            enemy.hp -= bullet.damage;
-            enemy.hitTimer = 140;
-            bullet.life = 0;
-            if (enemy.hp <= 0) {
-              const reward = enemy.type === 'lancer' ? 30 : enemy.type === 'raider' ? 20 : enemy.type === 'turret' ? 36 : 14;
-              addCredits(reward);
-              spawnExplosion(enemy.x, enemy.y, enemy.z, enemy.type === 'turret' ? '180,110,255' : '255,120,90');
-              if (state.rng() < 0.12) {
-                const roll = state.rng();
-                const type = roll > 0.7 ? 'shield' : roll > 0.4 ? 'repair' : 'data';
-                spawnPickup(type, enemy.x, enemy.y, enemy.z + 80);
-              }
-              state.challenges.forEach(ch => {
-                if (!ch.completed && !ch.failed && ch.type === 'kills' && ch.enemy === enemy.type) {
-                  ch.progress += 1;
-                }
-              });
+        if (dist(bullet.x, bullet.y, enemy.x, enemy.y) < enemy.size + 6) {
+          enemy.hp -= bullet.damage;
+          enemy.hitTimer = 140;
+          bullet.life = 0;
+          if (enemy.hp <= 0) {
+            const reward = enemy.type === 'lancer' ? 30 : enemy.type === 'raider' ? 20 : enemy.type === 'turret' ? 36 : 14;
+            addCredits(reward);
+            spawnExplosion(enemy.x, enemy.y, enemy.type === 'turret' ? '180,110,255' : '255,120,90');
+            if (state.rng() < 0.12) {
+              const roll = state.rng();
+              const type = roll > 0.7 ? 'shield' : roll > 0.4 ? 'repair' : 'data';
+              spawnPickup(type, enemy.x, enemy.y);
             }
+            state.challenges.forEach(ch => {
+              if (!ch.completed && !ch.failed && ch.type === 'kills' && ch.enemy === enemy.type) {
+                ch.progress += 1;
+              }
+            });
           }
         }
       });
     });
 
     state.enemyBullets.forEach(bullet => {
-      if (bullet.z < 60) {
-        const dx = bullet.x - player.x;
-        const dy = bullet.y - player.y;
-        if (Math.hypot(dx, dy) < 18) {
-          applyDamage(bullet.damage);
-          bullet.life = 0;
-        }
+      if (dist(bullet.x, bullet.y, player.x, player.y) < 18) {
+        applyDamage(bullet.damage);
+        bullet.life = 0;
       }
     });
 
     state.debris.forEach(debris => {
-      if (debris.z < 40) {
-        const dx = debris.x - player.x;
-        const dy = debris.y - player.y;
-        if (Math.hypot(dx, dy) < debris.r + 16) {
-          applyDamage(14);
-          debris.z = -120;
-        }
+      if (dist(debris.x, debris.y, player.x, player.y) < debris.r + 16) {
+        applyDamage(14);
+        debris.hit = true;
       }
     });
 
     state.pickups.forEach(pickup => {
-      if (pickup.z < 40) {
-        const dx = pickup.x - player.x;
-        const dy = pickup.y - player.y;
-        if (Math.hypot(dx, dy) < pickup.r + 14) {
-          if (pickup.type === 'repair') player.hp = Math.min(player.maxHp, player.hp + 24);
-          if (pickup.type === 'shield') player.shield = Math.min(player.maxShield, player.shield + 26);
-          if (pickup.type === 'data') {
-            addCredits(30, 'Data shard');
-            state.challenges.forEach(ch => {
-              if (!ch.completed && !ch.failed && ch.type === 'collect') {
-                ch.progress += 1;
-              }
-            });
-          }
-          pickup.z = -120;
+      if (dist(pickup.x, pickup.y, player.x, player.y) < pickup.r + 14) {
+        if (pickup.type === 'repair') player.hp = Math.min(player.maxHp, player.hp + 24);
+        if (pickup.type === 'shield') player.shield = Math.min(player.maxShield, player.shield + 26);
+        if (pickup.type === 'data') {
+          addCredits(30, 'Data shard');
+          state.challenges.forEach(ch => {
+            if (!ch.completed && !ch.failed && ch.type === 'collect') {
+              ch.progress += 1;
+            }
+          });
         }
+        pickup.collected = true;
       }
     });
 
-    state.enemies = state.enemies.filter(enemy => enemy.hp > 0 && enemy.z > -140);
-    state.bullets = state.bullets.filter(bullet => bullet.life > 0 && bullet.z < VIEW.depth + 400);
-    state.enemyBullets = state.enemyBullets.filter(bullet => bullet.life > 0 && bullet.z > -200);
-    state.debris = state.debris.filter(debris => debris.z > -140);
-    state.pickups = state.pickups.filter(pickup => pickup.z > -140);
-    state.gates = state.gates.filter(gate => gate.z > -140);
-    state.particles = state.particles.filter(p => p.life > 0 && p.z > -200);
-
-    if (segment && state.segmentDistance >= segment.length) {
-      reachCheckpoint();
-    }
+    state.enemies = state.enemies.filter(enemy => enemy.hp > 0 && dist(enemy.x, enemy.y, player.x, player.y) < 1800);
+    state.bullets = state.bullets.filter(bullet => bullet.life > 0 && dist(bullet.x, bullet.y, player.x, player.y) < 2000);
+    state.enemyBullets = state.enemyBullets.filter(bullet => bullet.life > 0 && dist(bullet.x, bullet.y, player.x, player.y) < 2000);
+    state.debris = state.debris.filter(debris => !debris.hit && dist(debris.x, debris.y, player.x, player.y) < 1800);
+    state.pickups = state.pickups.filter(pickup => !pickup.collected && dist(pickup.x, pickup.y, player.x, player.y) < 1800);
+    state.particles = state.particles.filter(p => p.life > 0);
 
     if (player.hp <= 0) {
       state.running = false;
@@ -1482,63 +1477,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function initBackground() {
+    const starField = 220;
+    const radius = 2200;
     state.background.stars = [];
     state.background.nebulae = [];
-    state.background.streaks = [];
-    state.background.dust = [];
-    STAR_LAYERS.forEach(layer => {
-      for (let i = 0; i < layer.count; i++) {
-        state.background.stars.push({
-          x: randRange(-VIEW.boundsX * 1.6, VIEW.boundsX * 1.6, Math.random),
-          y: randRange(-VIEW.boundsY * 1.6, VIEW.boundsY * 1.6, Math.random),
-          z: randRange(0, VIEW.depth, Math.random),
-          size: randRange(layer.sizeMin, layer.sizeMax, Math.random),
-          speed: layer.speed,
-          alpha: layer.alpha
-        });
-      }
-    });
-
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < starField; i++) {
+      state.background.stars.push({
+        x: state.player.x + randRange(-radius, radius, Math.random),
+        y: state.player.y + randRange(-radius, radius, Math.random),
+        size: randRange(0.8, 2.4, Math.random),
+        alpha: randRange(0.3, 0.9, Math.random)
+      });
+    }
+    for (let i = 0; i < 5; i++) {
       state.background.nebulae.push({
-        x: randRange(0.1, 0.9, Math.random) * canvas.width,
-        y: randRange(0.05, 0.5, Math.random) * canvas.height,
-        r: randRange(120, 220, Math.random),
+        x: state.player.x + randRange(-radius * 0.7, radius * 0.7, Math.random),
+        y: state.player.y + randRange(-radius * 0.7, radius * 0.7, Math.random),
+        r: randRange(260, 420, Math.random),
         color: i % 2 === 0 ? 'rgba(80,140,255,0.1)' : 'rgba(125,252,154,0.1)',
         phase: randRange(0, Math.PI * 2, Math.random)
       });
     }
-
-    for (let i = 0; i < 50; i++) {
-      state.background.streaks.push({
-        x: randRange(-VIEW.boundsX * 1.2, VIEW.boundsX * 1.2, Math.random),
-        y: randRange(-VIEW.boundsY * 1.2, VIEW.boundsY * 1.2, Math.random),
-        z: randRange(0, VIEW.depth, Math.random),
-        speed: randRange(1.4, 2.1, Math.random),
-        length: randRange(40, 90, Math.random)
-      });
-    }
-
-    for (let i = 0; i < 70; i++) {
-      state.background.dust.push({
-        x: randRange(-VIEW.boundsX * 1.4, VIEW.boundsX * 1.4, Math.random),
-        y: randRange(-VIEW.boundsY * 1.4, VIEW.boundsY * 1.4, Math.random),
-        z: randRange(0, VIEW.depth, Math.random),
-        speed: randRange(1.2, 1.8, Math.random),
-        size: randRange(0.8, 1.8, Math.random)
-      });
-    }
-  }
-
-  function projectPoint(x, y, z) {
-    const camX = VIEW.centerX + state.camera.vx * 0.08 + state.camera.shakeX;
-    const camY = VIEW.centerY + state.camera.vy * 0.08 + state.camera.shakeY;
-    const scale = VIEW.viewDist / (z + VIEW.viewDist);
-    return {
-      x: camX + x * scale,
-      y: camY + y * scale,
-      scale
-    };
   }
 
   function drawBackground() {
@@ -1549,169 +1508,125 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const glow = ctx.createRadialGradient(
-      VIEW.centerX,
-      VIEW.centerY - 80,
-      20,
-      VIEW.centerX,
-      VIEW.centerY - 80,
-      canvas.width * 0.7
-    );
-    glow.addColorStop(0, 'rgba(120,190,255,0.18)');
-    glow.addColorStop(0.5, 'rgba(60,120,200,0.08)');
-    glow.addColorStop(1, 'rgba(4,8,16,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
     state.background.nebulae.forEach(nebula => {
-      const nebulaGrad = ctx.createRadialGradient(nebula.x, nebula.y, 0, nebula.x, nebula.y, nebula.r);
+      const screen = toScreen(nebula.x, nebula.y);
+      const nebulaGrad = ctx.createRadialGradient(screen.x, screen.y, 0, screen.x, screen.y, nebula.r);
       nebulaGrad.addColorStop(0, nebula.color);
       nebulaGrad.addColorStop(1, 'rgba(4,8,16,0)');
       ctx.fillStyle = nebulaGrad;
       ctx.beginPath();
-      ctx.arc(nebula.x, nebula.y, nebula.r, 0, Math.PI * 2);
+      ctx.arc(screen.x, screen.y, nebula.r, 0, Math.PI * 2);
       ctx.fill();
     });
 
     state.background.stars.forEach(star => {
-      const relX = star.x - state.camera.x * 0.08;
-      const relY = star.y - state.camera.y * 0.08;
-      const proj = projectPoint(relX, relY, star.z);
-      const size = star.size * proj.scale;
+      const screen = toScreen(star.x, star.y);
+      const size = star.size;
       ctx.fillStyle = `rgba(210,230,255,${star.alpha})`;
-      ctx.fillRect(proj.x, proj.y, size, size);
-    });
-
-    state.background.dust.forEach(puff => {
-      const relX = puff.x - state.camera.x * 0.1;
-      const relY = puff.y - state.camera.y * 0.1;
-      const proj = projectPoint(relX, relY, puff.z);
-      const size = puff.size * proj.scale * 1.2;
-      ctx.fillStyle = 'rgba(180,210,255,0.25)';
-      ctx.fillRect(proj.x, proj.y, size, size);
-    });
-
-    ctx.strokeStyle = 'rgba(90,160,220,0.12)';
-    ctx.lineWidth = 1;
-    for (let i = -4; i <= 4; i++) {
-      ctx.beginPath();
-      let started = false;
-      for (let z = 200; z <= VIEW.depth; z += 220) {
-        const proj = projectPoint(i * 90, 0, z);
-        if (!started) {
-          ctx.moveTo(proj.x, proj.y);
-          started = true;
-        } else {
-          ctx.lineTo(proj.x, proj.y);
-        }
-      }
-      ctx.stroke();
-    }
-    for (let j = -2; j <= 2; j++) {
-      ctx.beginPath();
-      let started = false;
-      for (let z = 200; z <= VIEW.depth; z += 220) {
-        const proj = projectPoint(0, j * 70, z);
-        if (!started) {
-          ctx.moveTo(proj.x, proj.y);
-          started = true;
-        } else {
-          ctx.lineTo(proj.x, proj.y);
-        }
-      }
-      ctx.stroke();
-    }
-
-    state.background.streaks.forEach(streak => {
-      const relX = streak.x - state.camera.x * 0.08;
-      const relY = streak.y - state.camera.y * 0.08;
-      const head = projectPoint(relX, relY, streak.z);
-      const tail = projectPoint(relX, relY, Math.max(0, streak.z - streak.length));
-      ctx.strokeStyle = state.forwardSpeed > state.baseSpeed * 1.05
-        ? 'rgba(125,252,154,0.28)'
-        : 'rgba(140,200,255,0.18)';
-      ctx.lineWidth = Math.max(1, 2 * head.scale);
-      ctx.beginPath();
-      ctx.moveTo(head.x, head.y);
-      ctx.lineTo(tail.x, tail.y);
-      ctx.stroke();
+      if (screen.x < -10 || screen.x > canvas.width + 10 || screen.y < -10 || screen.y > canvas.height + 10) return;
+      ctx.fillRect(screen.x, screen.y, size, size);
     });
   }
 
+  function drawCorridor() {
+    const segment = state.route?.segments?.[state.segmentIndex];
+    if (!segment) return;
+    const halfWidth = 300;
+    const offsetX = -segment.dirY * halfWidth;
+    const offsetY = segment.dirX * halfWidth;
+    const startLeft = toScreen(segment.startX + offsetX, segment.startY + offsetY);
+    const endLeft = toScreen(segment.endX + offsetX, segment.endY + offsetY);
+    const startRight = toScreen(segment.startX - offsetX, segment.startY - offsetY);
+    const endRight = toScreen(segment.endX - offsetX, segment.endY - offsetY);
+
+    ctx.strokeStyle = 'rgba(90,160,220,0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startLeft.x, startLeft.y);
+    ctx.lineTo(endLeft.x, endLeft.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(startRight.x, startRight.y);
+    ctx.lineTo(endRight.x, endRight.y);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(90,160,220,0.12)';
+    ctx.setLineDash([8, 10]);
+    ctx.beginPath();
+    const centerStart = toScreen(segment.startX, segment.startY);
+    const centerEnd = toScreen(segment.endX, segment.endY);
+    ctx.moveTo(centerStart.x, centerStart.y);
+    ctx.lineTo(centerEnd.x, centerEnd.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
   function drawGate(gate) {
-    const relX = gate.x - state.player.x;
-    const relY = gate.y - state.player.y;
-    const proj = projectPoint(relX, relY, gate.z);
-    const radius = gate.radius * proj.scale;
-    const pulse = 0.6 + Math.sin((performance.now() + gate.z) / 380) * 0.4;
+    const screen = toScreen(gate.x, gate.y);
+    const radius = gate.radius;
+    const pulse = 0.6 + Math.sin(performance.now() / 380) * 0.4;
     ctx.strokeStyle = `rgba(125,252,154,${0.25 + pulse * 0.35})`;
     ctx.shadowColor = '#7dfc9a';
-    ctx.shadowBlur = 14 * proj.scale;
-    ctx.lineWidth = Math.max(1, 3.5 * proj.scale);
+    ctx.shadowBlur = 14;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
+    ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.shadowBlur = 0;
     ctx.strokeStyle = 'rgba(125,252,154,0.35)';
-    ctx.lineWidth = Math.max(1, 1.6 * proj.scale);
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.arc(proj.x, proj.y, radius * 0.65, 0, Math.PI * 2);
+    ctx.arc(screen.x, screen.y, radius * 0.65, 0, Math.PI * 2);
     ctx.stroke();
   }
 
   function drawDebris(debris) {
-    const relX = debris.x - state.player.x;
-    const relY = debris.y - state.player.y;
-    const proj = projectPoint(relX, relY, debris.z);
-    const r = debris.r * proj.scale;
-    const grad = ctx.createRadialGradient(proj.x, proj.y, 0, proj.x, proj.y, r);
+    const screen = toScreen(debris.x, debris.y);
+    const r = debris.r;
+    const grad = ctx.createRadialGradient(screen.x, screen.y, 0, screen.x, screen.y, r);
     grad.addColorStop(0, 'rgba(190,210,240,0.7)');
     grad.addColorStop(1, 'rgba(90,110,140,0.35)');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(proj.x, proj.y, r, 0, Math.PI * 2);
+    ctx.arc(screen.x, screen.y, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = 'rgba(160,190,220,0.4)';
-    ctx.lineWidth = Math.max(1, 1.2 * proj.scale);
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.arc(proj.x, proj.y, r * 0.7, 0, Math.PI * 2);
+    ctx.arc(screen.x, screen.y, r * 0.7, 0, Math.PI * 2);
     ctx.stroke();
   }
 
   function drawPickup(pickup) {
-    const relX = pickup.x - state.player.x;
-    const relY = pickup.y - state.player.y;
-    const proj = projectPoint(relX, relY, pickup.z);
-    const r = pickup.r * proj.scale;
-    const pulse = 0.8 + Math.sin(performance.now() / 260 + pickup.z / 120) * 0.2;
+    const screen = toScreen(pickup.x, pickup.y);
+    const r = pickup.r;
+    const pulse = 0.8 + Math.sin(performance.now() / 260) * 0.2;
     const color = pickup.type === 'data' ? '#7dfc9a' : pickup.type === 'shield' ? '#47f5ff' : '#ff7a47';
     ctx.fillStyle = color;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 12 * proj.scale;
+    ctx.shadowBlur = 12;
     ctx.beginPath();
-    ctx.arc(proj.x, proj.y, r * pulse, 0, Math.PI * 2);
+    ctx.arc(screen.x, screen.y, r * pulse, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
   }
 
   function drawEnemy(enemy) {
-    const relX = enemy.x - state.player.x;
-    const relY = enemy.y - state.player.y;
-    const proj = projectPoint(relX, relY, enemy.z);
-    const size = enemy.size * proj.scale;
+    const screen = toScreen(enemy.x, enemy.y);
+    const size = enemy.size;
     const hitPulse = enemy.hitTimer > 0 ? Math.min(1, enemy.hitTimer / 140) : 0;
     ctx.save();
-    ctx.translate(proj.x, proj.y);
+    ctx.translate(screen.x, screen.y);
     ctx.fillStyle = enemy.color;
     ctx.shadowColor = enemy.color;
-    ctx.shadowBlur = (12 + hitPulse * 12) * proj.scale;
+    ctx.shadowBlur = 12 + hitPulse * 12;
     ctx.beginPath();
     ctx.moveTo(0, -size);
     ctx.lineTo(size * 0.8, size * 0.8);
     ctx.lineTo(-size * 0.8, size * 0.8);
     ctx.closePath();
     ctx.fill();
-    ctx.lineWidth = Math.max(1, 1.2 * proj.scale);
+    ctx.lineWidth = 1.2;
     ctx.strokeStyle = hitPulse > 0 ? 'rgba(255,255,255,0.8)' : 'rgba(230,240,255,0.25)';
     ctx.stroke();
 
@@ -1727,23 +1642,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function drawBullets() {
     state.bullets.forEach(bullet => {
-      const relX = bullet.x - state.player.x;
-      const relY = bullet.y - state.player.y;
-      const proj = projectPoint(relX, relY, bullet.z);
+      const proj = toScreen(bullet.x, bullet.y);
       ctx.fillStyle = '#e6f2ff';
       ctx.shadowColor = '#e6f2ff';
-      ctx.shadowBlur = 8 * proj.scale;
+      ctx.shadowBlur = 8;
       ctx.fillRect(proj.x - 2, proj.y - 4, 4, 8);
       ctx.shadowBlur = 0;
     });
 
     state.enemyBullets.forEach(bullet => {
-      const relX = bullet.x - state.player.x;
-      const relY = bullet.y - state.player.y;
-      const proj = projectPoint(relX, relY, bullet.z);
+      const proj = toScreen(bullet.x, bullet.y);
       ctx.fillStyle = '#ffb347';
       ctx.shadowColor = '#ffb347';
-      ctx.shadowBlur = 8 * proj.scale;
+      ctx.shadowBlur = 8;
       ctx.fillRect(proj.x - 2, proj.y - 4, 4, 8);
       ctx.shadowBlur = 0;
     });
@@ -1751,10 +1662,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function drawParticles() {
     state.particles.forEach(p => {
-      const relX = p.x - state.player.x;
-      const relY = p.y - state.player.y;
-      const proj = projectPoint(relX, relY, p.z);
-      const size = p.size * proj.scale;
+      const proj = toScreen(p.x, p.y);
+      const size = p.size;
       ctx.fillStyle = `rgba(${p.color},${Math.min(1, p.life / 900)})`;
       ctx.beginPath();
       ctx.arc(proj.x, proj.y, size, 0, Math.PI * 2);
@@ -1764,8 +1673,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function drawPlayer() {
     const player = state.player;
-    const shipX = VIEW.centerX + player.vx * 0.12;
-    const shipY = VIEW.centerY + VIEW.shipOffsetY + player.vy * 0.12;
+    const shipX = VIEW.centerX + player.vx * 0.08;
+    const shipY = VIEW.centerY + player.vy * 0.08;
     const speed = Math.hypot(player.vx, player.vy);
     const drift = clamp(player.vx / (player.maxSpeed || 1), -1, 1) * 0.2;
 
@@ -1827,9 +1736,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function drawNavArrow() {
-    const gateTarget = state.gates
-      .filter(gate => !gate.passed && gate.z > 0)
-      .sort((a, b) => a.z - b.z)[0];
+    const gateTarget = state.gates[state.segmentGateIndex] || state.gates.find(gate => !gate.passed);
     const targetX = gateTarget ? gateTarget.x : 0;
     const targetY = gateTarget ? gateTarget.y : 0;
     const dx = targetX - state.player.x;
@@ -1855,12 +1762,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fill();
     ctx.stroke();
     ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(125,252,154,0.6)';
+    ctx.font = '12px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${Math.round(dist)}m`, arrowX, arrowY + 22);
+    ctx.restore();
   }
 
   function render() {
     state.camera.shakeX = (Math.random() - 0.5) * 6 * state.shake;
     state.camera.shakeY = (Math.random() - 0.5) * 6 * state.shake;
     drawBackground();
+    drawCorridor();
 
     const renderables = [
       ...state.gates.map(item => ({ type: 'gate', item })),
@@ -1869,7 +1784,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ...state.enemies.map(item => ({ type: 'enemy', item }))
     ];
 
-    renderables.sort((a, b) => b.item.z - a.item.z);
+    renderables.sort((a, b) => dist(b.item.x, b.item.y, state.player.x, state.player.y) - dist(a.item.x, a.item.y, state.player.x, state.player.y));
 
     renderables.forEach(entry => {
       if (entry.type === 'gate') drawGate(entry.item);
@@ -1950,7 +1865,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (hudScore) {
       const segment = currentSegment();
       const segPct = segment ? Math.min(100, Math.round((state.segmentDistance / segment.length) * 100)) : 0;
-      hudScore.textContent = `Drift: ${formatDistance(state.chapterDistance)} (${segPct}%)`;
+      const gateTotal = state.gates.length || 0;
+      const gateIndex = gateTotal ? Math.min(state.segmentGateIndex + 1, gateTotal) : 0;
+      const nextGate = state.gates[state.segmentGateIndex];
+      const gateDist = nextGate ? Math.round(dist(player.x, player.y, nextGate.x, nextGate.y)) : 0;
+      const gateText = gateTotal ? `Gate ${gateIndex}/${gateTotal} • ${gateDist}m` : 'Gate --';
+      hudScore.textContent = `Drift: ${formatDistance(state.chapterDistance)} (${segPct}%) • ${gateText}`;
     }
     updateObjectiveDisplay();
   }
