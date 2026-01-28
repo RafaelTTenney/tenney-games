@@ -598,9 +598,10 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
       const spawnY = typeof startY === 'number' ? startY : horizonY;
 
-      const shiftLimit = laneWidthAtPlayer * 0.18;
+      const laneShiftScale = gapLane === 0 ? 1 : 0.35;
+      const shiftLimit = laneWidthAtPlayer * 0.18 * laneShiftScale;
       const gapShift = (Math.random() - 0.5) * shiftLimit;
-      const shiftSpeed = (Math.random() - 0.5) * 30;
+      const shiftSpeed = (Math.random() - 0.5) * 30 * laneShiftScale;
 
       racerState.obstacles.push({
           y: spawnY,
@@ -609,6 +610,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
           roadWidthAtPlayer: roadWidthAtPlayer,
           gapShift,
           shiftSpeed,
+          shiftLimitScale: laneShiftScale,
           closeCall: false,
           color: `hsl(${colorHue}, 90%, 60%)`,
           hue: colorHue
@@ -721,7 +723,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
           ob.y += traveled;
           if (ob.shiftSpeed) {
               const laneWidthAtPlayer = (ob.roadWidthAtPlayer || roadWidthAtY(playerCar.y)) / 3;
-              const shiftLimit = laneWidthAtPlayer * 0.28;
+              const shiftScale = ob.shiftLimitScale || 1;
+              const shiftLimit = laneWidthAtPlayer * 0.28 * shiftScale;
               ob.gapShift += ob.shiftSpeed * (delta / 1000);
               if (ob.gapShift > shiftLimit || ob.gapShift < -shiftLimit) {
                   ob.shiftSpeed *= -1;
@@ -830,7 +833,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
       const roadWidthPlayer = roadWidthAtY(playerCar.y);
       const exactPlayerCenterX = playerCar.x;
 
-      const collisionWidth = playerCar.width * 0.86;
+      const laneSafetyScale = playerCar.lane === 0 ? 1 : 0.88;
+      const collisionWidth = playerCar.width * 0.86 * laneSafetyScale;
       const carLeft = exactPlayerCenterX - collisionWidth / 2;
       const carRight = exactPlayerCenterX + collisionWidth / 2;
       const carTop = playerCar.y;
@@ -843,7 +847,8 @@ import { getHighScore, submitHighScore } from './score-store.js';
           const obTop = ob.y - scaledHeight;
           const obBottom = ob.y;
 
-          const gap = getObstacleGap(ob);
+          const collisionY = Math.min(obBottom, Math.max(obTop, playerCar.y + playerCar.height * 0.6));
+          const gap = getObstacleGap(ob, collisionY);
           const gapLeft = gap.left;
           const gapRight = gap.right;
 
