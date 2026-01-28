@@ -38,40 +38,40 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   const input = { keys: {} };
 
   const VIEW = {
-    depth: 1800,
-    viewDist: 620,
+    depth: 2200,
+    viewDist: 700,
     centerX: canvas.width / 2,
-    centerY: canvas.height * 0.52,
-    shipOffsetY: 150,
-    boundsX: 240,
-    boundsY: 160
+    centerY: canvas.height * 0.54,
+    shipOffsetY: 170,
+    boundsX: 280,
+    boundsY: 200
   };
 
-  const BASE_SPEED = 70;
+  const BASE_SPEED = 120;
   const BASE_STATS = {
     hp: 120,
     shield: 90,
-    accel: 140,
-    maxSpeed: 160,
-    drag: 0.92,
-    fireDelay: 240,
-    damage: 12,
-    bulletSpeed: 820,
-    boostMax: 100,
-    boostRegen: 16
+    accel: 240,
+    maxSpeed: 240,
+    drag: 0.95,
+    fireDelay: 200,
+    damage: 13,
+    bulletSpeed: 920,
+    boostMax: 120,
+    boostRegen: 22
   };
 
   const STAR_LAYERS = [
-    { count: 120, sizeMin: 0.6, sizeMax: 1.6, speed: 0.45, alpha: 0.6 },
-    { count: 80, sizeMin: 1.2, sizeMax: 2.2, speed: 0.75, alpha: 0.8 },
-    { count: 40, sizeMin: 1.8, sizeMax: 3.2, speed: 1.05, alpha: 1 }
+    { count: 160, sizeMin: 0.5, sizeMax: 1.4, speed: 0.5, alpha: 0.5 },
+    { count: 110, sizeMin: 1.0, sizeMax: 2.2, speed: 0.8, alpha: 0.75 },
+    { count: 60, sizeMin: 1.6, sizeMax: 3.6, speed: 1.15, alpha: 0.95 }
   ];
 
   const ENEMY_TYPES = {
-    scout: { hp: 22, speed: 90, fireRate: 1400, damage: 8, size: 16, color: '#6df0ff' },
-    raider: { hp: 38, speed: 70, fireRate: 1200, damage: 10, size: 20, color: '#ffb347' },
-    lancer: { hp: 60, speed: 60, fireRate: 1000, damage: 14, size: 24, color: '#ff6b6b' },
-    turret: { hp: 70, speed: 0, fireRate: 900, damage: 12, size: 26, color: '#c77dff', static: true }
+    scout: { hp: 18, speed: 110, fireRate: 1500, damage: 7, size: 15, color: '#6df0ff', approach: 1.08 },
+    raider: { hp: 32, speed: 92, fireRate: 1250, damage: 9, size: 19, color: '#ffb347', approach: 1.05 },
+    lancer: { hp: 54, speed: 80, fireRate: 1050, damage: 12, size: 23, color: '#ff6b6b', approach: 1.12 },
+    turret: { hp: 65, speed: 0, fireRate: 950, damage: 11, size: 26, color: '#c77dff', static: true, approach: 0.85 }
   };
 
   const UPGRADE_DEFS = {
@@ -81,6 +81,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     shield: { label: 'Shield Core', max: 4, baseCost: 160, costStep: 140 },
     hull: { label: 'Hull Plating', max: 4, baseCost: 160, costStep: 140 },
     booster: { label: 'Afterburner', max: 3, baseCost: 180, costStep: 160 }
+  };
+  const PACE = {
+    lengthScale: 0.62,
+    spawnScale: 0.78,
+    gateBonus: 1,
+    dataBoost: 1.25
   };
 
   const JOURNEY = [
@@ -214,6 +220,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   ];
 
+  JOURNEY.forEach(chapter => {
+    chapter.segments.forEach(segment => {
+      segment.length = Math.round(segment.length * PACE.lengthScale);
+      segment.spawnInterval = Math.max(650, Math.round(segment.spawnInterval * PACE.spawnScale));
+      if (segment.gates) segment.gates += PACE.gateBonus;
+      if (segment.dataRate) segment.dataRate *= PACE.dataBoost;
+    });
+  });
+
   const DEFAULT_PROGRESS = {
     schemaVersion: 1,
     chapter: 1,
@@ -250,6 +265,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     forwardSpeed: BASE_SPEED,
     boostActive: false,
     shake: 0,
+    hitFlash: 0,
     stormPhase: 0,
     stormLevel: 0,
     objectiveText: '',
@@ -285,7 +301,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     particles: [],
     background: {
       stars: [],
-      nebulae: []
+      nebulae: [],
+      streaks: [],
+      dust: []
     },
     challenges: [],
     challengeState: {},
@@ -470,16 +488,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const hullLevel = upgrades.hull || 0;
     const boosterLevel = upgrades.booster || 0;
 
-    state.baseSpeed = BASE_SPEED + engineLevel * 3 + boosterLevel * 2;
-    state.player.accel = BASE_STATS.accel + engineLevel * 18;
-    state.player.maxSpeed = BASE_STATS.maxSpeed + engineLevel * 16;
-    state.player.fireDelay = Math.max(120, BASE_STATS.fireDelay - capacitorLevel * 18);
-    state.player.damage = BASE_STATS.damage + blasterLevel * 4;
-    state.player.bulletSpeed = BASE_STATS.bulletSpeed + blasterLevel * 12;
-    state.player.maxShield = BASE_STATS.shield + shieldLevel * 20;
-    state.player.maxHp = BASE_STATS.hp + hullLevel * 24;
-    state.player.boostMax = BASE_STATS.boostMax + boosterLevel * 28;
-    state.player.boostRegen = BASE_STATS.boostRegen + boosterLevel * 6;
+    state.baseSpeed = BASE_SPEED + engineLevel * 6 + boosterLevel * 4;
+    state.player.accel = BASE_STATS.accel + engineLevel * 22;
+    state.player.maxSpeed = BASE_STATS.maxSpeed + engineLevel * 20;
+    state.player.fireDelay = Math.max(120, BASE_STATS.fireDelay - capacitorLevel * 20);
+    state.player.damage = BASE_STATS.damage + blasterLevel * 3;
+    state.player.bulletSpeed = BASE_STATS.bulletSpeed + blasterLevel * 16;
+    state.player.maxShield = BASE_STATS.shield + shieldLevel * 22;
+    state.player.maxHp = BASE_STATS.hp + hullLevel * 26;
+    state.player.boostMax = BASE_STATS.boostMax + boosterLevel * 30;
+    state.player.boostRegen = BASE_STATS.boostRegen + boosterLevel * 8;
 
     state.player.hp = clamp(state.player.hp, 0, state.player.maxHp);
     state.player.shield = clamp(state.player.shield, 0, state.player.maxShield);
@@ -541,7 +559,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function getDifficulty() {
-    return 1 + state.chapterIndex * 0.18 + state.segmentIndex * 0.08;
+    return 1 + state.chapterIndex * 0.2 + state.segmentIndex * 0.12;
   }
 
   function initChallenges() {
@@ -865,9 +883,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function spawnEnemy(type, zOverride) {
     const def = ENEMY_TYPES[type] || ENEMY_TYPES.scout;
     const diff = getDifficulty();
-    const hpScale = 0.85 + diff * 0.25;
-    const speedScale = 0.9 + diff * 0.12;
-    const fireScale = clamp(1.05 - diff * 0.04, 0.65, 1.05);
+    const hpScale = 0.82 + diff * 0.22;
+    const speedScale = 0.95 + diff * 0.1;
+    const fireScale = clamp(1.05 - diff * 0.05, 0.6, 1.05);
     const enemy = {
       type,
       x: randRange(-VIEW.boundsX * 0.9, VIEW.boundsX * 0.9),
@@ -881,22 +899,41 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       fireRate: def.fireRate * fireScale,
       damage: def.damage * (0.9 + diff * 0.2),
       static: !!def.static,
+      approach: def.approach || 1,
       vx: randRange(-40, 40),
       vy: randRange(-30, 30),
       turn: def.static ? 0 : 0.7 + diff * 0.3,
-      fireCooldown: randRange(240, def.fireRate * fireScale)
+      fireCooldown: randRange(240, def.fireRate * fireScale),
+      timer: randRange(0, 1000),
+      pattern: state.rng() < 0.5 ? -1 : 1,
+      hitTimer: 0
     };
     state.enemies.push(enemy);
+    return enemy;
   }
 
   function spawnEnemyWave(segment) {
     if (!segment) return;
     const diff = getDifficulty();
-    const extra = diff > 1.6 && state.rng() < 0.3 ? 1 : 0;
-    const count = 1 + (state.rng() < 0.35 ? 1 : 0) + extra;
+    const formationRoll = state.rng();
+    if (formationRoll < 0.25) {
+      const type = pickWeighted(segment.mix);
+      const baseZ = VIEW.depth + 220;
+      const spacing = 90;
+      [-1, 0, 1].forEach((offset, idx) => {
+        const enemy = spawnEnemy(type, baseZ + idx * 80);
+        if (enemy) {
+          enemy.x = clamp(enemy.x + offset * spacing, -VIEW.boundsX * 0.95, VIEW.boundsX * 0.95);
+          enemy.y = clamp(enemy.y + Math.abs(offset) * 30, -VIEW.boundsY * 0.85, VIEW.boundsY * 0.85);
+        }
+      });
+      return;
+    }
+    const extra = diff > 1.4 && state.rng() < 0.4 ? 1 : 0;
+    const count = 1 + (state.rng() < 0.5 ? 1 : 0) + extra;
     for (let i = 0; i < count; i++) {
       const type = pickWeighted(segment.mix);
-      spawnEnemy(type, VIEW.depth + 220 + i * 80);
+      spawnEnemy(type, VIEW.depth + 220 + i * 90);
     }
   }
 
@@ -958,6 +995,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.hullDamaged = true;
     }
     state.shake = Math.min(1, state.shake + 0.35);
+    state.hitFlash = Math.min(1, state.hitFlash + 0.7);
+    for (let i = 0; i < 6; i++) {
+      state.particles.push({
+        x: player.x + randRange(-12, 12, Math.random),
+        y: player.y + randRange(-12, 12, Math.random),
+        z: 80,
+        vx: randRange(-80, 80, Math.random),
+        vy: randRange(-80, 80, Math.random),
+        vz: randRange(40, 120, Math.random),
+        life: randRange(260, 520, Math.random),
+        size: randRange(2, 4, Math.random),
+        color: '255,90,90'
+      });
+    }
   }
 
   function updateBackground(dtSec) {
@@ -970,6 +1021,26 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         star.y = randRange(-VIEW.boundsY * 1.6, VIEW.boundsY * 1.6, Math.random);
       }
     });
+    state.background.streaks.forEach(streak => {
+      streak.z -= speed * streak.speed;
+      if (streak.z < 0) {
+        streak.z = VIEW.depth + randRange(200, 600, Math.random);
+        streak.x = randRange(-VIEW.boundsX * 1.2, VIEW.boundsX * 1.2, Math.random);
+        streak.y = randRange(-VIEW.boundsY * 1.2, VIEW.boundsY * 1.2, Math.random);
+      }
+    });
+    state.background.dust.forEach(puff => {
+      puff.z -= speed * puff.speed;
+      if (puff.z < 0) {
+        puff.z = VIEW.depth + randRange(60, 200, Math.random);
+        puff.x = randRange(-VIEW.boundsX * 1.4, VIEW.boundsX * 1.4, Math.random);
+        puff.y = randRange(-VIEW.boundsY * 1.4, VIEW.boundsY * 1.4, Math.random);
+      }
+    });
+    state.background.nebulae.forEach(nebula => {
+      nebula.x += Math.sin(performance.now() / 12000 + nebula.phase) * dtSec * 2;
+      nebula.y += Math.cos(performance.now() / 15000 + nebula.phase) * dtSec * 1.5;
+    });
   }
 
   function update(dt) {
@@ -979,6 +1050,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     updateStatus(dt);
     state.shake = Math.max(0, state.shake - dtSec * 2);
+    state.hitFlash = Math.max(0, state.hitFlash - dtSec * 2.2);
 
     let ax = 0;
     let ay = 0;
@@ -991,9 +1063,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ax /= len;
       ay /= len;
     }
+    const hasInput = ax !== 0 || ay !== 0;
 
     player.vx += ax * player.accel * dtSec;
     player.vy += ay * player.accel * dtSec;
+    const centerPull = 0.12;
+    player.vx += (-player.x) * centerPull * dtSec;
+    player.vy += (-player.y) * centerPull * dtSec;
 
     state.stormLevel = segment?.hazards?.storm || 0;
     if (state.stormLevel > 0) {
@@ -1004,12 +1080,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     const boosting = input.keys.ShiftLeft || input.keys.ShiftRight;
     state.boostActive = boosting && player.boost > 0;
+    const segmentRamp = segment ? 1 + Math.min(0.18, (state.segmentDistance / segment.length) * 0.18) : 1;
     if (state.boostActive) {
-      state.forwardSpeed = state.baseSpeed * (1.55 + (progress.upgrades.booster || 0) * 0.08);
-      player.boost = Math.max(0, player.boost - 30 * dtSec);
+      state.forwardSpeed = state.baseSpeed * (1.7 + (progress.upgrades.booster || 0) * 0.1) * segmentRamp;
+      player.boost = Math.max(0, player.boost - 36 * dtSec);
       state.boostUsed = true;
     } else {
-      state.forwardSpeed = state.baseSpeed;
+      state.forwardSpeed = state.baseSpeed * segmentRamp;
       player.boost = Math.min(player.boostMax, player.boost + player.boostRegen * dtSec);
     }
 
@@ -1020,7 +1097,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.vy *= scale;
     }
 
-    const drag = Math.pow(player.drag, dtSec * 60);
+    const dragValue = hasInput ? player.drag : Math.max(0.9, player.drag - 0.03);
+    const drag = Math.pow(dragValue, dtSec * 60);
     player.vx *= drag;
     player.vy *= drag;
 
@@ -1031,7 +1109,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     if (player.fireCooldown > 0) player.fireCooldown -= dt;
     if (performance.now() - player.lastHit > 1200) {
-      player.shield = Math.min(player.maxShield, player.shield + 18 * dtSec);
+      player.shield = Math.min(player.maxShield, player.shield + 22 * dtSec);
     }
 
     if (input.keys.Space) firePlayer();
@@ -1043,8 +1121,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.spawnTimer -= dt;
       if (state.spawnTimer <= 0) {
         spawnEnemyWave(segment);
-        const diffScale = 0.9 + getDifficulty() * 0.08;
-        state.spawnTimer = segment.spawnInterval / diffScale;
+        const diffScale = 0.85 + getDifficulty() * 0.14;
+        const variance = randRange(0.85, 1.15);
+        state.spawnTimer = (segment.spawnInterval / diffScale) * variance;
       }
 
       const debrisRate = segment.hazards?.debris || 0;
@@ -1081,14 +1160,35 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
 
     state.enemies.forEach(enemy => {
-      enemy.z -= state.forwardSpeed * dtSec;
+      enemy.timer += dt;
+      if (enemy.hitTimer > 0) enemy.hitTimer -= dt;
+      enemy.z -= state.forwardSpeed * dtSec * enemy.approach;
+
       if (!enemy.static) {
-        const targetX = player.x + Math.sin(enemy.z / 180) * 30;
-        const targetY = player.y + Math.cos(enemy.z / 200) * 20;
-        enemy.vx += (targetX - enemy.x) * enemy.turn * dtSec;
-        enemy.vy += (targetY - enemy.y) * enemy.turn * dtSec;
+        let targetX = player.x;
+        let targetY = player.y;
+        if (enemy.type === 'scout') {
+          targetX += Math.sin(enemy.timer / 180) * 90 * enemy.pattern;
+          targetY += Math.cos(enemy.timer / 210) * 50;
+        } else if (enemy.type === 'raider') {
+          const angle = enemy.timer / 420 * enemy.pattern;
+          targetX += Math.cos(angle) * 140;
+          targetY += Math.sin(angle) * 90;
+        } else if (enemy.type === 'lancer') {
+          targetX += player.vx * 0.45;
+          targetY += player.vy * 0.45;
+        }
+
+        const swayX = Math.sin(enemy.timer / 240) * 18 * enemy.pattern;
+        const swayY = Math.cos(enemy.timer / 280) * 12 * enemy.pattern;
+        targetX += swayX;
+        targetY += swayY;
+
+        const turnRate = enemy.turn * (enemy.type === 'lancer' ? 1.25 : 1);
+        enemy.vx += (targetX - enemy.x) * turnRate * dtSec;
+        enemy.vy += (targetY - enemy.y) * turnRate * dtSec;
         const sideSpeed = Math.hypot(enemy.vx, enemy.vy);
-        const maxSide = enemy.speed;
+        const maxSide = enemy.speed * (enemy.type === 'scout' ? 1.15 : 1);
         if (sideSpeed > maxSide) {
           const scale = maxSide / sideSpeed;
           enemy.vx *= scale;
@@ -1096,25 +1196,31 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         }
         enemy.x += enemy.vx * dtSec;
         enemy.y += enemy.vy * dtSec;
+        enemy.x = clamp(enemy.x, -VIEW.boundsX * 1.1, VIEW.boundsX * 1.1);
+        enemy.y = clamp(enemy.y, -VIEW.boundsY * 1.1, VIEW.boundsY * 1.1);
       }
 
       enemy.fireCooldown -= dt;
-      if (enemy.fireCooldown <= 0 && enemy.z < 900) {
+      if (enemy.fireCooldown <= 0 && enemy.z < 980) {
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
         const len = Math.hypot(dx, dy) || 1;
-        const bulletSpeed = 320 + getDifficulty() * 40;
+        const jitter = randRange(-0.2, 0.2);
+        const dirX = (dx / len) + jitter;
+        const dirY = (dy / len) - jitter * 0.6;
+        const dirLen = Math.hypot(dirX, dirY) || 1;
+        const bulletSpeed = 280 + getDifficulty() * 45;
         state.enemyBullets.push({
           x: enemy.x,
           y: enemy.y,
           z: enemy.z,
-          vx: (dx / len) * 140,
-          vy: (dy / len) * 140,
+          vx: (dirX / dirLen) * 160,
+          vy: (dirY / dirLen) * 160,
           vz: -bulletSpeed,
           life: 1600,
           damage: enemy.damage
         });
-        enemy.fireCooldown = enemy.fireRate + randRange(-200, 300);
+        enemy.fireCooldown = enemy.fireRate + randRange(-250, 320);
       }
     });
 
@@ -1133,7 +1239,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         const dy = gate.y - player.y;
         if (Math.hypot(dx, dy) < gate.radius * 0.55) {
           gate.passed = true;
-          addCredits(35, 'Gate cleared');
+          addCredits(45, 'Gate cleared');
         } else {
           gate.passed = true;
         }
@@ -1173,9 +1279,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           const dy = bullet.y - enemy.y;
           if (Math.hypot(dx, dy) < enemy.size + 6) {
             enemy.hp -= bullet.damage;
+            enemy.hitTimer = 140;
             bullet.life = 0;
             if (enemy.hp <= 0) {
-              const reward = enemy.type === 'lancer' ? 25 : enemy.type === 'raider' ? 18 : enemy.type === 'turret' ? 30 : 12;
+              const reward = enemy.type === 'lancer' ? 30 : enemy.type === 'raider' ? 20 : enemy.type === 'turret' ? 36 : 14;
               addCredits(reward);
               spawnExplosion(enemy.x, enemy.y, enemy.z, enemy.type === 'turret' ? '180,110,255' : '255,120,90');
               if (state.rng() < 0.12) {
@@ -1224,7 +1331,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           if (pickup.type === 'repair') player.hp = Math.min(player.maxHp, player.hp + 24);
           if (pickup.type === 'shield') player.shield = Math.min(player.maxShield, player.shield + 26);
           if (pickup.type === 'data') {
-            addCredits(20, 'Data shard');
+            addCredits(30, 'Data shard');
             state.challenges.forEach(ch => {
               if (!ch.completed && !ch.failed && ch.type === 'collect') {
                 ch.progress += 1;
@@ -1269,7 +1376,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       return;
     }
 
-    addCredits(90, 'Checkpoint secured');
+    addCredits(120, 'Checkpoint secured');
     state.checkpointIndex = nextCheckpoint;
     state.segmentIndex = nextCheckpoint;
     progress.checkpoint = nextCheckpoint;
@@ -1282,7 +1389,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function completeChapter() {
     evaluateEndChallenges();
-    addCredits(220 + state.chapterIndex * 40, 'Chapter complete');
+    addCredits(260 + state.chapterIndex * 45, 'Chapter complete');
     progress.chapter = Math.min(JOURNEY.length + 1, progress.chapter + 1);
     progress.checkpoint = 0;
     queueSave();
@@ -1299,6 +1406,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function initBackground() {
     state.background.stars = [];
     state.background.nebulae = [];
+    state.background.streaks = [];
+    state.background.dust = [];
     STAR_LAYERS.forEach(layer => {
       for (let i = 0; i < layer.count; i++) {
         state.background.stars.push({
@@ -1317,7 +1426,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         x: randRange(0.1, 0.9, Math.random) * canvas.width,
         y: randRange(0.05, 0.5, Math.random) * canvas.height,
         r: randRange(120, 220, Math.random),
-        color: i % 2 === 0 ? 'rgba(80,140,255,0.08)' : 'rgba(125,252,154,0.08)'
+        color: i % 2 === 0 ? 'rgba(80,140,255,0.1)' : 'rgba(125,252,154,0.1)',
+        phase: randRange(0, Math.PI * 2, Math.random)
+      });
+    }
+
+    for (let i = 0; i < 50; i++) {
+      state.background.streaks.push({
+        x: randRange(-VIEW.boundsX * 1.2, VIEW.boundsX * 1.2, Math.random),
+        y: randRange(-VIEW.boundsY * 1.2, VIEW.boundsY * 1.2, Math.random),
+        z: randRange(0, VIEW.depth, Math.random),
+        speed: randRange(1.4, 2.1, Math.random),
+        length: randRange(40, 90, Math.random)
+      });
+    }
+
+    for (let i = 0; i < 70; i++) {
+      state.background.dust.push({
+        x: randRange(-VIEW.boundsX * 1.4, VIEW.boundsX * 1.4, Math.random),
+        y: randRange(-VIEW.boundsY * 1.4, VIEW.boundsY * 1.4, Math.random),
+        z: randRange(0, VIEW.depth, Math.random),
+        speed: randRange(1.2, 1.8, Math.random),
+        size: randRange(0.8, 1.8, Math.random)
       });
     }
   }
@@ -1337,14 +1467,31 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function drawBackground() {
     const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    grad.addColorStop(0, '#050a12');
-    grad.addColorStop(0.55, '#091321');
+    grad.addColorStop(0, '#060c16');
+    grad.addColorStop(0.55, '#0b1627');
     grad.addColorStop(1, '#04070e');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    const glow = ctx.createRadialGradient(
+      VIEW.centerX,
+      VIEW.centerY - 80,
+      20,
+      VIEW.centerX,
+      VIEW.centerY - 80,
+      canvas.width * 0.7
+    );
+    glow.addColorStop(0, 'rgba(120,190,255,0.18)');
+    glow.addColorStop(0.5, 'rgba(60,120,200,0.08)');
+    glow.addColorStop(1, 'rgba(4,8,16,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
     state.background.nebulae.forEach(nebula => {
-      ctx.fillStyle = nebula.color;
+      const nebulaGrad = ctx.createRadialGradient(nebula.x, nebula.y, 0, nebula.x, nebula.y, nebula.r);
+      nebulaGrad.addColorStop(0, nebula.color);
+      nebulaGrad.addColorStop(1, 'rgba(4,8,16,0)');
+      ctx.fillStyle = nebulaGrad;
       ctx.beginPath();
       ctx.arc(nebula.x, nebula.y, nebula.r, 0, Math.PI * 2);
       ctx.fill();
@@ -1359,18 +1506,60 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fillRect(proj.x, proj.y, size, size);
     });
 
-    if (state.forwardSpeed > state.baseSpeed * 1.1) {
-      ctx.strokeStyle = 'rgba(125,252,154,0.12)';
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 18; i++) {
-        const x = VIEW.centerX + (Math.random() - 0.5) * canvas.width;
-        const y = VIEW.centerY + Math.random() * canvas.height * 0.8;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x, y + 16 + Math.random() * 18);
-        ctx.stroke();
+    state.background.dust.forEach(puff => {
+      const relX = puff.x - state.player.x * 0.1;
+      const relY = puff.y - state.player.y * 0.1;
+      const proj = projectPoint(relX, relY, puff.z);
+      const size = puff.size * proj.scale * 1.2;
+      ctx.fillStyle = 'rgba(180,210,255,0.25)';
+      ctx.fillRect(proj.x, proj.y, size, size);
+    });
+
+    ctx.strokeStyle = 'rgba(90,160,220,0.12)';
+    ctx.lineWidth = 1;
+    for (let i = -4; i <= 4; i++) {
+      ctx.beginPath();
+      let started = false;
+      for (let z = 200; z <= VIEW.depth; z += 220) {
+        const proj = projectPoint(i * 90, 0, z);
+        if (!started) {
+          ctx.moveTo(proj.x, proj.y);
+          started = true;
+        } else {
+          ctx.lineTo(proj.x, proj.y);
+        }
       }
+      ctx.stroke();
     }
+    for (let j = -2; j <= 2; j++) {
+      ctx.beginPath();
+      let started = false;
+      for (let z = 200; z <= VIEW.depth; z += 220) {
+        const proj = projectPoint(0, j * 70, z);
+        if (!started) {
+          ctx.moveTo(proj.x, proj.y);
+          started = true;
+        } else {
+          ctx.lineTo(proj.x, proj.y);
+        }
+      }
+      ctx.stroke();
+    }
+
+    state.background.streaks.forEach(streak => {
+      const relX = streak.x - state.player.x * 0.08;
+      const relY = streak.y - state.player.y * 0.08;
+      const head = projectPoint(relX, relY, streak.z);
+      const tail = projectPoint(relX, relY, Math.max(0, streak.z - streak.length));
+      ctx.strokeStyle = state.forwardSpeed > state.baseSpeed * 1.05
+        ? 'rgba(125,252,154,0.28)'
+        : 'rgba(140,200,255,0.18)';
+      ctx.lineWidth = Math.max(1, 2 * head.scale);
+      ctx.beginPath();
+      ctx.moveTo(head.x, head.y);
+      ctx.lineTo(tail.x, tail.y);
+      ctx.stroke();
+    });
   }
 
   function drawGate(gate) {
@@ -1378,10 +1567,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const relY = gate.y - state.player.y;
     const proj = projectPoint(relX, relY, gate.z);
     const radius = gate.radius * proj.scale;
-    ctx.strokeStyle = 'rgba(125,252,154,0.55)';
-    ctx.lineWidth = Math.max(1, 3 * proj.scale);
+    const pulse = 0.6 + Math.sin((performance.now() + gate.z) / 380) * 0.4;
+    ctx.strokeStyle = `rgba(125,252,154,${0.25 + pulse * 0.35})`;
+    ctx.shadowColor = '#7dfc9a';
+    ctx.shadowBlur = 14 * proj.scale;
+    ctx.lineWidth = Math.max(1, 3.5 * proj.scale);
     ctx.beginPath();
     ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(125,252,154,0.35)';
+    ctx.lineWidth = Math.max(1, 1.6 * proj.scale);
+    ctx.beginPath();
+    ctx.arc(proj.x, proj.y, radius * 0.65, 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -1390,10 +1588,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const relY = debris.y - state.player.y;
     const proj = projectPoint(relX, relY, debris.z);
     const r = debris.r * proj.scale;
-    ctx.fillStyle = 'rgba(140,160,190,0.65)';
+    const grad = ctx.createRadialGradient(proj.x, proj.y, 0, proj.x, proj.y, r);
+    grad.addColorStop(0, 'rgba(190,210,240,0.7)');
+    grad.addColorStop(1, 'rgba(90,110,140,0.35)');
+    ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(proj.x, proj.y, r, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = 'rgba(160,190,220,0.4)';
+    ctx.lineWidth = Math.max(1, 1.2 * proj.scale);
+    ctx.beginPath();
+    ctx.arc(proj.x, proj.y, r * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   function drawPickup(pickup) {
@@ -1401,11 +1607,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const relY = pickup.y - state.player.y;
     const proj = projectPoint(relX, relY, pickup.z);
     const r = pickup.r * proj.scale;
-    ctx.fillStyle = pickup.type === 'data' ? '#7dfc9a' : pickup.type === 'shield' ? '#47f5ff' : '#ff7a47';
-    ctx.shadowColor = ctx.fillStyle;
-    ctx.shadowBlur = 8;
+    const pulse = 0.8 + Math.sin(performance.now() / 260 + pickup.z / 120) * 0.2;
+    const color = pickup.type === 'data' ? '#7dfc9a' : pickup.type === 'shield' ? '#47f5ff' : '#ff7a47';
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12 * proj.scale;
     ctx.beginPath();
-    ctx.arc(proj.x, proj.y, r, 0, Math.PI * 2);
+    ctx.arc(proj.x, proj.y, r * pulse, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
   }
@@ -1415,35 +1623,53 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const relY = enemy.y - state.player.y;
     const proj = projectPoint(relX, relY, enemy.z);
     const size = enemy.size * proj.scale;
+    const hitPulse = enemy.hitTimer > 0 ? Math.min(1, enemy.hitTimer / 140) : 0;
     ctx.save();
     ctx.translate(proj.x, proj.y);
     ctx.fillStyle = enemy.color;
     ctx.shadowColor = enemy.color;
-    ctx.shadowBlur = 12 * proj.scale;
+    ctx.shadowBlur = (12 + hitPulse * 12) * proj.scale;
     ctx.beginPath();
     ctx.moveTo(0, -size);
     ctx.lineTo(size * 0.8, size * 0.8);
     ctx.lineTo(-size * 0.8, size * 0.8);
     ctx.closePath();
     ctx.fill();
+    ctx.lineWidth = Math.max(1, 1.2 * proj.scale);
+    ctx.strokeStyle = hitPulse > 0 ? 'rgba(255,255,255,0.8)' : 'rgba(230,240,255,0.25)';
+    ctx.stroke();
+
+    ctx.fillStyle = `rgba(255,220,180,${0.25 + hitPulse * 0.35})`;
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.35, size * 0.85);
+    ctx.lineTo(0, size * 1.55);
+    ctx.lineTo(size * 0.35, size * 0.85);
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
   }
 
   function drawBullets() {
-    ctx.fillStyle = '#e6f2ff';
     state.bullets.forEach(bullet => {
       const relX = bullet.x - state.player.x;
       const relY = bullet.y - state.player.y;
       const proj = projectPoint(relX, relY, bullet.z);
+      ctx.fillStyle = '#e6f2ff';
+      ctx.shadowColor = '#e6f2ff';
+      ctx.shadowBlur = 8 * proj.scale;
       ctx.fillRect(proj.x - 2, proj.y - 4, 4, 8);
+      ctx.shadowBlur = 0;
     });
 
-    ctx.fillStyle = '#ffb347';
     state.enemyBullets.forEach(bullet => {
       const relX = bullet.x - state.player.x;
       const relY = bullet.y - state.player.y;
       const proj = projectPoint(relX, relY, bullet.z);
+      ctx.fillStyle = '#ffb347';
+      ctx.shadowColor = '#ffb347';
+      ctx.shadowBlur = 8 * proj.scale;
       ctx.fillRect(proj.x - 2, proj.y - 4, 4, 8);
+      ctx.shadowBlur = 0;
     });
   }
 
@@ -1454,7 +1680,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const proj = projectPoint(relX, relY, p.z);
       const size = p.size * proj.scale;
       ctx.fillStyle = `rgba(${p.color},${Math.min(1, p.life / 900)})`;
-      ctx.fillRect(proj.x, proj.y, size, size);
+      ctx.beginPath();
+      ctx.arc(proj.x, proj.y, size, 0, Math.PI * 2);
+      ctx.fill();
     });
   }
 
@@ -1462,35 +1690,60 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const player = state.player;
     const shipX = VIEW.centerX + player.vx * 0.12;
     const shipY = VIEW.centerY + VIEW.shipOffsetY + player.vy * 0.12;
+    const speed = Math.hypot(player.vx, player.vy);
+    const tilt = clamp(player.vx / (player.maxSpeed || 1), -1, 1) * 0.45;
 
     ctx.save();
     ctx.translate(shipX, shipY);
+    ctx.rotate(tilt);
 
     ctx.fillStyle = '#7dfc9a';
     ctx.shadowColor = '#7dfc9a';
     ctx.shadowBlur = 16;
     ctx.beginPath();
-    ctx.moveTo(0, -18);
-    ctx.lineTo(16, 16);
-    ctx.lineTo(-16, 16);
+    ctx.moveTo(0, -20);
+    ctx.lineTo(18, 16);
+    ctx.lineTo(8, 20);
+    ctx.lineTo(-8, 20);
+    ctx.lineTo(-18, 16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(220,255,240,0.6)';
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(20,40,28,0.8)';
+    ctx.beginPath();
+    ctx.moveTo(0, -6);
+    ctx.lineTo(6, 4);
+    ctx.lineTo(-6, 4);
     ctx.closePath();
     ctx.fill();
 
     if (state.boostActive) {
-      ctx.fillStyle = 'rgba(125,252,154,0.5)';
+      ctx.fillStyle = 'rgba(125,252,154,0.65)';
       ctx.beginPath();
-      ctx.moveTo(-8, 18);
-      ctx.lineTo(0, 34 + Math.random() * 6);
-      ctx.lineTo(8, 18);
+      ctx.moveTo(-10, 20);
+      ctx.lineTo(0, 40 + Math.random() * 8);
+      ctx.lineTo(10, 20);
       ctx.closePath();
       ctx.fill();
     }
 
+    const engineGlow = 0.25 + Math.min(1, speed / (player.maxSpeed || 1)) * 0.5;
+    ctx.fillStyle = `rgba(125,252,154,${engineGlow})`;
+    ctx.beginPath();
+    ctx.moveTo(-6, 18);
+    ctx.lineTo(0, 30);
+    ctx.lineTo(6, 18);
+    ctx.closePath();
+    ctx.fill();
+
     ctx.restore();
 
     if (player.shield > 6) {
-      ctx.strokeStyle = 'rgba(125,252,154,0.3)';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(125,252,154,0.35)';
+      ctx.lineWidth = 2.2;
       ctx.beginPath();
       ctx.arc(shipX, shipY, 26, 0, Math.PI * 2);
       ctx.stroke();
@@ -1519,6 +1772,45 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drawParticles();
     drawBullets();
     drawPlayer();
+
+    const retX = VIEW.centerX;
+    const retY = VIEW.centerY - 70;
+    ctx.strokeStyle = 'rgba(125,252,154,0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(retX, retY, 10, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(retX - 18, retY);
+    ctx.lineTo(retX - 6, retY);
+    ctx.moveTo(retX + 6, retY);
+    ctx.lineTo(retX + 18, retY);
+    ctx.moveTo(retX, retY - 18);
+    ctx.lineTo(retX, retY - 6);
+    ctx.moveTo(retX, retY + 6);
+    ctx.lineTo(retX, retY + 18);
+    ctx.stroke();
+
+    if (state.stormLevel > 0) {
+      const intensity = Math.min(0.35, state.stormLevel * 0.25);
+      ctx.fillStyle = `rgba(60,120,200,${0.08 + intensity * 0.2})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = `rgba(120,200,255,${0.05 + intensity * 0.1})`;
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 12; i++) {
+        const x = (i / 11) * canvas.width;
+        const y = (Math.sin(performance.now() / 300 + i) * 0.4 + 0.5) * canvas.height;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + 40, y + 20);
+        ctx.stroke();
+      }
+    }
+
+    if (state.hitFlash > 0) {
+      ctx.fillStyle = `rgba(255,80,80,${0.18 * state.hitFlash})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
     if (!state.running) {
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
