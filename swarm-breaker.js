@@ -299,7 +299,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       boostMax: BASE_STATS.boostMax,
       boostRegen: BASE_STATS.boostRegen,
       lastHit: 0,
-      angle: -Math.PI / 2
+      angle: -Math.PI / 2,
+      speed: 0
     },
     enemies: [],
     bullets: [],
@@ -387,7 +388,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const step = segment.length / gateCount;
       const gates = [];
       for (let i = 1; i <= gateCount; i++) {
-        const lateral = (rng() - 0.5) * 320;
+        const weave = (i % 2 === 0 ? 1 : -1) * (140 + rng() * 220);
+        const jitter = (rng() - 0.5) * 120;
+        const lateral = weave + jitter;
         const t = step * i;
         const gx = x + dirX * t - dirY * lateral;
         const gy = y + dirY * t + dirX * lateral;
@@ -795,6 +798,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.player.y = routeSegment?.startY || 0;
     state.player.vx = 0;
     state.player.vy = 0;
+    state.player.speed = 0;
     if (routeSegment) {
       state.player.angle = Math.atan2(routeSegment.dirY, routeSegment.dirX);
     } else {
@@ -1220,24 +1224,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (player.angle > Math.PI) player.angle -= Math.PI * 2;
     if (player.angle < -Math.PI) player.angle += Math.PI * 2;
 
-    if (forward) {
-      player.vx += Math.cos(player.angle) * player.thrust * dtSec;
-      player.vy += Math.sin(player.angle) * player.thrust * dtSec;
-      if (Math.random() < 0.6) emitThruster(false);
-    }
-    if (reverse) {
-      player.vx -= Math.cos(player.angle) * player.reverseThrust * dtSec;
-      player.vy -= Math.sin(player.angle) * player.reverseThrust * dtSec;
-      if (Math.random() < 0.5) emitThruster(true);
-    }
-
-    state.stormLevel = segment?.hazards?.storm || 0;
-    if (state.stormLevel > 0) {
-      state.stormPhase += dtSec * (0.6 + state.stormLevel);
-      player.vx += Math.sin(state.stormPhase * 1.3) * state.stormLevel * 18 * dtSec;
-      player.vy += Math.cos(state.stormPhase * 1.1) * state.stormLevel * 14 * dtSec;
-    }
-
     const boosting = input.keys.ShiftLeft || input.keys.ShiftRight;
     state.boostActive = boosting && player.boost > 0;
     if (state.boostActive) {
@@ -1247,25 +1233,52 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.boost = Math.min(player.boostMax, player.boost + player.boostRegen * dtSec);
     }
 
+    const thrusting = forward || reverse;
+    const forwardX = Math.cos(player.angle);
+    const forwardY = Math.sin(player.angle);
+    let accel = 0;
+    if (forward) {
+      accel += player.thrust;
+      if (Math.random() < 0.6) emitThruster(false);
+    }
+    if (reverse) {
+      accel -= player.reverseThrust;
+      if (Math.random() < 0.5) emitThruster(true);
+    }
+    if (state.boostActive && forward) {
+      accel *= 1.35;
+    }
+
+    player.speed += accel * dtSec;
+    const maxForward = player.maxSpeed + (state.boostActive ? 160 : 0);
+    const maxReverse = player.maxSpeed * 0.55;
+    player.speed = clamp(player.speed, -maxReverse, maxForward);
+    const dragBase = thrusting ? player.drag : Math.max(0.97, player.drag - 0.015);
+    player.speed *= Math.pow(dragBase, dtSec * 60);
+
+    const desiredVX = forwardX * player.speed;
+    const desiredVY = forwardY * player.speed;
+    const alignStrength = thrusting ? 0.26 : 0.14;
+    const align = 1 - Math.pow(1 - alignStrength, dtSec * 60);
+    player.vx += (desiredVX - player.vx) * align;
+    player.vy += (desiredVY - player.vy) * align;
+
+    state.stormLevel = segment?.hazards?.storm || 0;
+    if (state.stormLevel > 0) {
+      state.stormPhase += dtSec * (0.6 + state.stormLevel);
+      player.vx += Math.sin(state.stormPhase * 1.3) * state.stormLevel * 20 * dtSec;
+      player.vy += Math.cos(state.stormPhase * 1.1) * state.stormLevel * 16 * dtSec;
+    }
+
     const speed = Math.hypot(player.vx, player.vy);
-    if (speed > player.maxSpeed) {
-      const scale = player.maxSpeed / speed;
+    const maxActual = maxForward * (state.boostActive ? 1.05 : 1);
+    if (speed > maxActual) {
+      const scale = maxActual / speed;
       player.vx *= scale;
       player.vy *= scale;
     }
-
-    const thrusting = forward || reverse;
-    const dragValue = thrusting ? player.drag : Math.max(0.88, player.drag - 0.06);
-    const drag = Math.pow(dragValue, dtSec * 60);
-    player.vx *= drag;
-    player.vy *= drag;
-
-    const forwardX = Math.cos(player.angle);
-    const forwardY = Math.sin(player.angle);
-    const lateral = player.vx * -forwardY + player.vy * forwardX;
-    const assist = thrusting ? 0.55 : 1.1;
-    player.vx -= -forwardY * lateral * assist * dtSec;
-    player.vy -= forwardX * lateral * assist * dtSec;
+    const projected = player.vx * forwardX + player.vy * forwardY;
+    player.speed = clamp(projected, -maxReverse, maxForward);
 
     player.x += player.vx * dtSec;
     player.y += player.vy * dtSec;
@@ -1449,8 +1462,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         currentGate.threatSpawned = true;
       }
 
+      const playerSpeed = Math.hypot(player.vx, player.vy);
+      const slowEnough = playerSpeed < 150;
+      let threatCount = 0;
+      if (currentGate) {
+        state.enemies.forEach(enemy => {
+          if (enemy.hp <= 0) return;
+          if (dist(enemy.x, enemy.y, currentGate.x, currentGate.y) < 260) threatCount += 1;
+        });
+      }
+      const threatFactor = threatCount > 0 ? clamp(1 - threatCount * 0.08, 0.4, 1) : 1;
       if (gateDistToPlayer < currentGate.radius) {
-        state.gateCharge = Math.min(state.gateChargeTarget, state.gateCharge + dt);
+        const speedFactor = slowEnough ? 1 : 0.25;
+        state.gateCharge = Math.min(state.gateChargeTarget, state.gateCharge + dt * speedFactor * threatFactor);
+        if (!slowEnough && state.statusTimer <= 0) {
+          setStatus('Brake to stabilize the gate', 1200);
+        }
       } else {
         state.gateCharge = Math.max(0, state.gateCharge - dt * GATE_STABILIZE_DECAY);
       }
