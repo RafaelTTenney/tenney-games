@@ -310,6 +310,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       streaks: [],
       dust: []
     },
+    camera: {
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      shakeX: 0,
+      shakeY: 0
+    },
     challenges: [],
     challengeState: {},
     hullDamaged: false,
@@ -700,12 +708,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.stormLevel = segment.hazards?.storm || 0;
     state.hullDamaged = false;
     state.boostUsed = false;
+    state.objectiveText = `${segment.name} — ${chapter.objective}`;
 
     state.player.x = 0;
     state.player.y = 0;
     state.player.vx = 0;
     state.player.vy = 0;
     state.player.angle = -Math.PI / 2;
+    state.camera.x = 0;
+    state.camera.y = 0;
+    state.camera.vx = 0;
+    state.camera.vy = 0;
     state.player.fireCooldown = 0;
     state.player.hp = state.player.maxHp;
     state.player.shield = state.player.maxShield;
@@ -924,6 +937,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function spawnEnemyWave(segment) {
     if (!segment) return;
+    if (state.enemies.length > 14) return;
     const diff = getDifficulty();
     const formationRoll = state.rng();
     if (formationRoll < 0.25) {
@@ -1096,12 +1110,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (forward) {
       player.vx += Math.cos(player.angle) * player.thrust * dtSec;
       player.vy += Math.sin(player.angle) * player.thrust * dtSec;
-      if (state.rng() < 0.6) emitThruster(false);
+      if (Math.random() < 0.6) emitThruster(false);
     }
     if (reverse) {
       player.vx -= Math.cos(player.angle) * player.reverseThrust * dtSec;
       player.vy -= Math.sin(player.angle) * player.reverseThrust * dtSec;
-      if (state.rng() < 0.5) emitThruster(true);
+      if (Math.random() < 0.5) emitThruster(true);
     }
 
     const edgeX = VIEW.boundsX * 0.88;
@@ -1164,6 +1178,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.vy *= -0.35;
     }
 
+    state.camera.x += (player.x - state.camera.x) * 0.08;
+    state.camera.y += (player.y - state.camera.y) * 0.08;
+    state.camera.vx += (player.vx - state.camera.vx) * 0.08;
+    state.camera.vy += (player.vy - state.camera.vy) * 0.08;
+
     if (player.fireCooldown > 0) player.fireCooldown -= dt;
     if (performance.now() - player.lastHit > 1200) {
       player.shield = Math.min(player.maxShield, player.shield + 22 * dtSec);
@@ -1187,7 +1206,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (debrisRate > 0) {
         state.debrisTimer -= dt;
         if (state.debrisTimer <= 0) {
-          spawnDebris();
+          if (state.debris.length < 18) spawnDebris();
           state.debrisTimer = 1700 / debrisRate;
         }
       }
@@ -1196,7 +1215,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (turretRate > 0) {
         state.turretTimer -= dt;
         if (state.turretTimer <= 0) {
-          spawnEnemy('turret', VIEW.depth + 180);
+          if (state.enemies.length < 16) spawnEnemy('turret', VIEW.depth + 180);
           state.turretTimer = 3200 / turretRate;
         }
       }
@@ -1205,7 +1224,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (dataRate > 0) {
         state.dataTimer -= dt;
         if (state.dataTimer <= 0) {
-          spawnPickup('data', randRange(-120, 120), randRange(-80, 80), VIEW.depth + 140);
+          if (state.pickups.length < 10) {
+            spawnPickup('data', randRange(-120, 120), randRange(-80, 80), VIEW.depth + 140);
+          }
           state.dataTimer = 2600 / dataRate;
         }
       }
@@ -1510,10 +1531,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function projectPoint(x, y, z) {
-    const shakeX = (Math.random() - 0.5) * 6 * state.shake;
-    const shakeY = (Math.random() - 0.5) * 6 * state.shake;
-    const camX = VIEW.centerX + state.player.vx * 0.08 + shakeX;
-    const camY = VIEW.centerY + state.player.vy * 0.08 + shakeY;
+    const camX = VIEW.centerX + state.camera.vx * 0.08 + state.camera.shakeX;
+    const camY = VIEW.centerY + state.camera.vy * 0.08 + state.camera.shakeY;
     const scale = VIEW.viewDist / (z + VIEW.viewDist);
     return {
       x: camX + x * scale,
@@ -1555,8 +1574,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
 
     state.background.stars.forEach(star => {
-      const relX = star.x - state.player.x * 0.08;
-      const relY = star.y - state.player.y * 0.08;
+      const relX = star.x - state.camera.x * 0.08;
+      const relY = star.y - state.camera.y * 0.08;
       const proj = projectPoint(relX, relY, star.z);
       const size = star.size * proj.scale;
       ctx.fillStyle = `rgba(210,230,255,${star.alpha})`;
@@ -1564,8 +1583,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
 
     state.background.dust.forEach(puff => {
-      const relX = puff.x - state.player.x * 0.1;
-      const relY = puff.y - state.player.y * 0.1;
+      const relX = puff.x - state.camera.x * 0.1;
+      const relY = puff.y - state.camera.y * 0.1;
       const proj = projectPoint(relX, relY, puff.z);
       const size = puff.size * proj.scale * 1.2;
       ctx.fillStyle = 'rgba(180,210,255,0.25)';
@@ -1604,8 +1623,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
 
     state.background.streaks.forEach(streak => {
-      const relX = streak.x - state.player.x * 0.08;
-      const relY = streak.y - state.player.y * 0.08;
+      const relX = streak.x - state.camera.x * 0.08;
+      const relY = streak.y - state.camera.y * 0.08;
       const head = projectPoint(relX, relY, streak.z);
       const tail = projectPoint(relX, relY, Math.max(0, streak.z - streak.length));
       ctx.strokeStyle = state.forwardSpeed > state.baseSpeed * 1.05
@@ -1807,7 +1826,40 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
+  function drawNavArrow() {
+    const gateTarget = state.gates
+      .filter(gate => !gate.passed && gate.z > 0)
+      .sort((a, b) => a.z - b.z)[0];
+    const targetX = gateTarget ? gateTarget.x : 0;
+    const targetY = gateTarget ? gateTarget.y : 0;
+    const dx = targetX - state.player.x;
+    const dy = targetY - state.player.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 8) return;
+
+    const angle = Math.atan2(dy, dx);
+    const arrowX = VIEW.centerX;
+    const arrowY = VIEW.centerY - 70;
+    ctx.save();
+    ctx.translate(arrowX, arrowY);
+    ctx.rotate(angle);
+    ctx.strokeStyle = 'rgba(125,252,154,0.45)';
+    ctx.fillStyle = 'rgba(125,252,154,0.2)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(14, 0);
+    ctx.lineTo(-6, -8);
+    ctx.lineTo(-2, 0);
+    ctx.lineTo(-6, 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function render() {
+    state.camera.shakeX = (Math.random() - 0.5) * 6 * state.shake;
+    state.camera.shakeY = (Math.random() - 0.5) * 6 * state.shake;
     drawBackground();
 
     const renderables = [
@@ -1847,6 +1899,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.moveTo(retX, retY + 6);
     ctx.lineTo(retX, retY + 18);
     ctx.stroke();
+
+    drawNavArrow();
 
     if (state.stormLevel > 0) {
       const intensity = Math.min(0.35, state.stormLevel * 0.25);
@@ -1893,7 +1947,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (hudChapter) hudChapter.textContent = `Chapter: ${state.chapterIndex + 1}/${JOURNEY.length}`;
     const segmentCount = currentChapter()?.segments?.length || 0;
     if (hudCheckpoint) hudCheckpoint.textContent = `Checkpoint: ${state.checkpointIndex}/${segmentCount}`;
-    if (hudScore) hudScore.textContent = `Distance: ${formatDistance(state.chapterDistance)}`;
+    if (hudScore) {
+      const segment = currentSegment();
+      const segPct = segment ? Math.min(100, Math.round((state.segmentDistance / segment.length) * 100)) : 0;
+      hudScore.textContent = `Drift: ${formatDistance(state.chapterDistance)} (${segPct}%)`;
+    }
     updateObjectiveDisplay();
   }
 
