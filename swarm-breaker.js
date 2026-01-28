@@ -670,7 +670,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function updateObjectiveDisplay() {
     if (!hudObjective) return;
     if (state.signal <= 30) {
-      hudObjective.textContent = 'Objective: Signal critical — stabilize the next gate.';
+      hudObjective.textContent = 'Objective: Signal critical — clear defenders, stabilize the next gate.';
       return;
     }
     const active = state.challenges.find(ch => !ch.completed && !ch.failed);
@@ -688,7 +688,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     let gateText = gateTotal ? ` • Gate ${gateIndex}/${gateTotal}` : '';
     if (currentGate && state.gateChargeTarget > 0) {
       const pct = Math.round((state.gateCharge / state.gateChargeTarget) * 100);
-      gateText += pct > 0 ? ` • Stabilizing ${pct}%` : ' • Brake to stabilize';
+      gateText += pct > 0 ? ` • Stabilizing ${pct}%` : ' • Clear defenders + brake';
     }
     hudObjective.textContent = `Objective: ${state.objectiveText || '-'}${gateText}`;
   }
@@ -1339,7 +1339,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
-    const signalDrain = 0.6 + getDifficulty() * 0.15;
+    const signalDrain = 1.2 + getDifficulty() * 0.25;
     state.signal = clamp(state.signal - signalDrain * dtSec, 0, 100);
 
     if (segment) {
@@ -1498,7 +1498,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
 
       const playerSpeed = Math.hypot(player.vx, player.vy);
-      const slowEnough = playerSpeed < 90;
+      const slowEnough = playerSpeed < 50;
       let threatCount = 0;
       if (currentGate) {
         state.enemies.forEach(enemy => {
@@ -1506,21 +1506,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           if (dist(enemy.x, enemy.y, currentGate.x, currentGate.y) < 260) threatCount += 1;
         });
       }
+      const gateClear = threatCount === 0;
       const threatFactor = threatCount > 0 ? clamp(1 - threatCount * 0.08, 0.4, 1) : 1;
       if (gateDistToPlayer < currentGate.radius) {
         const speedFactor = slowEnough ? 1 : 0;
-        state.gateCharge = Math.min(state.gateChargeTarget, state.gateCharge + dt * speedFactor * threatFactor);
-        if (!slowEnough && state.statusTimer <= 0) {
-          setStatus('Brake to stabilize the gate', 1200);
+        if (!gateClear) {
+          state.gateCharge = Math.max(0, state.gateCharge - dt * 0.9);
+          if (state.statusTimer <= 0) setStatus('Clear the gate defenders', 1200);
+        } else {
+          state.gateCharge = Math.min(state.gateChargeTarget, state.gateCharge + dt * speedFactor * threatFactor);
+          if (!slowEnough && state.statusTimer <= 0) {
+            setStatus('Brake to stabilize the gate', 1200);
+          }
         }
       } else {
-        state.gateCharge = Math.max(0, state.gateCharge - dt * GATE_STABILIZE_DECAY);
+        state.gateCharge = Math.max(0, state.gateCharge - dt * (GATE_STABILIZE_DECAY + 0.15));
       }
       const chargeRatio = state.gateChargeTarget > 0 ? state.gateCharge / state.gateChargeTarget : 0;
       currentGate.charge = clamp(chargeRatio, 0, 1);
 
-      if (gateDistToPlayer < currentGate.radius && slowEnough) {
-        state.signal = clamp(state.signal + 20 * dtSec, 0, 100);
+      if (gateDistToPlayer < currentGate.radius && slowEnough && gateClear) {
+        state.signal = clamp(state.signal + 24 * dtSec, 0, 100);
       }
 
       if (state.gateCharge >= state.gateChargeTarget) {
@@ -1881,9 +1887,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.shadowColor = '#7dfc9a';
     ctx.shadowBlur = 16;
     ctx.beginPath();
-    ctx.moveTo(0, -22);
-    ctx.lineTo(12, 16);
-    ctx.lineTo(-12, 16);
+    ctx.moveTo(0, -24);
+    ctx.lineTo(18, 10);
+    ctx.lineTo(8, 20);
+    ctx.lineTo(-8, 20);
+    ctx.lineTo(-18, 10);
     ctx.closePath();
     ctx.fill();
     ctx.lineWidth = 1.5;
