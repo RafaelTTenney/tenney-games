@@ -68,9 +68,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
       speedLines: [],
       stars: [],
       animationFrame: null,
-      obstacleDepth: 3,
-      spawnSpacing: 300,
-      initialSpawnOffset: 50,
+      obstacleDepth: 5,
+      spawnSpacing: 240,
+      initialSpawnOffset: -60,
       gapWidthStartMultiplier: 1.7,
       gapWidthMinMultiplier: 1.25,
       gapWidthTightenRate: 0.012,
@@ -349,14 +349,26 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerCtx.strokeStyle = 'rgba(28, 255, 255, 0.25)';
       racerCtx.lineWidth = 2;
       const numLines = 10;
+      const step = 18;
       for (let i = 0; i <= numLines; i++) {
           const ratio = i / numLines;
-          const xTopL = vpX - roadWidthTop * (1 - ratio);
-          const xBottomL = vpX - roadWidthAtBottom * (1 - ratio);
-          racerCtx.beginPath(); racerCtx.moveTo(xTopL, vpY); racerCtx.lineTo(xBottomL, bottomY); racerCtx.stroke();
-          const xTopR = vpX + roadWidthTop * (1 - ratio);
-          const xBottomR = vpX + roadWidthAtBottom * (1 - ratio);
-          racerCtx.beginPath(); racerCtx.moveTo(xTopR, vpY); racerCtx.lineTo(xBottomR, bottomY); racerCtx.stroke();
+          racerCtx.beginPath();
+          for (let y = vpY; y <= bottomY; y += step) {
+              const roadW = roadWidthAtY(y);
+              const x = vpX - roadW * (1 - ratio);
+              if (y === vpY) racerCtx.moveTo(x, y);
+              else racerCtx.lineTo(x, y);
+          }
+          racerCtx.stroke();
+
+          racerCtx.beginPath();
+          for (let y = vpY; y <= bottomY; y += step) {
+              const roadW = roadWidthAtY(y);
+              const x = vpX + roadW * (1 - ratio);
+              if (y === vpY) racerCtx.moveTo(x, y);
+              else racerCtx.lineTo(x, y);
+          }
+          racerCtx.stroke();
       }
   }
 
@@ -390,6 +402,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerState.obstacles.forEach(ob => {
           const scale = getPerspectiveScale(ob.y);
           if (scale < 0.01) return;
+          const fadeIn = Math.max(0, Math.min(1, (ob.y - horizonY) / 90));
+          racerCtx.save();
+          racerCtx.globalAlpha = fadeIn;
 
           const scaledHeight = obstacleHeight * scale;
           const topY = ob.y - scaledHeight;
@@ -416,6 +431,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
                   glowFill
               );
           }
+          racerCtx.restore();
       });
 
       racerCtx.shadowColor = '#19d7ff';
@@ -511,6 +527,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
       racerState.obstacles.forEach(ob => {
           const scale = getPerspectiveScale(ob.y);
           if (scale < 0.01) return;
+          const fadeIn = Math.max(0, Math.min(1, (ob.y - horizonY) / 90));
+          racerCtx.save();
+          racerCtx.globalAlpha = fadeIn;
 
           const scaledHeight = obstacleHeight * scale;
           const topY = ob.y - scaledHeight;
@@ -553,6 +572,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
                   `hsl(${ob.hue}, 100%, 85%)`
               );
           }
+          racerCtx.restore();
       });
   }
 
@@ -630,10 +650,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
   }
 
   function seedObstacles() {
-      seedObstacles();
       const spacing = racerState.spawnSpacing;
       const offset = racerState.initialSpawnOffset;
-      const maxY = canvasHeight - 20;
+      const maxY = canvasHeight - 40;
       for (let i = 0; i < racerState.obstacleDepth; i++) {
           const y = horizonY + offset + (i * spacing);
           if (y > maxY) break;
@@ -657,6 +676,14 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
   function resetObstacles() {
       racerState.obstacles = [];
+      const spacing = racerState.spawnSpacing;
+      const offset = racerState.initialSpawnOffset;
+      const maxY = canvasHeight - 40;
+      for (let i = 0; i < racerState.obstacleDepth; i++) {
+          const y = horizonY + offset + i * spacing;
+          if (y > maxY) break;
+          spawnObstacle(y);
+      }
   }
 
   function ensureSpeedLines() {
@@ -857,11 +884,16 @@ import { getHighScore, submitHighScore } from './score-store.js';
           const baseCushion = Math.max(1, Math.round(collisionWidth * 0.02));
           const safeGapLeft = gapLeft - baseCushion;
           const safeGapRight = gapRight + baseCushion;
-          const nearMargin = Math.max(6, Math.round(collisionWidth * 0.1));
+      const nearMargin = Math.max(6, Math.min(Math.round(collisionWidth * 0.1), Math.round((gapRight - gapLeft) * 0.2)));
 
           if (!ob.closeCall) {
-              if (carLeft < gapLeft + nearMargin || carRight > gapRight - nearMargin) {
-                  ob.closeCall = true;
+              const insideGap = carLeft >= gapLeft && carRight <= gapRight;
+              if (insideGap) {
+                  const leftClear = carLeft - gapLeft;
+                  const rightClear = gapRight - carRight;
+                  if (leftClear < nearMargin || rightClear < nearMargin) {
+                      ob.closeCall = true;
+                  }
               }
           }
 
