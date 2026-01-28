@@ -1905,11 +1905,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const shipX = VIEW.centerX + player.vx * 0.08;
     const shipY = VIEW.centerY + player.vy * 0.08;
     const speed = Math.hypot(player.vx, player.vy);
-    const drift = clamp(player.vx / (player.maxSpeed || 1), -1, 1) * 0.2;
 
     ctx.save();
     ctx.translate(shipX, shipY);
-    ctx.rotate(player.angle + drift);
+    ctx.rotate(player.angle);
 
     ctx.fillStyle = '#7dfc9a';
     ctx.shadowColor = '#7dfc9a';
