@@ -280,6 +280,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     gateCharge: 0,
     gateChargeTarget: 0,
     signal: 100,
+    signalCells: 0,
     player: {
       x: 0,
       y: 0,
@@ -830,6 +831,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.gateCharge = 0;
     state.gateChargeTarget = getGateChargeTarget();
     state.signal = 100;
+    state.signalCells = 0;
     state.player.x = routeSegment?.startX || 0;
     state.player.y = routeSegment?.startY || 0;
     state.player.vx = 0;
@@ -913,7 +915,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const optional = (chapter.optional || [])
       .filter(ch => !progress.completedChallenges[ch.id])
       .map(ch => ch.text);
-    optional.push('Stabilize each gate by slowing inside the ring to restore signal.');
+    optional.push('Relay signal is draining — collect relay cells to unlock each gate.');
+    optional.push('Clear defenders, then brake inside the ring to stabilize and restore signal.');
     showBriefing({
       kicker: `Chapter ${state.chapterIndex + 1} of ${JOURNEY.length}`,
       title: extraTitle ? `${chapter.title} - ${extraTitle}` : chapter.title,
@@ -1128,6 +1131,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         anchorY: gate.y
       });
     }
+    const cellCount = 1 + (state.rng() < 0.55 ? 1 : 0);
+    for (let i = 0; i < cellCount; i++) {
+      const angle = randRange(0, Math.PI * 2);
+      const radius = randRange(90, 160);
+      spawnPickup('signal', gate.x + Math.cos(angle) * radius, gate.y + Math.sin(angle) * radius);
+    }
+    setStatus('Gate locked: clear defenders and grab relay cells', 1800);
   }
 
   function spawnDebris() {
@@ -1159,7 +1169,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       type,
       x,
       y,
-      r: type === 'data' ? 10 : 12
+      r: type === 'data' ? 10 : type === 'signal' ? 11 : 12
     });
   }
 
@@ -1179,15 +1189,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function emitThruster(reverse = false) {
     const player = state.player;
-    const angle = player.angle + (reverse ? 0 : Math.PI);
+    const forwardAngle = player.angle;
+    const angle = reverse ? forwardAngle : forwardAngle + Math.PI;
     const spread = 0.35;
     const strength = reverse ? 50 : 80;
     for (let i = 0; i < 2; i++) {
       const jitter = randRange(-spread, spread, Math.random);
       const dir = angle + jitter;
+      const offset = reverse ? 18 : -18;
+      const baseX = player.x + Math.cos(forwardAngle) * offset;
+      const baseY = player.y + Math.sin(forwardAngle) * offset;
       state.particles.push({
-        x: player.x + Math.cos(dir) * 16 + randRange(-3, 3, Math.random),
-        y: player.y + Math.sin(dir) * 16 + randRange(-3, 3, Math.random),
+        x: baseX + Math.cos(dir) * 4 + randRange(-3, 3, Math.random),
+        y: baseY + Math.sin(dir) * 4 + randRange(-3, 3, Math.random),
         vx: Math.cos(dir) * strength + randRange(-20, 20, Math.random),
         vy: Math.sin(dir) * strength + randRange(-20, 20, Math.random),
         life: randRange(180, 320, Math.random),
@@ -1497,41 +1511,45 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         currentGate.threatSpawned = true;
       }
 
-      const playerSpeed = Math.hypot(player.vx, player.vy);
-      const slowEnough = playerSpeed < 50;
-      let threatCount = 0;
+    const playerSpeed = Math.hypot(player.vx, player.vy);
+    const slowEnough = playerSpeed < 50;
+    let threatCount = 0;
       if (currentGate) {
         state.enemies.forEach(enemy => {
           if (enemy.hp <= 0) return;
           if (dist(enemy.x, enemy.y, currentGate.x, currentGate.y) < 260) threatCount += 1;
         });
       }
-      const gateClear = threatCount === 0;
-      const threatFactor = threatCount > 0 ? clamp(1 - threatCount * 0.08, 0.4, 1) : 1;
-      if (gateDistToPlayer < currentGate.radius) {
-        const speedFactor = slowEnough ? 1 : 0;
-        if (!gateClear) {
-          state.gateCharge = Math.max(0, state.gateCharge - dt * 0.9);
-          if (state.statusTimer <= 0) setStatus('Clear the gate defenders', 1200);
-        } else {
-          state.gateCharge = Math.min(state.gateChargeTarget, state.gateCharge + dt * speedFactor * threatFactor);
-          if (!slowEnough && state.statusTimer <= 0) {
-            setStatus('Brake to stabilize the gate', 1200);
-          }
+    const gateClear = threatCount === 0;
+    const threatFactor = threatCount > 0 ? clamp(1 - threatCount * 0.08, 0.4, 1) : 1;
+    if (gateDistToPlayer < currentGate.radius) {
+      const speedFactor = slowEnough ? 1 : 0;
+      if (state.signalCells <= 0) {
+        state.gateCharge = Math.max(0, state.gateCharge - dt * 0.9);
+        if (state.statusTimer <= 0) setStatus('Collect relay cells to unlock the gate', 1200);
+      } else if (!gateClear) {
+        state.gateCharge = Math.max(0, state.gateCharge - dt * 0.9);
+        if (state.statusTimer <= 0) setStatus('Clear the gate defenders', 1200);
+      } else {
+        state.gateCharge = Math.min(state.gateChargeTarget, state.gateCharge + dt * speedFactor * threatFactor);
+        if (!slowEnough && state.statusTimer <= 0) {
+          setStatus('Brake to stabilize the gate', 1200);
         }
+      }
       } else {
         state.gateCharge = Math.max(0, state.gateCharge - dt * (GATE_STABILIZE_DECAY + 0.15));
       }
       const chargeRatio = state.gateChargeTarget > 0 ? state.gateCharge / state.gateChargeTarget : 0;
       currentGate.charge = clamp(chargeRatio, 0, 1);
 
-      if (gateDistToPlayer < currentGate.radius && slowEnough && gateClear) {
+      if (gateDistToPlayer < currentGate.radius && slowEnough && gateClear && state.signalCells > 0) {
         state.signal = clamp(state.signal + 24 * dtSec, 0, 100);
       }
 
       if (state.gateCharge >= state.gateChargeTarget) {
         currentGate.passed = true;
         state.gateCharge = 0;
+        state.signalCells = Math.max(0, state.signalCells - 1);
         if (currentGate.checkpoint) {
           reachCheckpoint();
           return;
@@ -1595,6 +1613,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
               ch.progress += 1;
             }
           });
+        }
+        if (pickup.type === 'signal') {
+          state.signalCells += 1;
+          setStatus('Relay cell acquired', 1200);
         }
         pickup.collected = true;
       }
@@ -1802,7 +1824,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const screen = toScreen(pickup.x, pickup.y);
     const r = pickup.r;
     const pulse = 0.8 + Math.sin(performance.now() / 260) * 0.2;
-    const color = pickup.type === 'data' ? '#7dfc9a' : pickup.type === 'shield' ? '#47f5ff' : '#ff7a47';
+    const color = pickup.type === 'data'
+      ? '#7dfc9a'
+      : pickup.type === 'signal'
+        ? '#ffd166'
+        : pickup.type === 'shield'
+          ? '#47f5ff'
+          : '#ff7a47';
     ctx.fillStyle = color;
     ctx.shadowColor = color;
     ctx.shadowBlur = 12;
@@ -1909,9 +1937,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.boostActive) {
       ctx.fillStyle = 'rgba(125,252,154,0.65)';
       ctx.beginPath();
-      ctx.moveTo(-10, 20);
-      ctx.lineTo(0, 40 + Math.random() * 8);
-      ctx.lineTo(10, 20);
+      ctx.moveTo(-8, 20);
+      ctx.lineTo(0, 42 + Math.random() * 8);
+      ctx.lineTo(8, 20);
       ctx.closePath();
       ctx.fill();
     }
@@ -1919,9 +1947,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const engineGlow = 0.25 + Math.min(1, speed / (player.maxSpeed || 1)) * 0.5;
     ctx.fillStyle = `rgba(125,252,154,${engineGlow})`;
     ctx.beginPath();
-    ctx.moveTo(-6, 18);
-    ctx.lineTo(0, 30);
-    ctx.lineTo(6, 18);
+    ctx.moveTo(-7, 18);
+    ctx.lineTo(0, 32);
+    ctx.lineTo(7, 18);
     ctx.closePath();
     ctx.fill();
 
@@ -2058,7 +2086,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (!progress) return;
     const player = state.player;
     if (hudHp) hudHp.textContent = `Hull: ${Math.max(0, Math.round(player.hp))}`;
-    if (hudShield) hudShield.textContent = `Shield: ${Math.round(player.shield)}`;
+    if (hudShield) hudShield.textContent = `Shield: ${Math.round(player.shield)} • Cells: ${state.signalCells}`;
     if (hudCredits) hudCredits.textContent = `Credits: ${formatCredits(progress.credits)}`;
     if (hudChapter) {
       const bestLabel = bestProgressScore ? ` (Best ${formatProgressScore(bestProgressScore)})` : '';
@@ -2076,7 +2104,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const gatePct = state.gateChargeTarget > 0 ? Math.round((state.gateCharge / state.gateChargeTarget) * 100) : 0;
       const gateText = gateTotal ? `Gate ${gateIndex}/${gateTotal} • ${gateDist}m` : 'Gate --';
       const stabilizeText = gatePct > 0 ? ` • Stabilize ${gatePct}%` : '';
-      hudScore.textContent = `Drift: ${formatDistance(state.chapterDistance)} (${segPct}%) • ${gateText}${stabilizeText} • Signal ${Math.round(state.signal)}%`;
+      const cellText = `Cells ${state.signalCells}`;
+      hudScore.textContent = `Drift: ${formatDistance(state.chapterDistance)} (${segPct}%) • ${gateText}${stabilizeText} • ${cellText} • Signal ${Math.round(state.signal)}%`;
     }
     updateObjectiveDisplay();
   }
