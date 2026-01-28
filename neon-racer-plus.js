@@ -68,9 +68,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
       speedLines: [],
       stars: [],
       animationFrame: null,
-      obstacleDepth: 5,
-      spawnSpacing: 240,
-      initialSpawnOffset: -60,
+      obstacleDepth: 6,
+      spawnSpacing: 230,
+      initialSpawnOffset: -110,
       gapWidthStartMultiplier: 1.7,
       gapWidthMinMultiplier: 1.25,
       gapWidthTightenRate: 0.012,
@@ -93,8 +93,11 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
   // Perspective scaling & helpers
   function getPerspectiveScale(y) {
-      if (y < horizonY) return 0;
-      let normalizedY = (y - horizonY) / (canvasHeight - horizonY);
+      const fadeStart = 80;
+      const startY = horizonY - fadeStart;
+      if (y < startY) return 0;
+      let normalizedY = (y - startY) / (canvasHeight - startY);
+      normalizedY = Math.max(0, Math.min(normalizedY, 1));
       let scale = Math.pow(normalizedY, 2.2);
       return Math.max(0.01, Math.min(scale, 1.0));
   }
@@ -413,18 +416,20 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
           racerCtx.shadowColor = ob.color;
           const glowFill = 'rgba(0,0,0,0.02)';
-          if (bottomGap.left > bottomGap.roadLeft + 0.5) {
+          const leftEdge = Math.min(bottomGap.left, bottomGap.roadRight);
+          const rightEdge = Math.max(bottomGap.right, bottomGap.roadLeft);
+          if (leftEdge > bottomGap.roadLeft) {
               drawQuad(
                   bottomGap.roadLeft, ob.y,
-                  bottomGap.left, ob.y,
+                  leftEdge, ob.y,
                   topGap.left, topY,
                   topGap.roadLeft, topY,
                   glowFill
               );
           }
-          if (bottomGap.right < bottomGap.roadRight - 0.5) {
+          if (rightEdge < bottomGap.roadRight) {
               drawQuad(
-                  bottomGap.right, ob.y,
+                  rightEdge, ob.y,
                   bottomGap.roadRight, ob.y,
                   topGap.roadRight, topY,
                   topGap.right, topY,
@@ -540,10 +545,12 @@ import { getHighScore, submitHighScore } from './score-store.js';
           const edgeBottomY = topY + edgeHeight;
           const edgeGap = getObstacleGap(ob, edgeBottomY);
 
-          if (bottomGap.left > bottomGap.roadLeft + 0.5) {
+          const leftEdge = Math.min(bottomGap.left, bottomGap.roadRight);
+          const rightEdge = Math.max(bottomGap.right, bottomGap.roadLeft);
+          if (leftEdge > bottomGap.roadLeft) {
               drawQuad(
                   bottomGap.roadLeft, ob.y,
-                  bottomGap.left, ob.y,
+                  leftEdge, ob.y,
                   topGap.left, topY,
                   topGap.roadLeft, topY,
                   ob.color
@@ -556,9 +563,9 @@ import { getHighScore, submitHighScore } from './score-store.js';
                   `hsl(${ob.hue}, 100%, 85%)`
               );
           }
-          if (bottomGap.right < bottomGap.roadRight - 0.5) {
+          if (rightEdge < bottomGap.roadRight) {
               drawQuad(
-                  bottomGap.right, ob.y,
+                  rightEdge, ob.y,
                   bottomGap.roadRight, ob.y,
                   topGap.roadRight, topY,
                   topGap.right, topY,
@@ -596,7 +603,7 @@ import { getHighScore, submitHighScore } from './score-store.js';
 
   function spawnObstacle(startY) {
       const lanes = [-1, 0, 1];
-      const gapLane = lanes[Math.floor(Math.random() * lanes.length)];
+      let gapLane = lanes[Math.floor(Math.random() * lanes.length)];
       const colorHue = Math.floor(Math.random() * 360);
 
       const currentGapMultiplier = Math.max(
@@ -617,6 +624,20 @@ import { getHighScore, submitHighScore } from './score-store.js';
       gapWidthAtPlayer = Math.min(gapWidthAtPlayer, 320);
 
       const spawnY = typeof startY === 'number' ? startY : horizonY;
+
+      let nearest = null;
+      let nearestDist = Infinity;
+      racerState.obstacles.forEach(ob => {
+          const d = Math.abs(ob.y - spawnY);
+          if (d < nearestDist) {
+              nearestDist = d;
+              nearest = ob;
+          }
+      });
+      if (nearest && nearestDist < racerState.spawnSpacing * 0.85) {
+          const options = lanes.filter(lane => lane !== nearest.gapLane);
+          gapLane = options[Math.floor(Math.random() * options.length)];
+      }
 
       const laneShiftScale = gapLane === 0 ? 1 : 0.35;
       const shiftLimit = laneWidthAtPlayer * 0.18 * laneShiftScale;
@@ -884,14 +905,16 @@ import { getHighScore, submitHighScore } from './score-store.js';
           const baseCushion = Math.max(1, Math.round(collisionWidth * 0.02));
           const safeGapLeft = gapLeft - baseCushion;
           const safeGapRight = gapRight + baseCushion;
-      const nearMargin = Math.max(6, Math.min(Math.round(collisionWidth * 0.1), Math.round((gapRight - gapLeft) * 0.2)));
+      const nearMargin = Math.max(5, Math.min(Math.round(collisionWidth * 0.08), Math.round((gapRight - gapLeft) * 0.12)));
 
           if (!ob.closeCall) {
               const insideGap = carLeft >= gapLeft && carRight <= gapRight;
               if (insideGap) {
                   const leftClear = carLeft - gapLeft;
                   const rightClear = gapRight - carRight;
-                  if (leftClear < nearMargin || rightClear < nearMargin) {
+                  const minClear = Math.min(leftClear, rightClear);
+                  const tightThreshold = Math.min(10, Math.max(5, (gapRight - gapLeft) * 0.06));
+                  if (minClear > 0 && minClear < tightThreshold) {
                       ob.closeCall = true;
                   }
               }
