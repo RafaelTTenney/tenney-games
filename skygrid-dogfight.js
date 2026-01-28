@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 (function () {
   const canvas = document.getElementById('skygrid-canvas');
   if (!canvas) {
@@ -203,6 +205,9 @@
     drones: []
   };
 
+  const GAME_ID = 'skygrid-dogfight';
+  let bestWave = 0;
+
   function rand(min, max) {
     return min + Math.random() * (max - min);
   }
@@ -225,6 +230,19 @@
     const forwardDot = facingX * dirX + facingY * dirY;
     const backpedal = speed > 40 && forwardDot < -0.35;
     return { facingX, facingY, speed, dirX, dirY, forwardDot, backpedal };
+  }
+
+  async function loadBestWave() {
+    bestWave = await getHighScore(GAME_ID);
+    updateHud();
+  }
+
+  async function submitWaveScore() {
+    const saved = await submitHighScore(GAME_ID, state.wave);
+    if (typeof saved === 'number') {
+      bestWave = saved;
+      updateHud();
+    }
   }
 
   function getWaveSpeedScale() {
@@ -319,6 +337,7 @@
     state.pendingWave = nextWave;
     state.running = false;
     state.lastTime = 0;
+    submitWaveScore();
     setView('hangar');
     updateHud();
     render();
@@ -675,7 +694,10 @@
     const speed = Math.hypot(state.player.vx, state.player.vy);
     if (hudBoost) hudBoost.textContent = `Speed: ${Math.round(speed)}`;
     if (hudKills) hudKills.textContent = `Kills: ${state.kills}`;
-    if (hudWave) hudWave.textContent = `Wave: ${state.wave}`;
+    if (hudWave) {
+      const bestLabel = bestWave ? ` (Best ${bestWave})` : '';
+      hudWave.textContent = `Wave: ${state.wave}${bestLabel}`;
+    }
     if (hudCredits) hudCredits.textContent = `Credits: ${state.credits}`;
     if (hudShip) hudShip.textContent = `Ship: ${getShipTier().name}`;
     if (hangarCredits) hangarCredits.textContent = `${state.credits}`;
@@ -1099,6 +1121,7 @@
 
     if (player.hp <= 0) {
       state.running = false;
+      submitWaveScore();
     }
 
     syncPlayerStats();
@@ -1409,6 +1432,7 @@
     }
     resetSkygrid();
     initHangarScene();
+    loadBestWave();
   }
 
   startBtn?.addEventListener('click', start);

@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 // Arc Reactor - classic asteroid survival with a core to protect.
 (function () {
   const win = typeof window !== 'undefined' ? window : globalThis;
@@ -19,6 +21,8 @@
   let core = { x: 0, y: 0, r: 34, hp: 100 };
   let shootCooldown = 0;
   let invuln = 0;
+  const GAME_ID = 'arc-reactor';
+  let bestScore = 0;
 
   function resetShip() {
     ship = {
@@ -78,10 +82,26 @@
     const coreEl = document.getElementById('arc-core');
     const livesEl = document.getElementById('arc-lives');
     const waveEl = document.getElementById('arc-wave');
-    if (scoreEl) scoreEl.textContent = `Score: ${score}`;
+    if (scoreEl) {
+      const bestLabel = bestScore ? ` (Best ${bestScore})` : '';
+      scoreEl.textContent = `Score: ${score}${bestLabel}`;
+    }
     if (coreEl) coreEl.textContent = `Core: ${Math.max(0, Math.floor(core.hp))}%`;
     if (livesEl) livesEl.textContent = `Lives: ${lives}`;
     if (waveEl) waveEl.textContent = `Wave: ${wave}`;
+  }
+
+  async function loadBestScore() {
+    bestScore = await getHighScore(GAME_ID);
+    updateHud();
+  }
+
+  async function submitScore() {
+    const saved = await submitHighScore(GAME_ID, score);
+    if (typeof saved === 'number') {
+      bestScore = saved;
+      updateHud();
+    }
   }
 
   function fireBullet() {
@@ -171,6 +191,7 @@
 
     if (core.hp <= 0 || lives <= 0) {
       running = false;
+      submitScore();
     }
 
     updateHud();
@@ -272,6 +293,7 @@
     h = canvas.height;
     spawnStars();
     resetArcReactor();
+    loadBestScore();
     document.addEventListener('keydown', (e) => {
       if (['ArrowLeft','ArrowRight','ArrowUp','Space'].includes(e.code)) e.preventDefault();
       keys[e.key] = true;

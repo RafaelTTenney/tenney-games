@@ -1,4 +1,5 @@
 import { db, hasFirebaseConfig, waitForAuth } from './firebase.js';
+import { getHighScore, submitHighScore } from './score-store.js';
 import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 (() => {
@@ -89,6 +90,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     gateBonus: 1,
     dataBoost: 1.25
   };
+  const GAME_ID = 'driftline-journey';
   const GATE_STABILIZE_BASE = 1800;
   const GATE_STABILIZE_STEP = 220;
   const GATE_STABILIZE_DECAY = 0.55;
@@ -277,6 +279,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     segmentGateIndex: 0,
     gateCharge: 0,
     gateChargeTarget: 0,
+    signal: 100,
     player: {
       x: 0,
       y: 0,
@@ -334,6 +337,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   let currentUser = null;
   let upgradesBound = false;
   let saveTimer = null;
+  let bestProgressScore = 0;
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -665,6 +669,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function updateObjectiveDisplay() {
     if (!hudObjective) return;
+    if (state.signal <= 30) {
+      hudObjective.textContent = 'Objective: Signal critical — stabilize the next gate.';
+      return;
+    }
     const active = state.challenges.find(ch => !ch.completed && !ch.failed);
     if (active) {
       let extra = '';
@@ -680,7 +688,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     let gateText = gateTotal ? ` • Gate ${gateIndex}/${gateTotal}` : '';
     if (currentGate && state.gateChargeTarget > 0) {
       const pct = Math.round((state.gateCharge / state.gateChargeTarget) * 100);
-      gateText += pct > 0 ? ` • Stabilizing ${pct}%` : ' • Hold to stabilize';
+      gateText += pct > 0 ? ` • Stabilizing ${pct}%` : ' • Brake to stabilize';
     }
     hudObjective.textContent = `Objective: ${state.objectiveText || '-'}${gateText}`;
   }
@@ -761,6 +769,33 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       : 'Sign in to sync progress';
   }
 
+  function getProgressScore() {
+    const chapter = progress?.chapter || 1;
+    const checkpoint = progress?.checkpoint || 0;
+    return chapter * 100 + checkpoint;
+  }
+
+  function formatProgressScore(score) {
+    if (!score) return '-';
+    const chapter = Math.floor(score / 100);
+    const checkpoint = score % 100;
+    return `C${chapter}•CP${checkpoint}`;
+  }
+
+  async function loadBestProgressScore() {
+    bestProgressScore = await getHighScore(GAME_ID);
+    updateHud();
+  }
+
+  async function submitProgressScore() {
+    const score = getProgressScore();
+    const saved = await submitHighScore(GAME_ID, score);
+    if (typeof saved === 'number') {
+      bestProgressScore = saved;
+      updateHud();
+    }
+  }
+
   function resetRunToSegment() {
     const chapter = currentChapter();
     const segment = currentSegment();
@@ -794,6 +829,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     })) || [];
     state.gateCharge = 0;
     state.gateChargeTarget = getGateChargeTarget();
+    state.signal = 100;
     state.player.x = routeSegment?.startX || 0;
     state.player.y = routeSegment?.startY || 0;
     state.player.vx = 0;
@@ -877,6 +913,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const optional = (chapter.optional || [])
       .filter(ch => !progress.completedChallenges[ch.id])
       .map(ch => ch.text);
+    optional.push('Stabilize each gate by slowing inside the ring to restore signal.');
     showBriefing({
       kicker: `Chapter ${state.chapterIndex + 1} of ${JOURNEY.length}`,
       title: extraTitle ? `${chapter.title} - ${extraTitle}` : chapter.title,
@@ -1256,12 +1293,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const dragBase = thrusting ? player.drag : Math.max(0.97, player.drag - 0.015);
     player.speed *= Math.pow(dragBase, dtSec * 60);
 
-    const desiredVX = forwardX * player.speed;
-    const desiredVY = forwardY * player.speed;
-    const alignStrength = thrusting ? 0.26 : 0.14;
-    const align = 1 - Math.pow(1 - alignStrength, dtSec * 60);
-    player.vx += (desiredVX - player.vx) * align;
-    player.vy += (desiredVY - player.vy) * align;
+    player.vx = forwardX * player.speed;
+    player.vy = forwardY * player.speed;
 
     state.stormLevel = segment?.hazards?.storm || 0;
     if (state.stormLevel > 0) {
@@ -1272,13 +1305,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     const speed = Math.hypot(player.vx, player.vy);
     const maxActual = maxForward * (state.boostActive ? 1.05 : 1);
-    if (speed > maxActual) {
+    if (speed > maxActual && speed > 0) {
       const scale = maxActual / speed;
       player.vx *= scale;
       player.vy *= scale;
+      player.speed = maxActual;
     }
-    const projected = player.vx * forwardX + player.vy * forwardY;
-    player.speed = clamp(projected, -maxReverse, maxForward);
 
     player.x += player.vx * dtSec;
     player.y += player.vy * dtSec;
@@ -1306,6 +1338,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         if (state.statusTimer <= 0) setStatus('Signal drift - return to the corridor', 1200);
       }
     }
+
+    const signalDrain = 0.6 + getDifficulty() * 0.15;
+    state.signal = clamp(state.signal - signalDrain * dtSec, 0, 100);
 
     if (segment) {
       state.spawnTimer -= dt;
@@ -1463,7 +1498,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
 
       const playerSpeed = Math.hypot(player.vx, player.vy);
-      const slowEnough = playerSpeed < 150;
+      const slowEnough = playerSpeed < 90;
       let threatCount = 0;
       if (currentGate) {
         state.enemies.forEach(enemy => {
@@ -1473,7 +1508,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
       const threatFactor = threatCount > 0 ? clamp(1 - threatCount * 0.08, 0.4, 1) : 1;
       if (gateDistToPlayer < currentGate.radius) {
-        const speedFactor = slowEnough ? 1 : 0.25;
+        const speedFactor = slowEnough ? 1 : 0;
         state.gateCharge = Math.min(state.gateChargeTarget, state.gateCharge + dt * speedFactor * threatFactor);
         if (!slowEnough && state.statusTimer <= 0) {
           setStatus('Brake to stabilize the gate', 1200);
@@ -1483,6 +1518,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
       const chargeRatio = state.gateChargeTarget > 0 ? state.gateCharge / state.gateChargeTarget : 0;
       currentGate.charge = clamp(chargeRatio, 0, 1);
+
+      if (gateDistToPlayer < currentGate.radius && slowEnough) {
+        state.signal = clamp(state.signal + 20 * dtSec, 0, 100);
+      }
 
       if (state.gateCharge >= state.gateChargeTarget) {
         currentGate.passed = true;
@@ -1562,6 +1601,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.pickups = state.pickups.filter(pickup => !pickup.collected && dist(pickup.x, pickup.y, player.x, player.y) < 1800);
     state.particles = state.particles.filter(p => p.life > 0);
 
+    if (state.signal <= 0) {
+      state.running = false;
+      resetRunToSegment();
+      showDeathBriefing();
+    }
+
     if (player.hp <= 0) {
       state.running = false;
       resetRunToSegment();
@@ -1588,6 +1633,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.segmentIndex = nextCheckpoint;
     progress.checkpoint = nextCheckpoint;
     queueSave();
+    submitProgressScore();
 
     state.rng = makeRng((chapter.seed || 1000) + state.segmentIndex * 97);
     resetRunToSegment();
@@ -1600,6 +1646,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     progress.chapter = Math.min(JOURNEY.length + 1, progress.chapter + 1);
     progress.checkpoint = 0;
     queueSave();
+    submitProgressScore();
 
     if (progress.chapter > JOURNEY.length) {
       showJourneyComplete();
@@ -1834,11 +1881,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.shadowColor = '#7dfc9a';
     ctx.shadowBlur = 16;
     ctx.beginPath();
-    ctx.moveTo(0, -20);
-    ctx.lineTo(18, 16);
-    ctx.lineTo(8, 20);
-    ctx.lineTo(-8, 20);
-    ctx.lineTo(-18, 16);
+    ctx.moveTo(0, -22);
+    ctx.lineTo(12, 16);
+    ctx.lineTo(-12, 16);
     ctx.closePath();
     ctx.fill();
     ctx.lineWidth = 1.5;
@@ -1848,8 +1893,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillStyle = 'rgba(20,40,28,0.8)';
     ctx.beginPath();
     ctx.moveTo(0, -6);
-    ctx.lineTo(6, 4);
-    ctx.lineTo(-6, 4);
+    ctx.lineTo(5, 4);
+    ctx.lineTo(-5, 4);
     ctx.closePath();
     ctx.fill();
 
@@ -2007,7 +2052,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (hudHp) hudHp.textContent = `Hull: ${Math.max(0, Math.round(player.hp))}`;
     if (hudShield) hudShield.textContent = `Shield: ${Math.round(player.shield)}`;
     if (hudCredits) hudCredits.textContent = `Credits: ${formatCredits(progress.credits)}`;
-    if (hudChapter) hudChapter.textContent = `Chapter: ${state.chapterIndex + 1}/${JOURNEY.length}`;
+    if (hudChapter) {
+      const bestLabel = bestProgressScore ? ` (Best ${formatProgressScore(bestProgressScore)})` : '';
+      hudChapter.textContent = `Chapter: ${state.chapterIndex + 1}/${JOURNEY.length}${bestLabel}`;
+    }
     const segmentCount = currentChapter()?.segments?.length || 0;
     if (hudCheckpoint) hudCheckpoint.textContent = `Checkpoint: ${state.checkpointIndex}/${segmentCount}`;
     if (hudScore) {
@@ -2020,7 +2068,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const gatePct = state.gateChargeTarget > 0 ? Math.round((state.gateCharge / state.gateChargeTarget) * 100) : 0;
       const gateText = gateTotal ? `Gate ${gateIndex}/${gateTotal} • ${gateDist}m` : 'Gate --';
       const stabilizeText = gatePct > 0 ? ` • Stabilize ${gatePct}%` : '';
-      hudScore.textContent = `Drift: ${formatDistance(state.chapterDistance)} (${segPct}%) • ${gateText}${stabilizeText}`;
+      hudScore.textContent = `Drift: ${formatDistance(state.chapterDistance)} (${segPct}%) • ${gateText}${stabilizeText} • Signal ${Math.round(state.signal)}%`;
     }
     updateObjectiveDisplay();
   }
@@ -2052,6 +2100,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     applyUpgrades();
     updateUpgradeButtons();
     updateAuthNote();
+    loadBestProgressScore();
     state.ready = true;
   }
 

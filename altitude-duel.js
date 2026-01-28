@@ -1,4 +1,5 @@
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import { getHighScore, submitHighScore } from './score-store.js';
 
 (function () {
   const canvas = document.getElementById('duel-canvas');
@@ -119,6 +120,9 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
   const hudArrows = buildHudArrows(6);
   camera.add(hudArrows.group);
 
+  const GAME_ID = 'altitude-duel';
+  let bestWave = 0;
+
   function rand(min, max) {
     return min + Math.random() * (max - min);
   }
@@ -129,6 +133,19 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
   function getAssistMode() {
     return controlsSelect ? controlsSelect.value : 'manual';
+  }
+
+  async function loadBestWave() {
+    bestWave = await getHighScore(GAME_ID);
+    updateHud();
+  }
+
+  async function submitWaveScore() {
+    const saved = await submitHighScore(GAME_ID, state.wave);
+    if (typeof saved === 'number') {
+      bestWave = saved;
+      updateHud();
+    }
   }
 
   function updateHud() {
@@ -142,7 +159,10 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
         hudCooldown.textContent = `${TEST_MODE ? 'Mode: TEST' : 'Mode: LIVE'} • Enemies: ${state.enemies.length}`;
       }
     }
-    if (hudPhase) hudPhase.textContent = `Wave: ${state.wave}`;
+    if (hudPhase) {
+      const bestLabel = bestWave ? ` (Best ${bestWave})` : '';
+      hudPhase.textContent = `Wave: ${state.wave}${bestLabel}`;
+    }
   }
 
   function buildStarfield() {
@@ -763,7 +783,10 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
       state.intermission = SETTINGS.intermission;
     }
 
-    if (player.hp <= 0) state.running = false;
+    if (player.hp <= 0) {
+      state.running = false;
+      submitWaveScore();
+    }
 
     const speedRatio = clamp(player.velocity.length() / Math.max(1, SETTINGS.player.maxSpeed), 0, 1);
     updateSpeedLines(dtSec, speedRatio);
@@ -865,6 +888,7 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
     resize();
     bindInput();
     resetDuel();
+    loadBestWave();
   }
 
   startBtn?.addEventListener('click', start);

@@ -1,3 +1,5 @@
+import { getHighScore, submitHighScore } from './score-store.js';
+
 // Vector Tanks - classic artillery duel.
 (function () {
   const win = typeof window !== 'undefined' ? window : globalThis;
@@ -15,6 +17,9 @@
   let wind = 0;
   let angle = 45;
   let power = 40;
+  const GAME_ID = 'vector-tanks';
+  let bestScore = 0;
+  let submittedScore = false;
 
   function buildTerrain() {
     terrain = new Array(canvas.width).fill(0).map((_, x) => {
@@ -44,7 +49,10 @@
     const wEl = document.getElementById('tanks-wind');
     const anEl = document.getElementById('tanks-angle');
     const pwEl = document.getElementById('tanks-power');
-    if (pEl) pEl.textContent = `Player: ${Math.max(0, Math.floor(player.hp))}`;
+    if (pEl) {
+      const bestLabel = bestScore ? ` (Best ${bestScore})` : '';
+      pEl.textContent = `Player: ${Math.max(0, Math.floor(player.hp))}${bestLabel}`;
+    }
     if (aEl) aEl.textContent = `AI: ${Math.max(0, Math.floor(enemy.hp))}`;
     if (wEl) wEl.textContent = `Wind: ${wind.toFixed(2)}`;
     if (anEl) anEl.textContent = `Angle: ${Math.floor(angle)}`;
@@ -112,6 +120,7 @@
 
     if (player.hp <= 0 || enemy.hp <= 0) {
       running = false;
+      if (enemy.hp <= 0) submitScore();
     }
 
     updateHud();
@@ -174,8 +183,25 @@
   function resetVectorTanks() {
     buildTerrain();
     resetTanks();
+    submittedScore = false;
     updateHud();
     draw();
+  }
+
+  async function loadBestScore() {
+    bestScore = await getHighScore(GAME_ID);
+    updateHud();
+  }
+
+  async function submitScore() {
+    if (submittedScore) return;
+    submittedScore = true;
+    const score = Math.max(0, Math.round(player.hp));
+    const saved = await submitHighScore(GAME_ID, score);
+    if (typeof saved === 'number') {
+      bestScore = saved;
+      updateHud();
+    }
   }
 
   function initVectorTanksGame() {
@@ -190,6 +216,7 @@
     }
     ctx = canvas.getContext('2d');
     resetVectorTanks();
+    loadBestScore();
     document.addEventListener('keydown', (e) => {
       if (['a','A','d','D','w','W','s','S',' '].includes(e.key)) e.preventDefault();
       keys[e.key] = true;
