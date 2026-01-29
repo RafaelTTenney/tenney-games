@@ -282,6 +282,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     gateChargeTarget: 0,
     signal: 100,
     phase: 'travel',
+    slowMoTimer: 0,
     player: {
       x: 0,
       y: 0,
@@ -856,7 +857,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       passed: false,
       threatSpawned: false,
       charge: 0,
-      locked: false
+      locked: true
     })) || [];
     state.gateCharge = 0;
     state.gateChargeTarget = getGateChargeTarget();
@@ -1099,7 +1100,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       hitTimer: 0,
       guardGate: !!opts.guardGate,
       anchorX: typeof opts.anchorX === 'number' ? opts.anchorX : null,
-      anchorY: typeof opts.anchorY === 'number' ? opts.anchorY : null
+      anchorY: typeof opts.anchorY === 'number' ? opts.anchorY : null,
+      phase: 1,
+      shiftTimer: 0
     };
     state.enemies.push(enemy);
     return enemy;
@@ -1184,8 +1187,33 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       carrier.size += 6;
       carrier.hp *= 1.35;
       carrier.maxHp = carrier.hp;
+      carrier.phase = 1;
+      carrier.phaseThresholds = [0.65, 0.35];
     }
     setStatus('Gate locked: destroy the relay carrier', 1800);
+  }
+
+  function triggerCarrierPhaseShift(enemy) {
+    enemy.phase = Math.min(3, (enemy.phase || 1) + 1);
+    enemy.shiftTimer = 600;
+    enemy.speed *= 1.1;
+    enemy.turn *= 1.12;
+    enemy.fireRate = Math.max(700, enemy.fireRate * 0.8);
+    enemy.color = enemy.phase === 2 ? '#ffe08a' : '#fff1b5';
+    spawnExplosion(enemy.x, enemy.y, '255,209,102');
+
+    const escorts = enemy.phase === 2 ? 2 : 3;
+    for (let i = 0; i < escorts; i++) {
+      spawnEnemy(state.rng() < 0.6 ? 'scout' : 'raider', {
+        x: enemy.x,
+        y: enemy.y,
+        radiusMin: 140,
+        radiusMax: 220,
+        guardGate: true,
+        anchorX: enemy.anchorX ?? enemy.x,
+        anchorY: enemy.anchorY ?? enemy.y
+      });
+    }
   }
 
   function spawnDebris() {
@@ -1206,7 +1234,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         passed: false,
         threatSpawned: false,
         charge: 0,
-        locked: false
+        locked: true
       }));
       state.gateCharge = 0;
       state.gateChargeTarget = getGateChargeTarget();
@@ -1232,6 +1260,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         life: randRange(400, 900, Math.random),
         size: randRange(2, 5, Math.random),
         color: color || '255,140,90'
+      });
+    }
+  }
+
+  function spawnShieldShatter(gate) {
+    const count = 18;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + randRange(-0.2, 0.2);
+      const speed = randRange(120, 220);
+      const length = randRange(8, 18);
+      state.particles.push({
+        x: gate.x + Math.cos(angle) * gate.radius * 0.7,
+        y: gate.y + Math.sin(angle) * gate.radius * 0.7,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: randRange(480, 820),
+        size: 1.6,
+        color: '180,255,210',
+        type: 'shard',
+        angle,
+        length,
+        spin: randRange(-0.08, 0.08)
       });
     }
   }
@@ -1306,12 +1356,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function update(dt) {
-    const dtSec = dt / 1000;
+    const timeScale = state.slowMoTimer > 0 ? 0.45 : 1;
+    state.slowMoTimer = Math.max(0, state.slowMoTimer - dt);
+    const scaledDt = dt * timeScale;
+    const dtSec = scaledDt / 1000;
     const player = state.player;
     const segment = currentSegment();
     const routeSegment = state.route?.segments?.[state.segmentIndex];
 
-    updateStatus(dt);
+    updateStatus(scaledDt);
     state.shake = Math.max(0, state.shake - dtSec * 2);
     state.hitFlash = Math.max(0, state.hitFlash - dtSec * 2.2);
     state.jumpFlash = Math.max(0, state.jumpFlash - dtSec * 1.6);
@@ -1337,43 +1390,36 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const thrusting = forward || reverse;
     const forwardX = Math.cos(player.angle);
     const forwardY = Math.sin(player.angle);
-    let accel = 0;
+    const boostScale = state.boostActive ? 1.25 : 1;
+    const maxSpeed = player.maxSpeed + (state.boostActive ? 120 : 0);
+
     if (forward) {
-      accel += player.thrust;
+      player.vx += forwardX * player.thrust * boostScale * dtSec;
+      player.vy += forwardY * player.thrust * boostScale * dtSec;
       if (Math.random() < 0.6) emitThruster(false);
     }
     if (reverse) {
-      accel -= player.reverseThrust;
+      player.vx -= forwardX * player.reverseThrust * dtSec;
+      player.vy -= forwardY * player.reverseThrust * dtSec;
       if (Math.random() < 0.5) emitThruster(true);
     }
-    if (state.boostActive && forward) {
-      accel *= 1.35;
-    }
 
-    player.speed += accel * dtSec;
-    const maxForward = player.maxSpeed + (state.boostActive ? 160 : 0);
-    const maxReverse = player.maxSpeed * 0.55;
-    player.speed = clamp(player.speed, -maxReverse, maxForward);
-    const dragBase = thrusting ? player.drag : Math.max(0.97, player.drag - 0.015);
-    player.speed *= Math.pow(dragBase, dtSec * 60);
-
-    player.vx = forwardX * player.speed;
-    player.vy = forwardY * player.speed;
+    const drag = Math.pow(player.drag, dtSec * 60);
+    player.vx *= drag;
+    player.vy *= drag;
 
     state.stormLevel = segment?.hazards?.storm || 0;
     if (state.stormLevel > 0) {
       state.stormPhase += dtSec * (0.6 + state.stormLevel);
-      player.vx += Math.sin(state.stormPhase * 1.3) * state.stormLevel * 20 * dtSec;
-      player.vy += Math.cos(state.stormPhase * 1.1) * state.stormLevel * 16 * dtSec;
+      player.vx += Math.sin(state.stormPhase * 1.3) * state.stormLevel * 18 * dtSec;
+      player.vy += Math.cos(state.stormPhase * 1.1) * state.stormLevel * 14 * dtSec;
     }
 
     const speed = Math.hypot(player.vx, player.vy);
-    const maxActual = maxForward * (state.boostActive ? 1.05 : 1);
-    if (speed > maxActual && speed > 0) {
-      const scale = maxActual / speed;
+    if (speed > maxSpeed && speed > 0) {
+      const scale = maxSpeed / speed;
       player.vx *= scale;
       player.vy *= scale;
-      player.speed = maxActual;
     }
 
     player.x += player.vx * dtSec;
@@ -1489,6 +1535,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         const pressure = gatePressure > 0.35 ? 1.15 : 1;
         enemy.vx += (targetX - enemy.x) * turnRate * pressure * dtSec;
         enemy.vy += (targetY - enemy.y) * turnRate * pressure * dtSec;
+        if (enemy.shiftTimer > 0) {
+          const evade = (enemy.shiftTimer / 600);
+          enemy.vx += Math.cos(enemy.timer / 80) * 120 * evade * dtSec;
+          enemy.vy += Math.sin(enemy.timer / 90) * 120 * evade * dtSec;
+          enemy.shiftTimer -= scaledDt;
+        }
         const sideSpeed = Math.hypot(enemy.vx, enemy.vy);
         const maxSide = enemy.speed * (enemy.type === 'scout' ? 1.18 : 1) * pressure;
         if (sideSpeed > maxSide) {
@@ -1547,7 +1599,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.particles.forEach(p => {
       p.x += p.vx * dtSec;
       p.y += p.vy * dtSec;
-      p.life -= dt;
+      if (p.spin) p.angle += p.spin * dtSec * 60;
+      p.life -= scaledDt;
     });
 
     updateBackground(dtSec);
@@ -1613,9 +1666,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         if (bullet.life <= 0) return;
         if (enemy.hp <= 0) return;
         if (dist(bullet.x, bullet.y, enemy.x, enemy.y) < enemy.size + 6) {
+          const prevHp = enemy.hp;
           enemy.hp -= bullet.damage;
           enemy.hitTimer = 140;
           bullet.life = 0;
+          if (enemy.role === 'carrier' && enemy.hp > 0 && enemy.phaseThresholds) {
+            const ratio = enemy.hp / enemy.maxHp;
+            if (enemy.phase === 1 && ratio <= enemy.phaseThresholds[0]) {
+              triggerCarrierPhaseShift(enemy);
+            } else if (enemy.phase === 2 && ratio <= enemy.phaseThresholds[1]) {
+              triggerCarrierPhaseShift(enemy);
+            }
+          }
           if (enemy.hp <= 0) {
             const reward = enemy.type === 'lancer' ? 30 : enemy.type === 'raider' ? 20 : enemy.type === 'turret' ? 36 : 14;
             addCredits(reward);
@@ -1625,6 +1687,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
               if (gate) {
                 gate.locked = false;
                 setStatus('Gate unlocked - stabilize it', 1600);
+                spawnShieldShatter(gate);
+                state.slowMoTimer = 520;
+                state.shake = Math.min(1, state.shake + 0.6);
               }
             }
             if (state.rng() < 0.12) {
@@ -1855,7 +1920,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         if (dist(enemy.x, enemy.y, gate.x, gate.y) < 260) threatCount += 1;
       });
     }
-    const locked = isCurrent && (gate.locked || !gate.threatSpawned);
+    const locked = isCurrent && gate.locked;
     const contested = isCurrent && threatCount > 0;
     const ringColor = locked
       ? '255,209,102'
@@ -2009,7 +2074,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const proj = toScreen(bullet.x, bullet.y);
       const trailX = proj.x - bullet.vx * 0.04;
       const trailY = proj.y - bullet.vy * 0.04;
-      ctx.strokeStyle = 'rgba(255,179,71,0.8)';
+      ctx.strokeStyle = 'rgba(255,179,71,0.85)';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(trailX, trailY);
@@ -2027,7 +2092,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.particles.forEach(p => {
       const proj = toScreen(p.x, p.y);
       const size = p.size;
-      ctx.fillStyle = `rgba(${p.color},${Math.min(1, p.life / 900)})`;
+      const alpha = Math.min(1, p.life / 900);
+      if (p.type === 'shard') {
+        ctx.save();
+        ctx.translate(proj.x, proj.y);
+        ctx.rotate(p.angle || 0);
+        ctx.strokeStyle = `rgba(${p.color},${alpha})`;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(-p.length * 0.5, 0);
+        ctx.lineTo(p.length * 0.5, 0);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+      ctx.fillStyle = `rgba(${p.color},${alpha})`;
       ctx.beginPath();
       ctx.arc(proj.x, proj.y, size, 0, Math.PI * 2);
       ctx.fill();
@@ -2045,7 +2124,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.rotate(player.angle + Math.PI / 2);
 
     ctx.fillStyle = '#7dfc9a';
-    ctx.shadowColor = '#7dfc9a';
+    ctx.shadowColor = locked ? '#ffd166' : contested ? '#ff6b6b' : '#7dfc9a';
     ctx.shadowBlur = 16;
     ctx.beginPath();
     ctx.moveTo(0, -26);
@@ -2158,7 +2237,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fill();
     ctx.stroke();
 
-    const carrierLocked = gate.locked || !gate.threatSpawned;
+    const carrierLocked = gate.locked;
     const steps = [
       { label: 'Carrier', ok: !carrierLocked, color: carrierLocked ? '#ffd166' : '#7dfc9a', text: carrierLocked ? 'LOCKED' : 'DOWN' },
       { label: 'Defenders', ok: threatCount === 0, color: threatCount === 0 ? '#7dfc9a' : '#ff6b6b', text: threatCount === 0 ? 'CLEAR' : `${threatCount}` },
