@@ -2124,7 +2124,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.rotate(player.angle + Math.PI / 2);
 
     ctx.fillStyle = '#7dfc9a';
-    ctx.shadowColor = locked ? '#ffd166' : contested ? '#ff6b6b' : '#7dfc9a';
+    ctx.shadowColor = '#7dfc9a';
     ctx.shadowBlur = 16;
     ctx.beginPath();
     ctx.moveTo(0, -26);
