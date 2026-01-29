@@ -1941,7 +1941,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     ctx.save();
     ctx.translate(shipX, shipY);
-    ctx.rotate(player.angle);
+    ctx.rotate(player.angle + Math.PI / 2);
 
     ctx.fillStyle = '#7dfc9a';
     ctx.shadowColor = '#7dfc9a';
