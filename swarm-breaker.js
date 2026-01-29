@@ -671,7 +671,25 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function updateObjectiveDisplay() {
     if (!hudObjective) return;
     if (state.signal <= 30) {
-      hudObjective.textContent = 'Objective: Signal critical — clear defenders, stabilize the next gate.';
+      hudObjective.textContent = 'Objective: Signal critical — secure a relay cell, clear defenders, stabilize the gate.';
+      return;
+    }
+    const currentGate = state.gates[state.segmentGateIndex];
+    if (currentGate) {
+      let threatCount = 0;
+      state.enemies.forEach(enemy => {
+        if (enemy.hp <= 0) return;
+        if (dist(enemy.x, enemy.y, currentGate.x, currentGate.y) < 260) threatCount += 1;
+      });
+      if (state.signalCells <= 0) {
+        hudObjective.textContent = 'Objective: Collect a relay cell to unlock the gate.';
+        return;
+      }
+      if (threatCount > 0) {
+        hudObjective.textContent = 'Objective: Clear gate defenders.';
+        return;
+      }
+      hudObjective.textContent = 'Objective: Brake inside the ring to stabilize the gate.';
       return;
     }
     const active = state.challenges.find(ch => !ch.completed && !ch.failed);
@@ -685,9 +703,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
     const gateTotal = state.gates.length;
     const gateIndex = gateTotal ? Math.min(state.segmentGateIndex + 1, gateTotal) : 0;
-    const currentGate = state.gates[state.segmentGateIndex];
+    const gateForStatus = state.gates[state.segmentGateIndex];
     let gateText = gateTotal ? ` • Gate ${gateIndex}/${gateTotal}` : '';
-    if (currentGate && state.gateChargeTarget > 0) {
+    if (gateForStatus && state.gateChargeTarget > 0) {
       const pct = Math.round((state.gateCharge / state.gateChargeTarget) * 100);
       gateText += pct > 0 ? ` • Stabilizing ${pct}%` : ' • Clear defenders + brake';
     }
@@ -1774,7 +1792,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const screen = toScreen(gate.x, gate.y);
     const radius = gate.radius;
     const pulse = 0.6 + Math.sin(performance.now() / 380) * 0.4;
-    ctx.strokeStyle = `rgba(125,252,154,${0.25 + pulse * 0.35})`;
+    const isCurrent = state.gates[state.segmentGateIndex] === gate;
+    let threatCount = 0;
+    if (isCurrent) {
+      state.enemies.forEach(enemy => {
+        if (enemy.hp <= 0) return;
+        if (dist(enemy.x, enemy.y, gate.x, gate.y) < 260) threatCount += 1;
+      });
+    }
+    const locked = isCurrent && state.signalCells <= 0;
+    const contested = isCurrent && threatCount > 0;
+    const ringColor = locked
+      ? '255,209,102'
+      : contested
+        ? '255,120,120'
+        : '125,252,154';
+    ctx.strokeStyle = `rgba(${ringColor},${0.25 + pulse * 0.35})`;
     ctx.shadowColor = '#7dfc9a';
     ctx.shadowBlur = 14;
     ctx.lineWidth = 3;
@@ -1782,7 +1815,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(125,252,154,0.35)';
+    ctx.strokeStyle = `rgba(${ringColor},0.35)`;
     ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.arc(screen.x, screen.y, radius * 0.65, 0, Math.PI * 2);
@@ -1914,11 +1947,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.shadowColor = '#7dfc9a';
     ctx.shadowBlur = 16;
     ctx.beginPath();
-    ctx.moveTo(0, -24);
-    ctx.lineTo(18, 10);
-    ctx.lineTo(8, 20);
-    ctx.lineTo(-8, 20);
-    ctx.lineTo(-18, 10);
+    ctx.moveTo(0, -26);
+    ctx.lineTo(16, -6);
+    ctx.lineTo(10, 18);
+    ctx.lineTo(-10, 18);
+    ctx.lineTo(-16, -6);
     ctx.closePath();
     ctx.fill();
     ctx.lineWidth = 1.5;
