@@ -270,6 +270,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     boostActive: false,
     shake: 0,
     hitFlash: 0,
+    jumpFlash: 0,
     stormPhase: 0,
     stormLevel: 0,
     objectiveText: '',
@@ -281,6 +282,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     gateChargeTarget: 0,
     signal: 100,
     signalCells: 0,
+    phase: 'travel',
     player: {
       x: 0,
       y: 0,
@@ -681,8 +683,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         if (enemy.hp <= 0) return;
         if (dist(enemy.x, enemy.y, currentGate.x, currentGate.y) < 260) threatCount += 1;
       });
+      if (state.phase === 'travel' && state.signalCells <= 0) {
+        hudObjective.textContent = 'Objective: Reach the gate and engage the relay carrier.';
+        return;
+      }
       if (state.signalCells <= 0) {
-        hudObjective.textContent = 'Objective: Collect a relay cell to unlock the gate.';
+        hudObjective.textContent = 'Objective: Destroy the relay carrier to unlock the gate.';
         return;
       }
       if (threatCount > 0) {
@@ -835,9 +841,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.shake = 0;
     state.stormPhase = 0;
     state.stormLevel = segment.hazards?.storm || 0;
+    state.jumpFlash = 0;
     state.hullDamaged = false;
     state.boostUsed = false;
-    state.objectiveText = `${segment.name} — ${chapter.objective}`;
+    state.objectiveText = `${segment.name} — ${chapter.objective} Secure relay cells and stabilize the gate.`;
 
     state.segmentGateIndex = 0;
     state.gates = routeSegment?.gates?.map(gate => ({
@@ -850,6 +857,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.gateChargeTarget = getGateChargeTarget();
     state.signal = 100;
     state.signalCells = 0;
+    state.phase = 'travel';
     state.player.x = routeSegment?.startX || 0;
     state.player.y = routeSegment?.startY || 0;
     state.player.vx = 0;
@@ -933,12 +941,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const optional = (chapter.optional || [])
       .filter(ch => !progress.completedChallenges[ch.id])
       .map(ch => ch.text);
-    optional.push('Relay signal is draining — collect relay cells to unlock each gate.');
+    optional.push('Relay signal is draining — destroy the relay carrier to unlock each gate.');
     optional.push('Clear defenders, then brake inside the ring to stabilize and restore signal.');
     showBriefing({
       kicker: `Chapter ${state.chapterIndex + 1} of ${JOURNEY.length}`,
       title: extraTitle ? `${chapter.title} - ${extraTitle}` : chapter.title,
-      body: chapter.brief,
+      body: `${chapter.brief} Your nav core is failing — only stabilized gates will keep the Driftline alive.`,
       primary: chapter.objective,
       optional: optional.length ? optional : ['No optional challenges remaining.'],
       buttonText: state.completed ? 'Restart Journey' : 'Begin Chapter',
@@ -1095,8 +1103,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function spawnEnemyWave(segment) {
     if (!segment) return;
-    if (state.enemies.length > 14) return;
+    if (state.enemies.length > (state.phase === 'gate' ? 16 : 10)) return;
     const diff = getDifficulty();
+    if (state.phase !== 'gate') {
+      const type = state.rng() < 0.7 ? 'scout' : pickWeighted(segment.mix);
+      spawnEnemy(type);
+      return;
+    }
     const formationRoll = state.rng();
     if (formationRoll < 0.3) {
       const type = pickWeighted(segment.mix);
@@ -1121,6 +1134,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function spawnGateAmbush(gate) {
     const segment = currentSegment();
     if (!segment) return;
+    state.phase = 'gate';
     const diff = getDifficulty();
     const count = Math.min(7, 2 + Math.floor(diff) + (state.rng() < 0.45 ? 1 : 0));
     const mix = { ...(segment.mix || { scout: 1 }) };
@@ -1149,13 +1163,23 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         anchorY: gate.y
       });
     }
-    const cellCount = 1 + (state.rng() < 0.55 ? 1 : 0);
-    for (let i = 0; i < cellCount; i++) {
-      const angle = randRange(0, Math.PI * 2);
-      const radius = randRange(90, 160);
-      spawnPickup('signal', gate.x + Math.cos(angle) * radius, gate.y + Math.sin(angle) * radius);
+    const carrier = spawnEnemy('raider', {
+      x: gate.x,
+      y: gate.y,
+      radiusMin: 220,
+      radiusMax: 360,
+      guardGate: true,
+      anchorX: gate.x,
+      anchorY: gate.y
+    });
+    if (carrier) {
+      carrier.drop = 'signal';
+      carrier.color = '#ffd166';
+      carrier.size += 6;
+      carrier.hp *= 1.35;
+      carrier.maxHp = carrier.hp;
     }
-    setStatus('Gate locked: clear defenders and grab relay cells', 1800);
+    setStatus('Gate locked: destroy the relay carrier', 1800);
   }
 
   function spawnDebris() {
@@ -1283,6 +1307,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     updateStatus(dt);
     state.shake = Math.max(0, state.shake - dtSec * 2);
     state.hitFlash = Math.max(0, state.hitFlash - dtSec * 2.2);
+    state.jumpFlash = Math.max(0, state.jumpFlash - dtSec * 1.6);
 
     const rotateLeft = input.keys.KeyA || input.keys.ArrowLeft;
     const rotateRight = input.keys.KeyD || input.keys.ArrowRight;
@@ -1371,6 +1396,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
+    const currentGate = state.gates[state.segmentGateIndex];
+    const gateDistToPlayer = currentGate ? dist(player.x, player.y, currentGate.x, currentGate.y) : Infinity;
+    const gatePressure = currentGate ? clamp(1 - gateDistToPlayer / 720, 0, 1) : 0;
+    state.phase = currentGate && gateDistToPlayer < currentGate.radius * 2.6 ? 'gate' : 'travel';
+
     const signalDrain = 1.2 + getDifficulty() * 0.25;
     state.signal = clamp(state.signal - signalDrain * dtSec, 0, 100);
 
@@ -1380,7 +1410,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         spawnEnemyWave(segment);
         const diffScale = 0.85 + getDifficulty() * 0.14;
         const variance = randRange(0.85, 1.15);
-        state.spawnTimer = (segment.spawnInterval / diffScale) * variance;
+        const phaseScale = state.phase === 'gate' ? 0.7 : 1.35;
+        state.spawnTimer = (segment.spawnInterval / diffScale) * variance * phaseScale;
       }
 
       const debrisRate = segment.hazards?.debris || 0;
@@ -1412,10 +1443,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         }
       }
     }
-
-    const currentGate = state.gates[state.segmentGateIndex];
-    const gateDistToPlayer = currentGate ? dist(player.x, player.y, currentGate.x, currentGate.y) : Infinity;
-    const gatePressure = currentGate ? clamp(1 - gateDistToPlayer / 720, 0, 1) : 0;
 
     state.enemies.forEach(enemy => {
       enemy.timer += dt;
@@ -1568,6 +1595,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         currentGate.passed = true;
         state.gateCharge = 0;
         state.signalCells = Math.max(0, state.signalCells - 1);
+        state.jumpFlash = 1;
+        spawnExplosion(currentGate.x, currentGate.y, '125,252,154');
         if (currentGate.checkpoint) {
           reachCheckpoint();
           return;
@@ -1575,6 +1604,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         addCredits(65, 'Gate stabilized');
         state.segmentGateIndex += 1;
         state.gateChargeTarget = getGateChargeTarget();
+        state.phase = 'travel';
       }
     }
 
@@ -1591,6 +1621,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             const reward = enemy.type === 'lancer' ? 30 : enemy.type === 'raider' ? 20 : enemy.type === 'turret' ? 36 : 14;
             addCredits(reward);
             spawnExplosion(enemy.x, enemy.y, enemy.type === 'turret' ? '180,110,255' : '255,120,90');
+            if (enemy.drop === 'signal') {
+              spawnPickup('signal', enemy.x, enemy.y);
+              setStatus('Relay cell dropped', 1400);
+            }
             if (state.rng() < 0.12) {
               const roll = state.rng();
               const type = roll > 0.7 ? 'shield' : roll > 0.4 ? 'repair' : 'data';
@@ -1735,6 +1769,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    const motion = Math.hypot(state.camera.vx, state.camera.vy);
+    const streakScale = clamp(motion / 320, 0, 1);
+
     state.background.nebulae.forEach(nebula => {
       const screen = toScreen(nebula.x, nebula.y);
       const nebulaGrad = ctx.createRadialGradient(screen.x, screen.y, 0, screen.x, screen.y, nebula.r);
@@ -1749,9 +1786,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.background.stars.forEach(star => {
       const screen = toScreen(star.x, star.y);
       const size = star.size;
-      ctx.fillStyle = `rgba(210,230,255,${star.alpha})`;
+      const alpha = star.alpha * (0.6 + streakScale * 0.8);
+      const tail = (2 + streakScale * 10) * size;
+      const dx = -state.camera.vx * 0.02 * tail;
+      const dy = -state.camera.vy * 0.02 * tail;
+      ctx.strokeStyle = `rgba(210,230,255,${alpha})`;
       if (screen.x < -10 || screen.x > canvas.width + 10 || screen.y < -10 || screen.y > canvas.height + 10) return;
-      ctx.fillRect(screen.x, screen.y, size, size);
+      ctx.lineWidth = size;
+      ctx.beginPath();
+      ctx.moveTo(screen.x, screen.y);
+      ctx.lineTo(screen.x + dx, screen.y + dy);
+      ctx.stroke();
     });
   }
 
@@ -1786,6 +1831,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.lineTo(centerEnd.x, centerEnd.y);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = 'rgba(80,140,255,0.06)';
+    ctx.beginPath();
+    ctx.moveTo(startLeft.x, startLeft.y);
+    ctx.lineTo(endLeft.x, endLeft.y);
+    ctx.lineTo(endRight.x, endRight.y);
+    ctx.lineTo(startRight.x, startRight.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   function drawGate(gate) {
@@ -1808,7 +1865,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ? '255,120,120'
         : '125,252,154';
     ctx.strokeStyle = `rgba(${ringColor},${0.25 + pulse * 0.35})`;
-    ctx.shadowColor = '#7dfc9a';
+    ctx.shadowColor = locked ? '#ffd166' : contested ? '#ff6b6b' : '#7dfc9a';
     ctx.shadowBlur = 14;
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -1867,9 +1924,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillStyle = color;
     ctx.shadowColor = color;
     ctx.shadowBlur = 12;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, r * pulse, 0, Math.PI * 2);
-    ctx.fill();
+    if (pickup.type === 'signal') {
+      const size = r * 1.4 * pulse;
+      ctx.beginPath();
+      ctx.moveTo(screen.x, screen.y - size);
+      ctx.lineTo(screen.x + size, screen.y);
+      ctx.lineTo(screen.x, screen.y + size);
+      ctx.lineTo(screen.x - size, screen.y);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, r * pulse, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.shadowBlur = 0;
   }
 
@@ -1883,14 +1951,36 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.shadowColor = enemy.color;
     ctx.shadowBlur = 12 + hitPulse * 12;
     ctx.beginPath();
-    ctx.moveTo(0, -size);
-    ctx.lineTo(size * 0.8, size * 0.8);
-    ctx.lineTo(-size * 0.8, size * 0.8);
+    if (enemy.type === 'lancer') {
+      ctx.moveTo(0, -size * 1.2);
+      ctx.lineTo(size * 0.6, size);
+      ctx.lineTo(0, size * 0.6);
+      ctx.lineTo(-size * 0.6, size);
+    } else if (enemy.type === 'raider') {
+      ctx.moveTo(0, -size);
+      ctx.lineTo(size, 0);
+      ctx.lineTo(0, size);
+      ctx.lineTo(-size, 0);
+    } else if (enemy.type === 'turret') {
+      ctx.rect(-size * 0.7, -size * 0.7, size * 1.4, size * 1.4);
+    } else {
+      ctx.moveTo(0, -size);
+      ctx.lineTo(size * 0.8, size * 0.8);
+      ctx.lineTo(-size * 0.8, size * 0.8);
+    }
     ctx.closePath();
     ctx.fill();
     ctx.lineWidth = 1.2;
     ctx.strokeStyle = hitPulse > 0 ? 'rgba(255,255,255,0.8)' : 'rgba(230,240,255,0.25)';
     ctx.stroke();
+
+    if (enemy.drop === 'signal') {
+      ctx.strokeStyle = 'rgba(255,209,102,0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.9, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
     ctx.fillStyle = `rgba(255,220,180,${0.25 + hitPulse * 0.35})`;
     ctx.beginPath();
@@ -1905,19 +1995,35 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function drawBullets() {
     state.bullets.forEach(bullet => {
       const proj = toScreen(bullet.x, bullet.y);
+      const trailX = proj.x - bullet.vx * 0.04;
+      const trailY = proj.y - bullet.vy * 0.04;
+      ctx.strokeStyle = 'rgba(230,242,255,0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(trailX, trailY);
+      ctx.lineTo(proj.x, proj.y);
+      ctx.stroke();
       ctx.fillStyle = '#e6f2ff';
       ctx.shadowColor = '#e6f2ff';
       ctx.shadowBlur = 8;
-      ctx.fillRect(proj.x - 2, proj.y - 4, 4, 8);
+      ctx.fillRect(proj.x - 2, proj.y - 2, 4, 4);
       ctx.shadowBlur = 0;
     });
 
     state.enemyBullets.forEach(bullet => {
       const proj = toScreen(bullet.x, bullet.y);
+      const trailX = proj.x - bullet.vx * 0.04;
+      const trailY = proj.y - bullet.vy * 0.04;
+      ctx.strokeStyle = 'rgba(255,179,71,0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(trailX, trailY);
+      ctx.lineTo(proj.x, proj.y);
+      ctx.stroke();
       ctx.fillStyle = '#ffb347';
       ctx.shadowColor = '#ffb347';
       ctx.shadowBlur = 8;
-      ctx.fillRect(proj.x - 2, proj.y - 4, 4, 8);
+      ctx.fillRect(proj.x - 2, proj.y - 2, 4, 4);
       ctx.shadowBlur = 0;
     });
   }
@@ -1948,10 +2054,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.shadowBlur = 16;
     ctx.beginPath();
     ctx.moveTo(0, -26);
-    ctx.lineTo(16, -6);
-    ctx.lineTo(10, 18);
-    ctx.lineTo(-10, 18);
-    ctx.lineTo(-16, -6);
+    ctx.lineTo(11, 18);
+    ctx.lineTo(-11, 18);
     ctx.closePath();
     ctx.fill();
     ctx.lineWidth = 1.5;
@@ -2092,6 +2196,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ctx.lineTo(x + 40, y + 20);
         ctx.stroke();
       }
+    }
+
+    if (state.jumpFlash > 0) {
+      ctx.fillStyle = `rgba(125,252,154,${0.25 * state.jumpFlash})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = `rgba(180,255,210,${0.35 * state.jumpFlash})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(VIEW.centerX, VIEW.centerY, 120 + state.jumpFlash * 120, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    if (state.signal < 45) {
+      const intensity = (1 - state.signal / 45) * 0.25;
+      ctx.fillStyle = `rgba(255,80,80,${intensity})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
     if (state.hitFlash > 0) {
