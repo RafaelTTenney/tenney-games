@@ -281,7 +281,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     gateCharge: 0,
     gateChargeTarget: 0,
     signal: 100,
-    signalCells: 0,
     phase: 'travel',
     player: {
       x: 0,
@@ -673,7 +672,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function updateObjectiveDisplay() {
     if (!hudObjective) return;
     if (state.signal <= 30) {
-      hudObjective.textContent = 'Objective: Signal critical — secure a relay cell, clear defenders, stabilize the gate.';
+      hudObjective.textContent = 'Objective: Signal critical — unlock and stabilize the next gate.';
       return;
     }
     const currentGate = state.gates[state.segmentGateIndex];
@@ -683,11 +682,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         if (enemy.hp <= 0) return;
         if (dist(enemy.x, enemy.y, currentGate.x, currentGate.y) < 260) threatCount += 1;
       });
-      if (state.phase === 'travel' && state.signalCells <= 0) {
+      const gateDist = dist(state.player.x, state.player.y, currentGate.x, currentGate.y);
+      if (gateDist > currentGate.radius * 2.2) {
+        hudObjective.textContent = 'Objective: Fly to the next gate.';
+        return;
+      }
+      if (state.phase === 'travel' && currentGate.locked) {
         hudObjective.textContent = 'Objective: Reach the gate and engage the relay carrier.';
         return;
       }
-      if (state.signalCells <= 0) {
+      if (currentGate.locked) {
         hudObjective.textContent = 'Objective: Destroy the relay carrier to unlock the gate.';
         return;
       }
@@ -844,19 +848,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.jumpFlash = 0;
     state.hullDamaged = false;
     state.boostUsed = false;
-    state.objectiveText = `${segment.name} — ${chapter.objective} Secure relay cells and stabilize the gate.`;
+    state.objectiveText = `${segment.name} — ${chapter.objective} Destroy the relay carrier and stabilize the gate.`;
 
     state.segmentGateIndex = 0;
     state.gates = routeSegment?.gates?.map(gate => ({
       ...gate,
       passed: false,
       threatSpawned: false,
-      charge: 0
+      charge: 0,
+      locked: false
     })) || [];
     state.gateCharge = 0;
     state.gateChargeTarget = getGateChargeTarget();
     state.signal = 100;
-    state.signalCells = 0;
     state.phase = 'travel';
     state.player.x = routeSegment?.startX || 0;
     state.player.y = routeSegment?.startY || 0;
@@ -966,8 +970,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     showBriefing({
       kicker: `Checkpoint ${state.checkpointIndex} secured`,
       title: nextSegment ? nextSegment.name : chapter.title,
-      body: 'Resupply complete. Get ready for the next run.',
-      primary: `Reach Checkpoint ${state.checkpointIndex + 1} / ${chapter.segments.length}.`,
+      body: 'Resupply complete. The next gate is locked by a relay carrier — destroy it, clear defenders, then stabilize.',
+      primary: `Reach Checkpoint ${state.checkpointIndex + 1} / ${chapter.segments.length}. Keep signal above zero.`,
       optional: optional.length ? optional : ['No optional challenges remaining.'],
       buttonText: 'Continue',
       onLaunch: () => start()
@@ -978,8 +982,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     showBriefing({
       kicker: 'Ship disabled',
       title: 'Recovery drones inbound',
-      body: 'You were pulled back to the last checkpoint. Use the restart to re-engage.',
-      primary: `Restart from Checkpoint ${state.checkpointIndex} of ${currentChapter().segments.length}.`,
+      body: 'You were pulled back to the last checkpoint. Destroy the relay carrier to unlock the gate, then stabilize.',
+      primary: `Restart from Checkpoint ${state.checkpointIndex} of ${currentChapter().segments.length}. Keep the signal alive.`,
       optional: ['Repairs and shield recharged.'],
       buttonText: 'Relaunch',
       onLaunch: () => start()
@@ -1135,6 +1139,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const segment = currentSegment();
     if (!segment) return;
     state.phase = 'gate';
+    gate.locked = true;
     const diff = getDifficulty();
     const count = Math.min(7, 2 + Math.floor(diff) + (state.rng() < 0.45 ? 1 : 0));
     const mix = { ...(segment.mix || { scout: 1 }) };
@@ -1173,7 +1178,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       anchorY: gate.y
     });
     if (carrier) {
-      carrier.drop = 'signal';
+      carrier.role = 'carrier';
+      carrier.unlockGateIndex = state.segmentGateIndex;
       carrier.color = '#ffd166';
       carrier.size += 6;
       carrier.hp *= 1.35;
@@ -1199,7 +1205,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ...gate,
         passed: false,
         threatSpawned: false,
-        charge: 0
+        charge: 0,
+        locked: false
       }));
       state.gateCharge = 0;
       state.gateChargeTarget = getGateChargeTarget();
@@ -1211,7 +1218,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       type,
       x,
       y,
-      r: type === 'data' ? 10 : type === 'signal' ? 11 : 12
+      r: type === 'data' ? 10 : 12
     });
   }
 
@@ -1389,11 +1396,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const dy = player.y - routeSegment.startY;
       state.segmentDistance = clamp(dx * routeSegment.dirX + dy * routeSegment.dirY, 0, routeSegment.length);
       state.chapterDistance = routeSegment.startDistance + state.segmentDistance;
-      const lateral = Math.abs(dx * -routeSegment.dirY + dy * routeSegment.dirX);
-      if (lateral > 320) {
-        player.shield = Math.max(0, player.shield - 12 * dtSec);
-        if (state.statusTimer <= 0) setStatus('Signal drift - return to the corridor', 1200);
-      }
     }
 
     const currentGate = state.gates[state.segmentGateIndex];
@@ -1556,45 +1558,42 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         currentGate.threatSpawned = true;
       }
 
-    const playerSpeed = Math.hypot(player.vx, player.vy);
-    const slowEnough = playerSpeed < 50;
-    let threatCount = 0;
-      if (currentGate) {
-        state.enemies.forEach(enemy => {
-          if (enemy.hp <= 0) return;
-          if (dist(enemy.x, enemy.y, currentGate.x, currentGate.y) < 260) threatCount += 1;
-        });
-      }
-    const gateClear = threatCount === 0;
-    const threatFactor = threatCount > 0 ? clamp(1 - threatCount * 0.08, 0.4, 1) : 1;
-    if (gateDistToPlayer < currentGate.radius) {
-      const speedFactor = slowEnough ? 1 : 0;
-      if (state.signalCells <= 0) {
-        state.gateCharge = Math.max(0, state.gateCharge - dt * 0.9);
-        if (state.statusTimer <= 0) setStatus('Collect relay cells to unlock the gate', 1200);
-      } else if (!gateClear) {
-        state.gateCharge = Math.max(0, state.gateCharge - dt * 0.9);
-        if (state.statusTimer <= 0) setStatus('Clear the gate defenders', 1200);
-      } else {
-        state.gateCharge = Math.min(state.gateChargeTarget, state.gateCharge + dt * speedFactor * threatFactor);
-        if (!slowEnough && state.statusTimer <= 0) {
-          setStatus('Brake to stabilize the gate', 1200);
+      const playerSpeed = Math.hypot(player.vx, player.vy);
+      const slowEnough = playerSpeed < 50;
+      let threatCount = 0;
+      state.enemies.forEach(enemy => {
+        if (enemy.hp <= 0) return;
+        if (dist(enemy.x, enemy.y, currentGate.x, currentGate.y) < 260) threatCount += 1;
+      });
+      const gateClear = threatCount === 0;
+      const threatFactor = threatCount > 0 ? clamp(1 - threatCount * 0.08, 0.4, 1) : 1;
+      if (gateDistToPlayer < currentGate.radius) {
+        const speedFactor = slowEnough ? 1 : 0;
+        if (currentGate.locked) {
+          state.gateCharge = Math.max(0, state.gateCharge - dt * 0.9);
+          if (state.statusTimer <= 0) setStatus('Destroy the relay carrier to unlock the gate', 1200);
+        } else if (!gateClear) {
+          state.gateCharge = Math.max(0, state.gateCharge - dt * 0.9);
+          if (state.statusTimer <= 0) setStatus('Clear the gate defenders', 1200);
+        } else {
+          state.gateCharge = Math.min(state.gateChargeTarget, state.gateCharge + dt * speedFactor * threatFactor);
+          if (!slowEnough && state.statusTimer <= 0) {
+            setStatus('Brake to stabilize the gate', 1200);
+          }
         }
-      }
       } else {
         state.gateCharge = Math.max(0, state.gateCharge - dt * (GATE_STABILIZE_DECAY + 0.15));
       }
       const chargeRatio = state.gateChargeTarget > 0 ? state.gateCharge / state.gateChargeTarget : 0;
       currentGate.charge = clamp(chargeRatio, 0, 1);
 
-      if (gateDistToPlayer < currentGate.radius && slowEnough && gateClear && state.signalCells > 0) {
+      if (gateDistToPlayer < currentGate.radius && slowEnough && gateClear && !currentGate.locked) {
         state.signal = clamp(state.signal + 24 * dtSec, 0, 100);
       }
 
       if (state.gateCharge >= state.gateChargeTarget) {
         currentGate.passed = true;
         state.gateCharge = 0;
-        state.signalCells = Math.max(0, state.signalCells - 1);
         state.jumpFlash = 1;
         spawnExplosion(currentGate.x, currentGate.y, '125,252,154');
         if (currentGate.checkpoint) {
@@ -1621,9 +1620,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             const reward = enemy.type === 'lancer' ? 30 : enemy.type === 'raider' ? 20 : enemy.type === 'turret' ? 36 : 14;
             addCredits(reward);
             spawnExplosion(enemy.x, enemy.y, enemy.type === 'turret' ? '180,110,255' : '255,120,90');
-            if (enemy.drop === 'signal') {
-              spawnPickup('signal', enemy.x, enemy.y);
-              setStatus('Relay cell dropped', 1400);
+            if (enemy.role === 'carrier') {
+              const gate = state.gates[enemy.unlockGateIndex];
+              if (gate) {
+                gate.locked = false;
+                setStatus('Gate unlocked - stabilize it', 1600);
+              }
             }
             if (state.rng() < 0.12) {
               const roll = state.rng();
@@ -1665,10 +1667,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
               ch.progress += 1;
             }
           });
-        }
-        if (pickup.type === 'signal') {
-          state.signalCells += 1;
-          setStatus('Relay cell acquired', 1200);
         }
         pickup.collected = true;
       }
@@ -1857,7 +1855,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         if (dist(enemy.x, enemy.y, gate.x, gate.y) < 260) threatCount += 1;
       });
     }
-    const locked = isCurrent && state.signalCells <= 0;
+    const locked = isCurrent && (gate.locked || !gate.threatSpawned);
     const contested = isCurrent && threatCount > 0;
     const ringColor = locked
       ? '255,209,102'
@@ -1891,6 +1889,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       );
       ctx.stroke();
     }
+
+    if (isCurrent) {
+      ctx.save();
+      ctx.fillStyle = locked ? 'rgba(255,209,102,0.9)' : contested ? 'rgba(255,120,120,0.9)' : 'rgba(125,252,154,0.85)';
+      ctx.font = '12px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      const label = locked ? 'LOCKED' : contested ? 'DEFENDERS' : 'STABILIZE';
+      ctx.fillText(label, screen.x, screen.y - radius - 10);
+      ctx.restore();
+    }
   }
 
   function drawDebris(debris) {
@@ -1916,28 +1924,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const pulse = 0.8 + Math.sin(performance.now() / 260) * 0.2;
     const color = pickup.type === 'data'
       ? '#7dfc9a'
-      : pickup.type === 'signal'
-        ? '#ffd166'
-        : pickup.type === 'shield'
-          ? '#47f5ff'
-          : '#ff7a47';
+      : pickup.type === 'shield'
+        ? '#47f5ff'
+        : '#ff7a47';
     ctx.fillStyle = color;
     ctx.shadowColor = color;
     ctx.shadowBlur = 12;
-    if (pickup.type === 'signal') {
-      const size = r * 1.4 * pulse;
-      ctx.beginPath();
-      ctx.moveTo(screen.x, screen.y - size);
-      ctx.lineTo(screen.x + size, screen.y);
-      ctx.lineTo(screen.x, screen.y + size);
-      ctx.lineTo(screen.x - size, screen.y);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.arc(screen.x, screen.y, r * pulse, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, r * pulse, 0, Math.PI * 2);
+    ctx.fill();
     ctx.shadowBlur = 0;
   }
 
@@ -1974,7 +1969,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.strokeStyle = hitPulse > 0 ? 'rgba(255,255,255,0.8)' : 'rgba(230,240,255,0.25)';
     ctx.stroke();
 
-    if (enemy.drop === 'signal') {
+    if (enemy.role === 'carrier') {
       ctx.strokeStyle = 'rgba(255,209,102,0.8)';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -2136,11 +2131,61 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.restore();
   }
 
+  function drawObjectivePanel() {
+    const gate = state.gates[state.segmentGateIndex];
+    if (!gate) return;
+    let threatCount = 0;
+    state.enemies.forEach(enemy => {
+      if (enemy.hp <= 0) return;
+      if (dist(enemy.x, enemy.y, gate.x, gate.y) < 260) threatCount += 1;
+    });
+    const chargePct = state.gateChargeTarget > 0 ? Math.round((state.gateCharge / state.gateChargeTarget) * 100) : 0;
+
+    const panelW = 320;
+    const panelH = 54;
+    const x = (canvas.width - panelW) / 2;
+    const y = 18;
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,14,24,0.65)';
+    ctx.strokeStyle = 'rgba(125,252,154,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(x, y, panelW, panelH, 12);
+    } else {
+      ctx.rect(x, y, panelW, panelH);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    const carrierLocked = gate.locked || !gate.threatSpawned;
+    const steps = [
+      { label: 'Carrier', ok: !carrierLocked, color: carrierLocked ? '#ffd166' : '#7dfc9a', text: carrierLocked ? 'LOCKED' : 'DOWN' },
+      { label: 'Defenders', ok: threatCount === 0, color: threatCount === 0 ? '#7dfc9a' : '#ff6b6b', text: threatCount === 0 ? 'CLEAR' : `${threatCount}` },
+      { label: 'Stabilize', ok: chargePct >= 100, color: chargePct >= 100 ? '#7dfc9a' : '#8ecbff', text: `${chargePct}%` }
+    ];
+
+    ctx.font = '11px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    steps.forEach((step, i) => {
+      const sx = x + 16 + i * 100;
+      const sy = y + 18;
+      ctx.fillStyle = step.color;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(220,240,255,0.9)';
+      ctx.fillText(step.label, sx + 12, sy + 4);
+      ctx.fillStyle = step.color;
+      ctx.fillText(step.text, sx + 12, sy + 20);
+    });
+    ctx.restore();
+  }
+
   function render() {
     state.camera.shakeX = (Math.random() - 0.5) * 6 * state.shake;
     state.camera.shakeY = (Math.random() - 0.5) * 6 * state.shake;
     drawBackground();
-    drawCorridor();
 
     const renderables = [
       ...state.gates.map(item => ({ type: 'gate', item })),
@@ -2181,6 +2226,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.stroke();
 
     drawNavArrow();
+    drawObjectivePanel();
 
     if (state.stormLevel > 0) {
       const intensity = Math.min(0.35, state.stormLevel * 0.25);
@@ -2238,7 +2284,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (!progress) return;
     const player = state.player;
     if (hudHp) hudHp.textContent = `Hull: ${Math.max(0, Math.round(player.hp))}`;
-    if (hudShield) hudShield.textContent = `Shield: ${Math.round(player.shield)} • Cells: ${state.signalCells}`;
+    if (hudShield) hudShield.textContent = `Shield: ${Math.round(player.shield)}`;
     if (hudCredits) hudCredits.textContent = `Credits: ${formatCredits(progress.credits)}`;
     if (hudChapter) {
       const bestLabel = bestProgressScore ? ` (Best ${formatProgressScore(bestProgressScore)})` : '';
@@ -2256,8 +2302,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const gatePct = state.gateChargeTarget > 0 ? Math.round((state.gateCharge / state.gateChargeTarget) * 100) : 0;
       const gateText = gateTotal ? `Gate ${gateIndex}/${gateTotal} • ${gateDist}m` : 'Gate --';
       const stabilizeText = gatePct > 0 ? ` • Stabilize ${gatePct}%` : '';
-      const cellText = `Cells ${state.signalCells}`;
-      hudScore.textContent = `Drift: ${formatDistance(state.chapterDistance)} (${segPct}%) • ${gateText}${stabilizeText} • ${cellText} • Signal ${Math.round(state.signal)}%`;
+      hudScore.textContent = `Drift: ${formatDistance(state.chapterDistance)} (${segPct}%) • ${gateText}${stabilizeText} • Signal ${Math.round(state.signal)}%`;
     }
     updateObjectiveDisplay();
   }
