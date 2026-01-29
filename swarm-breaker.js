@@ -2211,54 +2211,54 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function drawObjectivePanel() {
-    const gate = state.gates[state.segmentGateIndex];
-    if (!gate) return;
-    let threatCount = 0;
-    state.enemies.forEach(enemy => {
-      if (enemy.hp <= 0) return;
-      if (dist(enemy.x, enemy.y, gate.x, gate.y) < 260) threatCount += 1;
-    });
-    const chargePct = state.gateChargeTarget > 0 ? Math.round((state.gateCharge / state.gateChargeTarget) * 100) : 0;
+    try {
+      const gate = state.gates[state.segmentGateIndex];
+      if (!gate) return;
+      let threatCount = 0;
+      state.enemies.forEach(enemy => {
+        if (enemy.hp <= 0) return;
+        if (dist(enemy.x, enemy.y, gate.x, gate.y) < 260) threatCount += 1;
+      });
+      const chargePct = state.gateChargeTarget > 0 ? Math.round((state.gateCharge / state.gateChargeTarget) * 100) : 0;
 
-    const panelW = 320;
-    const panelH = 54;
-    const x = (canvas.width - panelW) / 2;
-    const y = 18;
-    ctx.save();
-    ctx.fillStyle = 'rgba(8,14,24,0.65)';
-    ctx.strokeStyle = 'rgba(125,252,154,0.2)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    if (ctx.roundRect) {
-      ctx.roundRect(x, y, panelW, panelH, 12);
-    } else {
-      ctx.rect(x, y, panelW, panelH);
-    }
-    ctx.fill();
-    ctx.stroke();
-
-    const carrierLocked = gate.locked;
-    const steps = [
-      { label: 'Carrier', ok: !carrierLocked, color: carrierLocked ? '#ffd166' : '#7dfc9a', text: carrierLocked ? 'LOCKED' : 'DOWN' },
-      { label: 'Defenders', ok: threatCount === 0, color: threatCount === 0 ? '#7dfc9a' : '#ff6b6b', text: threatCount === 0 ? 'CLEAR' : `${threatCount}` },
-      { label: 'Stabilize', ok: chargePct >= 100, color: chargePct >= 100 ? '#7dfc9a' : '#8ecbff', text: `${chargePct}%` }
-    ];
-
-    ctx.font = '11px "Segoe UI", sans-serif';
-    ctx.textAlign = 'left';
-    steps.forEach((step, i) => {
-      const sx = x + 16 + i * 100;
-      const sy = y + 18;
-      ctx.fillStyle = step.color;
+      const panelW = 320;
+      const panelH = 54;
+      const x = (canvas.width - panelW) / 2;
+      const y = 18;
+      ctx.save();
+      ctx.fillStyle = 'rgba(8,14,24,0.65)';
+      ctx.strokeStyle = 'rgba(125,252,154,0.2)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+      ctx.rect(x, y, panelW, panelH);
       ctx.fill();
-      ctx.fillStyle = 'rgba(220,240,255,0.9)';
-      ctx.fillText(step.label, sx + 12, sy + 4);
-      ctx.fillStyle = step.color;
-      ctx.fillText(step.text, sx + 12, sy + 20);
-    });
-    ctx.restore();
+      ctx.stroke();
+
+      const carrierLocked = gate.locked;
+      const steps = [
+        { label: 'Carrier', ok: !carrierLocked, color: carrierLocked ? '#ffd166' : '#7dfc9a', text: carrierLocked ? 'LOCKED' : 'DOWN' },
+        { label: 'Defenders', ok: threatCount === 0, color: threatCount === 0 ? '#7dfc9a' : '#ff6b6b', text: threatCount === 0 ? 'CLEAR' : `${threatCount}` },
+        { label: 'Stabilize', ok: chargePct >= 100, color: chargePct >= 100 ? '#7dfc9a' : '#8ecbff', text: `${chargePct}%` }
+      ];
+
+      ctx.font = '11px "Segoe UI", sans-serif';
+      ctx.textAlign = 'left';
+      steps.forEach((step, i) => {
+        const sx = x + 16 + i * 100;
+        const sy = y + 18;
+        ctx.fillStyle = step.color;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(220,240,255,0.9)';
+        ctx.fillText(step.label, sx + 12, sy + 4);
+        ctx.fillStyle = step.color;
+        ctx.fillText(step.text, sx + 12, sy + 20);
+      });
+      ctx.restore();
+    } catch (err) {
+      // Keep gameplay running if HUD rendering fails.
+    }
   }
 
   function render() {
