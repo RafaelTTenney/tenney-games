@@ -36,21 +36,33 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   const upgradeButtons = Array.from(document.querySelectorAll('[data-swarm-upgrade]'));
   const upgradeNote = document.getElementById('swarm-upgrade-note');
 
-  const input = { keys: {} };
+  const input = {
+    keys: {},
+    justPressed: {},
+    pointer: { x: canvas.width / 2, y: canvas.height / 2, down: false }
+  };
 
   const VIEW = {
     width: canvas.width,
     height: canvas.height,
     centerX: canvas.width / 2,
-    centerY: canvas.height / 2,
-    boundsX: 720,
-    boundsY: 520
+    centerY: canvas.height / 2
   };
 
-  const BASE_SPEED = 90;
+  const WORLD = {
+    size: 4000,
+    half: 2000,
+    sectorSize: 800,
+    maxSector: 4
+  };
+
+  const GAME_ID = 'spacex-exploration';
+  const SAVE_VERSION = 3;
+  const SAVE_KEY = `swarmBreakerSave_v${SAVE_VERSION}`;
+
   const BASE_STATS = {
-    hp: 120,
-    shield: 90,
+    maxHp: 120,
+    maxShield: 90,
     thrust: 420,
     reverseThrust: 260,
     turnRate: 0.0056,
@@ -60,8 +72,151 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     damage: 13,
     bulletSpeed: 920,
     boostMax: 120,
-    boostRegen: 22
+    boostRegen: 22,
+    energyMax: 100,
+    energyRegen: 18
   };
+
+  const HULL_SIZES = {
+    small: { label: 'Small', baseHp: 110, baseShield: 80, size: 12, mass: 1, speedBonus: 0.1 },
+    medium: { label: 'Medium', baseHp: 145, baseShield: 110, size: 16, mass: 1.2, speedBonus: 0 },
+    large: { label: 'Large', baseHp: 190, baseShield: 140, size: 20, mass: 1.45, speedBonus: -0.08 }
+  };
+
+  const UPGRADE_DEFS = {
+    engine: { label: 'Engine Output', max: 5, baseCost: 160 },
+    blaster: { label: 'Pulse Cannons', max: 5, baseCost: 170 },
+    capacitor: { label: 'Capacitor', max: 4, baseCost: 150 },
+    shield: { label: 'Shield Core', max: 4, baseCost: 160 },
+    hull: { label: 'Hull Plating', max: 4, baseCost: 160 },
+    booster: { label: 'Afterburner', max: 3, baseCost: 180 }
+  };
+
+  const BLUEPRINTS = {
+    shield_overdrive: {
+      name: 'Shield Overdrive',
+      description: 'Boosts shield capacity by 30%.',
+      effect: { shieldMult: 1.3 }
+    },
+    turbo_engine: {
+      name: 'Turbo Engine',
+      description: 'Increases max speed and thrust by 12%.',
+      effect: { speedMult: 1.12, thrustMult: 1.12 }
+    },
+    drone_swarm: {
+      name: 'Drone Swarm',
+      description: 'Unlocks additional escort drones.',
+      effect: { droneBonus: 2 }
+    },
+    plasma_cannon: {
+      name: 'Plasma Cannon',
+      description: 'Unlocks heavy plasma secondary weapon.',
+      effect: { unlockPlasma: true }
+    },
+    nebula_skin: {
+      name: 'Nebula Skin',
+      description: 'Cosmetic hull shader.',
+      effect: { cosmetic: true }
+    }
+  };
+
+  const ENEMY_TYPES = {
+    scout: { hp: 18, speed: 130, fireRate: 1500, damage: 7, size: 13, color: '#6df0ff', approach: 1.08 },
+    fighter: { hp: 30, speed: 110, fireRate: 1250, damage: 9, size: 17, color: '#ffb347', approach: 1.05 },
+    bomber: { hp: 50, speed: 90, fireRate: 1050, damage: 12, size: 22, color: '#ff6b6b', approach: 1.12 },
+    turret: { hp: 65, speed: 0, fireRate: 950, damage: 11, size: 26, color: '#c77dff', static: true, approach: 0.85 }
+  };
+
+  const CHAPTERS = [
+    {
+      id: 1,
+      title: 'Driftline Exodus',
+      brief: 'You leave the Tenney Belt with a cracked nav core. The Driftline is unstable, but the relay must come back online.',
+      objective: 'Reach the relay gate and stabilize the beacon.',
+      distanceGoal: 14000,
+      optional: [
+        { id: 'c1-a', type: 'kills', enemy: 'scout', target: 10, reward: 160, text: 'Destroy 10 scouts.' },
+        { id: 'c1-b', type: 'noHullDamage', reward: 200, text: 'Reach the relay without hull damage.' }
+      ]
+    },
+    {
+      id: 2,
+      title: 'Glasswake Run',
+      brief: 'The relay points to a debris river. The Glasswake will tear hulls apart, but it is the only way forward.',
+      objective: 'Cross the Glasswake and secure the signal cache.',
+      distanceGoal: 16000,
+      optional: [
+        { id: 'c2-a', type: 'collect', target: 4, reward: 220, text: 'Collect 4 data shards.' },
+        { id: 'c2-b', type: 'kills', enemy: 'fighter', target: 5, reward: 180, text: 'Disable 5 fighters.' }
+      ]
+    },
+    {
+      id: 3,
+      title: 'Signal Thief',
+      brief: 'Pirates have latched onto the relay. Cut through their screen before they drain the beacon.',
+      objective: 'Disable the signal thieves and keep the relay alive.',
+      distanceGoal: 17000,
+      optional: [
+        { id: 'c3-a', type: 'kills', enemy: 'fighter', target: 6, reward: 240, text: 'Disable 6 fighters.' },
+        { id: 'c3-b', type: 'shieldAtEnd', target: 50, reward: 220, text: 'Finish with 50 shield.' }
+      ]
+    },
+    {
+      id: 4,
+      title: 'Stormvault',
+      brief: 'Ion storms scramble everything. Only the vault lane is stable enough to fly.',
+      objective: 'Navigate the stormvault and keep the nav core intact.',
+      distanceGoal: 18000,
+      optional: [
+        { id: 'c4-a', type: 'noBoost', reward: 200, text: 'Reach the midpoint without boost.' },
+        { id: 'c4-b', type: 'collect', target: 5, reward: 220, text: 'Collect 5 data shards.' }
+      ]
+    },
+    {
+      id: 5,
+      title: 'Redshift Pursuit',
+      brief: 'The enemy cruiser leaps ahead. Keep pace through redshift tides before it escapes.',
+      objective: 'Stay on the pursuit line and tag the cruiser.',
+      distanceGoal: 20000,
+      optional: [
+        { id: 'c5-a', type: 'kills', enemy: 'bomber', target: 4, reward: 240, text: 'Destroy 4 bombers.' },
+        { id: 'c5-b', type: 'noHullDamage', reward: 220, text: 'Reach the redshift gate without hull damage.' }
+      ]
+    },
+    {
+      id: 6,
+      title: 'Bastion Cross',
+      brief: 'Automated defense platforms guard the cross. Disable them before they lock the gate.',
+      objective: 'Cross the bastion and open the gate.',
+      distanceGoal: 21000,
+      optional: [
+        { id: 'c6-a', type: 'kills', enemy: 'turret', target: 3, reward: 260, text: 'Destroy 3 bastion turrets.' },
+        { id: 'c6-b', type: 'collect', target: 6, reward: 240, text: 'Collect 6 data shards.' }
+      ]
+    },
+    {
+      id: 7,
+      title: 'Darklane Refuge',
+      brief: 'Nebula shadows hide a refugee convoy. Protect them without drawing a full pursuit.',
+      objective: 'Reach Darklane and keep the convoy alive.',
+      distanceGoal: 22000,
+      optional: [
+        { id: 'c7-a', type: 'kills', enemy: 'scout', target: 8, reward: 260, text: 'Destroy 8 scouts.' },
+        { id: 'c7-b', type: 'noBoost', reward: 240, text: 'Finish without using boost.' }
+      ]
+    },
+    {
+      id: 8,
+      title: 'Starforge Arrival',
+      brief: 'The final gate opens into a shipyard of myth. Survive the guardian and claim the Starforge.',
+      objective: 'Defeat the guardian and secure the Starforge.',
+      distanceGoal: 24000,
+      optional: [
+        { id: 'c8-a', type: 'kills', enemy: 'bomber', target: 6, reward: 300, text: 'Destroy 6 bombers.' },
+        { id: 'c8-b', type: 'shieldAtEnd', target: 60, reward: 260, text: 'Finish with 60 shield.' }
+      ]
+    }
+  ];
 
   const STAR_LAYERS = [
     { count: 160, sizeMin: 0.5, sizeMax: 1.4, speed: 0.5, alpha: 0.5 },
@@ -69,176 +224,52 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     { count: 60, sizeMin: 1.6, sizeMax: 3.6, speed: 1.15, alpha: 0.95 }
   ];
 
-  const ENEMY_TYPES = {
-    scout: { hp: 18, speed: 110, fireRate: 1500, damage: 7, size: 15, color: '#6df0ff', approach: 1.08 },
-    raider: { hp: 32, speed: 92, fireRate: 1250, damage: 9, size: 19, color: '#ffb347', approach: 1.05 },
-    lancer: { hp: 54, speed: 80, fireRate: 1050, damage: 12, size: 23, color: '#ff6b6b', approach: 1.12 },
-    turret: { hp: 65, speed: 0, fireRate: 950, damage: 11, size: 26, color: '#c77dff', static: true, approach: 0.85 }
+  const state = {
+    running: false,
+    paused: false,
+    lastFrame: 0,
+    time: 0,
+    frameId: null,
+    cloudReady: false,
+    statusTimer: 0,
+    checkpoint: null,
+    lastSaveAt: 0,
+    lastCloudAt: 0,
+    bestDistance: 0,
+    awaitingBrief: true,
+    scanPulse: 0
   };
 
-  const UPGRADE_DEFS = {
-    engine: { label: 'Engine Output', max: 5, baseCost: 160, costStep: 140 },
-    blaster: { label: 'Pulse Cannons', max: 5, baseCost: 170, costStep: 150 },
-    capacitor: { label: 'Capacitor', max: 4, baseCost: 150, costStep: 130 },
-    shield: { label: 'Shield Core', max: 4, baseCost: 160, costStep: 140 },
-    hull: { label: 'Hull Plating', max: 4, baseCost: 160, costStep: 140 },
-    booster: { label: 'Afterburner', max: 3, baseCost: 180, costStep: 160 }
+  const world = {
+    sectors: new Map(),
+    discovered: new Set(),
+    cacheClaims: {},
+    bossesDefeated: {}
   };
-  const PACE = {
-    lengthScale: 0.62,
-    spawnScale: 0.78,
-    gateBonus: 1,
-    dataBoost: 1.25
+
+  const entities = {
+    enemies: [],
+    bullets: [],
+    enemyBullets: [],
+    drones: [],
+    loot: [],
+    effects: []
   };
-  const GAME_ID = 'driftline-journey';
-  const GATE_STABILIZE_BASE = 1800;
-  const GATE_STABILIZE_STEP = 220;
-  const GATE_STABILIZE_DECAY = 0.55;
 
-  const JOURNEY = [
-    {
-      id: 1,
-      seed: 1411,
-      title: 'Driftline Exodus',
-      brief: 'You leave the Tenney Belt with a cracked nav core. The Driftline is unstable, but the relay must come back online.',
-      objective: 'Reach the relay gate and stabilize the beacon.',
-      segments: [
-        { name: 'Launch Corridor', length: 18000, spawnInterval: 1600, mix: { scout: 0.7, raider: 0.3 }, hazards: { debris: 0.25 }, gates: 3, dataRate: 0.25 },
-        { name: 'Rift Wake', length: 20000, spawnInterval: 1400, mix: { scout: 0.5, raider: 0.3, lancer: 0.2 }, hazards: { storm: 0.35, debris: 0.2 }, gates: 3, dataRate: 0.3 },
-        { name: 'Relay Approach', length: 20000, spawnInterval: 1300, mix: { raider: 0.55, lancer: 0.45 }, hazards: { debris: 0.15 }, gates: 2, dataRate: 0.25 }
-      ],
-      optional: [
-        { id: 'c1-a', type: 'kills', enemy: 'scout', target: 10, untilCheckpoint: 2, reward: 160, text: 'Destroy 10 scouts before Checkpoint 2.' },
-        { id: 'c1-b', type: 'noHullDamage', untilCheckpoint: 3, reward: 200, text: 'Reach the relay without hull damage.' }
-      ]
-    },
-    {
-      id: 2,
-      seed: 1539,
-      title: 'Glasswake Run',
-      brief: 'The relay points to a debris river. The Glasswake will tear hulls apart, but it is the only way forward.',
-      objective: 'Cross the Glasswake and secure the signal cache.',
-      segments: [
-        { name: 'Shatter Field', length: 20000, spawnInterval: 1500, mix: { scout: 0.5, raider: 0.5 }, hazards: { debris: 0.5 }, gates: 3, dataRate: 0.35 },
-        { name: 'Signal Carve', length: 22000, spawnInterval: 1350, mix: { scout: 0.35, raider: 0.45, lancer: 0.2 }, hazards: { debris: 0.4 }, gates: 3, dataRate: 0.4 },
-        { name: 'Cache Approach', length: 21000, spawnInterval: 1300, mix: { raider: 0.6, lancer: 0.4 }, hazards: { debris: 0.3 }, gates: 2, dataRate: 0.35 }
-      ],
-      optional: [
-        { id: 'c2-a', type: 'collect', target: 4, untilCheckpoint: 3, reward: 220, text: 'Collect 4 data shards before the cache.' },
-        { id: 'c2-b', type: 'kills', enemy: 'raider', target: 5, untilCheckpoint: 2, reward: 180, text: 'Disable 5 raiders before Checkpoint 2.' }
-      ]
-    },
-    {
-      id: 3,
-      seed: 1673,
-      title: 'Signal Thief',
-      brief: 'Pirates have latched onto the relay. Cut through their screen before they drain the beacon.',
-      objective: 'Disable the signal thieves and keep the relay alive.',
-      segments: [
-        { name: 'Intercept', length: 21000, spawnInterval: 1300, mix: { scout: 0.4, raider: 0.4, lancer: 0.2 }, hazards: { debris: 0.2 }, gates: 3, dataRate: 0.3 },
-        { name: 'Pursuit Line', length: 22000, spawnInterval: 1200, mix: { raider: 0.5, lancer: 0.5 }, hazards: { storm: 0.2 }, gates: 3, dataRate: 0.3 },
-        { name: 'Break the Net', length: 22000, spawnInterval: 1150, mix: { raider: 0.45, lancer: 0.55 }, hazards: { debris: 0.15 }, gates: 2, dataRate: 0.25 }
-      ],
-      optional: [
-        { id: 'c3-a', type: 'kills', enemy: 'raider', target: 6, untilCheckpoint: 3, reward: 240, text: 'Disable 6 raiders before the net breaks.' },
-        { id: 'c3-b', type: 'shieldAtEnd', target: 50, reward: 220, text: 'Finish the chapter with at least 50 shield.' }
-      ]
-    },
-    {
-      id: 4,
-      seed: 1799,
-      title: 'Stormvault',
-      brief: 'Ion storms scramble everything. Only the vault lane is stable enough to fly.',
-      objective: 'Navigate the stormvault and keep the nav core intact.',
-      segments: [
-        { name: 'Ion Veil', length: 22000, spawnInterval: 1400, mix: { scout: 0.4, raider: 0.4, lancer: 0.2 }, hazards: { storm: 0.6 }, gates: 3, dataRate: 0.35 },
-        { name: 'Eye of Storm', length: 23000, spawnInterval: 1300, mix: { raider: 0.5, lancer: 0.5 }, hazards: { storm: 0.5 }, gates: 3, dataRate: 0.4 },
-        { name: 'Drift Exit', length: 22000, spawnInterval: 1200, mix: { raider: 0.4, lancer: 0.6 }, hazards: { storm: 0.4 }, gates: 2, dataRate: 0.35 }
-      ],
-      optional: [
-        { id: 'c4-a', type: 'noBoost', untilCheckpoint: 2, reward: 200, text: 'Reach Checkpoint 2 without using boost.' },
-        { id: 'c4-b', type: 'collect', target: 5, untilCheckpoint: 3, reward: 220, text: 'Collect 5 data shards in the stormvault.' }
-      ]
-    },
-    {
-      id: 5,
-      seed: 1913,
-      title: 'Redshift Pursuit',
-      brief: 'The enemy cruiser leaps ahead. Keep pace through redshift tides before it escapes.',
-      objective: 'Stay on the pursuit line and tag the cruiser.',
-      segments: [
-        { name: 'Redline Burn', length: 23000, spawnInterval: 1200, mix: { raider: 0.45, lancer: 0.55 }, hazards: { debris: 0.2 }, gates: 3, dataRate: 0.3 },
-        { name: 'Coil Run', length: 24000, spawnInterval: 1150, mix: { raider: 0.4, lancer: 0.6 }, hazards: { storm: 0.3 }, gates: 3, dataRate: 0.3 },
-        { name: 'Pursuit Lock', length: 24000, spawnInterval: 1100, mix: { raider: 0.35, lancer: 0.65 }, hazards: { debris: 0.25 }, gates: 2, dataRate: 0.25 }
-      ],
-      optional: [
-        { id: 'c5-a', type: 'kills', enemy: 'lancer', target: 4, untilCheckpoint: 2, reward: 240, text: 'Destroy 4 lancers before Checkpoint 2.' },
-        { id: 'c5-b', type: 'noHullDamage', untilCheckpoint: 2, reward: 220, text: 'Reach Checkpoint 2 without hull damage.' }
-      ]
-    },
-    {
-      id: 6,
-      seed: 2039,
-      title: 'Bastion Cross',
-      brief: 'Automated defense platforms guard the cross. Disable them before they lock the gate.',
-      objective: 'Cross the bastion and open the gate.',
-      segments: [
-        { name: 'Defense Ring', length: 24000, spawnInterval: 1200, mix: { raider: 0.45, lancer: 0.45, turret: 0.1 }, hazards: { turret: 0.3 }, gates: 3, dataRate: 0.35 },
-        { name: 'Trench Drift', length: 24000, spawnInterval: 1100, mix: { raider: 0.35, lancer: 0.55, turret: 0.1 }, hazards: { turret: 0.35 }, gates: 3, dataRate: 0.35 },
-        { name: 'Gate Breach', length: 23000, spawnInterval: 1050, mix: { raider: 0.3, lancer: 0.55, turret: 0.15 }, hazards: { turret: 0.4 }, gates: 2, dataRate: 0.3 }
-      ],
-      optional: [
-        { id: 'c6-a', type: 'kills', enemy: 'turret', target: 3, untilCheckpoint: 3, reward: 260, text: 'Destroy 3 bastion turrets.' },
-        { id: 'c6-b', type: 'collect', target: 6, untilCheckpoint: 3, reward: 240, text: 'Collect 6 data shards in the bastion.' }
-      ]
-    },
-    {
-      id: 7,
-      seed: 2171,
-      title: 'Darklane Refuge',
-      brief: 'Nebula shadows hide a refugee convoy. Protect them without drawing a full pursuit.',
-      objective: 'Reach Darklane and keep the convoy alive.',
-      segments: [
-        { name: 'Shadow Drift', length: 24000, spawnInterval: 1250, mix: { scout: 0.35, raider: 0.4, lancer: 0.25 }, hazards: { storm: 0.3 }, gates: 3, dataRate: 0.3 },
-        { name: 'Sensor Nets', length: 25000, spawnInterval: 1150, mix: { raider: 0.35, lancer: 0.55, turret: 0.1 }, hazards: { storm: 0.35 }, gates: 3, dataRate: 0.3 },
-        { name: 'Refuge Approach', length: 24000, spawnInterval: 1100, mix: { raider: 0.3, lancer: 0.6, turret: 0.1 }, hazards: { storm: 0.4 }, gates: 2, dataRate: 0.25 }
-      ],
-      optional: [
-        { id: 'c7-a', type: 'hullAtEnd', target: 80, reward: 260, text: 'Finish the chapter with at least 80 hull.' },
-        { id: 'c7-b', type: 'kills', enemy: 'scout', target: 12, untilCheckpoint: 3, reward: 220, text: 'Destroy 12 scouts before the refuge.' }
-      ]
-    },
-    {
-      id: 8,
-      seed: 2299,
-      title: 'Leviathan Gate',
-      brief: 'The final gate opens under fire. A leviathan carrier blocks the passage.',
-      objective: 'Break the carrier screen and punch through the gate.',
-      segments: [
-        { name: 'Outer Guard', length: 25000, spawnInterval: 1100, mix: { raider: 0.35, lancer: 0.55, turret: 0.1 }, hazards: { turret: 0.3 }, gates: 3, dataRate: 0.3 },
-        { name: 'Gate Throat', length: 26000, spawnInterval: 1050, mix: { raider: 0.3, lancer: 0.6, turret: 0.1 }, hazards: { storm: 0.35, turret: 0.25 }, gates: 3, dataRate: 0.25 },
-        { name: 'Leviathan Core', length: 26000, spawnInterval: 1000, mix: { raider: 0.25, lancer: 0.6, turret: 0.15 }, hazards: { storm: 0.45, turret: 0.35 }, gates: 2, dataRate: 0.25 }
-      ],
-      optional: [
-        { id: 'c8-a', type: 'kills', enemy: 'lancer', target: 8, untilCheckpoint: 3, reward: 280, text: 'Destroy 8 lancers before the core.' },
-        { id: 'c8-b', type: 'shieldAtEnd', target: 70, reward: 260, text: 'Reach the gate with at least 70 shield.' }
-      ]
-    }
-  ];
-
-  JOURNEY.forEach(chapter => {
-    chapter.segments.forEach(segment => {
-      segment.length = Math.round(segment.length * PACE.lengthScale);
-      segment.spawnInterval = Math.max(650, Math.round(segment.spawnInterval * PACE.spawnScale));
-      if (segment.gates) segment.gates += PACE.gateBonus;
-      if (segment.dataRate) segment.dataRate *= PACE.dataBoost;
-    });
-  });
-
-  const DEFAULT_PROGRESS = {
-    schemaVersion: 1,
-    chapter: 1,
-    checkpoint: 0,
+  const player = {
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    angle: -Math.PI / 2,
+    hp: BASE_STATS.maxHp,
+    shield: BASE_STATS.maxShield,
+    boost: BASE_STATS.boostMax,
+    energy: BASE_STATS.energyMax,
+    lastShot: 0,
+    lastAltShot: 0,
+    lastHit: 0,
+    hullSize: 'small',
     credits: 0,
     upgrades: {
       engine: 0,
@@ -248,127 +279,39 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       hull: 0,
       booster: 0
     },
-    completedChallenges: {}
-  };
-
-  const state = {
-    running: false,
-    lastTime: 0,
-    ready: false,
-    completed: false,
+    blueprints: new Set(),
+    skins: [],
+    toys: [],
+    level: 1,
+    distanceThisChapter: 0,
+    distanceTotal: 0,
     chapterIndex: 0,
     checkpointIndex: 0,
-    segmentIndex: 0,
-    chapterDistance: 0,
-    segmentDistance: 0,
-    segmentTimer: 0,
-    spawnTimer: 0,
-    debrisTimer: 0,
-    turretTimer: 0,
-    dataTimer: 0,
-    baseSpeed: BASE_SPEED,
-    boostActive: false,
-    shake: 0,
-    hitFlash: 0,
-    jumpFlash: 0,
-    stormPhase: 0,
-    stormLevel: 0,
-    objectiveText: '',
-    statusTimer: 0,
-    message: '',
-    route: null,
-    segmentGateIndex: 0,
-    gateCharge: 0,
-    gateChargeTarget: 0,
-    signal: 100,
-    phase: 'travel',
-    slowMoTimer: 0,
-    player: {
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      thrust: BASE_STATS.thrust,
-      reverseThrust: BASE_STATS.reverseThrust,
-      turnRate: BASE_STATS.turnRate,
-      maxSpeed: BASE_STATS.maxSpeed,
-      drag: BASE_STATS.drag,
-      fireDelay: BASE_STATS.fireDelay,
-      fireCooldown: 0,
-      hp: BASE_STATS.hp,
-      maxHp: BASE_STATS.hp,
-      shield: BASE_STATS.shield,
-      maxShield: BASE_STATS.shield,
-      damage: BASE_STATS.damage,
-      bulletSpeed: BASE_STATS.bulletSpeed,
-      boost: BASE_STATS.boostMax,
-      boostMax: BASE_STATS.boostMax,
-      boostRegen: BASE_STATS.boostRegen,
-      lastHit: 0,
-      angle: -Math.PI / 2,
-      speed: 0
-    },
-    enemies: [],
-    bullets: [],
-    enemyBullets: [],
-    debris: [],
-    pickups: [],
-    gates: [],
-    particles: [],
-    background: {
-      stars: [],
-      nebulae: []
-    },
-    camera: {
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      shakeX: 0,
-      shakeY: 0
-    },
-    challenges: [],
-    challengeState: {},
-    hullDamaged: false,
-    boostUsed: false,
-    rng: Math.random
+    chapterState: {},
+    selectedWeapon: 'laser',
+    unlockedPlasma: false
   };
 
-  let progress = null;
-  let progressReady = false;
-  let progressSource = 'local';
-  let currentUser = null;
-  let upgradesBound = false;
-  let saveTimer = null;
-  let bestProgressScore = 0;
+  const starLayers = STAR_LAYERS.map((layer, index) => {
+    const rng = mulberry32(1000 + index * 17);
+    return Array.from({ length: layer.count }).map(() => ({
+      x: rng() * WORLD.size - WORLD.half,
+      y: rng() * WORLD.size - WORLD.half,
+      size: randRange(rng, layer.sizeMin, layer.sizeMax),
+      alpha: layer.alpha
+    }));
+  });
 
-  function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-  }
+  const missionTracker = {
+    optional: new Map(),
+    noHullDamage: true,
+    noBoost: true,
+    shieldAtEnd: 0,
+    dataShards: 0,
+    kills: {}
+  };
 
-  function toScreen(x, y) {
-    return {
-      x: VIEW.centerX + (x - state.camera.x),
-      y: VIEW.centerY + (y - state.camera.y)
-    };
-  }
-
-  function dist(aX, aY, bX, bY) {
-    return Math.hypot(aX - bX, aY - bY);
-  }
-
-  function formatDistance(value) {
-    const km = value / 1000;
-    if (km >= 100) return `${Math.round(km)}k`;
-    if (km >= 10) return `${km.toFixed(1)}k`;
-    return `${km.toFixed(2)}k`;
-  }
-
-  function formatCredits(value) {
-    return Math.max(0, Math.round(value));
-  }
-
-  function makeRng(seed) {
+  function mulberry32(seed) {
     let t = seed >>> 0;
     return function () {
       t += 0x6D2B79F5;
@@ -378,1330 +321,813 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     };
   }
 
-  function buildRouteForChapter(chapter) {
-    const rng = makeRng((chapter.seed || 1200) + 77);
-    const segments = [];
-    let x = 0;
-    let y = 0;
-    let distance = 0;
-    let angle = rng() * Math.PI * 2;
-
-    chapter.segments.forEach((segment, index) => {
-      const turn = (rng() - 0.5) * 0.9;
-      angle += turn;
-      const dirX = Math.cos(angle);
-      const dirY = Math.sin(angle);
-      const gateCount = Math.max(1, segment.gates || 1);
-      const step = segment.length / gateCount;
-      const gates = [];
-      for (let i = 1; i <= gateCount; i++) {
-        const weave = (i % 2 === 0 ? 1 : -1) * (140 + rng() * 220);
-        const jitter = (rng() - 0.5) * 120;
-        const lateral = weave + jitter;
-        const t = step * i;
-        const gx = x + dirX * t - dirY * lateral;
-        const gy = y + dirY * t + dirX * lateral;
-        gates.push({
-          x: gx,
-          y: gy,
-          radius: 80,
-          passed: false,
-          checkpoint: i === gateCount
-        });
-      }
-      const endX = x + dirX * segment.length;
-      const endY = y + dirY * segment.length;
-      segments.push({
-        index,
-        startDistance: distance,
-        startX: x,
-        startY: y,
-        endX,
-        endY,
-        dirX,
-        dirY,
-        length: segment.length,
-        gates
-      });
-      x = endX;
-      y = endY;
-      distance += segment.length;
-    });
-    return { segments };
-  }
-
-  function randRange(min, max, rng = state.rng) {
+  function randRange(rng, min, max) {
     return min + (max - min) * rng();
   }
 
-  function pickWeighted(mix, rng = state.rng) {
-    const entries = Object.entries(mix || { scout: 1 });
-    const total = entries.reduce((sum, [, weight]) => sum + weight, 0);
-    let roll = rng() * total;
-    for (const [key, weight] of entries) {
-      roll -= weight;
-      if (roll <= 0) return key;
-    }
-    return entries[0][0];
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
   }
 
-  function upgradeScore(upgrades) {
-    return Object.values(upgrades || {}).reduce((sum, value) => sum + (value || 0), 0);
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
   }
 
-  function mergeProgress(data) {
-    const merged = {
-      ...DEFAULT_PROGRESS,
-      ...(data || {}),
-      upgrades: { ...DEFAULT_PROGRESS.upgrades, ...(data?.upgrades || {}) },
-      completedChallenges: { ...(data?.completedChallenges || {}) }
+  function dist(a, b, c, d) {
+    return Math.hypot(c - a, d - b);
+  }
+
+  function normalize(x, y) {
+    const len = Math.hypot(x, y) || 1;
+    return { x: x / len, y: y / len };
+  }
+
+  function sectorCoords(x, y) {
+    const sx = clamp(Math.floor((x + WORLD.half) / WORLD.sectorSize), 0, WORLD.maxSector);
+    const sy = clamp(Math.floor((y + WORLD.half) / WORLD.sectorSize), 0, WORLD.maxSector);
+    return { sx, sy };
+  }
+
+  function sectorKey(sx, sy) {
+    return `${sx},${sy}`;
+  }
+
+  function seededSector(sx, sy) {
+    const key = sectorKey(sx, sy);
+    if (world.sectors.has(key)) return world.sectors.get(key);
+    const seed = 10000 + sx * 199 + sy * 997;
+    const sector = {
+      key,
+      sx,
+      sy,
+      seed,
+      generated: false,
+      entities: {
+        asteroids: [],
+        planets: [],
+        stations: [],
+        caches: [],
+        storms: []
+      },
+      spawnTimer: 0,
+      threat: 1
     };
-    merged.chapter = Math.max(1, Math.floor(merged.chapter || 1));
-    merged.checkpoint = Math.max(0, Math.floor(merged.checkpoint || 0));
-    merged.credits = Math.max(0, Number(merged.credits) || 0);
-    return merged;
+    world.sectors.set(key, sector);
+    return sector;
   }
 
-  function loadLocalProgress() {
-    try {
-      const raw = localStorage.getItem('journey-progress-v1');
-      if (!raw) return null;
-      return mergeProgress(JSON.parse(raw));
-    } catch (err) {
-      console.warn('Journey local progress read failed', err);
-      return null;
-    }
-  }
+  function generateSector(sector) {
+    if (sector.generated) return;
+    const rng = mulberry32(sector.seed);
+    const originX = sector.sx * WORLD.sectorSize - WORLD.half;
+    const originY = sector.sy * WORLD.sectorSize - WORLD.half;
+    const density = randRange(rng, 0.4, 1.2);
 
-  function saveLocalProgress(data) {
-    try {
-      localStorage.setItem('journey-progress-v1', JSON.stringify(data));
-    } catch (err) {
-      console.warn('Journey local progress save failed', err);
-    }
-  }
-
-  function chooseBestProgress(local, remote) {
-    if (!local) return remote;
-    if (!remote) return local;
-    if (local.chapter !== remote.chapter) return local.chapter > remote.chapter ? local : remote;
-    if (local.checkpoint !== remote.checkpoint) return local.checkpoint > remote.checkpoint ? local : remote;
-    if (local.credits !== remote.credits) return local.credits > remote.credits ? local : remote;
-    const localUp = upgradeScore(local.upgrades);
-    const remoteUp = upgradeScore(remote.upgrades);
-    if (localUp !== remoteUp) return localUp > remoteUp ? local : remote;
-    return remote;
-  }
-
-  async function loadRemoteProgress(userId, localData) {
-    const docRef = doc(db, 'journeyProgress', userId);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) {
-      const fresh = mergeProgress(localData || DEFAULT_PROGRESS);
-      await setDoc(docRef, { ...fresh, uid: userId, updatedAt: serverTimestamp() }, { merge: true });
-      return fresh;
-    }
-    const remoteData = mergeProgress(snap.data());
-    const localMerged = localData ? mergeProgress(localData) : null;
-    const best = chooseBestProgress(localMerged, remoteData);
-    if (best === localMerged) {
-      await setDoc(docRef, { ...best, uid: userId, updatedAt: serverTimestamp() }, { merge: true });
-    }
-    return best;
-  }
-
-  async function loadProgress() {
-    const localData = loadLocalProgress();
-    if (!hasFirebaseConfig()) {
-      progressSource = 'local';
-      return localData || mergeProgress(DEFAULT_PROGRESS);
-    }
-    try {
-      const user = await waitForAuth();
-      if (!user) {
-        progressSource = 'local';
-        return localData || mergeProgress(DEFAULT_PROGRESS);
-      }
-      currentUser = user;
-      progressSource = 'firebase';
-      const remote = await loadRemoteProgress(user.uid, localData);
-      return remote || mergeProgress(DEFAULT_PROGRESS);
-    } catch (err) {
-      console.warn('Journey remote progress failed', err);
-      progressSource = 'local';
-      return localData || mergeProgress(DEFAULT_PROGRESS);
-    }
-  }
-
-  function queueSave() {
-    saveLocalProgress(progress);
-    if (progressSource !== 'firebase' || !currentUser) return;
-    if (saveTimer) return;
-    saveTimer = setTimeout(async () => {
-      saveTimer = null;
-      try {
-        const docRef = doc(db, 'journeyProgress', currentUser.uid);
-        await setDoc(docRef, { ...progress, uid: currentUser.uid, updatedAt: serverTimestamp() }, { merge: true });
-      } catch (err) {
-        console.warn('Journey save failed', err);
-      }
-    }, 400);
-  }
-
-  function sanitizeProgress() {
-    if (!progress) return;
-    const maxChapter = JOURNEY.length + 1;
-    progress.chapter = clamp(progress.chapter, 1, maxChapter);
-    if (progress.chapter <= JOURNEY.length) {
-      const chapter = JOURNEY[progress.chapter - 1];
-      const maxCheckpoint = chapter.segments.length - 1;
-      if (progress.checkpoint > maxCheckpoint) {
-        progress.chapter = Math.min(JOURNEY.length + 1, progress.chapter + 1);
-        progress.checkpoint = 0;
-      }
-    } else {
-      progress.checkpoint = 0;
-    }
-  }
-
-  function applyUpgrades() {
-    if (!progress) return;
-    const upgrades = progress.upgrades || DEFAULT_PROGRESS.upgrades;
-    const engineLevel = upgrades.engine || 0;
-    const blasterLevel = upgrades.blaster || 0;
-    const capacitorLevel = upgrades.capacitor || 0;
-    const shieldLevel = upgrades.shield || 0;
-    const hullLevel = upgrades.hull || 0;
-    const boosterLevel = upgrades.booster || 0;
-
-    state.baseSpeed = BASE_SPEED + engineLevel * 6 + boosterLevel * 4;
-    state.player.thrust = BASE_STATS.thrust + engineLevel * 70;
-    state.player.reverseThrust = BASE_STATS.reverseThrust + engineLevel * 50;
-    state.player.turnRate = BASE_STATS.turnRate + engineLevel * 0.00025 + boosterLevel * 0.00018;
-    state.player.maxSpeed = BASE_STATS.maxSpeed + engineLevel * 26;
-    state.player.fireDelay = Math.max(120, BASE_STATS.fireDelay - capacitorLevel * 20);
-    state.player.damage = BASE_STATS.damage + blasterLevel * 3;
-    state.player.bulletSpeed = BASE_STATS.bulletSpeed + blasterLevel * 16;
-    state.player.maxShield = BASE_STATS.shield + shieldLevel * 22;
-    state.player.maxHp = BASE_STATS.hp + hullLevel * 26;
-    state.player.boostMax = BASE_STATS.boostMax + boosterLevel * 30;
-    state.player.boostRegen = BASE_STATS.boostRegen + boosterLevel * 8;
-
-    state.player.hp = clamp(state.player.hp, 0, state.player.maxHp);
-    state.player.shield = clamp(state.player.shield, 0, state.player.maxShield);
-    state.player.boost = clamp(state.player.boost, 0, state.player.boostMax);
-  }
-
-  function getUpgradeCost(id) {
-    const def = UPGRADE_DEFS[id];
-    if (!def) return Infinity;
-    const level = progress?.upgrades?.[id] || 0;
-    return def.baseCost + def.costStep * level;
-  }
-
-  function updateUpgradeButtons() {
-    if (!progress) return;
-    upgradeButtons.forEach(btn => {
-      const id = btn.dataset.swarmUpgrade;
-      const def = UPGRADE_DEFS[id];
-      if (!def) return;
-      const level = progress.upgrades[id] || 0;
-      const isMax = level >= def.max;
-      const cost = getUpgradeCost(id);
-      btn.textContent = isMax
-        ? `${def.label} MAX`
-        : `${def.label} L${level + 1} - ${cost}c`;
-      btn.disabled = isMax || progress.credits < cost;
-    });
-    if (upgradeNote) {
-      upgradeNote.textContent = progressSource === 'firebase'
-        ? 'Upgrades save to your profile. Credits earned from objectives and challenges.'
-        : 'Sign in to sync upgrades across devices. Credits saved locally.';
-    }
-  }
-
-  function purchaseUpgrade(id) {
-    if (!progress) return;
-    const def = UPGRADE_DEFS[id];
-    if (!def) return;
-    const level = progress.upgrades[id] || 0;
-    if (level >= def.max) return;
-    const cost = getUpgradeCost(id);
-    if (progress.credits < cost) return;
-    progress.credits -= cost;
-    progress.upgrades[id] = level + 1;
-    applyUpgrades();
-    updateUpgradeButtons();
-    setStatus(`${def.label} upgraded.`, 1800);
-    queueSave();
-    updateHud();
-  }
-
-  function currentChapter() {
-    return JOURNEY[state.chapterIndex];
-  }
-
-  function currentSegment() {
-    const chapter = currentChapter();
-    return chapter?.segments?.[state.segmentIndex];
-  }
-
-  function getDifficulty() {
-    return 1 + state.chapterIndex * 0.2 + state.segmentIndex * 0.12;
-  }
-
-  function getGateChargeTarget() {
-    const base = GATE_STABILIZE_BASE + state.chapterIndex * GATE_STABILIZE_STEP + state.segmentIndex * 140;
-    return Math.min(3400, base + state.segmentGateIndex * 140);
-  }
-
-  function initChallenges() {
-    const chapter = currentChapter();
-    state.challenges = (chapter?.optional || []).map(def => {
-      const completed = !!progress?.completedChallenges?.[def.id];
-      return {
-        ...def,
-        completed,
-        failed: false,
-        progress: 0
-      };
-    });
-    state.hullDamaged = false;
-    state.boostUsed = false;
-  }
-
-  function updateObjectiveDisplay() {
-    if (!hudObjective) return;
-    if (state.signal <= 30) {
-      hudObjective.textContent = 'Objective: Signal critical — unlock and stabilize the next gate.';
-      return;
-    }
-    const currentGate = state.gates[state.segmentGateIndex];
-    if (currentGate) {
-      let threatCount = 0;
-      state.enemies.forEach(enemy => {
-        if (enemy.hp <= 0) return;
-        if (dist(enemy.x, enemy.y, currentGate.x, currentGate.y) < 260) threatCount += 1;
+    const asteroidCount = Math.floor(randRange(rng, 6, 16) * density);
+    for (let i = 0; i < asteroidCount; i += 1) {
+      sector.entities.asteroids.push({
+        x: originX + randRange(rng, 80, WORLD.sectorSize - 80),
+        y: originY + randRange(rng, 80, WORLD.sectorSize - 80),
+        radius: randRange(rng, 18, 45),
+        drift: randRange(rng, -6, 6),
+        spin: randRange(rng, -0.3, 0.3)
       });
-      const gateDist = dist(state.player.x, state.player.y, currentGate.x, currentGate.y);
-      if (gateDist > currentGate.radius * 2.2) {
-        hudObjective.textContent = 'Objective: Fly to the next gate.';
-        return;
-      }
-      if (state.phase === 'travel' && currentGate.locked) {
-        hudObjective.textContent = 'Objective: Reach the gate and engage the relay carrier.';
-        return;
-      }
-      if (currentGate.locked) {
-        hudObjective.textContent = 'Objective: Destroy the relay carrier to unlock the gate.';
-        return;
-      }
-      if (threatCount > 0) {
-        hudObjective.textContent = 'Objective: Clear gate defenders.';
-        return;
-      }
-      hudObjective.textContent = 'Objective: Brake inside the ring to stabilize the gate.';
-      return;
     }
-    const active = state.challenges.find(ch => !ch.completed && !ch.failed);
-    if (active) {
-      let extra = '';
-      if (active.type === 'kills' || active.type === 'collect') {
-        extra = ` (${active.progress}/${active.target})`;
-      }
-      hudObjective.textContent = `Optional: ${active.text}${extra}`;
-      return;
+
+    if (rng() < 0.35) {
+      sector.entities.planets.push({
+        x: originX + randRange(rng, 120, WORLD.sectorSize - 120),
+        y: originY + randRange(rng, 120, WORLD.sectorSize - 120),
+        radius: randRange(rng, 55, 110),
+        hue: randRange(rng, 180, 260)
+      });
     }
-    const gateTotal = state.gates.length;
-    const gateIndex = gateTotal ? Math.min(state.segmentGateIndex + 1, gateTotal) : 0;
-    const gateForStatus = state.gates[state.segmentGateIndex];
-    let gateText = gateTotal ? ` • Gate ${gateIndex}/${gateTotal}` : '';
-    if (gateForStatus && state.gateChargeTarget > 0) {
-      const pct = Math.round((state.gateCharge / state.gateChargeTarget) * 100);
-      gateText += pct > 0 ? ` • Stabilizing ${pct}%` : ' • Clear defenders + brake';
+
+    if (rng() < 0.25) {
+      sector.entities.stations.push({
+        x: originX + randRange(rng, 140, WORLD.sectorSize - 140),
+        y: originY + randRange(rng, 140, WORLD.sectorSize - 140),
+        radius: randRange(rng, 40, 55)
+      });
     }
-    hudObjective.textContent = `Objective: ${state.objectiveText || '-'}${gateText}`;
+
+    if (rng() < 0.3) {
+      sector.entities.storms.push({
+        x: originX + randRange(rng, 180, WORLD.sectorSize - 180),
+        y: originY + randRange(rng, 180, WORLD.sectorSize - 180),
+        radius: randRange(rng, 120, 200),
+        intensity: randRange(rng, 0.3, 0.65)
+      });
+    }
+
+    if (rng() < 0.28 && !world.cacheClaims[sector.key]) {
+      sector.entities.caches.push({
+        x: originX + randRange(rng, 150, WORLD.sectorSize - 150),
+        y: originY + randRange(rng, 150, WORLD.sectorSize - 150),
+        radius: 18,
+        blueprint: pickRandomBlueprint(rng)
+      });
+    }
+
+    sector.threat = 1 + (sector.sx + sector.sy) * 0.12 + randRange(rng, 0, 0.5);
+    sector.generated = true;
   }
 
-  function completeChallenge(challenge) {
-    if (!challenge || challenge.completed) return;
-    challenge.completed = true;
-    progress.completedChallenges[challenge.id] = true;
-    addCredits(challenge.reward, 'Challenge complete');
-    setStatus(`Challenge complete: +${challenge.reward}c`, 2200);
-    queueSave();
-    updateObjectiveDisplay();
+  function pickRandomBlueprint(rng) {
+    const keys = Object.keys(BLUEPRINTS);
+    return keys[Math.floor(rng() * keys.length)];
   }
 
-  function evaluateCheckpointChallenges(checkpointIndex) {
-    state.challenges.forEach(ch => {
-      if (ch.completed || ch.failed) return;
-      if (ch.untilCheckpoint && checkpointIndex >= ch.untilCheckpoint) {
-        if (ch.type === 'kills' || ch.type === 'collect') {
-          if (ch.progress >= ch.target) completeChallenge(ch);
-          else ch.failed = true;
-        }
-        if (ch.type === 'noHullDamage') {
-          if (!state.hullDamaged) completeChallenge(ch);
-          else ch.failed = true;
-        }
-        if (ch.type === 'noBoost') {
-          if (!state.boostUsed) completeChallenge(ch);
-          else ch.failed = true;
-        }
-      }
-    });
-  }
-
-  function evaluateEndChallenges() {
-    state.challenges.forEach(ch => {
-      if (ch.completed || ch.failed) return;
-      if (ch.type === 'shieldAtEnd') {
-        if (state.player.shield >= ch.target) completeChallenge(ch);
-        else ch.failed = true;
-      }
-      if (ch.type === 'hullAtEnd') {
-        if (state.player.hp >= ch.target) completeChallenge(ch);
-        else ch.failed = true;
-      }
-    });
-  }
-
-  function addCredits(amount, reason) {
-    if (!progress) return;
-    progress.credits += amount;
-    updateUpgradeButtons();
-    updateHud();
-    if (reason) setStatus(`${reason}: +${amount}c`, 1600);
-    queueSave();
-  }
-
-  function setStatus(text, duration = 1500) {
-    state.message = text;
+  function noteStatus(message, duration = 3) {
+    if (!statusText) return;
+    statusText.textContent = message;
     state.statusTimer = duration;
-    if (statusText) statusText.textContent = text;
   }
 
-  function updateStatus(dt) {
-    if (state.statusTimer > 0) {
-      state.statusTimer -= dt;
-      if (state.statusTimer <= 0) {
-        state.message = '';
-        if (statusText) statusText.textContent = '';
-      }
-    }
+  function updateStatusTimer(dt) {
+    if (!statusText || state.statusTimer <= 0) return;
+    state.statusTimer -= dt;
+    if (state.statusTimer <= 0) statusText.textContent = '';
   }
 
-  function updateAuthNote() {
-    if (!authNote) return;
-    authNote.textContent = progressSource === 'firebase'
-      ? 'Sync: Online'
-      : 'Sign in to sync progress';
-  }
-
-  function getProgressScore() {
-    const chapter = progress?.chapter || 1;
-    const checkpoint = progress?.checkpoint || 0;
-    return chapter * 100 + checkpoint;
-  }
-
-  function formatProgressScore(score) {
-    if (!score) return '-';
-    const chapter = Math.floor(score / 100);
-    const checkpoint = score % 100;
-    return `C${chapter}•CP${checkpoint}`;
-  }
-
-  async function loadBestProgressScore() {
-    bestProgressScore = await getHighScore(GAME_ID);
-    updateHud();
-  }
-
-  async function submitProgressScore() {
-    const score = getProgressScore();
-    const saved = await submitHighScore(GAME_ID, score);
-    if (typeof saved === 'number') {
-      bestProgressScore = saved;
-      updateHud();
-    }
-  }
-
-  function resetRunToSegment() {
-    const chapter = currentChapter();
-    const segment = currentSegment();
-    if (!chapter || !segment) return;
-    state.rng = makeRng((chapter.seed || 1000) + state.segmentIndex * 97);
-    const routeSegment = state.route?.segments?.[state.segmentIndex];
-
-    state.running = false;
-    state.lastTime = 0;
-    state.chapterDistance = routeSegment?.startDistance || 0;
-    state.segmentDistance = 0;
-    state.segmentTimer = 0;
-    state.spawnTimer = 0;
-    state.debrisTimer = 0;
-    state.turretTimer = 0;
-    state.dataTimer = 0;
-    state.boostActive = false;
-    state.shake = 0;
-    state.stormPhase = 0;
-    state.stormLevel = segment.hazards?.storm || 0;
-    state.jumpFlash = 0;
-    state.hullDamaged = false;
-    state.boostUsed = false;
-    state.objectiveText = `${segment.name} — ${chapter.objective} Destroy the relay carrier and stabilize the gate.`;
-
-    state.segmentGateIndex = 0;
-    state.gates = routeSegment?.gates?.map(gate => ({
-      ...gate,
-      passed: false,
-      threatSpawned: false,
-      charge: 0,
-      locked: true
-    })) || [];
-    state.gateCharge = 0;
-    state.gateChargeTarget = getGateChargeTarget();
-    state.signal = 100;
-    state.phase = 'travel';
-    state.player.x = routeSegment?.startX || 0;
-    state.player.y = routeSegment?.startY || 0;
-    state.player.vx = 0;
-    state.player.vy = 0;
-    state.player.speed = 0;
-    if (routeSegment) {
-      state.player.angle = Math.atan2(routeSegment.dirY, routeSegment.dirX);
-    } else {
-      state.player.angle = -Math.PI / 2;
-    }
-    state.camera.x = state.player.x;
-    state.camera.y = state.player.y;
-    state.camera.vx = 0;
-    state.camera.vy = 0;
-    state.player.fireCooldown = 0;
-    state.player.hp = state.player.maxHp;
-    state.player.shield = state.player.maxShield;
-    state.player.boost = state.player.boostMax;
-    state.player.lastHit = 0;
-
-    state.enemies = [];
-    state.bullets = [];
-    state.enemyBullets = [];
-    state.debris = [];
-    state.pickups = [];
-    state.particles = [];
-
-    initBackground();
-  }
-
-  function setupChapter(chapterIndex, checkpointIndex) {
-    const chapter = JOURNEY[chapterIndex];
-    if (!chapter) return;
-    chapter.totalLength = chapter.totalLength || chapter.segments.reduce((sum, seg) => sum + seg.length, 0);
-
-    state.completed = false;
-    state.chapterIndex = chapterIndex;
-    state.checkpointIndex = clamp(checkpointIndex, 0, chapter.segments.length - 1);
-    state.segmentIndex = state.checkpointIndex;
-    state.objectiveText = chapter.objective;
-    state.rng = makeRng((chapter.seed || 1000) + state.segmentIndex * 97);
-    state.route = buildRouteForChapter(chapter);
-
-    initChallenges();
-    resetRunToSegment();
-    updateObjectiveDisplay();
-    updateHud();
-  }
-
-  function showBriefing({ kicker, title, body, primary, optional, buttonText, onLaunch }) {
-    if (!briefing) return;
-    if (briefKicker) briefKicker.textContent = kicker || '';
-    if (briefTitle) briefTitle.textContent = title || '';
-    if (briefBody) briefBody.textContent = body || '';
-    if (briefPrimary) briefPrimary.textContent = primary || '';
-    if (briefOptional) {
-      briefOptional.innerHTML = '';
-      (optional || []).forEach(text => {
-        const li = document.createElement('li');
-        li.textContent = text;
-        briefOptional.appendChild(li);
-      });
-    }
-    if (briefLaunch) {
-      briefLaunch.textContent = buttonText || 'Begin';
-      briefLaunch.onclick = () => {
-        hideBriefing();
-        if (onLaunch) onLaunch();
-      };
-    }
-    briefing.classList.add('active');
-  }
-
-  function hideBriefing() {
-    briefing?.classList.remove('active');
-  }
-
-  function showChapterBriefing(extraTitle) {
-    const chapter = currentChapter();
-    if (!chapter) return;
-    const optional = (chapter.optional || [])
-      .filter(ch => !progress.completedChallenges[ch.id])
-      .map(ch => ch.text);
-    optional.push('Relay signal is draining — destroy the relay carrier to unlock each gate.');
-    optional.push('Clear defenders, then brake inside the ring to stabilize and restore signal.');
-    showBriefing({
-      kicker: `Chapter ${state.chapterIndex + 1} of ${JOURNEY.length}`,
-      title: extraTitle ? `${chapter.title} - ${extraTitle}` : chapter.title,
-      body: `${chapter.brief} Your nav core is failing — only stabilized gates will keep the Driftline alive.`,
-      primary: chapter.objective,
-      optional: optional.length ? optional : ['No optional challenges remaining.'],
-      buttonText: state.completed ? 'Restart Journey' : 'Begin Chapter',
-      onLaunch: () => {
-        if (state.completed) {
-          resetJourney();
-          return;
-        }
-        start();
-      }
+  function applyBlueprintEffects(stats) {
+    let result = { ...stats };
+    let droneBonus = 0;
+    let unlockPlasma = false;
+    player.blueprints.forEach((id) => {
+      const blueprint = BLUEPRINTS[id];
+      if (!blueprint || !blueprint.effect) return;
+      const effect = blueprint.effect;
+      if (effect.shieldMult) result.maxShield *= effect.shieldMult;
+      if (effect.speedMult) result.maxSpeed *= effect.speedMult;
+      if (effect.thrustMult) result.thrust *= effect.thrustMult;
+      if (effect.droneBonus) droneBonus += effect.droneBonus;
+      if (effect.unlockPlasma) unlockPlasma = true;
     });
+    result.droneBonus = droneBonus;
+    result.unlockPlasma = unlockPlasma;
+    return result;
   }
 
-  function showCheckpointBriefing(nextSegment) {
-    const chapter = currentChapter();
-    const optional = state.challenges.filter(ch => !ch.completed && !ch.failed).map(ch => ch.text);
-    showBriefing({
-      kicker: `Checkpoint ${state.checkpointIndex} secured`,
-      title: nextSegment ? nextSegment.name : chapter.title,
-      body: 'Resupply complete. The next gate is locked by a relay carrier — destroy it, clear defenders, then stabilize.',
-      primary: `Reach Checkpoint ${state.checkpointIndex + 1} / ${chapter.segments.length}. Keep signal above zero.`,
-      optional: optional.length ? optional : ['No optional challenges remaining.'],
-      buttonText: 'Continue',
-      onLaunch: () => start()
-    });
-  }
-
-  function showDeathBriefing() {
-    showBriefing({
-      kicker: 'Ship disabled',
-      title: 'Recovery drones inbound',
-      body: 'You were pulled back to the last checkpoint. Destroy the relay carrier to unlock the gate, then stabilize.',
-      primary: `Restart from Checkpoint ${state.checkpointIndex} of ${currentChapter().segments.length}. Keep the signal alive.`,
-      optional: ['Repairs and shield recharged.'],
-      buttonText: 'Relaunch',
-      onLaunch: () => start()
-    });
-  }
-
-  function showJourneyComplete() {
-    state.completed = true;
-    showBriefing({
-      kicker: 'Journey complete',
-      title: 'Leviathan Gate secured',
-      body: 'The Driftline is stable again. You can restart the journey or keep refining your upgrades.',
-      primary: 'Restart the journey to run the shared route again.',
-      optional: ['All progress is saved per user.'],
-      buttonText: 'Restart Journey',
-      onLaunch: () => resetJourney()
-    });
-  }
-
-  function resetJourney() {
-    const savedUpgrades = progress?.upgrades ? { ...progress.upgrades } : { ...DEFAULT_PROGRESS.upgrades };
-    const savedCredits = progress?.credits || 0;
-    progress = mergeProgress(DEFAULT_PROGRESS);
-    progressSource = progressSource === 'firebase' ? 'firebase' : 'local';
-    progress.chapter = 1;
-    progress.checkpoint = 0;
-    progress.credits = savedCredits;
-    progress.upgrades = { ...savedUpgrades };
-    progress.completedChallenges = {};
-    queueSave();
-    applyUpgrades();
-    setupChapter(0, 0);
-    showChapterBriefing();
-    updateUpgradeButtons();
-    updateHud();
-  }
-
-  function start() {
-    if (!state.ready || state.running) return;
-    state.running = true;
-    state.lastTime = performance.now();
-    requestAnimationFrame(loop);
-  }
-
-  function pause() {
-    state.running = false;
-    render();
-  }
-
-  function restartFromCheckpoint() {
-    resetRunToSegment();
-    setStatus('Restarted from checkpoint.', 1600);
-    render();
-  }
-
-  function firePlayer() {
-    const player = state.player;
-    if (player.fireCooldown > 0) return;
-    const spread = (progress.upgrades.blaster || 0) >= 4 ? 0.05 : 0.02;
-    const shotCount = (progress.upgrades.blaster || 0) >= 5 ? 2 : 1;
-    for (let i = 0; i < shotCount; i++) {
-      const offset = (i - (shotCount - 1) / 2) * spread;
-      const heading = player.angle + offset;
-      const lateralSpeed = 220 + (progress.upgrades.blaster || 0) * 10;
-      state.bullets.push({
-        x: player.x,
-        y: player.y,
-        vx: Math.cos(heading) * lateralSpeed + player.vx * 0.35,
-        vy: Math.sin(heading) * lateralSpeed + player.vy * 0.35,
-        life: 1400,
-        damage: player.damage
-      });
-    }
-    player.fireCooldown = player.fireDelay;
-  }
-
-  function spawnEnemy(type, opts = {}) {
-    const def = ENEMY_TYPES[type] || ENEMY_TYPES.scout;
-    const diff = getDifficulty();
-    const hpScale = 0.82 + diff * 0.22;
-    const speedScale = 0.9 + diff * 0.08;
-    const fireScale = clamp(1.08 - diff * 0.04, 0.7, 1.05);
-    const targetGate = state.gates[state.segmentGateIndex] || { x: state.player.x, y: state.player.y };
-    const angleToGate = Math.atan2(targetGate.y - state.player.y, targetGate.x - state.player.x);
-    const originX = opts.x ?? state.player.x;
-    const originY = opts.y ?? state.player.y;
-    let spawnAngle = angleToGate + randRange(-1.3, 1.3);
-    if (typeof opts.angle === 'number') {
-      spawnAngle = opts.angle;
-    } else if (typeof opts.angleBias === 'number') {
-      const spread = opts.angleSpread ?? 0.8;
-      spawnAngle = opts.angleBias + randRange(-spread, spread);
-    }
-    const radius = randRange(opts.radiusMin ?? 420, opts.radiusMax ?? 720);
-    const enemy = {
-      type,
-      x: originX + Math.cos(spawnAngle) * radius,
-      y: originY + Math.sin(spawnAngle) * radius,
-      hp: def.hp * hpScale,
-      maxHp: def.hp * hpScale,
-      size: def.size,
-      color: def.color,
-      speed: def.speed * speedScale,
-      fireRate: def.fireRate * fireScale,
-      damage: def.damage * (0.9 + diff * 0.2),
-      static: !!def.static,
-      vx: randRange(-40, 40),
-      vy: randRange(-30, 30),
-      turn: def.static ? 0 : 0.7 + diff * 0.3,
-      fireCooldown: randRange(240, def.fireRate * fireScale),
-      timer: randRange(0, 1000),
-      pattern: state.rng() < 0.5 ? -1 : 1,
-      hitTimer: 0,
-      guardGate: !!opts.guardGate,
-      anchorX: typeof opts.anchorX === 'number' ? opts.anchorX : null,
-      anchorY: typeof opts.anchorY === 'number' ? opts.anchorY : null,
-      phase: 1,
-      shiftTimer: 0
+  function computeStats() {
+    const hull = HULL_SIZES[player.hullSize] || HULL_SIZES.small;
+    const upgrades = player.upgrades;
+    const maxHp = hull.baseHp * (1 + upgrades.hull * 0.15);
+    const maxShield = hull.baseShield * (1 + upgrades.shield * 0.15);
+    const thrust = BASE_STATS.thrust * (1 + upgrades.engine * 0.08) / hull.mass;
+    const reverseThrust = BASE_STATS.reverseThrust * (1 + upgrades.engine * 0.06) / hull.mass;
+    const maxSpeed = BASE_STATS.maxSpeed * (1 + upgrades.engine * 0.05 + hull.speedBonus);
+    const turnRate = BASE_STATS.turnRate * (1 + upgrades.engine * 0.04);
+    let fireDelay = BASE_STATS.fireDelay * (1 - upgrades.blaster * 0.06);
+    fireDelay = Math.max(80, fireDelay);
+    const damage = BASE_STATS.damage * (1 + upgrades.blaster * 0.12);
+    const bulletSpeed = BASE_STATS.bulletSpeed * (1 + upgrades.blaster * 0.04);
+    const boostMax = BASE_STATS.boostMax * (1 + upgrades.booster * 0.2);
+    const boostRegen = BASE_STATS.boostRegen * (1 + upgrades.booster * 0.12);
+    const energyMax = BASE_STATS.energyMax * (1 + upgrades.capacitor * 0.18);
+    const energyRegen = BASE_STATS.energyRegen * (1 + upgrades.capacitor * 0.15);
+    const shieldRegen = 24 + upgrades.shield * 4;
+    const shieldDelay = 1.2 - upgrades.shield * 0.05;
+    const baseStats = {
+      maxHp,
+      maxShield,
+      thrust,
+      reverseThrust,
+      maxSpeed,
+      turnRate,
+      fireDelay,
+      damage,
+      bulletSpeed,
+      boostMax,
+      boostRegen,
+      energyMax,
+      energyRegen,
+      shieldRegen,
+      shieldDelay,
+      size: hull.size
     };
-    state.enemies.push(enemy);
-    return enemy;
+    const boosted = applyBlueprintEffects(baseStats);
+    player.unlockedPlasma = boosted.unlockPlasma;
+    return boosted;
   }
 
-  function spawnEnemyWave(segment) {
-    if (!segment) return;
-    if (state.enemies.length > (state.phase === 'gate' ? 16 : 10)) return;
-    const diff = getDifficulty();
-    if (state.phase !== 'gate') {
-      const type = state.rng() < 0.7 ? 'scout' : pickWeighted(segment.mix);
-      spawnEnemy(type);
-      return;
-    }
-    const formationRoll = state.rng();
-    if (formationRoll < 0.3) {
-      const type = pickWeighted(segment.mix);
-      const spacing = 90;
-      [-1, 0, 1].forEach(offset => {
-        const enemy = spawnEnemy(type);
-        if (enemy) {
-          enemy.x += offset * spacing;
-          enemy.y += Math.abs(offset) * 40;
-        }
-      });
-      return;
-    }
-    const extra = diff > 1.4 && state.rng() < 0.4 ? 1 : 0;
-    const count = 1 + (state.rng() < 0.5 ? 1 : 0) + extra;
-    for (let i = 0; i < count; i++) {
-      const type = pickWeighted(segment.mix);
-      spawnEnemy(type);
+  let cachedStats = computeStats();
+
+  function refreshStats({ keepRatios = true } = {}) {
+    const prev = cachedStats;
+    cachedStats = computeStats();
+    if (keepRatios) {
+      const hpRatio = prev.maxHp > 0 ? player.hp / prev.maxHp : 1;
+      const shieldRatio = prev.maxShield > 0 ? player.shield / prev.maxShield : 1;
+      const boostRatio = prev.boostMax > 0 ? player.boost / prev.boostMax : 1;
+      const energyRatio = prev.energyMax > 0 ? player.energy / prev.energyMax : 1;
+      player.hp = clamp(cachedStats.maxHp * hpRatio, 0, cachedStats.maxHp);
+      player.shield = clamp(cachedStats.maxShield * shieldRatio, 0, cachedStats.maxShield);
+      player.boost = clamp(cachedStats.boostMax * boostRatio, 0, cachedStats.boostMax);
+      player.energy = clamp(cachedStats.energyMax * energyRatio, 0, cachedStats.energyMax);
+    } else {
+      player.hp = cachedStats.maxHp;
+      player.shield = cachedStats.maxShield;
+      player.boost = cachedStats.boostMax;
+      player.energy = cachedStats.energyMax;
     }
   }
 
-  function spawnGateAmbush(gate) {
-    const segment = currentSegment();
-    if (!segment) return;
-    state.phase = 'gate';
-    gate.locked = true;
-    const diff = getDifficulty();
-    const count = Math.min(6, 1 + Math.floor(diff * 0.8) + (state.rng() < 0.35 ? 1 : 0));
-    const mix = { ...(segment.mix || { scout: 1 }) };
-    mix.raider = (mix.raider || 0) + 0.2;
-    mix.lancer = (mix.lancer || 0) + 0.15;
-    for (let i = 0; i < count; i++) {
-      const type = pickWeighted(mix);
-      spawnEnemy(type, {
-        x: gate.x,
-        y: gate.y,
-        radiusMin: 260,
-        radiusMax: 460,
-        guardGate: true,
-        anchorX: gate.x,
-        anchorY: gate.y
-      });
-    }
-    if ((segment.hazards?.turret || diff > 1.8) && state.rng() < 0.35) {
-      spawnEnemy('turret', {
-        x: gate.x,
-        y: gate.y,
-        radiusMin: 140,
-        radiusMax: 240,
-        guardGate: true,
-        anchorX: gate.x,
-        anchorY: gate.y
-      });
-    }
-    const carrier = spawnEnemy('raider', {
-      x: gate.x,
-      y: gate.y,
-      radiusMin: 220,
-      radiusMax: 360,
-      guardGate: true,
-      anchorX: gate.x,
-      anchorY: gate.y
-    });
-    if (carrier) {
-      carrier.role = 'carrier';
-      carrier.unlockGateIndex = state.segmentGateIndex;
-      carrier.color = '#ffd166';
-      carrier.size += 6;
-      carrier.hp *= 1.1;
-      carrier.maxHp = carrier.hp;
-      carrier.phase = 1;
-      carrier.phaseThresholds = [0.6, 0.3];
-    }
-    setStatus('Gate locked: destroy the relay carrier', 1800);
+  function computePlayerLevel() {
+    const upgradeSum = Object.values(player.upgrades).reduce((sum, value) => sum + value, 0);
+    const blueprintCount = player.blueprints.size;
+    const sectorCount = world.discovered.size;
+    return Math.max(1, Math.floor(1 + upgradeSum * 0.7 + blueprintCount * 0.8 + sectorCount * 0.15));
   }
 
-  function triggerCarrierPhaseShift(enemy) {
-    enemy.phase = Math.min(3, (enemy.phase || 1) + 1);
-    enemy.shiftTimer = 600;
-    enemy.speed *= 1.1;
-    enemy.turn *= 1.12;
-    enemy.fireRate = Math.max(700, enemy.fireRate * 0.8);
-    enemy.color = enemy.phase === 2 ? '#ffe08a' : '#fff1b5';
-    spawnExplosion(enemy.x, enemy.y, '255,209,102');
-
-    const escorts = enemy.phase === 2 ? 2 : 3;
-    for (let i = 0; i < escorts; i++) {
-      spawnEnemy(state.rng() < 0.6 ? 'scout' : 'raider', {
-        x: enemy.x,
-        y: enemy.y,
-        radiusMin: 140,
-        radiusMax: 220,
-        guardGate: true,
-        anchorX: enemy.anchorX ?? enemy.x,
-        anchorY: enemy.anchorY ?? enemy.y
-      });
+  function updateHullSizeFromLevel() {
+    const level = player.level;
+    let newSize = 'small';
+    if (level >= 8) newSize = 'large';
+    else if (level >= 4) newSize = 'medium';
+    if (newSize !== player.hullSize) {
+      player.hullSize = newSize;
+      refreshStats({ keepRatios: true });
+      noteStatus(`Hull expanded to ${HULL_SIZES[newSize].label}.`);
     }
   }
 
-  function spawnDebris() {
-    state.debris.push({
-      x: state.player.x + randRange(-VIEW.boundsX, VIEW.boundsX),
-      y: state.player.y + randRange(-VIEW.boundsY, VIEW.boundsY),
-      vx: randRange(-20, 20),
-      vy: randRange(-20, 20),
-      r: randRange(12, 26)
+  function resetChapterState() {
+    missionTracker.optional.clear();
+    missionTracker.noHullDamage = true;
+    missionTracker.noBoost = true;
+    missionTracker.dataShards = 0;
+    missionTracker.kills = {};
+    const chapter = CHAPTERS[player.chapterIndex];
+    if (!chapter) return;
+    chapter.optional.forEach((opt) => {
+      missionTracker.optional.set(opt.id, { complete: false, progress: 0 });
     });
   }
 
-  function spawnGate() {
-    const segment = state.route?.segments?.[state.segmentIndex];
-    if (segment) {
-      state.gates = segment.gates.map(gate => ({
-        ...gate,
-        passed: false,
-        threatSpawned: false,
-        charge: 0,
-        locked: true
-      }));
-      state.gateCharge = 0;
-      state.gateChargeTarget = getGateChargeTarget();
-    }
+  function applyCheckpoint(snapshot) {
+    if (!snapshot) return;
+    player.x = snapshot.x;
+    player.y = snapshot.y;
+    player.vx = 0;
+    player.vy = 0;
+    player.hp = snapshot.hp;
+    player.shield = snapshot.shield;
+    player.boost = snapshot.boost;
+    player.energy = snapshot.energy;
+    player.distanceThisChapter = snapshot.distanceThisChapter;
+    player.checkpointIndex = snapshot.checkpointIndex;
+    noteStatus('Returned to last checkpoint.');
   }
 
-  function spawnPickup(type, x, y) {
-    state.pickups.push({
+  function setCheckpoint() {
+    state.checkpoint = {
+      x: player.x,
+      y: player.y,
+      hp: player.hp,
+      shield: player.shield,
+      boost: player.boost,
+      energy: player.energy,
+      distanceThisChapter: player.distanceThisChapter,
+      checkpointIndex: player.checkpointIndex
+    };
+  }
+
+  function initPlayerPosition() {
+    player.x = 0;
+    player.y = 0;
+    player.vx = 0;
+    player.vy = 0;
+    player.angle = -Math.PI / 2;
+  }
+
+  function resetRun({ full = false } = {}) {
+    entities.enemies.length = 0;
+    entities.bullets.length = 0;
+    entities.enemyBullets.length = 0;
+    entities.drones.length = 0;
+    entities.loot.length = 0;
+    entities.effects.length = 0;
+    if (full) {
+      player.credits = 0;
+      player.upgrades = {
+        engine: 0,
+        blaster: 0,
+        capacitor: 0,
+        shield: 0,
+        hull: 0,
+        booster: 0
+      };
+      player.blueprints = new Set();
+      player.skins = [];
+      player.toys = [];
+      player.hullSize = 'small';
+      player.chapterIndex = 0;
+      player.distanceThisChapter = 0;
+      player.distanceTotal = 0;
+      player.checkpointIndex = 0;
+      world.discovered.clear();
+      world.cacheClaims = {};
+      world.bossesDefeated = {};
+      world.sectors.clear();
+    }
+    initPlayerPosition();
+    refreshStats({ keepRatios: false });
+    spawnDrones();
+    resetChapterState();
+    setCheckpoint();
+    state.awaitingBrief = true;
+    showBriefing();
+    noteStatus(full ? 'Fresh run initialized.' : 'Run reset.');
+  }
+
+  function awardCredits(amount, reason) {
+    player.credits += amount;
+    if (reason) noteStatus(`${reason} +${amount} credits.`);
+  }
+
+  function updateOptionalProgress(type, payload) {
+    const chapter = CHAPTERS[player.chapterIndex];
+    if (!chapter) return;
+    chapter.optional.forEach((opt) => {
+      if (opt.type !== type) return;
+      const tracker = missionTracker.optional.get(opt.id);
+      if (!tracker || tracker.complete) return;
+      if (type === 'kills' && payload.enemy !== opt.enemy) return;
+      tracker.progress += payload.amount || 1;
+      if (tracker.progress >= opt.target) {
+        tracker.complete = true;
+        awardCredits(opt.reward, `Optional complete: ${opt.text}`);
+      }
+    });
+  }
+
+  function finalizeOptionalChallenges() {
+    const chapter = CHAPTERS[player.chapterIndex];
+    if (!chapter) return;
+    chapter.optional.forEach((opt) => {
+      const tracker = missionTracker.optional.get(opt.id);
+      if (!tracker || tracker.complete) return;
+      if (opt.type === 'noHullDamage' && missionTracker.noHullDamage) {
+        tracker.complete = true;
+        awardCredits(opt.reward, `Optional complete: ${opt.text}`);
+      }
+      if (opt.type === 'noBoost' && missionTracker.noBoost) {
+        tracker.complete = true;
+        awardCredits(opt.reward, `Optional complete: ${opt.text}`);
+      }
+      if (opt.type === 'shieldAtEnd' && player.shield >= opt.target) {
+        tracker.complete = true;
+        awardCredits(opt.reward, `Optional complete: ${opt.text}`);
+      }
+    });
+  }
+
+  function updateDifficulty() {
+    player.level = computePlayerLevel();
+    updateHullSizeFromLevel();
+  }
+
+  function getSectorAtPlayer() {
+    const { sx, sy } = sectorCoords(player.x, player.y);
+    const sector = seededSector(sx, sy);
+    generateSector(sector);
+    if (!world.discovered.has(sector.key)) {
+      world.discovered.add(sector.key);
+      awardCredits(40, 'Sector discovered');
+    }
+    return sector;
+  }
+
+  function spawnEnemy(type, x, y, scale = 1) {
+    const def = ENEMY_TYPES[type];
+    if (!def) return;
+    const levelScale = 1 + (player.level - 1) * 0.08;
+    entities.enemies.push({
       type,
       x,
       y,
-      r: type === 'data' ? 10 : 12
+      vx: 0,
+      vy: 0,
+      angle: 0,
+      hp: def.hp * scale * levelScale,
+      maxHp: def.hp * scale * levelScale,
+      fireCooldown: randRange(Math.random, 0, def.fireRate),
+      state: 'patrol',
+      size: def.size * scale,
+      def
     });
   }
 
-  function spawnExplosion(x, y, color) {
-    for (let i = 0; i < 12; i++) {
-      state.particles.push({
-        x,
-        y,
-        vx: randRange(-60, 60, Math.random),
-        vy: randRange(-60, 60, Math.random),
-        life: randRange(400, 900, Math.random),
-        size: randRange(2, 5, Math.random),
-        color: color || '255,140,90'
+  function spawnBoss(x, y) {
+    entities.enemies.push({
+      type: 'boss',
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      angle: 0,
+      hp: 520 + player.level * 35,
+      maxHp: 520 + player.level * 35,
+      fireCooldown: 900,
+      state: 'chase',
+      size: 42,
+      phase: 1,
+      isBoss: true
+    });
+    noteStatus('Guardian inbound.');
+  }
+
+  function spawnLoot(x, y, type, value) {
+    entities.loot.push({
+      x,
+      y,
+      type,
+      value,
+      vx: randRange(Math.random, -25, 25),
+      vy: randRange(Math.random, -25, 25),
+      life: 18
+    });
+  }
+
+  function spawnEffect(x, y, color) {
+    entities.effects.push({ x, y, radius: 6, life: 0.6, color });
+  }
+
+  function spawnDrones() {
+    entities.drones.length = 0;
+    const base = 1;
+    const droneCount = base + Math.floor(player.upgrades.capacitor / 2) + (cachedStats.droneBonus || 0);
+    for (let i = 0; i < droneCount; i += 1) {
+      entities.drones.push({
+        angle: (Math.PI * 2 * i) / droneCount,
+        radius: 34 + i * 6,
+        type: i % 2 === 0 ? 'attack' : 'repair',
+        cooldown: randRange(Math.random, 0.2, 0.6)
       });
     }
   }
 
-  function spawnShieldShatter(gate) {
-    const count = 18;
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2 + randRange(-0.2, 0.2);
-      const speed = randRange(120, 220);
-      const length = randRange(8, 18);
-      state.particles.push({
-        x: gate.x + Math.cos(angle) * gate.radius * 0.7,
-        y: gate.y + Math.sin(angle) * gate.radius * 0.7,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: randRange(480, 820),
-        size: 1.6,
-        color: '180,255,210',
-        type: 'shard',
-        angle,
-        length,
-        spin: randRange(-0.08, 0.08)
-      });
+  function applyDamage(target, amount) {
+    if (target === player) {
+      if (player.shield > 0) {
+        const absorbed = Math.min(player.shield, amount * 0.75);
+        player.shield -= absorbed;
+        amount -= absorbed;
+      }
+      if (amount > 0) {
+        player.hp -= amount;
+        missionTracker.noHullDamage = false;
+      }
+      player.lastHit = state.time;
+      if (player.hp <= 0) {
+        player.hp = 0;
+        handlePlayerDeath();
+      }
+      return;
+    }
+    target.hp -= amount;
+    if (target.hp <= 0) {
+      target.hp = 0;
     }
   }
 
-  function emitThruster(reverse = false) {
-    const player = state.player;
-    const forwardAngle = player.angle;
-    const angle = reverse ? forwardAngle : forwardAngle + Math.PI;
-    const spread = 0.35;
-    const strength = reverse ? 50 : 80;
-    for (let i = 0; i < 2; i++) {
-      const jitter = randRange(-spread, spread, Math.random);
-      const dir = angle + jitter;
-      const offset = reverse ? 18 : -18;
-      const baseX = player.x + Math.cos(forwardAngle) * offset;
-      const baseY = player.y + Math.sin(forwardAngle) * offset;
-      state.particles.push({
-        x: baseX + Math.cos(dir) * 4 + randRange(-3, 3, Math.random),
-        y: baseY + Math.sin(dir) * 4 + randRange(-3, 3, Math.random),
-        vx: Math.cos(dir) * strength + randRange(-20, 20, Math.random),
-        vy: Math.sin(dir) * strength + randRange(-20, 20, Math.random),
-        life: randRange(180, 320, Math.random),
-        size: randRange(2, 3.5, Math.random),
-        color: reverse ? '120,200,255' : '125,252,154'
-      });
+  function handlePlayerDeath() {
+    state.running = false;
+    noteStatus('Hull breach. Press Start to relaunch.');
+    submitHighScore(GAME_ID, Math.floor(player.distanceTotal));
+  }
+
+  function handleEnemyDeath(enemy) {
+    awardCredits(Math.round(25 + enemy.maxHp * 0.4));
+    updateOptionalProgress('kills', { enemy: enemy.type, amount: 1 });
+    spawnEffect(enemy.x, enemy.y, enemy.isBoss ? '#ffb347' : '#7dfc9a');
+    if (Math.random() < 0.2) spawnLoot(enemy.x, enemy.y, 'shield', 18);
+    if (Math.random() < 0.25) spawnLoot(enemy.x, enemy.y, 'boost', 16);
+    if (Math.random() < 0.18) spawnLoot(enemy.x, enemy.y, 'data', 1);
+    if (enemy.isBoss) {
+      world.bossesDefeated[player.chapterIndex] = true;
+      awardCredits(600, 'Boss defeated');
+      maybeAdvanceChapter(true);
     }
   }
 
-  function applyDamage(amount) {
-    const player = state.player;
-    player.lastHit = performance.now();
-    if (player.shield > 0) {
-      const absorbed = Math.min(player.shield, amount);
-      player.shield -= absorbed;
-      amount -= absorbed;
-    }
-    if (amount > 0) {
-      player.hp -= amount;
-      state.hullDamaged = true;
-    }
-    state.shake = Math.min(1, state.shake + 0.35);
-    state.hitFlash = Math.min(1, state.hitFlash + 0.7);
-    for (let i = 0; i < 6; i++) {
-      state.particles.push({
-        x: player.x + randRange(-12, 12, Math.random),
-        y: player.y + randRange(-12, 12, Math.random),
-        vx: randRange(-80, 80, Math.random),
-        vy: randRange(-80, 80, Math.random),
-        life: randRange(260, 520, Math.random),
-        size: randRange(2, 4, Math.random),
-        color: '255,90,90'
-      });
-    }
+  function firePlayerWeapon() {
+    const now = state.time;
+    if (now - player.lastShot < cachedStats.fireDelay / 1000) return;
+    player.lastShot = now;
+    const dir = { x: Math.cos(player.angle), y: Math.sin(player.angle) };
+    entities.bullets.push({
+      x: player.x + dir.x * 16,
+      y: player.y + dir.y * 16,
+      vx: player.vx + dir.x * cachedStats.bulletSpeed,
+      vy: player.vy + dir.y * cachedStats.bulletSpeed,
+      life: 1.2,
+      damage: cachedStats.damage,
+      color: '#7dfc9a'
+    });
   }
 
-  function updateBackground(dtSec) {
-    const radius = 2400;
-    state.background.stars.forEach(star => {
-      if (Math.abs(star.x - state.camera.x) > radius || Math.abs(star.y - state.camera.y) > radius) {
-        star.x = state.camera.x + randRange(-radius, radius, Math.random);
-        star.y = state.camera.y + randRange(-radius, radius, Math.random);
+  function firePlasmaWeapon() {
+    if (!player.unlockedPlasma) return;
+    const now = state.time;
+    const cooldown = 0.9;
+    if (now - player.lastAltShot < cooldown) return;
+    if (player.energy < 30) {
+      noteStatus('Not enough energy for plasma.');
+      return;
+    }
+    player.energy -= 30;
+    player.lastAltShot = now;
+    const dir = { x: Math.cos(player.angle), y: Math.sin(player.angle) };
+    entities.bullets.push({
+      x: player.x + dir.x * 18,
+      y: player.y + dir.y * 18,
+      vx: player.vx + dir.x * (cachedStats.bulletSpeed * 0.8),
+      vy: player.vy + dir.y * (cachedStats.bulletSpeed * 0.8),
+      life: 1.6,
+      damage: cachedStats.damage * 2.4,
+      color: '#ffb347',
+      splash: 38
+    });
+    noteStatus('Plasma discharge.');
+  }
+
+  function fireEMPBlast() {
+    const now = state.time;
+    if (now - player.lastAltShot < 1.2) return;
+    if (player.energy < 45) {
+      noteStatus('Not enough energy for EMP.');
+      return;
+    }
+    player.energy -= 45;
+    player.lastAltShot = now;
+    entities.effects.push({ x: player.x, y: player.y, radius: 20, life: 0.4, color: '#6df0ff', emp: true });
+    entities.enemies.forEach((enemy) => {
+      if (dist(player.x, player.y, enemy.x, enemy.y) < 150) {
+        enemy.stunned = 1.2;
       }
     });
-    state.background.nebulae.forEach(nebula => {
-      if (Math.abs(nebula.x - state.camera.x) > radius * 0.8 || Math.abs(nebula.y - state.camera.y) > radius * 0.8) {
-        nebula.x = state.camera.x + randRange(-radius * 0.6, radius * 0.6, Math.random);
-        nebula.y = state.camera.y + randRange(-radius * 0.6, radius * 0.6, Math.random);
-      }
-      nebula.x += Math.sin(performance.now() / 12000 + nebula.phase) * dtSec * 1.2;
-      nebula.y += Math.cos(performance.now() / 15000 + nebula.phase) * dtSec * 1.1;
-    });
+    noteStatus('EMP burst engaged.');
   }
 
-  function update(dt) {
-    const timeScale = state.slowMoTimer > 0 ? 0.45 : 1;
-    state.slowMoTimer = Math.max(0, state.slowMoTimer - dt);
-    const scaledDt = dt * timeScale;
-    const dtSec = scaledDt / 1000;
-    const player = state.player;
-    const segment = currentSegment();
-    const routeSegment = state.route?.segments?.[state.segmentIndex];
+  function updatePlayer(dt) {
+    const turningLeft = input.keys['KeyA'] || input.keys['ArrowLeft'];
+    const turningRight = input.keys['KeyD'] || input.keys['ArrowRight'];
+    const thrusting = input.keys['KeyW'] || input.keys['ArrowUp'];
+    const reversing = input.keys['KeyS'] || input.keys['ArrowDown'];
+    const boosting = input.keys['ShiftLeft'] || input.keys['ShiftRight'];
 
-    updateStatus(scaledDt);
-    state.shake = Math.max(0, state.shake - dtSec * 2);
-    state.hitFlash = Math.max(0, state.hitFlash - dtSec * 2.2);
-    state.jumpFlash = Math.max(0, state.jumpFlash - dtSec * 1.6);
+    if (turningLeft) player.angle -= cachedStats.turnRate * (dt * 60);
+    if (turningRight) player.angle += cachedStats.turnRate * (dt * 60);
 
-    const rotateLeft = input.keys.KeyA || input.keys.ArrowLeft;
-    const rotateRight = input.keys.KeyD || input.keys.ArrowRight;
-    const forward = input.keys.KeyW || input.keys.ArrowUp;
-    const reverse = input.keys.KeyS || input.keys.ArrowDown;
-    const turnScale = state.phase === 'gate' ? 1.2 : 1;
-    if (rotateLeft) player.angle -= player.turnRate * dt * turnScale;
-    if (rotateRight) player.angle += player.turnRate * dt * turnScale;
-    if (player.angle > Math.PI) player.angle -= Math.PI * 2;
-    if (player.angle < -Math.PI) player.angle += Math.PI * 2;
+    const dir = { x: Math.cos(player.angle), y: Math.sin(player.angle) };
+    if (thrusting) {
+      player.vx += dir.x * cachedStats.thrust * dt;
+      player.vy += dir.y * cachedStats.thrust * dt;
+    }
+    if (reversing) {
+      player.vx -= dir.x * cachedStats.reverseThrust * dt;
+      player.vy -= dir.y * cachedStats.reverseThrust * dt;
+    }
 
-    const boosting = input.keys.ShiftLeft || input.keys.ShiftRight;
-    state.boostActive = boosting && player.boost > 0;
-    if (state.boostActive) {
-      player.boost = Math.max(0, player.boost - 36 * dtSec);
-      state.boostUsed = true;
+    if (boosting && player.boost > 0) {
+      player.vx += dir.x * cachedStats.thrust * 1.8 * dt;
+      player.vy += dir.y * cachedStats.thrust * 1.8 * dt;
+      player.boost = clamp(player.boost - 48 * dt, 0, cachedStats.boostMax);
+      missionTracker.noBoost = false;
+      spawnEffect(player.x - dir.x * 18, player.y - dir.y * 18, '#7dfc9a');
     } else {
-      player.boost = Math.min(player.boostMax, player.boost + player.boostRegen * dtSec);
-    }
-
-    const thrusting = forward || reverse;
-    const forwardX = Math.cos(player.angle);
-    const forwardY = Math.sin(player.angle);
-    const boostScale = state.boostActive ? 1.25 : 1;
-    const maxSpeed = player.maxSpeed + (state.boostActive ? 120 : 0);
-
-    if (forward) {
-      const accelScale = state.phase === 'gate' ? 0.92 : 1;
-      player.vx += forwardX * player.thrust * boostScale * accelScale * dtSec;
-      player.vy += forwardY * player.thrust * boostScale * accelScale * dtSec;
-      if (Math.random() < 0.6) emitThruster(false);
-    }
-    if (reverse) {
-      player.vx -= forwardX * player.reverseThrust * dtSec;
-      player.vy -= forwardY * player.reverseThrust * dtSec;
-      if (Math.random() < 0.5) emitThruster(true);
-    }
-
-    const drag = Math.pow(state.phase === 'gate' ? 0.986 : player.drag, dtSec * 60);
-    player.vx *= drag;
-    player.vy *= drag;
-
-    state.stormLevel = segment?.hazards?.storm || 0;
-    if (state.stormLevel > 0) {
-      state.stormPhase += dtSec * (0.6 + state.stormLevel);
-      player.vx += Math.sin(state.stormPhase * 1.3) * state.stormLevel * 18 * dtSec;
-      player.vy += Math.cos(state.stormPhase * 1.1) * state.stormLevel * 14 * dtSec;
+      player.boost = clamp(player.boost + cachedStats.boostRegen * dt, 0, cachedStats.boostMax);
     }
 
     const speed = Math.hypot(player.vx, player.vy);
-    if (speed > maxSpeed && speed > 0) {
-      const scale = maxSpeed / speed;
+    const maxSpeed = boosting ? cachedStats.maxSpeed * 1.35 : cachedStats.maxSpeed;
+    if (speed > maxSpeed) {
+      const scale = maxSpeed / (speed || 1);
       player.vx *= scale;
       player.vy *= scale;
     }
 
-    player.x += player.vx * dtSec;
-    player.y += player.vy * dtSec;
+    player.vx *= cachedStats.drag;
+    player.vy *= cachedStats.drag;
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
 
-    state.camera.x += (player.x - state.camera.x) * 0.08;
-    state.camera.y += (player.y - state.camera.y) * 0.08;
-    state.camera.vx += (player.vx - state.camera.vx) * 0.08;
-    state.camera.vy += (player.vy - state.camera.vy) * 0.08;
+    player.x = clamp(player.x, -WORLD.half + 40, WORLD.half - 40);
+    player.y = clamp(player.y, -WORLD.half + 40, WORLD.half - 40);
 
-    if (player.fireCooldown > 0) player.fireCooldown -= dt;
-    if (performance.now() - player.lastHit > 1200) {
-      player.shield = Math.min(player.maxShield, player.shield + 22 * dtSec);
+    if (input.keys['Space']) firePlayerWeapon();
+    if (input.justPressed['KeyX']) firePlasmaWeapon();
+    if (input.justPressed['KeyF']) fireEMPBlast();
+    if (input.justPressed['KeyR']) applyCheckpoint(state.checkpoint);
+
+    if (state.time - player.lastHit > cachedStats.shieldDelay) {
+      player.shield = clamp(player.shield + cachedStats.shieldRegen * dt, 0, cachedStats.maxShield);
+    }
+    player.energy = clamp(player.energy + cachedStats.energyRegen * dt, 0, cachedStats.energyMax);
+  }
+
+  function updateEnemies(dt) {
+    const sector = getSectorAtPlayer();
+    sector.spawnTimer -= dt;
+    const maxEnemies = 4 + Math.floor(player.level * 1.2);
+    if (sector.spawnTimer <= 0 && entities.enemies.length < maxEnemies) {
+      const rng = mulberry32(sector.seed + Math.floor(state.time * 10));
+      const choices = ['scout', 'fighter', 'bomber', 'turret'];
+      const type = choices[Math.floor(rng() * choices.length)];
+      const angle = rng() * Math.PI * 2;
+      const radius = randRange(rng, 220, 420);
+      spawnEnemy(type, player.x + Math.cos(angle) * radius, player.y + Math.sin(angle) * radius, 1 + sector.threat * 0.1);
+      sector.spawnTimer = randRange(rng, 1.2, 2.5) / (1 + player.level * 0.05);
     }
 
-    if (input.keys.Space) firePlayer();
-
-    if (routeSegment) {
-      const dx = player.x - routeSegment.startX;
-      const dy = player.y - routeSegment.startY;
-      state.segmentDistance = clamp(dx * routeSegment.dirX + dy * routeSegment.dirY, 0, routeSegment.length);
-      state.chapterDistance = routeSegment.startDistance + state.segmentDistance;
-    }
-
-    const currentGate = state.gates[state.segmentGateIndex];
-    const gateDistToPlayer = currentGate ? dist(player.x, player.y, currentGate.x, currentGate.y) : Infinity;
-    const gatePressure = currentGate ? clamp(1 - gateDistToPlayer / 720, 0, 1) : 0;
-    state.phase = currentGate && gateDistToPlayer < currentGate.radius * 2.6 ? 'gate' : 'travel';
-
-    const signalDrain = 0.8 + getDifficulty() * 0.2;
-    state.signal = clamp(state.signal - signalDrain * dtSec, 0, 100);
-
-    if (segment) {
-      state.spawnTimer -= dt;
-      if (state.spawnTimer <= 0) {
-        spawnEnemyWave(segment);
-        const diffScale = 0.85 + getDifficulty() * 0.14;
-        const variance = randRange(0.85, 1.15);
-        const phaseScale = state.phase === 'gate' ? 0.7 : 1.35;
-        state.spawnTimer = (segment.spawnInterval / diffScale) * variance * phaseScale;
-      }
-
-      const debrisRate = segment.hazards?.debris || 0;
-      if (debrisRate > 0) {
-        state.debrisTimer -= dt;
-        if (state.debrisTimer <= 0) {
-          if (state.debris.length < 18) spawnDebris();
-          state.debrisTimer = 1700 / debrisRate;
-        }
-      }
-
-      const turretRate = segment.hazards?.turret || 0;
-      if (turretRate > 0) {
-        state.turretTimer -= dt;
-        if (state.turretTimer <= 0) {
-          if (state.enemies.length < 16) spawnEnemy('turret');
-          state.turretTimer = 3200 / turretRate;
-        }
-      }
-
-      const dataRate = segment.dataRate || 0;
-      if (dataRate > 0) {
-        state.dataTimer -= dt;
-        if (state.dataTimer <= 0) {
-          if (state.pickups.length < 10) {
-            spawnPickup('data', player.x + randRange(-160, 160), player.y + randRange(-120, 120));
-          }
-          state.dataTimer = 2600 / dataRate;
-        }
-      }
-    }
-
-    state.enemies.forEach(enemy => {
-      enemy.timer += dt;
-      if (enemy.hitTimer > 0) enemy.hitTimer -= dt;
-
-      if (!enemy.static) {
-        let targetX = player.x;
-        let targetY = player.y;
-
-        if (currentGate && (enemy.guardGate || gatePressure > 0.15)) {
-          const bias = enemy.guardGate ? 0.75 : gatePressure * 0.45;
-          targetX = targetX * (1 - bias) + currentGate.x * bias;
-          targetY = targetY * (1 - bias) + currentGate.y * bias;
-        }
-
-        if (enemy.guardGate && currentGate) {
-          const orbitRadius = enemy.type === 'raider' ? 200 : enemy.type === 'scout' ? 150 : 170;
-          const orbitSpeed = enemy.type === 'scout' ? 260 : 320;
-          const orbitAngle = enemy.timer / orbitSpeed * enemy.pattern;
-          targetX = currentGate.x + Math.cos(orbitAngle) * orbitRadius;
-          targetY = currentGate.y + Math.sin(orbitAngle) * orbitRadius;
-        } else {
-          if (enemy.type === 'scout') {
-            targetX += Math.sin(enemy.timer / 180) * 110 * enemy.pattern;
-            targetY += Math.cos(enemy.timer / 210) * 70;
-          } else if (enemy.type === 'raider') {
-            const angle = enemy.timer / 360 * enemy.pattern;
-            targetX += Math.cos(angle) * 170;
-            targetY += Math.sin(angle) * 120;
-          } else if (enemy.type === 'lancer') {
-            targetX += player.vx * 0.6;
-            targetY += player.vy * 0.6;
-          }
-
-          const swayX = Math.sin(enemy.timer / 240) * 18 * enemy.pattern;
-          const swayY = Math.cos(enemy.timer / 280) * 12 * enemy.pattern;
-          targetX += swayX;
-          targetY += swayY;
-        }
-
-        const turnRate = enemy.turn * (enemy.type === 'lancer' ? 1.25 : 1);
-        const pressure = gatePressure > 0.35 ? 1.1 : 1;
-        enemy.vx += (targetX - enemy.x) * turnRate * pressure * dtSec;
-        enemy.vy += (targetY - enemy.y) * turnRate * pressure * dtSec;
-        if (enemy.shiftTimer > 0) {
-          const evade = (enemy.shiftTimer / 600);
-          enemy.vx += Math.cos(enemy.timer / 80) * 120 * evade * dtSec;
-          enemy.vy += Math.sin(enemy.timer / 90) * 120 * evade * dtSec;
-          enemy.shiftTimer -= scaledDt;
-        }
-        const sideSpeed = Math.hypot(enemy.vx, enemy.vy);
-        const maxSide = enemy.speed * (enemy.type === 'scout' ? 1.1 : 1) * pressure;
-        if (sideSpeed > maxSide) {
-          const scale = maxSide / sideSpeed;
-          enemy.vx *= scale;
-          enemy.vy *= scale;
-        }
-        enemy.x += enemy.vx * dtSec;
-        enemy.y += enemy.vy * dtSec;
-      }
-
-    enemy.fireCooldown -= dt;
-    if (enemy.fireCooldown <= 0 && dist(enemy.x, enemy.y, player.x, player.y) < 900) {
+    entities.enemies.forEach((enemy) => {
+      if (enemy.hp <= 0) return;
       const dx = player.x - enemy.x;
       const dy = player.y - enemy.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const jitter = randRange(-0.22, 0.22);
-      const dirX = (dx / len) + jitter;
-      const dirY = (dy / len) - jitter * 0.6;
-      const dirLen = Math.hypot(dirX, dirY) || 1;
-      const bulletSpeed = 260 + getDifficulty() * 38 + gatePressure * 35;
-      state.enemyBullets.push({
-        x: enemy.x,
-        y: enemy.y,
-        vx: (dirX / dirLen) * bulletSpeed,
-        vy: (dirY / dirLen) * bulletSpeed,
-        life: 1400,
-        damage: enemy.damage
-      });
-      enemy.fireCooldown = enemy.fireRate + randRange(-180, 360);
-    }
-    });
-
-    state.debris.forEach(debris => {
-      debris.x += (debris.vx || 0) * dtSec;
-      debris.y += (debris.vy || 0) * dtSec;
-    });
-
-    state.pickups.forEach(pickup => {
-      pickup.x += (pickup.vx || 0) * dtSec;
-      pickup.y += (pickup.vy || 0) * dtSec;
-    });
-
-    state.bullets.forEach(bullet => {
-      bullet.x += bullet.vx * dtSec;
-      bullet.y += bullet.vy * dtSec;
-      bullet.life -= dt;
-    });
-
-    state.enemyBullets.forEach(bullet => {
-      bullet.x += bullet.vx * dtSec;
-      bullet.y += bullet.vy * dtSec;
-      bullet.life -= dt;
-    });
-
-    state.particles.forEach(p => {
-      p.x += p.vx * dtSec;
-      p.y += p.vy * dtSec;
-      if (p.spin) p.angle += p.spin * dtSec * 60;
-      p.life -= scaledDt;
-    });
-
-    updateBackground(dtSec);
-
-    if (currentGate) {
-      if (!currentGate.threatSpawned && gateDistToPlayer < currentGate.radius * 2.4) {
-        spawnGateAmbush(currentGate);
-        currentGate.threatSpawned = true;
-      }
-
-      const playerSpeed = Math.hypot(player.vx, player.vy);
-      const slowEnough = playerSpeed < 50;
-      let threatCount = 0;
-      state.enemies.forEach(enemy => {
-        if (enemy.hp <= 0) return;
-        if (dist(enemy.x, enemy.y, currentGate.x, currentGate.y) < 260) threatCount += 1;
-      });
-      const gateClear = threatCount === 0;
-      const threatFactor = threatCount > 0 ? clamp(1 - threatCount * 0.08, 0.4, 1) : 1;
-      if (gateDistToPlayer < currentGate.radius) {
-        const speedFactor = slowEnough ? 1 : 0;
-        if (currentGate.locked) {
-          state.gateCharge = Math.max(0, state.gateCharge - dt * 0.9);
-          if (state.statusTimer <= 0) setStatus('Destroy the relay carrier to unlock the gate', 1200);
-        } else if (!gateClear) {
-          state.gateCharge = Math.max(0, state.gateCharge - dt * 0.9);
-          if (state.statusTimer <= 0) setStatus('Clear the gate defenders', 1200);
-        } else {
-          state.gateCharge = Math.min(state.gateChargeTarget, state.gateCharge + dt * speedFactor * threatFactor);
-          if (!slowEnough && state.statusTimer <= 0) {
-            setStatus('Brake to stabilize the gate', 1200);
-          }
-        }
+      const distance = Math.hypot(dx, dy);
+      const isStatic = enemy.def?.static;
+      if (enemy.stunned) {
+        enemy.stunned -= dt;
+        enemy.vx *= 0.96;
+        enemy.vy *= 0.96;
       } else {
-        state.gateCharge = Math.max(0, state.gateCharge - dt * (GATE_STABILIZE_DECAY + 0.15));
-      }
-      const chargeRatio = state.gateChargeTarget > 0 ? state.gateCharge / state.gateChargeTarget : 0;
-      currentGate.charge = clamp(chargeRatio, 0, 1);
-
-      if (gateDistToPlayer < currentGate.radius && slowEnough && gateClear && !currentGate.locked) {
-        state.signal = clamp(state.signal + 36 * dtSec, 0, 100);
-      }
-
-      if (state.gateCharge >= state.gateChargeTarget) {
-        currentGate.passed = true;
-        state.gateCharge = 0;
-        state.jumpFlash = 1;
-        spawnExplosion(currentGate.x, currentGate.y, '125,252,154');
-        if (currentGate.checkpoint) {
-          reachCheckpoint();
-          return;
+        if (enemy.isBoss) {
+          if (enemy.hp < enemy.maxHp * 0.65) enemy.phase = 2;
+          if (enemy.hp < enemy.maxHp * 0.3) enemy.phase = 3;
         }
-        addCredits(65, 'Gate stabilized');
-        state.segmentGateIndex += 1;
-        state.gateChargeTarget = getGateChargeTarget();
-        state.phase = 'travel';
-      }
-    }
 
-    state.bullets.forEach(bullet => {
-      if (bullet.life <= 0) return;
-      state.enemies.forEach(enemy => {
-        if (bullet.life <= 0) return;
-        if (enemy.hp <= 0) return;
-        if (dist(bullet.x, bullet.y, enemy.x, enemy.y) < enemy.size + 6) {
-          const prevHp = enemy.hp;
-          enemy.hp -= bullet.damage;
-          enemy.hitTimer = 140;
-          bullet.life = 0;
-          if (enemy.role === 'carrier' && enemy.hp > 0 && enemy.phaseThresholds) {
-            const ratio = enemy.hp / enemy.maxHp;
-            if (enemy.phase === 1 && ratio <= enemy.phaseThresholds[0]) {
-              triggerCarrierPhaseShift(enemy);
-            } else if (enemy.phase === 2 && ratio <= enemy.phaseThresholds[1]) {
-              triggerCarrierPhaseShift(enemy);
-            }
+        if (distance < 420) enemy.state = 'attack';
+        else if (distance < 720) enemy.state = 'chase';
+        else enemy.state = 'patrol';
+
+        if (enemy.hp < enemy.maxHp * 0.25 && !enemy.isBoss) enemy.state = 'retreat';
+
+        let speed = enemy.def ? enemy.def.speed : 90;
+        if (enemy.isBoss) speed = 70 + enemy.phase * 25;
+
+        if (!isStatic) {
+          if (enemy.state === 'chase' || enemy.state === 'attack') {
+            const dir = normalize(dx, dy);
+            enemy.vx += dir.x * speed * dt;
+            enemy.vy += dir.y * speed * dt;
+          } else if (enemy.state === 'retreat') {
+            const dir = normalize(-dx, -dy);
+            enemy.vx += dir.x * speed * dt;
+            enemy.vy += dir.y * speed * dt;
+          } else {
+            enemy.vx += Math.sin(state.time + enemy.x) * 5 * dt;
+            enemy.vy += Math.cos(state.time + enemy.y) * 5 * dt;
           }
-          if (enemy.hp <= 0) {
-            const reward = enemy.type === 'lancer' ? 30 : enemy.type === 'raider' ? 20 : enemy.type === 'turret' ? 36 : 14;
-            addCredits(reward);
-            spawnExplosion(enemy.x, enemy.y, enemy.type === 'turret' ? '180,110,255' : '255,120,90');
-            if (enemy.role === 'carrier') {
-              const gate = state.gates[enemy.unlockGateIndex];
-              if (gate) {
-                gate.locked = false;
-                setStatus('Gate unlocked - stabilize it', 1600);
-                spawnShieldShatter(gate);
-                state.slowMoTimer = 520;
-                state.shake = Math.min(1, state.shake + 0.6);
-              }
-            }
-            if (state.rng() < 0.12) {
-              const roll = state.rng();
-              const type = roll > 0.7 ? 'shield' : roll > 0.4 ? 'repair' : 'data';
-              spawnPickup(type, enemy.x, enemy.y);
-            }
-            state.challenges.forEach(ch => {
-              if (!ch.completed && !ch.failed && ch.type === 'kills' && ch.enemy === enemy.type) {
-                ch.progress += 1;
+        }
+      }
+
+      if (isStatic) {
+        enemy.vx = 0;
+        enemy.vy = 0;
+      } else {
+        enemy.vx *= 0.98;
+        enemy.vy *= 0.98;
+        enemy.x += enemy.vx * dt;
+        enemy.y += enemy.vy * dt;
+      }
+
+      enemy.fireCooldown -= dt * 1000;
+      if (enemy.state === 'attack' && enemy.fireCooldown <= 0) {
+        enemy.fireCooldown = enemy.isBoss ? 450 : enemy.def.fireRate;
+        const dir = normalize(player.x - enemy.x, player.y - enemy.y);
+        entities.enemyBullets.push({
+          x: enemy.x + dir.x * enemy.size,
+          y: enemy.y + dir.y * enemy.size,
+          vx: dir.x * (enemy.isBoss ? 420 : 320),
+          vy: dir.y * (enemy.isBoss ? 420 : 320),
+          life: 2.2,
+          damage: enemy.isBoss ? 18 : enemy.def.damage,
+          color: enemy.isBoss ? '#ffb347' : '#ff6b6b'
+        });
+      }
+    });
+  }
+
+  function updateBullets(dt) {
+    entities.bullets.forEach((bullet) => {
+      bullet.life -= dt;
+      bullet.x += bullet.vx * dt;
+      bullet.y += bullet.vy * dt;
+      if (bullet.splash) {
+        bullet.vx *= 0.985;
+        bullet.vy *= 0.985;
+      }
+    });
+    entities.bullets = entities.bullets.filter((bullet) => bullet.life > 0);
+
+    entities.enemyBullets.forEach((bullet) => {
+      bullet.life -= dt;
+      bullet.x += bullet.vx * dt;
+      bullet.y += bullet.vy * dt;
+    });
+    entities.enemyBullets = entities.enemyBullets.filter((bullet) => bullet.life > 0);
+  }
+
+  function updateDrones(dt) {
+    entities.drones.forEach((drone, index) => {
+      drone.angle += dt * 0.9;
+      const offsetAngle = drone.angle + index * 0.4;
+      drone.x = player.x + Math.cos(offsetAngle) * drone.radius;
+      drone.y = player.y + Math.sin(offsetAngle) * drone.radius;
+      drone.cooldown -= dt;
+      if (drone.type === 'repair') {
+        if (drone.cooldown <= 0 && player.hp < cachedStats.maxHp) {
+          player.hp = clamp(player.hp + 6, 0, cachedStats.maxHp);
+          drone.cooldown = 1.4;
+          spawnEffect(drone.x, drone.y, '#6df0ff');
+        }
+      } else if (drone.type === 'attack') {
+        if (drone.cooldown <= 0) {
+          const target = entities.enemies.find((enemy) => enemy.hp > 0 && dist(drone.x, drone.y, enemy.x, enemy.y) < 360);
+          if (target) {
+            const dir = normalize(target.x - drone.x, target.y - drone.y);
+            entities.bullets.push({
+              x: drone.x + dir.x * 8,
+              y: drone.y + dir.y * 8,
+              vx: dir.x * 640,
+              vy: dir.y * 640,
+              life: 1.1,
+              damage: cachedStats.damage * 0.55,
+              color: '#c77dff'
+            });
+            drone.cooldown = 0.8;
+          }
+        }
+      }
+    });
+  }
+
+  function updateLoot(dt) {
+    entities.loot.forEach((drop) => {
+      drop.life -= dt;
+      drop.x += drop.vx * dt;
+      drop.y += drop.vy * dt;
+      drop.vx *= 0.98;
+      drop.vy *= 0.98;
+      if (dist(player.x, player.y, drop.x, drop.y) < 24) {
+        drop.life = 0;
+        if (drop.type === 'credits') {
+          awardCredits(drop.value || 25, 'Looted');
+        } else if (drop.type === 'shield') {
+          player.shield = clamp(player.shield + (drop.value || 18), 0, cachedStats.maxShield);
+        } else if (drop.type === 'boost') {
+          player.boost = clamp(player.boost + (drop.value || 16), 0, cachedStats.boostMax);
+        } else if (drop.type === 'data') {
+          missionTracker.dataShards += 1;
+          updateOptionalProgress('collect', { amount: 1 });
+          awardCredits(40, 'Data shard recovered');
+        }
+      }
+    });
+    entities.loot = entities.loot.filter((drop) => drop.life > 0);
+  }
+
+  function updateEffects(dt) {
+    entities.effects.forEach((effect) => {
+      effect.life -= dt;
+      effect.radius += dt * 120;
+    });
+    entities.effects = entities.effects.filter((effect) => effect.life > 0);
+  }
+
+  function handleCollisions(dt) {
+    const sector = getSectorAtPlayer();
+
+    sector.entities.asteroids.forEach((asteroid) => {
+      const d = dist(player.x, player.y, asteroid.x, asteroid.y);
+      if (d < asteroid.radius + cachedStats.size) {
+        const push = normalize(player.x - asteroid.x, player.y - asteroid.y);
+        player.x = asteroid.x + push.x * (asteroid.radius + cachedStats.size + 2);
+        player.y = asteroid.y + push.y * (asteroid.radius + cachedStats.size + 2);
+        applyDamage(player, 12);
+        spawnEffect(player.x, player.y, '#ff6b6b');
+      }
+    });
+
+    sector.entities.storms.forEach((storm) => {
+      if (dist(player.x, player.y, storm.x, storm.y) < storm.radius) {
+        player.shield = clamp(player.shield - storm.intensity * 15 * dt, 0, cachedStats.maxShield);
+        player.energy = clamp(player.energy - storm.intensity * 8 * dt, 0, cachedStats.energyMax);
+      }
+    });
+
+    entities.bullets.forEach((bullet) => {
+      entities.enemies.forEach((enemy) => {
+        if (enemy.hp <= 0) return;
+        if (dist(bullet.x, bullet.y, enemy.x, enemy.y) < enemy.size) {
+          bullet.life = 0;
+          applyDamage(enemy, bullet.damage);
+          if (bullet.splash) {
+            entities.enemies.forEach((other) => {
+              if (other !== enemy && dist(bullet.x, bullet.y, other.x, other.y) < bullet.splash) {
+                applyDamage(other, bullet.damage * 0.4);
               }
             });
           }
@@ -1709,752 +1135,675 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     });
 
-    state.enemyBullets.forEach(bullet => {
-      if (dist(bullet.x, bullet.y, player.x, player.y) < 18) {
-        applyDamage(bullet.damage);
+    entities.enemyBullets.forEach((bullet) => {
+      if (dist(bullet.x, bullet.y, player.x, player.y) < cachedStats.size + 6) {
         bullet.life = 0;
+        applyDamage(player, bullet.damage);
       }
     });
 
-    state.debris.forEach(debris => {
-      if (dist(debris.x, debris.y, player.x, player.y) < debris.r + 16) {
-        applyDamage(14);
-        debris.hit = true;
+    entities.enemies = entities.enemies.filter((enemy) => {
+      if (enemy.hp <= 0) {
+        handleEnemyDeath(enemy);
+        return false;
       }
+      return true;
     });
 
-    state.pickups.forEach(pickup => {
-      if (dist(pickup.x, pickup.y, player.x, player.y) < pickup.r + 14) {
-        if (pickup.type === 'repair') player.hp = Math.min(player.maxHp, player.hp + 24);
-        if (pickup.type === 'shield') player.shield = Math.min(player.maxShield, player.shield + 26);
-        if (pickup.type === 'data') {
-          addCredits(30, 'Data shard');
-          state.challenges.forEach(ch => {
-            if (!ch.completed && !ch.failed && ch.type === 'collect') {
-              ch.progress += 1;
-            }
-          });
+    sector.entities.caches.forEach((cache) => {
+      if (dist(player.x, player.y, cache.x, cache.y) < cache.radius + cachedStats.size) {
+        if (!world.cacheClaims[sector.key]) {
+          world.cacheClaims[sector.key] = cache.blueprint;
+          player.blueprints.add(cache.blueprint);
+          refreshStats({ keepRatios: true });
+          awardCredits(120, 'Blueprint cache secured');
+          spawnLoot(cache.x, cache.y, 'data', 1);
+          noteStatus(`Blueprint found: ${BLUEPRINTS[cache.blueprint].name}`);
         }
-        pickup.collected = true;
       }
     });
 
-    state.enemies = state.enemies.filter(enemy => enemy.hp > 0 && dist(enemy.x, enemy.y, player.x, player.y) < 1800);
-    state.bullets = state.bullets.filter(bullet => bullet.life > 0 && dist(bullet.x, bullet.y, player.x, player.y) < 2000);
-    state.enemyBullets = state.enemyBullets.filter(bullet => bullet.life > 0 && dist(bullet.x, bullet.y, player.x, player.y) < 2000);
-    state.debris = state.debris.filter(debris => !debris.hit && dist(debris.x, debris.y, player.x, player.y) < 1800);
-    state.pickups = state.pickups.filter(pickup => !pickup.collected && dist(pickup.x, pickup.y, player.x, player.y) < 1800);
-    state.particles = state.particles.filter(p => p.life > 0);
-
-    if (state.signal <= 0) {
-      state.running = false;
-      resetRunToSegment();
-      showDeathBriefing();
-    }
-
-    if (player.hp <= 0) {
-      state.running = false;
-      resetRunToSegment();
-      showDeathBriefing();
-    }
-
-    updateObjectiveDisplay();
-    updateHud();
+    sector.entities.stations.forEach((station) => {
+      if (dist(player.x, player.y, station.x, station.y) < station.radius + 40) {
+        if (input.justPressed['KeyT']) {
+          const repairCost = 60;
+          if (player.credits >= repairCost) {
+            player.credits -= repairCost;
+            player.hp = cachedStats.maxHp;
+            player.shield = cachedStats.maxShield;
+            player.boost = cachedStats.boostMax;
+            player.energy = cachedStats.energyMax;
+            noteStatus('Station services applied.');
+          } else {
+            noteStatus('Insufficient credits for repairs.');
+          }
+        }
+      }
+    });
   }
 
-  function reachCheckpoint() {
-    const chapter = currentChapter();
+  function maybeAdvanceChapter(bossDefeated = false) {
+    const chapter = CHAPTERS[player.chapterIndex];
     if (!chapter) return;
-    evaluateCheckpointChallenges(state.checkpointIndex + 1);
-
-    const nextCheckpoint = state.checkpointIndex + 1;
-    if (nextCheckpoint >= chapter.segments.length) {
-      completeChapter();
+    const bossRequired = player.chapterIndex >= 5;
+    if (player.distanceThisChapter < chapter.distanceGoal) return;
+    if (bossRequired && !world.bossesDefeated[player.chapterIndex]) return;
+    finalizeOptionalChallenges();
+    if (player.chapterIndex >= CHAPTERS.length - 1) {
+      awardCredits(800, 'Campaign complete');
+      noteStatus('Starforge secured. Campaign complete.');
+      submitHighScore(GAME_ID, Math.floor(player.distanceTotal));
+      state.running = false;
       return;
     }
-
-    addCredits(120, 'Checkpoint secured');
-    state.checkpointIndex = nextCheckpoint;
-    state.segmentIndex = nextCheckpoint;
-    progress.checkpoint = nextCheckpoint;
-    queueSave();
-    submitProgressScore();
-
-    state.rng = makeRng((chapter.seed || 1000) + state.segmentIndex * 97);
-    resetRunToSegment();
-    showCheckpointBriefing(chapter.segments[state.segmentIndex]);
-  }
-
-  function completeChapter() {
-    evaluateEndChallenges();
-    addCredits(260 + state.chapterIndex * 45, 'Chapter complete');
-    progress.chapter = Math.min(JOURNEY.length + 1, progress.chapter + 1);
-    progress.checkpoint = 0;
-    queueSave();
-    submitProgressScore();
-
-    if (progress.chapter > JOURNEY.length) {
-      showJourneyComplete();
-      return;
-    }
-
-    setupChapter(progress.chapter - 1, 0);
-    showChapterBriefing('Next Run');
-  }
-
-  function initBackground() {
-    const starField = 220;
-    const radius = 2200;
-    state.background.stars = [];
-    state.background.nebulae = [];
-    for (let i = 0; i < starField; i++) {
-      state.background.stars.push({
-        x: state.player.x + randRange(-radius, radius, Math.random),
-        y: state.player.y + randRange(-radius, radius, Math.random),
-        size: randRange(0.8, 2.4, Math.random),
-        alpha: randRange(0.3, 0.9, Math.random)
-      });
-    }
-    for (let i = 0; i < 5; i++) {
-      state.background.nebulae.push({
-        x: state.player.x + randRange(-radius * 0.7, radius * 0.7, Math.random),
-        y: state.player.y + randRange(-radius * 0.7, radius * 0.7, Math.random),
-        r: randRange(260, 420, Math.random),
-        color: i % 2 === 0 ? 'rgba(80,140,255,0.1)' : 'rgba(125,252,154,0.1)',
-        phase: randRange(0, Math.PI * 2, Math.random)
-      });
-    }
-  }
-
-  function drawBackground() {
-    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    grad.addColorStop(0, '#060c16');
-    grad.addColorStop(0.55, '#0b1627');
-    grad.addColorStop(1, '#04070e');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const motion = Math.hypot(state.camera.vx, state.camera.vy);
-    const streakScale = clamp(motion / 320, 0, 1);
-
-    state.background.nebulae.forEach(nebula => {
-      const screen = toScreen(nebula.x, nebula.y);
-      const nebulaGrad = ctx.createRadialGradient(screen.x, screen.y, 0, screen.x, screen.y, nebula.r);
-      nebulaGrad.addColorStop(0, nebula.color);
-      nebulaGrad.addColorStop(1, 'rgba(4,8,16,0)');
-      ctx.fillStyle = nebulaGrad;
-      ctx.beginPath();
-      ctx.arc(screen.x, screen.y, nebula.r, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    state.background.stars.forEach(star => {
-      const screen = toScreen(star.x, star.y);
-      const size = star.size;
-      const alpha = star.alpha * (0.6 + streakScale * 0.8);
-      const tail = (2 + streakScale * 10) * size;
-      const dx = -state.camera.vx * 0.02 * tail;
-      const dy = -state.camera.vy * 0.02 * tail;
-      ctx.strokeStyle = `rgba(210,230,255,${alpha})`;
-      if (screen.x < -10 || screen.x > canvas.width + 10 || screen.y < -10 || screen.y > canvas.height + 10) return;
-      ctx.lineWidth = size;
-      ctx.beginPath();
-      ctx.moveTo(screen.x, screen.y);
-      ctx.lineTo(screen.x + dx, screen.y + dy);
-      ctx.stroke();
-    });
-  }
-
-  function drawCorridor() {
-    const segment = state.route?.segments?.[state.segmentIndex];
-    if (!segment) return;
-    const halfWidth = 300;
-    const offsetX = -segment.dirY * halfWidth;
-    const offsetY = segment.dirX * halfWidth;
-    const startLeft = toScreen(segment.startX + offsetX, segment.startY + offsetY);
-    const endLeft = toScreen(segment.endX + offsetX, segment.endY + offsetY);
-    const startRight = toScreen(segment.startX - offsetX, segment.startY - offsetY);
-    const endRight = toScreen(segment.endX - offsetX, segment.endY - offsetY);
-
-    ctx.strokeStyle = 'rgba(90,160,220,0.2)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(startLeft.x, startLeft.y);
-    ctx.lineTo(endLeft.x, endLeft.y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(startRight.x, startRight.y);
-    ctx.lineTo(endRight.x, endRight.y);
-    ctx.stroke();
-
-    ctx.strokeStyle = 'rgba(90,160,220,0.12)';
-    ctx.setLineDash([8, 10]);
-    ctx.beginPath();
-    const centerStart = toScreen(segment.startX, segment.startY);
-    const centerEnd = toScreen(segment.endX, segment.endY);
-    ctx.moveTo(centerStart.x, centerStart.y);
-    ctx.lineTo(centerEnd.x, centerEnd.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    ctx.fillStyle = 'rgba(80,140,255,0.06)';
-    ctx.beginPath();
-    ctx.moveTo(startLeft.x, startLeft.y);
-    ctx.lineTo(endLeft.x, endLeft.y);
-    ctx.lineTo(endRight.x, endRight.y);
-    ctx.lineTo(startRight.x, startRight.y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function drawGate(gate) {
-    const screen = toScreen(gate.x, gate.y);
-    const radius = gate.radius;
-    const pulse = 0.6 + Math.sin(performance.now() / 380) * 0.4;
-    const isCurrent = state.gates[state.segmentGateIndex] === gate;
-    let threatCount = 0;
-    if (isCurrent) {
-      state.enemies.forEach(enemy => {
-        if (enemy.hp <= 0) return;
-        if (dist(enemy.x, enemy.y, gate.x, gate.y) < 260) threatCount += 1;
-      });
-    }
-    const locked = isCurrent && gate.locked;
-    const contested = isCurrent && threatCount > 0;
-    const ringColor = locked
-      ? '255,209,102'
-      : contested
-        ? '255,120,120'
-        : '125,252,154';
-    ctx.strokeStyle = `rgba(${ringColor},${0.25 + pulse * 0.35})`;
-    ctx.shadowColor = locked ? '#ffd166' : contested ? '#ff6b6b' : '#7dfc9a';
-    ctx.shadowBlur = 14;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = `rgba(${ringColor},0.35)`;
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, radius * 0.65, 0, Math.PI * 2);
-    ctx.stroke();
-
-    if (gate.charge && gate.charge > 0) {
-      ctx.strokeStyle = 'rgba(125,252,154,0.85)';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(
-        screen.x,
-        screen.y,
-        radius * 0.9,
-        -Math.PI / 2,
-        -Math.PI / 2 + Math.PI * 2 * gate.charge
-      );
-      ctx.stroke();
-    }
-
-    if (isCurrent) {
-      ctx.save();
-      ctx.fillStyle = locked ? 'rgba(255,209,102,0.9)' : contested ? 'rgba(255,120,120,0.9)' : 'rgba(125,252,154,0.85)';
-      ctx.font = '12px "Segoe UI", sans-serif';
-      ctx.textAlign = 'center';
-      const label = locked ? 'LOCKED' : contested ? 'DEFENDERS' : 'STABILIZE';
-      ctx.fillText(label, screen.x, screen.y - radius - 10);
-      ctx.restore();
-    }
-  }
-
-  function drawDebris(debris) {
-    const screen = toScreen(debris.x, debris.y);
-    const r = debris.r;
-    const grad = ctx.createRadialGradient(screen.x, screen.y, 0, screen.x, screen.y, r);
-    grad.addColorStop(0, 'rgba(190,210,240,0.7)');
-    grad.addColorStop(1, 'rgba(90,110,140,0.35)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(160,190,220,0.4)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, r * 0.7, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  function drawPickup(pickup) {
-    const screen = toScreen(pickup.x, pickup.y);
-    const r = pickup.r;
-    const pulse = 0.8 + Math.sin(performance.now() / 260) * 0.2;
-    const color = pickup.type === 'data'
-      ? '#7dfc9a'
-      : pickup.type === 'shield'
-        ? '#47f5ff'
-        : '#ff7a47';
-    ctx.fillStyle = color;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 12;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, r * pulse, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-  }
-
-  function drawEnemy(enemy) {
-    const screen = toScreen(enemy.x, enemy.y);
-    const size = enemy.size;
-    const hitPulse = enemy.hitTimer > 0 ? Math.min(1, enemy.hitTimer / 140) : 0;
-    ctx.save();
-    ctx.translate(screen.x, screen.y);
-    ctx.fillStyle = enemy.color;
-    ctx.shadowColor = enemy.color;
-    ctx.shadowBlur = 12 + hitPulse * 12;
-    ctx.beginPath();
-    if (enemy.type === 'lancer') {
-      ctx.moveTo(0, -size * 1.2);
-      ctx.lineTo(size * 0.6, size);
-      ctx.lineTo(0, size * 0.6);
-      ctx.lineTo(-size * 0.6, size);
-    } else if (enemy.type === 'raider') {
-      ctx.moveTo(0, -size);
-      ctx.lineTo(size, 0);
-      ctx.lineTo(0, size);
-      ctx.lineTo(-size, 0);
-    } else if (enemy.type === 'turret') {
-      ctx.rect(-size * 0.7, -size * 0.7, size * 1.4, size * 1.4);
-    } else {
-      ctx.moveTo(0, -size);
-      ctx.lineTo(size * 0.8, size * 0.8);
-      ctx.lineTo(-size * 0.8, size * 0.8);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.lineWidth = 1.2;
-    ctx.strokeStyle = hitPulse > 0 ? 'rgba(255,255,255,0.8)' : 'rgba(230,240,255,0.25)';
-    ctx.stroke();
-
-    if (enemy.role === 'carrier') {
-      ctx.strokeStyle = 'rgba(255,209,102,0.8)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, size * 0.9, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = `rgba(255,220,180,${0.25 + hitPulse * 0.35})`;
-    ctx.beginPath();
-    ctx.moveTo(-size * 0.35, size * 0.85);
-    ctx.lineTo(0, size * 1.55);
-    ctx.lineTo(size * 0.35, size * 0.85);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function drawBullets() {
-    state.bullets.forEach(bullet => {
-      const proj = toScreen(bullet.x, bullet.y);
-      const trailX = proj.x - bullet.vx * 0.04;
-      const trailY = proj.y - bullet.vy * 0.04;
-      ctx.strokeStyle = 'rgba(230,242,255,0.8)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(trailX, trailY);
-      ctx.lineTo(proj.x, proj.y);
-      ctx.stroke();
-      ctx.fillStyle = '#e6f2ff';
-      ctx.shadowColor = '#e6f2ff';
-      ctx.shadowBlur = 8;
-      ctx.fillRect(proj.x - 2, proj.y - 2, 4, 4);
-      ctx.shadowBlur = 0;
-    });
-
-    state.enemyBullets.forEach(bullet => {
-      const proj = toScreen(bullet.x, bullet.y);
-      const trailX = proj.x - bullet.vx * 0.04;
-      const trailY = proj.y - bullet.vy * 0.04;
-      ctx.strokeStyle = 'rgba(255,179,71,0.85)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(trailX, trailY);
-      ctx.lineTo(proj.x, proj.y);
-      ctx.stroke();
-      ctx.fillStyle = '#ffb347';
-      ctx.shadowColor = '#ffb347';
-      ctx.shadowBlur = 8;
-      ctx.fillRect(proj.x - 2, proj.y - 2, 4, 4);
-      ctx.shadowBlur = 0;
-    });
-  }
-
-  function drawParticles() {
-    state.particles.forEach(p => {
-      const proj = toScreen(p.x, p.y);
-      const size = p.size;
-      const alpha = Math.min(1, p.life / 900);
-      if (p.type === 'shard') {
-        ctx.save();
-        ctx.translate(proj.x, proj.y);
-        ctx.rotate(p.angle || 0);
-        ctx.strokeStyle = `rgba(${p.color},${alpha})`;
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.moveTo(-p.length * 0.5, 0);
-        ctx.lineTo(p.length * 0.5, 0);
-        ctx.stroke();
-        ctx.restore();
-        return;
+    entities.enemies.length = 0;
+    entities.enemyBullets.length = 0;
+    entities.bullets.length = 0;
+    player.chapterIndex = Math.min(player.chapterIndex + 1, CHAPTERS.length - 1);
+    player.distanceThisChapter = 0;
+    player.checkpointIndex = 0;
+    resetChapterState();
+    setCheckpoint();
+    showBriefing();
+    awardCredits(300, 'Chapter complete');
+    if (bossDefeated) {
+      const blueprintKeys = Object.keys(BLUEPRINTS);
+      const reward = blueprintKeys[(player.chapterIndex + 2) % blueprintKeys.length];
+      if (!player.blueprints.has(reward)) {
+        player.blueprints.add(reward);
+        refreshStats({ keepRatios: true });
+        noteStatus(`Chapter reward: ${BLUEPRINTS[reward].name}`);
       }
-      ctx.fillStyle = `rgba(${p.color},${alpha})`;
-      ctx.beginPath();
-      ctx.arc(proj.x, proj.y, size, 0, Math.PI * 2);
-      ctx.fill();
-    });
+    }
   }
 
-  function drawPlayer() {
-    const player = state.player;
-    const shipX = VIEW.centerX + player.vx * 0.08;
-    const shipY = VIEW.centerY + player.vy * 0.08;
+  function updateProgress(dt) {
     const speed = Math.hypot(player.vx, player.vy);
+    player.distanceThisChapter += speed * dt;
+    player.distanceTotal += speed * dt;
 
-    ctx.save();
-    ctx.translate(shipX, shipY);
-    ctx.rotate(player.angle + Math.PI / 2);
-
-    ctx.fillStyle = '#7dfc9a';
-    ctx.shadowColor = '#7dfc9a';
-    ctx.shadowBlur = 16;
-    ctx.beginPath();
-    ctx.moveTo(0, -26);
-    ctx.lineTo(11, 18);
-    ctx.lineTo(-11, 18);
-    ctx.closePath();
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(220,255,240,0.6)';
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(20,40,28,0.8)';
-    ctx.beginPath();
-    ctx.moveTo(0, -6);
-    ctx.lineTo(5, 4);
-    ctx.lineTo(-5, 4);
-    ctx.closePath();
-    ctx.fill();
-
-    if (state.boostActive) {
-      ctx.fillStyle = 'rgba(125,252,154,0.65)';
-      ctx.beginPath();
-      ctx.moveTo(-8, 20);
-      ctx.lineTo(0, 42 + Math.random() * 8);
-      ctx.lineTo(8, 20);
-      ctx.closePath();
-      ctx.fill();
+    const chapter = CHAPTERS[player.chapterIndex];
+    if (!chapter) return;
+    const checkpoints = Math.min(3, Math.floor((player.distanceThisChapter / chapter.distanceGoal) * 3));
+    if (checkpoints > player.checkpointIndex) {
+      player.checkpointIndex = checkpoints;
+      setCheckpoint();
+      awardCredits(120, 'Checkpoint reached');
     }
 
-    const engineGlow = 0.25 + Math.min(1, speed / (player.maxSpeed || 1)) * 0.5;
-    ctx.fillStyle = `rgba(125,252,154,${engineGlow})`;
-    ctx.beginPath();
-    ctx.moveTo(-7, 18);
-    ctx.lineTo(0, 32);
-    ctx.lineTo(7, 18);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.restore();
-
-    if (player.shield > 6) {
-      ctx.strokeStyle = 'rgba(125,252,154,0.35)';
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      ctx.arc(shipX, shipY, 26, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  }
-
-  function drawNavArrow() {
-    const gateTarget = state.gates[state.segmentGateIndex] || state.gates.find(gate => !gate.passed);
-    const targetX = gateTarget ? gateTarget.x : 0;
-    const targetY = gateTarget ? gateTarget.y : 0;
-    const dx = targetX - state.player.x;
-    const dy = targetY - state.player.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 8) return;
-
-    const angle = Math.atan2(dy, dx);
-    const arrowX = VIEW.centerX;
-    const arrowY = VIEW.centerY - 70;
-    ctx.save();
-    ctx.translate(arrowX, arrowY);
-    ctx.rotate(angle);
-    ctx.strokeStyle = 'rgba(125,252,154,0.45)';
-    ctx.fillStyle = 'rgba(125,252,154,0.2)';
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(14, 0);
-    ctx.lineTo(-6, -8);
-    ctx.lineTo(-2, 0);
-    ctx.lineTo(-6, 8);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(125,252,154,0.6)';
-    ctx.font = '12px "Segoe UI", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${Math.round(dist)}m`, arrowX, arrowY + 22);
-    ctx.restore();
-  }
-
-  function drawObjectivePanel() {
-    try {
-      const gate = state.gates[state.segmentGateIndex];
-      if (!gate) return;
-      let threatCount = 0;
-      state.enemies.forEach(enemy => {
-        if (enemy.hp <= 0) return;
-        if (dist(enemy.x, enemy.y, gate.x, gate.y) < 260) threatCount += 1;
-      });
-      const chargePct = state.gateChargeTarget > 0 ? Math.round((state.gateCharge / state.gateChargeTarget) * 100) : 0;
-
-      const panelW = 320;
-      const panelH = 54;
-      const x = (canvas.width - panelW) / 2;
-      const y = 18;
-      ctx.save();
-      ctx.fillStyle = 'rgba(8,14,24,0.65)';
-      ctx.strokeStyle = 'rgba(125,252,154,0.2)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.rect(x, y, panelW, panelH);
-      ctx.fill();
-      ctx.stroke();
-
-      const carrierLocked = gate.locked;
-      const steps = [
-        { label: 'Carrier', ok: !carrierLocked, color: carrierLocked ? '#ffd166' : '#7dfc9a', text: carrierLocked ? 'LOCKED' : 'DOWN' },
-        { label: 'Defenders', ok: threatCount === 0, color: threatCount === 0 ? '#7dfc9a' : '#ff6b6b', text: threatCount === 0 ? 'CLEAR' : `${threatCount}` },
-        { label: 'Stabilize', ok: chargePct >= 100, color: chargePct >= 100 ? '#7dfc9a' : '#8ecbff', text: `${chargePct}%` }
-      ];
-
-      ctx.font = '11px "Segoe UI", sans-serif';
-      ctx.textAlign = 'left';
-      steps.forEach((step, i) => {
-        const sx = x + 16 + i * 100;
-        const sy = y + 18;
-        ctx.fillStyle = step.color;
-        ctx.beginPath();
-        ctx.arc(sx, sy, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(220,240,255,0.9)';
-        ctx.fillText(step.label, sx + 12, sy + 4);
-        ctx.fillStyle = step.color;
-        ctx.fillText(step.text, sx + 12, sy + 20);
-      });
-      ctx.restore();
-    } catch (err) {
-      // Keep gameplay running if HUD rendering fails.
-    }
-  }
-
-  function render() {
-    state.camera.shakeX = (Math.random() - 0.5) * 6 * state.shake;
-    state.camera.shakeY = (Math.random() - 0.5) * 6 * state.shake;
-    drawBackground();
-
-    const renderables = [
-      ...state.gates.map(item => ({ type: 'gate', item })),
-      ...state.debris.map(item => ({ type: 'debris', item })),
-      ...state.pickups.map(item => ({ type: 'pickup', item })),
-      ...state.enemies.map(item => ({ type: 'enemy', item }))
-    ];
-
-    renderables.sort((a, b) => dist(b.item.x, b.item.y, state.player.x, state.player.y) - dist(a.item.x, a.item.y, state.player.x, state.player.y));
-
-    renderables.forEach(entry => {
-      if (entry.type === 'gate') drawGate(entry.item);
-      if (entry.type === 'debris') drawDebris(entry.item);
-      if (entry.type === 'pickup') drawPickup(entry.item);
-      if (entry.type === 'enemy') drawEnemy(entry.item);
-    });
-
-    drawParticles();
-    drawBullets();
-    drawPlayer();
-
-    const retX = VIEW.centerX;
-    const retY = VIEW.centerY - 70;
-    ctx.strokeStyle = 'rgba(125,252,154,0.35)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(retX, retY, 10, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(retX - 18, retY);
-    ctx.lineTo(retX - 6, retY);
-    ctx.moveTo(retX + 6, retY);
-    ctx.lineTo(retX + 18, retY);
-    ctx.moveTo(retX, retY - 18);
-    ctx.lineTo(retX, retY - 6);
-    ctx.moveTo(retX, retY + 6);
-    ctx.lineTo(retX, retY + 18);
-    ctx.stroke();
-
-    drawNavArrow();
-    drawObjectivePanel();
-
-    if (state.stormLevel > 0) {
-      const intensity = Math.min(0.35, state.stormLevel * 0.25);
-      ctx.fillStyle = `rgba(60,120,200,${0.08 + intensity * 0.2})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = `rgba(120,200,255,${0.05 + intensity * 0.1})`;
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 12; i++) {
-        const x = (i / 11) * canvas.width;
-        const y = (Math.sin(performance.now() / 300 + i) * 0.4 + 0.5) * canvas.height;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + 40, y + 20);
-        ctx.stroke();
+    const bossRequired = player.chapterIndex >= 5;
+    if (bossRequired && player.distanceThisChapter > chapter.distanceGoal * 0.8 && !world.bossesDefeated[player.chapterIndex]) {
+      const bossExists = entities.enemies.some((enemy) => enemy.isBoss);
+      if (!bossExists) {
+        const angle = Math.random() * Math.PI * 2;
+        spawnBoss(player.x + Math.cos(angle) * 320, player.y + Math.sin(angle) * 320);
       }
     }
 
-    if (state.jumpFlash > 0) {
-      ctx.fillStyle = `rgba(125,252,154,${0.25 * state.jumpFlash})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = `rgba(180,255,210,${0.35 * state.jumpFlash})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(VIEW.centerX, VIEW.centerY, 120 + state.jumpFlash * 120, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    if (state.signal < 45) {
-      const intensity = (1 - state.signal / 45) * 0.25;
-      ctx.fillStyle = `rgba(255,80,80,${intensity})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    if (state.hitFlash > 0) {
-      ctx.fillStyle = `rgba(255,80,80,${0.18 * state.hitFlash})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    if (!state.running) {
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+    maybeAdvanceChapter();
   }
 
-  function loop(timestamp) {
-    if (!state.running) return;
-    const dt = Math.min(40, timestamp - state.lastTime);
-    state.lastTime = timestamp;
-    update(dt);
-    render();
-    requestAnimationFrame(loop);
+  function update(dt) {
+    if (input.justPressed['KeyC']) {
+      if (player.energy >= 20) {
+        player.energy -= 20;
+        state.scanPulse = 2.2;
+        noteStatus('Scanner pulse active.');
+      } else {
+        noteStatus('Insufficient energy for scan.');
+      }
+    }
+    state.scanPulse = Math.max(0, state.scanPulse - dt);
+    updatePlayer(dt);
+    updateEnemies(dt);
+    updateBullets(dt);
+    updateDrones(dt);
+    updateLoot(dt);
+    updateEffects(dt);
+    handleCollisions(dt);
+    updateProgress(dt);
+    updateDifficulty();
+    updateStatusTimer(dt);
+    updateHud();
+    updateUpgradeButtons();
+    input.justPressed = {};
   }
 
   function updateHud() {
-    if (!progress) return;
-    const player = state.player;
-    if (hudHp) hudHp.textContent = `Hull: ${Math.max(0, Math.round(player.hp))}`;
-    if (hudShield) hudShield.textContent = `Shield: ${Math.round(player.shield)}`;
-    if (hudCredits) hudCredits.textContent = `Credits: ${formatCredits(progress.credits)}`;
-    if (hudChapter) {
-      const bestLabel = bestProgressScore ? ` (Best ${formatProgressScore(bestProgressScore)})` : '';
-      hudChapter.textContent = `Chapter: ${state.chapterIndex + 1}/${JOURNEY.length}${bestLabel}`;
-    }
-    const segmentCount = currentChapter()?.segments?.length || 0;
-    if (hudCheckpoint) hudCheckpoint.textContent = `Checkpoint: ${state.checkpointIndex}/${segmentCount}`;
-    if (hudScore) {
-      const segment = currentSegment();
-      const segPct = segment ? Math.min(100, Math.round((state.segmentDistance / segment.length) * 100)) : 0;
-      const gateTotal = state.gates.length || 0;
-      const gateIndex = gateTotal ? Math.min(state.segmentGateIndex + 1, gateTotal) : 0;
-      const nextGate = state.gates[state.segmentGateIndex];
-      const gateDist = nextGate ? Math.round(dist(player.x, player.y, nextGate.x, nextGate.y)) : 0;
-      const gatePct = state.gateChargeTarget > 0 ? Math.round((state.gateCharge / state.gateChargeTarget) * 100) : 0;
-      const gateText = gateTotal ? `Gate ${gateIndex}/${gateTotal} • ${gateDist}m` : 'Gate --';
-      const stabilizeText = gatePct > 0 ? ` • Stabilize ${gatePct}%` : '';
-      hudScore.textContent = `Drift: ${formatDistance(state.chapterDistance)} (${segPct}%) • ${gateText}${stabilizeText} • Signal ${Math.round(state.signal)}%`;
-    }
-    updateObjectiveDisplay();
+    if (hudHp) hudHp.textContent = `Hull: ${Math.round(player.hp)}/${Math.round(cachedStats.maxHp)}`;
+    if (hudShield) hudShield.textContent = `Shield: ${Math.round(player.shield)}/${Math.round(cachedStats.maxShield)}`;
+    if (hudCredits) hudCredits.textContent = `Credits: ${Math.round(player.credits)}`;
+    if (hudChapter) hudChapter.textContent = `Chapter: ${player.chapterIndex + 1}/${CHAPTERS.length}`;
+    if (hudCheckpoint) hudCheckpoint.textContent = `Checkpoint: ${player.checkpointIndex}/3`;
+    if (hudScore) hudScore.textContent = `Distance: ${Math.floor(player.distanceTotal)}`;
+    const chapter = CHAPTERS[player.chapterIndex];
+    if (hudObjective && chapter) hudObjective.textContent = `Objective: ${chapter.objective}`;
   }
 
-  function bindInput() {
-    if (window.__swarmBound) return;
-    window.__swarmBound = true;
-    document.addEventListener('keydown', (e) => {
-      if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
-      input.keys[e.code] = true;
-      if (e.code === 'KeyR') {
-        restartFromCheckpoint();
+  function drawBackground(camera) {
+    const gradient = ctx.createLinearGradient(0, 0, 0, VIEW.height);
+    gradient.addColorStop(0, '#050a14');
+    gradient.addColorStop(1, '#0b1a2d');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+
+    STAR_LAYERS.forEach((layer, idx) => {
+      ctx.fillStyle = `rgba(180,220,255,${layer.alpha})`;
+      starLayers[idx].forEach((star) => {
+        const screenX = star.x - camera.x * layer.speed + VIEW.centerX;
+        const screenY = star.y - camera.y * layer.speed + VIEW.centerY;
+        if (screenX < -10 || screenX > VIEW.width + 10 || screenY < -10 || screenY > VIEW.height + 10) return;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, star.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    });
+  }
+
+  function drawSectorFeatures(sector, camera) {
+    sector.entities.planets.forEach((planet) => {
+      const x = planet.x - camera.x + VIEW.centerX;
+      const y = planet.y - camera.y + VIEW.centerY;
+      const grad = ctx.createRadialGradient(x - 20, y - 20, planet.radius * 0.2, x, y, planet.radius);
+      grad.addColorStop(0, `hsla(${planet.hue},70%,60%,0.9)`);
+      grad.addColorStop(1, `hsla(${planet.hue + 20},65%,30%,0.85)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, planet.radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    sector.entities.storms.forEach((storm) => {
+      const x = storm.x - camera.x + VIEW.centerX;
+      const y = storm.y - camera.y + VIEW.centerY;
+      ctx.fillStyle = `rgba(90,160,255,${storm.intensity * 0.2})`;
+      ctx.beginPath();
+      ctx.arc(x, y, storm.radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    sector.entities.asteroids.forEach((asteroid) => {
+      const x = asteroid.x - camera.x + VIEW.centerX;
+      const y = asteroid.y - camera.y + VIEW.centerY;
+      ctx.fillStyle = '#283241';
+      ctx.beginPath();
+      ctx.arc(x, y, asteroid.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(125,252,154,0.15)';
+      ctx.stroke();
+    });
+
+    sector.entities.stations.forEach((station) => {
+      const x = station.x - camera.x + VIEW.centerX;
+      const y = station.y - camera.y + VIEW.centerY;
+      ctx.strokeStyle = 'rgba(125,252,154,0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, station.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(125,252,154,0.12)';
+      ctx.fill();
+      ctx.lineWidth = 1;
+    });
+
+    sector.entities.caches.forEach((cache) => {
+      if (world.cacheClaims[sector.key]) return;
+      if (state.scanPulse <= 0 && dist(player.x, player.y, cache.x, cache.y) > 140) return;
+      const x = cache.x - camera.x + VIEW.centerX;
+      const y = cache.y - camera.y + VIEW.centerY;
+      ctx.strokeStyle = 'rgba(255,179,71,0.8)';
+      ctx.beginPath();
+      ctx.arc(x, y, cache.radius + Math.sin(state.time * 2) * 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,179,71,0.2)';
+      ctx.fill();
+    });
+  }
+
+  function drawEntities(camera) {
+    entities.loot.forEach((drop) => {
+      const x = drop.x - camera.x + VIEW.centerX;
+      const y = drop.y - camera.y + VIEW.centerY;
+      ctx.fillStyle = drop.type === 'credits' ? '#ffd166' : drop.type === 'data' ? '#6df0ff' : '#7dfc9a';
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    entities.bullets.forEach((bullet) => {
+      const x = bullet.x - camera.x + VIEW.centerX;
+      const y = bullet.y - camera.y + VIEW.centerY;
+      ctx.fillStyle = bullet.color;
+      ctx.beginPath();
+      ctx.arc(x, y, bullet.splash ? 4 : 2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    entities.enemyBullets.forEach((bullet) => {
+      const x = bullet.x - camera.x + VIEW.centerX;
+      const y = bullet.y - camera.y + VIEW.centerY;
+      ctx.fillStyle = bullet.color;
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    entities.enemies.forEach((enemy) => {
+      const x = enemy.x - camera.x + VIEW.centerX;
+      const y = enemy.y - camera.y + VIEW.centerY;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(enemy.angle || 0);
+      ctx.fillStyle = enemy.isBoss ? '#ffb347' : enemy.def?.color || '#ff6b6b';
+      ctx.beginPath();
+      if (enemy.isBoss) {
+        ctx.moveTo(0, -enemy.size);
+        ctx.lineTo(enemy.size * 0.9, enemy.size);
+        ctx.lineTo(-enemy.size * 0.9, enemy.size);
+      } else {
+        ctx.moveTo(0, -enemy.size);
+        ctx.lineTo(enemy.size * 0.7, enemy.size);
+        ctx.lineTo(-enemy.size * 0.7, enemy.size);
       }
-      if (e.code === 'Escape') pause();
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     });
-    document.addEventListener('keyup', (e) => {
-      input.keys[e.code] = false;
+
+    entities.drones.forEach((drone) => {
+      const x = drone.x - camera.x + VIEW.centerX;
+      const y = drone.y - camera.y + VIEW.centerY;
+      ctx.fillStyle = drone.type === 'attack' ? '#c77dff' : '#6df0ff';
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
     });
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) pause();
+
+    entities.effects.forEach((effect) => {
+      const x = effect.x - camera.x + VIEW.centerX;
+      const y = effect.y - camera.y + VIEW.centerY;
+      ctx.strokeStyle = effect.color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = Math.max(0, effect.life * 2);
+      ctx.beginPath();
+      ctx.arc(x, y, effect.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1;
+    });
+
+    const px = player.x - camera.x + VIEW.centerX;
+    const py = player.y - camera.y + VIEW.centerY;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(player.angle + Math.PI / 2);
+    ctx.fillStyle = '#7dfc9a';
+    ctx.beginPath();
+    ctx.moveTo(0, -cachedStats.size * 1.3);
+    ctx.lineTo(cachedStats.size * 0.9, cachedStats.size * 1.2);
+    ctx.lineTo(-cachedStats.size * 0.9, cachedStats.size * 1.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    if (player.shield > 0) {
+      ctx.strokeStyle = 'rgba(109,240,255,0.4)';
+      ctx.beginPath();
+      ctx.arc(px, py, cachedStats.size + 6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  function drawMiniMap(camera) {
+    const mapSize = 120;
+    const padding = 12;
+    const mapX = VIEW.width - mapSize - padding;
+    const mapY = padding;
+    ctx.fillStyle = 'rgba(5,10,18,0.7)';
+    ctx.fillRect(mapX, mapY, mapSize, mapSize);
+    ctx.strokeStyle = 'rgba(125,252,154,0.4)';
+    ctx.strokeRect(mapX, mapY, mapSize, mapSize);
+
+    for (let sx = 0; sx <= WORLD.maxSector; sx += 1) {
+      for (let sy = 0; sy <= WORLD.maxSector; sy += 1) {
+        const key = sectorKey(sx, sy);
+        const cellX = mapX + (sx / (WORLD.maxSector + 1)) * mapSize;
+        const cellY = mapY + (sy / (WORLD.maxSector + 1)) * mapSize;
+        ctx.fillStyle = world.discovered.has(key) ? 'rgba(125,252,154,0.6)' : 'rgba(80,90,110,0.4)';
+        ctx.fillRect(cellX + 2, cellY + 2, 6, 6);
+      }
+    }
+
+    const px = mapX + ((player.x + WORLD.half) / WORLD.size) * mapSize;
+    const py = mapY + ((player.y + WORLD.half) / WORLD.size) * mapSize;
+    ctx.fillStyle = '#ffb347';
+    ctx.beginPath();
+    ctx.arc(px, py, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function render() {
+    const camera = { x: player.x, y: player.y };
+    drawBackground(camera);
+    const sector = getSectorAtPlayer();
+    drawSectorFeatures(sector, camera);
+    drawEntities(camera);
+    drawMiniMap(camera);
+  }
+
+  function tick(timestamp) {
+    if (!state.lastFrame) state.lastFrame = timestamp;
+    const dt = Math.min(0.05, (timestamp - state.lastFrame) / 1000);
+    state.lastFrame = timestamp;
+    state.time += dt;
+
+    if (state.running && !state.paused) {
+      update(dt);
+      state.lastSaveAt += dt;
+      state.lastCloudAt += dt;
+      if (state.lastSaveAt > 60) {
+        state.lastSaveAt = 0;
+        saveLocal();
+      }
+      if (state.lastCloudAt > 90) {
+        state.lastCloudAt = 0;
+        pushCloudSave();
+      }
+    } else {
+      updateStatusTimer(dt);
+    }
+
+    render();
+    state.frameId = requestAnimationFrame(tick);
+  }
+
+  function updateUpgradeButtons() {
+    upgradeButtons.forEach((btn) => {
+      const id = btn.dataset.swarmUpgrade;
+      const def = UPGRADE_DEFS[id];
+      if (!def) return;
+      const level = player.upgrades[id] || 0;
+      const cost = Math.round(def.baseCost * Math.pow(1.5, level));
+      if (level >= def.max) {
+        btn.textContent = `${def.label} (MAX)`;
+        btn.disabled = true;
+      } else {
+        btn.textContent = `${def.label} Lv.${level + 1} - ${cost}`;
+        btn.disabled = player.credits < cost;
+      }
     });
   }
 
-  async function ensureProgress() {
-    if (progressReady) return;
-    progressReady = true;
-    progress = await loadProgress();
-    sanitizeProgress();
-    applyUpgrades();
-    updateUpgradeButtons();
-    updateAuthNote();
-    loadBestProgressScore();
-    state.ready = true;
-  }
-
-  async function initSwarm() {
-    bindInput();
-    await ensureProgress();
-    if (progress.chapter > JOURNEY.length) {
-      showJourneyComplete();
-      render();
+  function purchaseUpgrade(id) {
+    const def = UPGRADE_DEFS[id];
+    if (!def) return;
+    const level = player.upgrades[id] || 0;
+    if (level >= def.max) return;
+    const cost = Math.round(def.baseCost * Math.pow(1.5, level));
+    if (player.credits < cost) {
+      noteStatus('Insufficient credits.');
       return;
     }
-    setupChapter(progress.chapter - 1, progress.checkpoint);
-    showChapterBriefing();
-    render();
+    player.credits -= cost;
+    player.upgrades[id] = level + 1;
+    refreshStats({ keepRatios: true });
+    spawnDrones();
+    updateUpgradeButtons();
+    noteStatus(`${def.label} upgraded.`);
+  }
 
-    if (!upgradesBound) {
-      upgradeButtons.forEach(btn => {
+  function showBriefing() {
+    const chapter = CHAPTERS[player.chapterIndex];
+    if (!chapter || !briefing) return;
+    if (briefKicker) briefKicker.textContent = `Chapter ${chapter.id}`;
+    if (briefTitle) briefTitle.textContent = chapter.title;
+    if (briefBody) briefBody.textContent = chapter.brief;
+    if (briefPrimary) briefPrimary.textContent = chapter.objective;
+    if (briefOptional) {
+      briefOptional.innerHTML = '';
+      chapter.optional.forEach((opt) => {
+        const li = document.createElement('li');
+        li.textContent = opt.text;
+        briefOptional.appendChild(li);
+      });
+    }
+    briefing.classList.add('active');
+    state.awaitingBrief = true;
+    state.paused = true;
+  }
+
+  function hideBriefing() {
+    if (!briefing) return;
+    briefing.classList.remove('active');
+    state.awaitingBrief = false;
+    state.paused = false;
+  }
+
+  function saveLocal() {
+    const save = {
+      version: SAVE_VERSION,
+      savedAt: Date.now(),
+      player: {
+        x: player.x,
+        y: player.y,
+        hp: player.hp,
+        shield: player.shield,
+        boost: player.boost,
+        energy: player.energy,
+        hullSize: player.hullSize,
+        credits: player.credits,
+        upgrades: player.upgrades,
+        blueprints: Array.from(player.blueprints),
+        skins: player.skins,
+        toys: player.toys,
+        chapterIndex: player.chapterIndex,
+        distanceThisChapter: player.distanceThisChapter,
+        distanceTotal: player.distanceTotal,
+        checkpointIndex: player.checkpointIndex
+      },
+      world: {
+        discovered: Array.from(world.discovered),
+        cacheClaims: world.cacheClaims,
+        bossesDefeated: world.bossesDefeated
+      },
+      checkpoint: state.checkpoint
+    };
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+    } catch (err) {
+      console.warn('Save failed', err);
+    }
+  }
+
+  function loadLocal() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return null;
+      const save = JSON.parse(raw);
+      if (!save || save.version !== SAVE_VERSION) return null;
+      return save;
+    } catch (err) {
+      console.warn('Load failed', err);
+      return null;
+    }
+  }
+
+  function applySave(save) {
+    if (!save) return;
+    const savedPlayer = save.player || {};
+    player.x = savedPlayer.x ?? player.x;
+    player.y = savedPlayer.y ?? player.y;
+    player.hp = savedPlayer.hp ?? player.hp;
+    player.shield = savedPlayer.shield ?? player.shield;
+    player.boost = savedPlayer.boost ?? player.boost;
+    player.energy = savedPlayer.energy ?? player.energy;
+    player.hullSize = HULL_SIZES[savedPlayer.hullSize] ? savedPlayer.hullSize : player.hullSize;
+    player.credits = savedPlayer.credits ?? player.credits;
+    player.upgrades = { ...player.upgrades, ...(savedPlayer.upgrades || {}) };
+    player.blueprints = new Set(savedPlayer.blueprints || []);
+    player.skins = savedPlayer.skins || [];
+    player.toys = savedPlayer.toys || [];
+    player.chapterIndex = savedPlayer.chapterIndex ?? player.chapterIndex;
+    player.distanceThisChapter = savedPlayer.distanceThisChapter ?? player.distanceThisChapter;
+    player.distanceTotal = savedPlayer.distanceTotal ?? player.distanceTotal;
+    player.checkpointIndex = savedPlayer.checkpointIndex ?? player.checkpointIndex;
+
+    world.discovered = new Set(save.world?.discovered || []);
+    world.cacheClaims = save.world?.cacheClaims || {};
+    world.bossesDefeated = save.world?.bossesDefeated || {};
+
+    state.checkpoint = save.checkpoint || state.checkpoint;
+
+    refreshStats({ keepRatios: true });
+    spawnDrones();
+    updateDifficulty();
+    resetChapterState();
+    state.awaitingBrief = false;
+    state.paused = false;
+  }
+
+  async function pullCloudSave() {
+    if (!hasFirebaseConfig()) {
+      if (authNote) authNote.textContent = 'Cloud sync unavailable.';
+      return;
+    }
+    const user = await waitForAuth();
+    if (!user) {
+      if (authNote) authNote.textContent = 'Sign in for cloud sync.';
+      return;
+    }
+    state.cloudReady = true;
+    if (authNote) authNote.textContent = 'Cloud sync ready.';
+    try {
+      const docRef = doc(db, 'gameSaves', `${user.uid}_swarmBreaker`);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) return;
+      const cloud = snap.data();
+      const cloudSave = cloud?.data;
+      const cloudUpdated = cloud?.clientUpdatedAt || 0;
+      const local = loadLocal();
+      const localUpdated = local?.savedAt || 0;
+      if (cloudSave && cloudUpdated > localUpdated) {
+        applySave(cloudSave);
+        noteStatus('Cloud save loaded.');
+      }
+    } catch (err) {
+      console.warn('Cloud sync failed', err);
+    }
+  }
+
+  async function pushCloudSave() {
+    if (!state.cloudReady) return;
+    const user = await waitForAuth();
+    if (!user) return;
+    const save = loadLocal();
+    if (!save) return;
+    try {
+      const docRef = doc(db, 'gameSaves', `${user.uid}_swarmBreaker`);
+      await setDoc(docRef, {
+        uid: user.uid,
+        gameId: GAME_ID,
+        data: save,
+        clientUpdatedAt: save.savedAt,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Cloud save push failed', err);
+    }
+  }
+
+  function bindInputs() {
+    if (window.__swarmBound) return;
+    window.__swarmBound = true;
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      input.keys[e.code] = true;
+      input.justPressed[e.code] = true;
+    });
+    window.addEventListener('keyup', (e) => {
+      input.keys[e.code] = false;
+    });
+    window.addEventListener('blur', () => {
+      input.keys = {};
+      input.justPressed = {};
+    });
+  }
+
+  function handleStart() {
+    if (state.awaitingBrief) {
+      noteStatus('Review the briefing and press Begin Chapter.');
+      return;
+    }
+    if (!state.running) {
+      state.running = true;
+      state.paused = false;
+      if (!state.frameId) state.frameId = requestAnimationFrame(tick);
+      noteStatus('Engines online.');
+    } else if (state.paused) {
+      state.paused = false;
+      noteStatus('Resumed.');
+    }
+  }
+
+  function handlePause() {
+    if (!state.running) return;
+    if (state.awaitingBrief) return;
+    state.paused = !state.paused;
+    noteStatus(state.paused ? 'Paused.' : 'Resumed.');
+  }
+
+  function handleReset() {
+    resetRun({ full: false });
+    saveLocal();
+  }
+
+  function initSwarm() {
+    bindInputs();
+    if (!window.__swarmUiBound) {
+      window.__swarmUiBound = true;
+      if (startBtn) startBtn.addEventListener('click', handleStart);
+      if (pauseBtn) pauseBtn.addEventListener('click', handlePause);
+      if (resetBtn) resetBtn.addEventListener('click', handleReset);
+      if (briefLaunch) briefLaunch.addEventListener('click', () => {
+        hideBriefing();
+        if (!state.running) handleStart();
+      });
+
+      upgradeButtons.forEach((btn) => {
         btn.addEventListener('click', () => purchaseUpgrade(btn.dataset.swarmUpgrade));
       });
-      upgradesBound = true;
     }
+
+    const localSave = loadLocal();
+    if (localSave) {
+      applySave(localSave);
+      noteStatus('Local save loaded.');
+    } else {
+      resetRun({ full: true });
+    }
+
+    getHighScore(GAME_ID).then((score) => {
+      state.bestDistance = score || 0;
+      if (score) noteStatus(`Best distance: ${score}`);
+    });
+
+    pullCloudSave();
+    spawnDrones();
+    updateUpgradeButtons();
+    updateHud();
+
+    if (!state.frameId) state.frameId = requestAnimationFrame(tick);
   }
 
   function stopSwarm() {
     state.running = false;
-    render();
+    state.paused = false;
+    if (state.frameId) cancelAnimationFrame(state.frameId);
+    state.frameId = null;
+    saveLocal();
   }
 
-  startBtn?.addEventListener('click', () => {
-    hideBriefing();
-    start();
-  });
-  pauseBtn?.addEventListener('click', pause);
-  resetBtn?.addEventListener('click', () => {
-    progress.checkpoint = 0;
-    queueSave();
-    setupChapter(state.chapterIndex, 0);
-    showChapterBriefing('Restarted');
-  });
+  window.addEventListener('beforeunload', () => saveLocal());
 
   window.initSwarm = initSwarm;
   window.stopSwarm = stopSwarm;
