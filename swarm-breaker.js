@@ -50,18 +50,30 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   };
 
   const GAME_ID = 'spacex-exploration-flagship';
-  const SAVE_VERSION = 6;
+  const SAVE_VERSION = 7;
   const SAVE_KEY = `swarmBreakerSave_v${SAVE_VERSION}`;
   const WORLD_SEED = 284113;
 
   const WORLD = {
-    sectorSize: 900,
-    gridRadius: 7,
-    maxDepth: 7
+    sectorSize: 980,
+    gridRadius: 14,
+    maxDepth: 12
   };
   WORLD.size = (WORLD.gridRadius * 2 + 1) * WORLD.sectorSize;
   WORLD.half = WORLD.size / 2;
   WORLD.boundary = WORLD.gridRadius * WORLD.sectorSize + WORLD.sectorSize * 0.4;
+
+  const PHYSICS = {
+    linearDamp: 0.986,
+    assistDamp: 0.88,
+    angularDamp: 0.86,
+    maxAngular: 3.1,
+    collisionElasticity: 0.28,
+    collisionDamp: 0.7,
+    gravityConstant: 18000,
+    gravityMinRadius: 70,
+    gravityMaxRadius: 380
+  };
 
   const PALETTE = {
     ink: '#04070d',
@@ -82,38 +94,163 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     redshift: { name: 'Redshift', hue: 20, accent: '#ff8b5c', fog: 'rgba(180,80,60,0.14)', dust: 'rgba(255,160,120,0.12)', threat: 1.4 },
     bastion: { name: 'Bastion', hue: 135, accent: '#7dfc9a', fog: 'rgba(80,140,100,0.12)', dust: 'rgba(120,230,160,0.12)', threat: 1.55 },
     darklane: { name: 'Darklane', hue: 240, accent: '#8899ff', fog: 'rgba(70,80,150,0.18)', dust: 'rgba(120,140,220,0.12)', threat: 1.7 },
-    starforge: { name: 'Starforge', hue: 45, accent: '#ffd166', fog: 'rgba(220,170,90,0.12)', dust: 'rgba(255,210,140,0.12)', threat: 1.9 }
+    starforge: { name: 'Starforge', hue: 45, accent: '#ffd166', fog: 'rgba(220,170,90,0.12)', dust: 'rgba(255,210,140,0.12)', threat: 1.9 },
+    hollow: { name: 'Hollow Reach', hue: 300, accent: '#f5a6ff', fog: 'rgba(160,90,170,0.15)', dust: 'rgba(210,150,230,0.12)', threat: 2.05 },
+    emberveil: { name: 'Emberveil', hue: 15, accent: '#ff9f6b', fog: 'rgba(190,80,60,0.14)', dust: 'rgba(255,150,120,0.12)', threat: 2.2 },
+    solstice: { name: 'Solstice', hue: 55, accent: '#ffe08a', fog: 'rgba(220,200,120,0.12)', dust: 'rgba(255,230,170,0.12)', threat: 2.35 },
+    blackout: { name: 'Blackout', hue: 230, accent: '#9aa7ff', fog: 'rgba(70,90,140,0.2)', dust: 'rgba(120,140,200,0.14)', threat: 2.55 }
   };
 
+  const REGION_BANDS = [
+    ['driftline', 'glasswake'],
+    ['stormvault', 'redshift'],
+    ['bastion', 'darklane'],
+    ['starforge', 'hollow'],
+    ['emberveil', 'solstice'],
+    ['blackout']
+  ];
+
+  const SYSTEM_NAME_PARTS = {
+    prefix: ['Aether', 'Vanta', 'Sol', 'Nova', 'Argo', 'Lyra', 'Kessel', 'Orion', 'Vesper', 'Echo', 'Cinder', 'Lux'],
+    suffix: ['Reach', 'Gate', 'Belt', 'Span', 'Drift', 'Crown', 'Fall', 'Haven', 'Field', 'Run', 'Vault', 'Pass']
+  };
+
+  const FACTIONS = [
+    { id: 'aetherline', name: 'Aetherline Initiative', color: '#6df0ff' },
+    { id: 'ion_clade', name: 'Ion Clade', color: '#c77dff' },
+    { id: 'redshift_cartel', name: 'Redshift Cartel', color: '#ff8b5c' },
+    { id: 'bastion_order', name: 'Bastion Order', color: '#7dfc9a' },
+    { id: 'darklane_refuge', name: 'Darklane Refuge', color: '#8899ff' }
+  ];
+
+  const BASE_TYPES = {
+    outpost: { id: 'outpost', label: 'Outpost', hp: 260, shield: 140, radius: 70, turretCount: 3, spawn: ['scout', 'fighter'], color: '#7dfc9a' },
+    fortress: { id: 'fortress', label: 'Fortress', hp: 520, shield: 280, radius: 100, turretCount: 5, spawn: ['fighter', 'bomber', 'gunship'], color: '#ffb347' },
+    refinery: { id: 'refinery', label: 'Refinery', hp: 340, shield: 180, radius: 86, turretCount: 4, spawn: ['interceptor', 'gunship'], color: '#ffd166' },
+    relay: { id: 'relay', label: 'Relay Node', hp: 220, shield: 120, radius: 64, turretCount: 2, spawn: ['scout', 'interceptor'], color: '#6df0ff' }
+  };
+
+  const LORE_ENTRIES = [
+    { id: 'log_01', title: 'Tenney Belt Broadcast', text: 'The Aetherline Initiative opened recruitment for deep-range pilots.' },
+    { id: 'log_02', title: 'Signal Ash', text: 'Ion Clade interference forced Relay Eighty-Seven into emergency drift.' },
+    { id: 'log_03', title: 'Scout Debrief', text: 'Glasswake currents are rich with derelict nav cores and hidden caches.' },
+    { id: 'log_04', title: 'Launch Manifest', text: 'Transport carriers now deploy interceptors to protect fuel convoys.' },
+    { id: 'log_05', title: 'Driftline Memo', text: 'Flight assist fails under sustained boost. Manual control is advised.' },
+    { id: 'log_06', title: 'Warden Key', text: 'Starforge security requires three relay keys and a live nav imprint.' },
+    { id: 'log_07', title: 'Refuge Convoy', text: 'Darklane refugees have been moving in silent lanes to avoid patrols.' },
+    { id: 'log_08', title: 'Stormvault Note', text: 'Ion storms invert shield harmonics. Use staggered recharge cycles.' },
+    { id: 'log_09', title: 'Transponder Echo', text: 'Unregistered carriers broadcast a false Aetherline signature.' },
+    { id: 'log_10', title: 'Pilot Journal', text: 'The Hollow Reach bends sound. Keep eyes on the thruster glow.' },
+    { id: 'log_11', title: 'Aetherline Update', text: 'New cargo protocols prioritize salvage over mineral samples.' },
+    { id: 'log_12', title: 'Redshift Advisory', text: 'Redshift tides disrupt homing missiles beyond 600 meters.' },
+    { id: 'log_13', title: 'Ops Directive', text: 'Disable refinery cores to cut cartel transport reinforcements.' },
+    { id: 'log_14', title: 'Salvage Crew', text: 'Recovered armor plates show unusual lattice patterns.' },
+    { id: 'log_15', title: 'Navigation Drift', text: 'Sector grids shift by 0.02 per cycle. Driftline charts updated.' },
+    { id: 'log_16', title: 'Docking Protocol', text: 'Home base bays accept bulk ammo only after hazard clearance.' },
+    { id: 'log_17', title: 'Carrier Field Notes', text: 'Carriers vent plasma when hangar doors cycle. Exploit the breach.' },
+    { id: 'log_18', title: 'Scanner Blueprint', text: 'Scanner drones detect harmonic caches under storm intensity spikes.' },
+    { id: 'log_19', title: 'Gunship Report', text: 'Gunships prefer broadside angles. Stay under the stern arc.' },
+    { id: 'log_20', title: 'Bastion Order', text: 'Defense lattice nodes coordinate via phased pulse beacons.' },
+    { id: 'log_21', title: 'Convoy Schedule', text: 'Transport windows open during solar minima in Emberveil.' },
+    { id: 'log_22', title: 'Hollow Signal', text: 'Silent relays still carry echoes of the first Aetherline jump.' },
+    { id: 'log_23', title: 'Pilot Test', text: 'Rail spears show 12% higher penetration after nano polishing.' },
+    { id: 'log_24', title: 'Shield Lattice', text: 'Nanofiber arrays stabilize faster if energy is kept above 40%.' },
+    { id: 'log_25', title: 'Harbor Watch', text: 'Refuge stations are moving to hidden orbitals near Darklane.' },
+    { id: 'log_26', title: 'Fleet Doctrine', text: 'Intercept at range, then pull to 350 meters for strikes.' },
+    { id: 'log_27', title: 'Cache Rumor', text: 'Blueprints tagged in amber signal illicit modifications.' },
+    { id: 'log_28', title: 'Core Leak', text: 'Engine packs run hotter after sustained boost chains.' },
+    { id: 'log_29', title: 'Fleet Whisper', text: 'The Starforge guardian tracks threat levels, not hull size.' },
+    { id: 'log_30', title: 'Courier Note', text: 'Avoid gravity wells when hauling cargo. Lateral drift grows fast.' },
+    { id: 'log_31', title: 'Anomaly Trace', text: 'Anomaly charge peaks when scan pulses align with sector edges.' },
+    { id: 'log_32', title: 'Aetherline Memo', text: 'Prototype turrets now fire adaptive clusters at close range.' },
+    { id: 'log_33', title: 'Glasswake Echo', text: 'Recovered logs mention a hidden vault beyond the relay gate.' },
+    { id: 'log_34', title: 'Outpost Brief', text: 'Enemy outposts seed drones before carriers arrive.' },
+    { id: 'log_35', title: 'Driftline Prayer', text: 'Pilots whisper that Driftline storms answer only to patience.' },
+    { id: 'log_36', title: 'Refinery Record', text: 'Emberveil cores cycle every 92 seconds; overload at 95.' },
+    { id: 'log_37', title: 'Atlas Fragment', text: 'Old Atlas charts show a lattice of hidden relay gates.' },
+    { id: 'log_38', title: 'Hollow Beacon', text: 'Beacon arrays use inverted signals to dodge cartel scans.' },
+    { id: 'log_39', title: 'Carrier Log', text: 'Transport crews paint their hulls in soot to absorb sensor light.' },
+    { id: 'log_40', title: 'Vesper Note', text: 'Vesper stations trade relics for flak canisters.' },
+    { id: 'log_41', title: 'Ion Clade Notice', text: 'Ion Clade fleets avoid nebula cores after shield failures.' },
+    { id: 'log_42', title: 'Bastion Contract', text: 'Lattice nodes pay extra for base strikes in the inner ring.' },
+    { id: 'log_43', title: 'Aetherline Diary', text: 'First jump pilots said the Stars bent like glass.' },
+    { id: 'log_44', title: 'Cargo Ledger', text: 'Alloys fetch double value when sold at home base.' },
+    { id: 'log_45', title: 'Signal Archive', text: 'Recovered archives show Starforge AI still learning.' },
+    { id: 'log_46', title: 'Redshift Warning', text: 'Boost fuel vaporizes faster near redshift anomalies.' },
+    { id: 'log_47', title: 'Relay Whisper', text: 'The last relay key is held inside a fortress in the Hollow.' },
+    { id: 'log_48', title: 'Convoy Oath', text: 'Refuge convoys hide their lights in dust shadows.' },
+    { id: 'log_49', title: 'Guardian Note', text: 'The guardian resets after each phase. Pressure it hard.' },
+    { id: 'log_50', title: 'Home Base Dispatch', text: 'Aetherline Bastion is open to all pilots with clean logs.' },
+    { id: 'log_51', title: 'Hidden Cove', text: 'A quiet cove near Solstice hides a dormant ship core.' },
+    { id: 'log_52', title: 'Convoy Whisper', text: 'Transports run dark when the Hollow storms flare.' },
+    { id: 'log_53', title: 'Outpost Scrap', text: 'Outposts reinforce armor with layered asteroid composites.' },
+    { id: 'log_54', title: 'Carrier Hymn', text: 'Carrier decks cycle every 30 seconds. Time your strike.' },
+    { id: 'log_55', title: 'Darklane Lantern', text: 'Refuge pilots leave light trails to guide lost scouts.' },
+    { id: 'log_56', title: 'Echo Relay', text: 'Relay echoes repeat every 14 minutes in the Driftline.' },
+    { id: 'log_57', title: 'Pilot Sol', text: 'A veteran swears by pulse repeaters in close quarters.' },
+    { id: 'log_58', title: 'Bastion Salvage', text: 'Bastion alloys fetch premium value at home base.' },
+    { id: 'log_59', title: 'Rift Fringe', text: 'Rift edges spark with unstable particles after boosts.' },
+    { id: 'log_60', title: 'Aetherline Promise', text: 'The Initiative vows to reopen the Starforge for all.' },
+    { id: 'log_61', title: 'Glasswake Coil', text: 'Spiral debris coils hide fast-moving patrols.' },
+    { id: 'log_62', title: 'Redshift Wake', text: 'Missiles drift off-course in redshift wakes.' },
+    { id: 'log_63', title: 'Stormvault Riddle', text: 'Stormvault gates open only during ion troughs.' },
+    { id: 'log_64', title: 'Scavenger Pact', text: 'Scavengers trade relics for hull plating.' },
+    { id: 'log_65', title: 'Bastion Oath', text: 'Bastion defenders never abandon a relay node.' },
+    { id: 'log_66', title: 'Carrier Spine', text: 'Carrier spines hold the launch rails together.' },
+    { id: 'log_67', title: 'Hollow Echo', text: 'Echoes in the Hollow distort shield telemetry.' },
+    { id: 'log_68', title: 'Solstice Path', text: 'Solstice lanes align when twin stars rise.' },
+    { id: 'log_69', title: 'Darklane Cartography', text: 'Cartographers map Darklane in chalk dust.' },
+    { id: 'log_70', title: 'Driftline Hymn', text: 'Old pilots hum to keep their hands steady.' },
+    { id: 'log_71', title: 'Refinery Coil', text: 'Refinery coils hum just before a flare.' },
+    { id: 'log_72', title: 'Archive Fragment', text: 'An archive fragment hints at a hidden jump gate.' },
+    { id: 'log_73', title: 'Aetherline Beacon', text: 'Aetherline beacons pulse when the storm clears.' },
+    { id: 'log_74', title: 'Convoy Tale', text: 'A convoy once crossed the Hollow without lights.' },
+    { id: 'log_75', title: 'Starforge Wake', text: 'Starforge wakes linger longer than expected.' },
+    { id: 'log_76', title: 'Guardian Whisper', text: 'The guardian listens for warp echoes.' }
+  ];
+
   const HULLS = {
-    small: { id: 'small', label: 'Small Hull', baseHp: 110, baseShield: 80, size: 14, mass: 0.95, unlockLevel: 1 },
-    medium: { id: 'medium', label: 'Medium Hull', baseHp: 150, baseShield: 110, size: 18, mass: 1.1, unlockLevel: 3 },
-    large: { id: 'large', label: 'Large Hull', baseHp: 200, baseShield: 150, size: 24, mass: 1.3, unlockLevel: 6 }
+    small: { id: 'small', label: 'Small Hull', baseHp: 110, baseShield: 80, size: 14, mass: 0.95, armor: 0.04, cargo: 6, unlockLevel: 1 },
+    medium: { id: 'medium', label: 'Medium Hull', baseHp: 150, baseShield: 110, size: 18, mass: 1.1, armor: 0.06, cargo: 10, unlockLevel: 3 },
+    large: { id: 'large', label: 'Large Hull', baseHp: 200, baseShield: 150, size: 24, mass: 1.3, armor: 0.08, cargo: 14, unlockLevel: 6 }
   };
 
   const ENGINES = {
-    standard: { id: 'standard', label: 'Standard Pack', thrust: 420, reverse: 260, maxSpeed: 320, turnRate: 0.0056, boostRegen: 24 },
-    turbo: { id: 'turbo', label: 'Turbo Pack', thrust: 475, reverse: 290, maxSpeed: 360, turnRate: 0.0059, boostRegen: 28 },
-    hyper: { id: 'hyper', label: 'Hyper Pack', thrust: 530, reverse: 320, maxSpeed: 405, turnRate: 0.0064, boostRegen: 32 }
+    standard: { id: 'standard', label: 'Standard Pack', thrust: 420, reverse: 260, maxSpeed: 320, turnRate: 0.0056, boostRegen: 24, mass: 0.18, fuelRegen: 0.9 },
+    turbo: { id: 'turbo', label: 'Turbo Pack', thrust: 475, reverse: 290, maxSpeed: 360, turnRate: 0.0059, boostRegen: 28, mass: 0.22, fuelRegen: 0.95 },
+    hyper: { id: 'hyper', label: 'Hyper Pack', thrust: 530, reverse: 320, maxSpeed: 405, turnRate: 0.0064, boostRegen: 32, mass: 0.26, fuelRegen: 1.05 }
   };
 
   const SHIELDS = {
-    standard: { id: 'standard', label: 'Standard Array', regen: 24, delay: 1.2, capacityBonus: 0 },
-    overdrive: { id: 'overdrive', label: 'Overdrive Array', regen: 22, delay: 1.1, capacityBonus: 0.18 },
-    nanofiber: { id: 'nanofiber', label: 'Nanofiber Array', regen: 30, delay: 0.9, capacityBonus: 0.12 }
+    standard: { id: 'standard', label: 'Standard Array', regen: 24, delay: 1.2, capacityBonus: 0, resist: 0.02 },
+    overdrive: { id: 'overdrive', label: 'Overdrive Array', regen: 22, delay: 1.1, capacityBonus: 0.18, resist: 0.04 },
+    nanofiber: { id: 'nanofiber', label: 'Nanofiber Array', regen: 30, delay: 0.9, capacityBonus: 0.12, resist: 0.05 }
   };
 
   const DRONE_BAYS = {
-    basic: { id: 'basic', label: 'Basic Bay', count: 2 },
-    advanced: { id: 'advanced', label: 'Advanced Bay', count: 3 },
-    swarm: { id: 'swarm', label: 'Swarm Bay', count: 5 }
+    basic: { id: 'basic', label: 'Basic Bay', count: 2, mass: 0.08 },
+    advanced: { id: 'advanced', label: 'Advanced Bay', count: 3, mass: 0.1 },
+    swarm: { id: 'swarm', label: 'Swarm Bay', count: 5, mass: 0.12 }
+  };
+
+  const AMMO_TYPES = {
+    slugs: { id: 'slugs', label: 'Rail Slugs', max: 140, price: 2 },
+    missiles: { id: 'missiles', label: 'Missiles', max: 32, price: 8 },
+    torpedoes: { id: 'torpedoes', label: 'Torpedoes', max: 14, price: 18 },
+    flak: { id: 'flak', label: 'Flak Canisters', max: 90, price: 3 },
+    mines: { id: 'mines', label: 'Mag Mines', max: 20, price: 6 }
   };
 
   const WEAPONS = {
-    laser: { id: 'laser', label: 'Laser Blaster', slot: 'primary', damage: 12, cooldown: 0.14, speed: 980, energy: 0, color: '#7dfc9a', hitscan: true },
-    plasma: { id: 'plasma', label: 'Plasma Cannon', slot: 'secondary', damage: 36, cooldown: 0.9, speed: 520, energy: 28, color: '#ffb347', splash: 52 },
-    missile: { id: 'missile', label: 'Missile Rack', slot: 'secondary', damage: 44, cooldown: 1.25, speed: 420, energy: 24, color: '#ff6b6b', homing: true, turn: 2.2 },
-    emp: { id: 'emp', label: 'EMP Burst', slot: 'secondary', damage: 18, cooldown: 1.4, speed: 780, energy: 35, color: '#6df0ff', emp: 1.0 }
+    laser: { id: 'laser', label: 'Laser Blaster', slot: 'primary', damage: 12, cooldown: 0.14, speed: 980, energy: 6, color: '#7dfc9a', hitscan: true, recoil: 8 },
+    pulse: { id: 'pulse', label: 'Pulse Repeater', slot: 'primary', damage: 9, cooldown: 0.08, speed: 820, energy: 8, color: '#6df0ff', recoil: 10 },
+    rail: { id: 'rail', label: 'Rail Spear', slot: 'primary', damage: 34, cooldown: 0.5, speed: 1120, energy: 4, ammoType: 'slugs', ammoCost: 1, color: '#ffd166', recoil: 34 },
+    plasma: { id: 'plasma', label: 'Plasma Cannon', slot: 'secondary', damage: 40, cooldown: 0.85, speed: 520, energy: 24, color: '#ffb347', splash: 58, recoil: 18 },
+    missile: { id: 'missile', label: 'Missile Rack', slot: 'secondary', damage: 48, cooldown: 1.2, speed: 420, energy: 12, ammoType: 'missiles', ammoCost: 1, color: '#ff6b6b', homing: true, turn: 2.2, recoil: 22 },
+    torpedo: { id: 'torpedo', label: 'Torpedo Lance', slot: 'secondary', damage: 90, cooldown: 1.9, speed: 300, energy: 18, ammoType: 'torpedoes', ammoCost: 1, color: '#ff9f6b', splash: 90, recoil: 38 },
+    flak: { id: 'flak', label: 'Flak Scatter', slot: 'secondary', damage: 12, cooldown: 0.7, speed: 460, energy: 10, ammoType: 'flak', ammoCost: 2, color: '#c77dff', spread: 0.4, projectiles: 6, recoil: 16 },
+    emp: { id: 'emp', label: 'EMP Burst', slot: 'secondary', damage: 18, cooldown: 1.4, speed: 780, energy: 35, color: '#6df0ff', emp: 1.0, recoil: 10 },
+    mine: { id: 'mine', label: 'Mag Mines', slot: 'secondary', damage: 54, cooldown: 1.6, speed: 0, energy: 8, ammoType: 'mines', ammoCost: 1, color: '#ff6b6b', mine: true, splash: 70, recoil: 6 }
   };
 
   const BASE = {
@@ -142,23 +279,38 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drone_swarm: { id: 'drone_swarm', name: 'Drone Swarm', unlock: { drone: 'swarm' }, effect: { droneBonus: 2 } },
     nanofiber_shield: { id: 'nanofiber_shield', name: 'Nanofiber Shield', unlock: { shield: 'nanofiber' }, effect: { shieldRegenMult: 1.15 } },
     hull_reinforce: { id: 'hull_reinforce', name: 'Hull Reinforcement', unlock: {}, effect: { hullMult: 1.12 } },
-    scanner_drone: { id: 'scanner_drone', name: 'Scanner Drone', unlock: { toy: 'scanner' }, effect: { scanRange: 1.2 } }
+    scanner_drone: { id: 'scanner_drone', name: 'Scanner Drone', unlock: { toy: 'scanner' }, effect: { scanRange: 1.2 } },
+    rail_spear: { id: 'rail_spear', name: 'Rail Spear', unlock: { weapon: 'rail' }, effect: { damageMult: 1.05 } },
+    pulse_repeater: { id: 'pulse_repeater', name: 'Pulse Repeater', unlock: { weapon: 'pulse' }, effect: { damageMult: 1.03 } },
+    flak_scatter: { id: 'flak_scatter', name: 'Flak Scatter', unlock: { weapon: 'flak' }, effect: { damageMult: 1.04 } },
+    torpedo_lance: { id: 'torpedo_lance', name: 'Torpedo Lance', unlock: { weapon: 'torpedo' }, effect: { damageMult: 1.08 } },
+    magnetic_mines: { id: 'magnetic_mines', name: 'Magnetic Mines', unlock: { weapon: 'mine' }, effect: { damageMult: 1.02 } },
+    grav_dampers: { id: 'grav_dampers', name: 'Grav Dampers', unlock: {}, effect: { massMult: 0.92 } }
   };
 
   const STORE_ITEMS = [
     { id: 'boost_pack', name: 'Boost Pack', type: 'consumable', price: 120, effect: { boost: 45 }, category: 'Boosts' },
     { id: 'energy_cell', name: 'Energy Cell', type: 'consumable', price: 140, effect: { energy: 45 }, category: 'Boosts' },
     { id: 'repair_kit', name: 'Repair Kit', type: 'consumable', price: 170, effect: { hp: 45 }, category: 'Boosts' },
+    { id: 'ammo_slugs', name: 'Rail Slugs x20', type: 'ammo', price: 40, effect: { ammo: { slugs: 20 } }, category: 'Ammo' },
+    { id: 'ammo_missiles', name: 'Missiles x6', type: 'ammo', price: 60, effect: { ammo: { missiles: 6 } }, category: 'Ammo' },
+    { id: 'ammo_torpedoes', name: 'Torpedoes x3', type: 'ammo', price: 72, effect: { ammo: { torpedoes: 3 } }, category: 'Ammo' },
+    { id: 'ammo_flak', name: 'Flak x20', type: 'ammo', price: 45, effect: { ammo: { flak: 20 } }, category: 'Ammo' },
+    { id: 'ammo_mines', name: 'Mag Mines x4', type: 'ammo', price: 55, effect: { ammo: { mines: 4 } }, category: 'Ammo' },
     { id: 'nebula_skin', name: 'Nebula Skin', type: 'cosmetic', price: 420, effect: { cosmetic: 'nebula' }, category: 'Skins' },
     { id: 'ember_skin', name: 'Ember Skin', type: 'cosmetic', price: 420, effect: { cosmetic: 'ember' }, category: 'Skins' }
   ];
 
   const ENEMY_TYPES = {
-    scout: { role: 'scout', hp: 22, speed: 150, fireRate: 1.4, damage: 6, size: 12, color: '#6df0ff' },
-    fighter: { role: 'fighter', hp: 42, speed: 120, fireRate: 1.2, damage: 10, size: 16, color: '#ffb347' },
-    bomber: { role: 'bomber', hp: 75, speed: 90, fireRate: 1.8, damage: 16, size: 22, color: '#ff6b6b' },
-    sniper: { role: 'sniper', hp: 34, speed: 110, fireRate: 2.3, damage: 18, size: 14, color: '#c77dff' },
-    turret: { role: 'turret', hp: 95, speed: 0, fireRate: 1.6, damage: 14, size: 24, color: '#8899ff', static: true }
+    scout: { role: 'scout', hp: 22, speed: 150, fireRate: 1.4, damage: 6, size: 12, color: '#6df0ff', armor: 0.02 },
+    fighter: { role: 'fighter', hp: 42, speed: 120, fireRate: 1.2, damage: 10, size: 16, color: '#ffb347', armor: 0.03 },
+    interceptor: { role: 'interceptor', hp: 34, speed: 165, fireRate: 0.9, damage: 9, size: 14, color: '#b8f9ff', armor: 0.02 },
+    gunship: { role: 'gunship', hp: 66, speed: 105, fireRate: 1.4, damage: 14, size: 20, color: '#ff9f6b', armor: 0.04 },
+    bomber: { role: 'bomber', hp: 75, speed: 90, fireRate: 1.8, damage: 16, size: 22, color: '#ff6b6b', armor: 0.05 },
+    sniper: { role: 'sniper', hp: 34, speed: 110, fireRate: 2.3, damage: 18, size: 14, color: '#c77dff', armor: 0.02 },
+    turret: { role: 'turret', hp: 95, speed: 0, fireRate: 1.6, damage: 14, size: 24, color: '#8899ff', static: true, armor: 0.08 },
+    transport: { role: 'transport', hp: 220, speed: 60, fireRate: 1.8, damage: 18, size: 42, color: '#ffd166', hangar: 4, armor: 0.12 },
+    carrier: { role: 'carrier', hp: 360, speed: 50, fireRate: 1.6, damage: 22, size: 54, color: '#ffb347', hangar: 8, armor: 0.16 }
   };
 
   const STORY = [
@@ -195,7 +347,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       intro: 'Pirates have latched onto the relay. Dislodge them before the signal degrades further.',
       objective: 'Disable 12 pirate ships.',
       depth: 3,
-      goal: { type: 'kills', target: 12 },
+      goal: { type: 'kills', target: 12, enemy: 'fighter' },
       optional: [
         { id: 'c3-a', type: 'kills', enemy: 'fighter', target: 7, reward: 240, text: 'Disable 7 fighters.' },
         { id: 'c3-b', type: 'shieldAtEnd', target: 60, reward: 220, text: 'Finish with at least 60 shield.' }
@@ -231,10 +383,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       id: 6,
       title: 'Bastion Cross',
       kicker: 'Defense Lattice',
-      intro: 'Automated bastion platforms guard the cross. Disable them before they lock the gate.',
-      objective: 'Disable 14 bastion defenders.',
+      intro: 'Automated bastion platforms guard the cross. Disable their command outpost before the gate locks.',
+      objective: 'Destroy the bastion outpost.',
       depth: 6,
-      goal: { type: 'kills', target: 14 },
+      goal: { type: 'base', target: 1 },
       optional: [
         { id: 'c6-a', type: 'kills', enemy: 'turret', target: 4, reward: 260, text: 'Destroy 4 bastion turrets.' },
         { id: 'c6-b', type: 'collect', target: 6, reward: 240, text: 'Collect 6 data shards.' }
@@ -244,26 +396,52 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       id: 7,
       title: 'Darklane Refuge',
       kicker: 'Refuge Convoy',
-      intro: 'Nebula shadows hide a refugee convoy. Protect them without drawing the full pursuit.',
-      objective: 'Reach Darklane relay gate.',
+      intro: 'Nebula shadows hide a refugee convoy. The transports cannot fall. Break the interceptors.',
+      objective: 'Disable 3 enemy transports.',
       depth: 7,
-      goal: { type: 'reach_gate' },
+      goal: { type: 'convoy', target: 3 },
       optional: [
-        { id: 'c7-a', type: 'kills', enemy: 'scout', target: 10, reward: 260, text: 'Destroy 10 scouts.' },
+        { id: 'c7-a', type: 'kills', enemy: 'interceptor', target: 8, reward: 260, text: 'Destroy 8 interceptors.' },
         { id: 'c7-b', type: 'noBoost', reward: 240, text: 'Finish without boost.' }
       ]
     },
     {
       id: 8,
+      title: 'Hollow Break',
+      kicker: 'Ion Clade',
+      intro: 'Carrier groups pierce the Hollow Reach. Burn their launch decks before they flood the lane.',
+      objective: 'Disable 2 enemy carriers.',
+      depth: 8,
+      goal: { type: 'carrier', target: 2 },
+      optional: [
+        { id: 'c8-a', type: 'kills', enemy: 'gunship', target: 6, reward: 280, text: 'Destroy 6 gunships.' },
+        { id: 'c8-b', type: 'shieldAtEnd', target: 70, reward: 260, text: 'Finish with 70 shield.' }
+      ]
+    },
+    {
+      id: 9,
+      title: 'Emberveil Siege',
+      kicker: 'Redshift Cartel',
+      intro: 'The cartel refinery powers their fleet. Crack the core and salvage its relay keys.',
+      objective: 'Destroy the Emberveil refinery.',
+      depth: 9,
+      goal: { type: 'base', target: 1 },
+      optional: [
+        { id: 'c9-a', type: 'collect', target: 6, reward: 300, text: 'Collect 6 data shards.' },
+        { id: 'c9-b', type: 'kills', enemy: 'bomber', target: 6, reward: 280, text: 'Destroy 6 bombers.' }
+      ]
+    },
+    {
+      id: 10,
       title: 'Starforge Arrival',
       kicker: 'Starforge Authority',
       intro: 'The final gate opens into a shipyard of myth. The guardian AI remains online. You must reclaim the forge.',
       objective: 'Defeat the Starforge Guardian.',
-      depth: 7,
+      depth: 10,
       goal: { type: 'boss' },
       optional: [
-        { id: 'c8-a', type: 'kills', enemy: 'bomber', target: 6, reward: 300, text: 'Destroy 6 bombers.' },
-        { id: 'c8-b', type: 'shieldAtEnd', target: 70, reward: 260, text: 'Finish with 70 shield.' }
+        { id: 'c10-a', type: 'kills', enemy: 'carrier', target: 1, reward: 320, text: 'Destroy a carrier escort.' },
+        { id: 'c10-b', type: 'shieldAtEnd', target: 80, reward: 300, text: 'Finish with 80 shield.' }
       ]
     }
   ];
@@ -293,7 +471,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     cameraShakeTimer: 0,
     cameraNoiseSeed: Math.random() * 10,
     shiftBoost: { active: false, timer: 0 },
-    prompt: null
+    prompt: null,
+    loreScroll: 0
   };
 
   const world = {
@@ -301,7 +480,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     gates: {},
     discovered: new Set(),
     bossDefeated: {},
-    stationContracts: {}
+    stationContracts: {},
+    baseClaims: {},
+    systemNames: new Map(),
+    homeBase: { x: 0, y: 0, radius: 80, name: 'Aetherline Bastion' }
   };
 
   const entities = {
@@ -312,7 +494,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drones: [],
     loot: [],
     effects: [],
-    particles: []
+    particles: [],
+    structures: [],
+    debris: []
   };
 
   const player = {
@@ -321,10 +505,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     vx: 0,
     vy: 0,
     angle: -Math.PI / 2,
+    angularVelocity: 0,
+    throttle: 0,
+    flightAssist: true,
     hp: 120,
     shield: 90,
     boost: BASE.boostMax,
     energy: BASE.energyMax,
+    fuel: 120,
     lastShot: 0,
     lastAltShot: 0,
     lastHit: 0,
@@ -364,11 +552,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       credits: 0,
       blueprints: [],
       skins: ['nebula'],
-      toys: []
+      toys: [],
+      cargo: { salvage: 0, alloys: 0, relics: 0 }
+    },
+    ammo: {
+      slugs: 60,
+      missiles: 12,
+      torpedoes: 4,
+      flak: 50,
+      mines: 6
     },
     cosmetics: new Set(),
     blueprints: new Set(),
-    toys: new Set()
+    toys: new Set(),
+    lore: new Set()
   };
 
   const mission = {
@@ -378,7 +575,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     progress: 0,
     reward: 0,
     text: '',
-    gateKey: ''
+    gateKey: '',
+    enemyType: '',
+    spawned: false
   };
 
   const contract = {
@@ -521,16 +720,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   const nebulaLayers = [
     createNebulaLayer({ seed: 1201, hue: 200, alpha: 0.45 }),
     createNebulaLayer({ seed: 1402, hue: 240, alpha: 0.35 }),
-    createNebulaLayer({ seed: 1603, hue: 320, alpha: 0.25 })
+    createNebulaLayer({ seed: 1603, hue: 320, alpha: 0.25 }),
+    createNebulaLayer({ seed: 1804, hue: 30, alpha: 0.2 })
   ];
 
   const starLayers = [
-    createStarLayer({ seed: 2201, count: 280, sizeMin: 0.4, sizeMax: 1.4, speed: 0.4, tint: 'rgba(180,220,255,0.7)' }),
-    createStarLayer({ seed: 2301, count: 200, sizeMin: 0.7, sizeMax: 1.9, speed: 0.65, tint: 'rgba(140,210,255,0.75)' }),
-    createStarLayer({ seed: 2401, count: 120, sizeMin: 1.2, sizeMax: 2.8, speed: 0.95, tint: 'rgba(120,180,255,0.85)' })
+    createStarLayer({ seed: 2201, count: 460, sizeMin: 0.4, sizeMax: 1.4, speed: 0.4, tint: 'rgba(180,220,255,0.7)' }),
+    createStarLayer({ seed: 2301, count: 360, sizeMin: 0.7, sizeMax: 1.9, speed: 0.65, tint: 'rgba(140,210,255,0.75)' }),
+    createStarLayer({ seed: 2401, count: 240, sizeMin: 1.2, sizeMax: 2.8, speed: 0.95, tint: 'rgba(120,180,255,0.85)' })
   ];
 
-  const dustField = createDustField({ seed: 3001, count: 90 });
+  const dustField = createDustField({ seed: 3001, count: 160 });
 
   function noteStatus(message, duration = 3) {
     if (!statusText) return;
@@ -563,14 +763,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     return { x: gx * WORLD.sectorSize, y: gy * WORLD.sectorSize };
   }
 
-  function pickBiome(depth) {
-    if (depth <= 1) return 'driftline';
-    if (depth === 2) return 'glasswake';
-    if (depth === 3) return 'stormvault';
-    if (depth === 4) return 'redshift';
-    if (depth === 5) return 'bastion';
-    if (depth === 6) return 'darklane';
-    return 'starforge';
+  function pickBiome(depth, gx, gy) {
+    const bandIndex = Math.min(REGION_BANDS.length - 1, Math.max(0, Math.floor((depth - 1) / 2)));
+    const band = REGION_BANDS[bandIndex];
+    const rng = mulberry32(WORLD_SEED + gx * 41 + gy * 73 + depth * 11);
+    return band[Math.floor(rng() * band.length)];
   }
 
   function buildGateMap() {
@@ -595,13 +792,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const key = sectorKey(gx, gy);
     if (world.sectors.has(key)) return world.sectors.get(key);
     const depth = depthFromGrid(gx, gy);
-    const biome = pickBiome(depth);
+    const biome = pickBiome(depth, gx, gy);
     const sector = {
       key,
       gx,
       gy,
       depth,
       biome,
+      name: getSystemName(gx, gy),
+      faction: FACTIONS[(Math.abs(gx * 7 + gy * 13 + depth) % FACTIONS.length)],
       discovered: false,
       locked: depth > state.unlockedDepth,
       revealedUntil: 0,
@@ -612,6 +811,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         asteroids: [],
         planets: [],
         stations: [],
+        bases: [],
+        wrecks: [],
         caches: [],
         storms: [],
         anomalies: []
@@ -658,7 +859,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         x: center.x + randRange(rng, -420, 420),
         y: center.y + randRange(rng, -420, 420),
         radius: randRange(rng, 60, 140),
-        hue: randRange(rng, biome.hue - 20, biome.hue + 40)
+        hue: randRange(rng, biome.hue - 20, biome.hue + 40),
+        mass: randRange(rng, 0.6, 1.2),
+        ring: rng() < 0.45
       });
     }
 
@@ -667,6 +870,35 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         x: center.x + randRange(rng, -200, 200),
         y: center.y + randRange(rng, -200, 200),
         radius: randRange(rng, 42, 60)
+      });
+    }
+
+    if (rng() < 0.28 + sector.depth * 0.02 && !world.baseClaims?.[sector.key] && !(sector.gx === 0 && sector.gy === 0)) {
+      const baseKeys = Object.keys(BASE_TYPES);
+      const baseType = BASE_TYPES[baseKeys[Math.min(baseKeys.length - 1, Math.floor(rng() * baseKeys.length))]];
+      sector.objects.bases.push({
+        id: `${sector.key}-base`,
+        type: baseType.id,
+        x: center.x + randRange(rng, -220, 220),
+        y: center.y + randRange(rng, -220, 220),
+        hp: baseType.hp,
+        shield: baseType.shield,
+        radius: baseType.radius,
+        turrets: Array.from({ length: baseType.turretCount }).map((_, idx) => ({
+          angle: (Math.PI * 2 * idx) / baseType.turretCount,
+          cooldown: randRange(rng, 0.4, 1.2)
+        })),
+        spawnTimer: randRange(rng, 2, 4),
+        def: baseType
+      });
+    }
+
+    if (rng() < 0.35) {
+      sector.objects.wrecks.push({
+        x: center.x + randRange(rng, -320, 320),
+        y: center.y + randRange(rng, -320, 320),
+        radius: randRange(rng, 24, 50),
+        salvage: Math.floor(randRange(rng, 1, 4))
       });
     }
 
@@ -698,6 +930,37 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
+  function spawnBaseInSector(sector, baseTypeId) {
+    if (!sector) return;
+    const baseType = BASE_TYPES[baseTypeId] || BASE_TYPES.outpost;
+    if (sector.objects.bases.length) return;
+    const center = posFromGrid(sector.gx, sector.gy);
+    sector.objects.bases.push({
+      id: `${sector.key}-base`,
+      type: baseType.id,
+      x: center.x + randRange(Math.random, -140, 140),
+      y: center.y + randRange(Math.random, -140, 140),
+      hp: baseType.hp,
+      shield: baseType.shield,
+      radius: baseType.radius,
+      turrets: Array.from({ length: baseType.turretCount }).map((_, idx) => ({
+        angle: (Math.PI * 2 * idx) / baseType.turretCount,
+        cooldown: randRange(Math.random, 0.4, 1.2)
+      })),
+      spawnTimer: randRange(Math.random, 2, 4),
+      def: baseType
+    });
+  }
+
+  function getSystemName(gx, gy) {
+    const key = sectorKey(gx, gy);
+    if (world.systemNames.has(key)) return world.systemNames.get(key);
+    const rng = mulberry32(WORLD_SEED + gx * 97 + gy * 131 + 909);
+    const name = `${SYSTEM_NAME_PARTS.prefix[Math.floor(rng() * SYSTEM_NAME_PARTS.prefix.length)]} ${SYSTEM_NAME_PARTS.suffix[Math.floor(rng() * SYSTEM_NAME_PARTS.suffix.length)]}`;
+    world.systemNames.set(key, name);
+    return name;
+  }
+
   function pickRandomBlueprint(rng) {
     const keys = Object.keys(BLUEPRINTS);
     return keys[Math.floor(rng() * keys.length)];
@@ -714,7 +977,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       thrustMult: 1,
       shieldRegenMult: 1,
       hullMult: 1,
-      scanRange: 1
+      scanRange: 1,
+      massMult: 1
     };
     player.blueprints.forEach((id) => {
       const blueprint = BLUEPRINTS[id];
@@ -729,12 +993,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (effect.shieldRegenMult) bonus.shieldRegenMult *= effect.shieldRegenMult;
       if (effect.hullMult) bonus.hullMult *= effect.hullMult;
       if (effect.scanRange) bonus.scanRange *= effect.scanRange;
+      if (effect.massMult) bonus.massMult *= effect.massMult;
     });
     result.maxHp *= bonus.hullMult;
     result.maxShield *= bonus.shieldMult;
     result.maxSpeed *= bonus.speedMult;
     result.thrust *= bonus.thrustMult;
+    result.reverseThrust *= bonus.thrustMult;
     result.shieldRegen *= bonus.shieldRegenMult;
+    result.mass *= bonus.massMult;
     result.damageMult = bonus.damageMult;
     result.droneBonus = bonus.droneBonus;
     result.empBonus = bonus.empBonus;
@@ -747,22 +1014,29 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const engine = ENGINES[player.modules.enginePack] || ENGINES.standard;
     const shield = SHIELDS[player.modules.shieldArray] || SHIELDS.standard;
     const upgrades = player.upgrades;
+    const droneBay = DRONE_BAYS[player.modules.droneBay] || DRONE_BAYS.basic;
 
     const maxHp = hull.baseHp * (1 + upgrades.hull * 0.16);
     const maxShield = hull.baseShield * (1 + upgrades.shield * 0.18 + shield.capacityBonus);
-    const thrust = engine.thrust * (1 + upgrades.engine * 0.08) / hull.mass;
-    const reverseThrust = engine.reverse * (1 + upgrades.engine * 0.06) / hull.mass;
+    const mass = (hull.mass + engine.mass + droneBay.mass) * (1 + upgrades.hull * 0.04);
+    const thrust = engine.thrust * (1 + upgrades.engine * 0.08) / mass;
+    const reverseThrust = engine.reverse * (1 + upgrades.engine * 0.06) / mass;
     const maxSpeed = engine.maxSpeed * (1 + upgrades.engine * 0.05);
     const turnRate = engine.turnRate * (1 + upgrades.engine * 0.05);
+    const torque = 5.2 * (1 + upgrades.engine * 0.08) / mass;
     let fireDelay = 0.12 * (1 - upgrades.blaster * 0.06);
     fireDelay = Math.max(0.08, fireDelay);
     const damage = 1 + upgrades.blaster * 0.12;
     const boostMax = BASE.boostMax * (1 + upgrades.booster * 0.22);
     const boostRegen = engine.boostRegen * (1 + upgrades.booster * 0.14);
+    const fuelMax = 140 + upgrades.booster * 25;
+    const fuelRegen = 0.45 + engine.fuelRegen * 0.2;
     const energyMax = BASE.energyMax * (1 + upgrades.capacitor * 0.2);
     const energyRegen = BASE.energyRegen * (1 + upgrades.capacitor * 0.16);
     const shieldRegen = shield.regen * (1 + upgrades.shield * 0.12);
     const shieldDelay = Math.max(0.6, shield.delay - upgrades.shield * 0.05);
+    const armor = hull.armor + upgrades.hull * 0.02 + shield.resist;
+    const cargoMax = hull.cargo + upgrades.hull * 2;
 
     const baseStats = {
       maxHp,
@@ -771,14 +1045,24 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       reverseThrust,
       maxSpeed,
       turnRate,
+      torque,
       fireDelay,
       damage,
       boostMax,
       boostRegen,
+      fuelMax,
+      fuelRegen,
       energyMax,
       energyRegen,
       shieldRegen,
       shieldDelay,
+      armor,
+      mass,
+      cargoMax,
+      linearDamp: PHYSICS.linearDamp,
+      assistDamp: PHYSICS.assistDamp,
+      angularDamp: PHYSICS.angularDamp,
+      maxAngular: PHYSICS.maxAngular,
       size: hull.size
     };
 
@@ -795,15 +1079,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const shieldRatio = prev.maxShield > 0 ? player.shield / prev.maxShield : 1;
       const boostRatio = prev.boostMax > 0 ? player.boost / prev.boostMax : 1;
       const energyRatio = prev.energyMax > 0 ? player.energy / prev.energyMax : 1;
+      const fuelRatio = prev.fuelMax > 0 ? player.fuel / prev.fuelMax : 1;
       player.hp = clamp(cachedStats.maxHp * hpRatio, 0, cachedStats.maxHp);
       player.shield = clamp(cachedStats.maxShield * shieldRatio, 0, cachedStats.maxShield);
       player.boost = clamp(cachedStats.boostMax * boostRatio, 0, cachedStats.boostMax);
       player.energy = clamp(cachedStats.energyMax * energyRatio, 0, cachedStats.energyMax);
+      player.fuel = clamp(cachedStats.fuelMax * fuelRatio, 0, cachedStats.fuelMax);
     } else {
       player.hp = cachedStats.maxHp;
       player.shield = cachedStats.maxShield;
       player.boost = cachedStats.boostMax;
       player.energy = cachedStats.energyMax;
+      player.fuel = cachedStats.fuelMax;
     }
     state.scanRadius = 540 * (cachedStats.scanRange || 1);
   }
@@ -875,6 +1162,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.vx = 0;
     player.vy = 0;
     player.angle = -Math.PI / 2;
+    player.angularVelocity = 0;
+    player.throttle = 0;
   }
 
   function resetRun({ full = false } = {}) {
@@ -888,10 +1177,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     entities.particles.length = 0;
     if (full) {
       player.credits = 0;
+      player.fuel = BASE.boostMax;
+      player.angularVelocity = 0;
+      player.throttle = 0;
+      player.flightAssist = true;
       player.upgrades = { engine: 0, blaster: 0, capacitor: 0, shield: 0, hull: 0, booster: 0 };
       player.blueprints = new Set();
       player.cosmetics = new Set();
       player.toys = new Set();
+      player.lore = new Set();
       player.modules = {
         hullSize: 'small',
         enginePack: 'standard',
@@ -910,15 +1204,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         weapons: ['laser', 'plasma'],
         toys: []
       };
+      player.ammo = { slugs: 60, missiles: 12, torpedoes: 4, flak: 50, mines: 6 };
+      player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0 };
       player.chapterIndex = 0;
       player.distanceThisChapter = 0;
       player.distanceTotal = 0;
       player.checkpointIndex = 0;
       state.storyLog = [];
+      state.loreScroll = 0;
       state.unlockedDepth = 1;
       world.discovered.clear();
       world.bossDefeated = {};
       world.stationContracts = {};
+      world.baseClaims = {};
+      world.systemNames = new Map();
       world.sectors.clear();
       contract.active = false;
       mission.active = false;
@@ -986,7 +1285,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       sector.discoveredAt = Date.now();
       world.discovered.add(sector.key);
       awardCredits(50, 'Sector discovered');
-      pushStoryLog(`Discovered sector ${sector.gx},${sector.gy}.`);
+      pushStoryLog(`Discovered ${sector.name} (${sector.gx},${sector.gy}).`);
     }
     return sector;
   }
@@ -1072,7 +1371,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       def,
       threat: scale,
       stunned: 0,
-      shield: def.role === 'bomber' ? 20 : 0
+      shield: def.role === 'bomber' ? 20 : 0,
+      armor: def.armor || 0,
+      hangar: def.hangar ? Math.floor(def.hangar * scale) : 0,
+      spawnCooldown: def.hangar ? randRange(Math.random, 1.4, 3.4) : 0,
+      cargo: def.role === 'transport' ? 3 + Math.floor(scale * 2) : 0
     });
   }
 
@@ -1093,7 +1396,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state: 'chase',
       size: 58,
       phase: 1,
-      isBoss: true
+      isBoss: true,
+      armor: 0.18,
+      hangar: 6,
+      spawnCooldown: 2.4
     });
     noteStatus('Guardian inbound.');
     addCameraShake(2.2, 0.6);
@@ -1156,6 +1462,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         player.shield = Math.max(0, player.shield - final);
         final = reduced;
       }
+      final *= 1 - clamp(cachedStats.armor || 0, 0, 0.6);
       if (final > 0) {
         player.hp -= final;
         missionTracker.noHullDamage = false;
@@ -1178,6 +1485,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       target.shield -= shieldAbsorb;
       final -= shieldAbsorb;
     }
+    if (target.armor) {
+      final *= 1 - clamp(target.armor, 0, 0.65);
+    }
     target.hp -= final;
     if (target.hp <= 0) target.hp = 0;
   }
@@ -1192,10 +1502,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     awardCredits(Math.round(28 + enemy.maxHp * 0.45));
     updateOptionalProgress('kills', { enemy: enemy.type, amount: 1 });
     if (mission.active && mission.type === 'kills') {
+      if (!mission.enemyType || mission.enemyType === enemy.type) {
+        mission.progress += 1;
+        if (mission.progress >= mission.target) completeMission();
+      }
+    }
+    if (mission.active && mission.type === 'carrier' && enemy.type === 'carrier') {
+      mission.progress += 1;
+      if (mission.progress >= mission.target) completeMission();
+    }
+    if (mission.active && mission.type === 'convoy' && enemy.type === 'transport') {
       mission.progress += 1;
       if (mission.progress >= mission.target) completeMission();
     }
     if (contract.active && contract.type === 'kills') {
+      contract.progress += 1;
+      if (contract.progress >= contract.target) completeContract();
+    }
+    if (contract.active && contract.type === 'carrier' && enemy.type === 'carrier') {
+      contract.progress += 1;
+      if (contract.progress >= contract.target) completeContract();
+    }
+    if (contract.active && contract.type === 'convoy' && enemy.type === 'transport') {
       contract.progress += 1;
       if (contract.progress >= contract.target) completeContract();
     }
@@ -1207,10 +1535,37 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (Math.random() < 0.25) spawnLoot(enemy.x, enemy.y, 'boost', 16);
     if (Math.random() < 0.2) spawnLoot(enemy.x, enemy.y, 'energy', 18);
     if (Math.random() < 0.18) spawnLoot(enemy.x, enemy.y, 'data', 1);
+    if (enemy.type === 'transport' || enemy.type === 'carrier') {
+      spawnLoot(enemy.x, enemy.y, 'salvage', 1);
+      if (Math.random() < 0.5) spawnLoot(enemy.x, enemy.y, 'ammo', 1);
+    }
     if (enemy.isBoss) {
       world.bossDefeated[player.chapterIndex] = true;
       awardCredits(700, 'Boss defeated');
       maybeAdvanceChapter(true);
+    }
+  }
+
+  function destroyBase(base, sector) {
+    if (base.hp <= 0) return;
+    base.hp = 0;
+    world.baseClaims = world.baseClaims || {};
+    world.baseClaims[sector.key] = base.type;
+    awardCredits(400 + sector.depth * 60, 'Enemy base destroyed');
+    if (getCargoCount() < cachedStats.cargoMax) {
+      player.inventory.cargo.salvage += 2 + Math.floor(sector.depth * 0.4);
+    } else {
+      noteStatus('Cargo bay full.');
+    }
+    spawnExplosion(base.x, base.y, base.def.color);
+    addCameraShake(1.6, 0.5);
+    if (mission.active && mission.type === 'base') {
+      mission.progress = mission.target;
+      completeMission();
+    }
+    if (contract.active && contract.type === 'base') {
+      contract.progress = contract.target;
+      completeContract();
     }
   }
 
@@ -1222,14 +1577,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       y: originY,
       vx: velocity.x,
       vy: velocity.y,
-      life: weapon.homing ? 3.6 : 1.8,
+      life: weapon.mine ? 6 : weapon.homing ? 3.6 : 1.8,
       damage: weapon.damage,
       color: weapon.color,
       splash: weapon.splash || 0,
       homing: weapon.homing || false,
       turn: weapon.turn || 0,
       emp: weapon.emp || 0,
-      isPlayer
+      isPlayer,
+      mine: weapon.mine || false,
+      armed: weapon.mine ? 0.4 : 0,
+      trail: weapon.homing || weapon.mine || weapon.splash ? 1 : 0
     };
     if (weapon.homing) {
       projectile.target = findClosestEnemy(originX, originY);
@@ -1238,15 +1596,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     else entities.enemyShots.push(projectile);
   }
 
-  function fireLaser() {
-    const weapon = WEAPONS[player.weapons.primary];
+  function fireLaser(weapon, isPrimary = true) {
     if (!weapon || !weapon.hitscan) return;
     const now = state.time;
     if (now - player.lastShot < Math.max(cachedStats.fireDelay, weapon.cooldown)) return;
+    if (player.energy < weapon.energy) {
+      noteStatus('Not enough energy.');
+      return;
+    }
     player.lastShot = now;
+    player.energy = clamp(player.energy - weapon.energy, 0, cachedStats.energyMax);
 
     const dir = { x: Math.cos(player.angle), y: Math.sin(player.angle) };
-    const range = 800;
+    const range = 820;
     let hit = null;
     let hitDist = range;
     entities.enemies.forEach((enemy) => {
@@ -1267,6 +1629,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const damage = weapon.damage * cachedStats.damage * (cachedStats.damageMult || 1);
       applyDamage(hit, damage, { canCrit: true });
     }
+    applyRecoil(dir, weapon.recoil || 0);
   }
 
   function fireWeapon(weaponId, isPrimary = true) {
@@ -1277,7 +1640,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       return;
     }
     if (weapon.hitscan) {
-      fireLaser();
+      fireLaser(weapon, isPrimary);
       return;
     }
     const now = state.time;
@@ -1292,11 +1655,24 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       noteStatus('Not enough energy.');
       return;
     }
+    if (!hasAmmo(weapon)) {
+      noteStatus('Out of ammo.');
+      return;
+    }
     player.energy = clamp(player.energy - weapon.energy, 0, cachedStats.energyMax);
+    consumeAmmo(weapon);
     const dir = { x: Math.cos(player.angle), y: Math.sin(player.angle) };
     const damage = weapon.damage * cachedStats.damage * (cachedStats.damageMult || 1);
-    spawnProjectile({ ...weapon, damage }, player.x + dir.x * 18, player.y + dir.y * 18, dir, true);
+    const count = weapon.projectiles || 1;
+    for (let i = 0; i < count; i += 1) {
+      const spread = weapon.spread ? (Math.random() - 0.5) * weapon.spread : 0;
+      const angle = Math.atan2(dir.y, dir.x) + spread;
+      const shotDir = { x: Math.cos(angle), y: Math.sin(angle) };
+      const originOffset = weapon.mine ? -14 : 18;
+      spawnProjectile({ ...weapon, damage }, player.x + shotDir.x * originOffset, player.y + shotDir.y * originOffset, shotDir, true);
+    }
     spawnEffect(player.x + dir.x * 12, player.y + dir.y * 12, weapon.color, 6);
+    applyRecoil(dir, weapon.recoil || 0);
   }
 
   function fireEMPBurst() {
@@ -1318,6 +1694,46 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     noteStatus('EMP burst engaged.');
   }
 
+  function hasAmmo(weapon) {
+    if (!weapon.ammoType) return true;
+    const available = player.ammo[weapon.ammoType] || 0;
+    return available >= (weapon.ammoCost || 1);
+  }
+
+  function consumeAmmo(weapon) {
+    if (!weapon.ammoType) return;
+    const cost = weapon.ammoCost || 1;
+    player.ammo[weapon.ammoType] = clamp((player.ammo[weapon.ammoType] || 0) - cost, 0, AMMO_TYPES[weapon.ammoType]?.max || 999);
+  }
+
+  function applyRecoil(dir, strength) {
+    if (!strength) return;
+    const recoilForce = strength / (cachedStats.mass || 1);
+    player.vx -= dir.x * recoilForce;
+    player.vy -= dir.y * recoilForce;
+  }
+
+  function clampAmmo() {
+    Object.keys(AMMO_TYPES).forEach((key) => {
+      const max = AMMO_TYPES[key].max;
+      player.ammo[key] = clamp(player.ammo[key] || 0, 0, max);
+    });
+  }
+
+  function getCargoCount() {
+    const cargo = player.inventory.cargo;
+    return cargo.salvage + cargo.alloys + cargo.relics;
+  }
+
+  function unlockLoreEntry(source = 'data shard') {
+    const locked = LORE_ENTRIES.filter((entry) => !player.lore.has(entry.id));
+    if (!locked.length) return;
+    const entry = locked[Math.floor(Math.random() * locked.length)];
+    player.lore.add(entry.id);
+    pushStoryLog(`Archive unlocked: ${entry.title}`);
+    noteStatus(`New archive: ${entry.title}`);
+  }
+
   function updatePlayer(dt) {
     if (state.mode !== 'flight') return;
     const turningLeft = input.keys['KeyA'] || input.keys['ArrowLeft'];
@@ -1325,10 +1741,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const thrusting = input.keys['KeyW'] || input.keys['ArrowUp'];
     const reversing = input.keys['KeyS'] || input.keys['ArrowDown'];
 
-    if (turningLeft) player.angle -= cachedStats.turnRate * (dt * 60);
-    if (turningRight) player.angle += cachedStats.turnRate * (dt * 60);
+    if (turningLeft) player.angularVelocity -= cachedStats.torque * dt * 60;
+    if (turningRight) player.angularVelocity += cachedStats.torque * dt * 60;
+    player.angularVelocity = clamp(player.angularVelocity, -cachedStats.maxAngular, cachedStats.maxAngular);
+    player.angularVelocity *= Math.pow(cachedStats.angularDamp, dt * 60);
+    player.angle += player.angularVelocity * dt;
 
     const dir = { x: Math.cos(player.angle), y: Math.sin(player.angle) };
+    const lateral = { x: -dir.y, y: dir.x };
+
     if (thrusting) {
       player.vx += dir.x * cachedStats.thrust * dt;
       player.vy += dir.y * cachedStats.thrust * dt;
@@ -1339,25 +1760,39 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.vy -= dir.y * cachedStats.reverseThrust * dt;
     }
 
-    if ((input.justPressed['KeyB'] || input.justPressed['ShiftLeft'] || input.justPressed['ShiftRight']) && player.boost > 20) {
+    applyGravityToEntity(player, getCurrentSector(), dt);
+
+    if ((input.justPressed['KeyB'] || input.justPressed['ShiftLeft'] || input.justPressed['ShiftRight']) && player.boost > 20 && player.fuel > 12) {
       state.shiftBoost.active = true;
       state.shiftBoost.timer = 3;
     }
 
     if (state.shiftBoost.active) {
-      player.vx += dir.x * cachedStats.thrust * 1.5 * dt;
-      player.vy += dir.y * cachedStats.thrust * 1.5 * dt;
+      player.vx += dir.x * cachedStats.thrust * 1.8 * dt;
+      player.vy += dir.y * cachedStats.thrust * 1.8 * dt;
       player.boost = clamp(player.boost - 35 * dt, 0, cachedStats.boostMax);
+      player.fuel = clamp(player.fuel - 12 * dt, 0, cachedStats.fuelMax);
       state.shiftBoost.timer -= dt;
       missionTracker.noBoost = false;
       spawnEffect(player.x - dir.x * 18, player.y - dir.y * 18, '#7dfc9a');
       spawnParticle(player.x - dir.x * 20, player.y - dir.y * 20, 'rgba(125,252,154,0.8)', 0.5, 4, -dir.x * 80, -dir.y * 80);
-      if (state.shiftBoost.timer <= 0 || player.boost <= 0) {
+      if (state.shiftBoost.timer <= 0 || player.boost <= 0 || player.fuel <= 0) {
         state.shiftBoost.active = false;
       }
     } else {
       player.boost = clamp(player.boost + cachedStats.boostRegen * dt, 0, cachedStats.boostMax);
+      player.fuel = clamp(player.fuel + cachedStats.fuelRegen * dt, 0, cachedStats.fuelMax);
     }
+
+    if (player.flightAssist) {
+      const lateralSpeed = player.vx * lateral.x + player.vy * lateral.y;
+      const assistForce = (1 - cachedStats.assistDamp) * dt * 60;
+      player.vx -= lateral.x * lateralSpeed * assistForce;
+      player.vy -= lateral.y * lateralSpeed * assistForce;
+    }
+
+    player.vx *= Math.pow(cachedStats.linearDamp, dt * 60);
+    player.vy *= Math.pow(cachedStats.linearDamp, dt * 60);
 
     const speed = Math.hypot(player.vx, player.vy);
     const maxSpeed = state.shiftBoost.active ? cachedStats.maxSpeed * 1.5 : cachedStats.maxSpeed;
@@ -1367,8 +1802,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.vy *= scale;
     }
 
-    player.vx *= 0.985;
-    player.vy *= 0.985;
     player.x += player.vx * dt;
     player.y += player.vy * dt;
 
@@ -1404,7 +1837,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (entities.enemies.length >= maxEnemies) return;
 
     const rng = mulberry32(WORLD_SEED + sector.gx * 77 + sector.gy * 91 + Math.floor(state.time * 7));
-    const choices = ['scout', 'fighter', 'bomber', 'sniper', 'turret'];
+    const choices = ['scout', 'fighter', 'interceptor', 'gunship', 'bomber', 'sniper', 'turret'];
+    if (sector.depth >= 5) choices.push('transport');
+    if (sector.depth >= 7 && Math.random() < 0.4) choices.push('carrier');
     const threatScale = biome.threat + player.level * 0.05;
     const count = clamp(Math.floor(randRange(rng, 1, 3) + sector.depth * 0.3), 1, 4);
     for (let i = 0; i < count; i += 1) {
@@ -1451,37 +1886,70 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (enemy.isBoss) speed = 80 + enemy.phase * 25;
 
     if (!isStatic) {
-      if (enemy.role === 'scout') {
-        const dir = normalize(dx, dy);
-        if (distance > 200) {
-          enemy.vx += dir.x * speed * 1.1 * dt;
-          enemy.vy += dir.y * speed * 1.1 * dt;
-        } else {
-          enemy.vx += -dir.y * speed * 0.8 * dt;
-          enemy.vy += dir.x * speed * 0.8 * dt;
-        }
-      } else if (enemy.role === 'bomber') {
-        const dir = normalize(dx, dy);
-        if (distance < 300) {
-          enemy.vx -= dir.x * speed * 1.1 * dt;
-          enemy.vy -= dir.y * speed * 1.1 * dt;
-        } else if (distance > 440) {
-          enemy.vx += dir.x * speed * dt;
-          enemy.vy += dir.y * speed * dt;
-        }
-      } else if (enemy.role === 'sniper') {
-        const dir = normalize(dx, dy);
-        if (distance < 420) {
-          enemy.vx -= dir.x * speed * dt;
-          enemy.vy -= dir.y * speed * dt;
-        } else if (distance > 540) {
-          enemy.vx += dir.x * speed * 0.8 * dt;
-          enemy.vy += dir.y * speed * 0.8 * dt;
-        }
-      } else if (enemy.state === 'chase' || enemy.state === 'attack') {
-        const dir = normalize(dx, dy);
+    if (enemy.role === 'scout') {
+      const dir = normalize(dx, dy);
+      if (distance > 200) {
+        enemy.vx += dir.x * speed * 1.1 * dt;
+        enemy.vy += dir.y * speed * 1.1 * dt;
+      } else {
+        enemy.vx += -dir.y * speed * 0.8 * dt;
+        enemy.vy += dir.x * speed * 0.8 * dt;
+      }
+    } else if (enemy.role === 'interceptor') {
+      const dir = normalize(dx, dy);
+      if (distance > 180) {
+        enemy.vx += dir.x * speed * 1.4 * dt;
+        enemy.vy += dir.y * speed * 1.4 * dt;
+      } else {
+        enemy.vx += -dir.y * speed * 1.2 * dt;
+        enemy.vy += dir.x * speed * 1.2 * dt;
+      }
+    } else if (enemy.role === 'gunship') {
+      const dir = normalize(dx, dy);
+      if (distance < 260) {
+        enemy.vx -= dir.x * speed * 1.1 * dt;
+        enemy.vy -= dir.y * speed * 1.1 * dt;
+      } else if (distance > 420) {
+        enemy.vx += dir.x * speed * 0.9 * dt;
+        enemy.vy += dir.y * speed * 0.9 * dt;
+      } else {
+        enemy.vx += -dir.y * speed * 0.6 * dt;
+        enemy.vy += dir.x * speed * 0.6 * dt;
+      }
+    } else if (enemy.role === 'bomber') {
+      const dir = normalize(dx, dy);
+      if (distance < 300) {
+        enemy.vx -= dir.x * speed * 1.1 * dt;
+        enemy.vy -= dir.y * speed * 1.1 * dt;
+      } else if (distance > 440) {
         enemy.vx += dir.x * speed * dt;
         enemy.vy += dir.y * speed * dt;
+      }
+    } else if (enemy.role === 'sniper') {
+      const dir = normalize(dx, dy);
+      if (distance < 420) {
+        enemy.vx -= dir.x * speed * dt;
+        enemy.vy -= dir.y * speed * dt;
+      } else if (distance > 540) {
+        enemy.vx += dir.x * speed * 0.8 * dt;
+        enemy.vy += dir.y * speed * 0.8 * dt;
+      }
+    } else if (enemy.role === 'carrier' || enemy.role === 'transport') {
+      const dir = normalize(dx, dy);
+      if (distance < 320) {
+        enemy.vx -= dir.x * speed * 0.8 * dt;
+        enemy.vy -= dir.y * speed * 0.8 * dt;
+      } else if (distance > 520) {
+        enemy.vx += dir.x * speed * 0.6 * dt;
+        enemy.vy += dir.y * speed * 0.6 * dt;
+      } else {
+        enemy.vx += -dir.y * speed * 0.25 * dt;
+        enemy.vy += dir.x * speed * 0.25 * dt;
+      }
+    } else if (enemy.state === 'chase' || enemy.state === 'attack') {
+      const dir = normalize(dx, dy);
+      enemy.vx += dir.x * speed * dt;
+      enemy.vy += dir.y * speed * dt;
       } else if (enemy.state === 'retreat') {
         const dir = normalize(-dx, -dy);
         enemy.vx += dir.x * speed * dt;
@@ -1495,6 +1963,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (enemy.isBoss && enemy.phase >= 2 && Math.random() < 0.012) {
       const angle = Math.random() * Math.PI * 2;
       spawnEnemy('fighter', enemy.x + Math.cos(angle) * 60, enemy.y + Math.sin(angle) * 60, 1 + enemy.phase * 0.2);
+    }
+
+    if ((enemy.role === 'carrier' || enemy.role === 'transport') && enemy.hangar > 0) {
+      enemy.spawnCooldown -= dt;
+      if (enemy.spawnCooldown <= 0) {
+        const choice = enemy.role === 'carrier' ? (Math.random() < 0.5 ? 'fighter' : 'interceptor') : 'scout';
+        const angle = Math.random() * Math.PI * 2;
+        const radius = enemy.size + 30;
+        spawnEnemy(choice, enemy.x + Math.cos(angle) * radius, enemy.y + Math.sin(angle) * radius, 1 + enemy.threat * 0.2);
+        enemy.hangar -= 1;
+        enemy.spawnCooldown = 2.8 + Math.random() * 1.6;
+      }
     }
 
     if (isStatic) {
@@ -1511,23 +1991,32 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (enemy.state === 'attack' && enemy.fireCooldown <= 0) {
       enemy.fireCooldown = enemy.isBoss ? 0.5 : enemy.def.fireRate;
       const dir = normalize(player.x - enemy.x, player.y - enemy.y);
-      const weapon = enemy.role === 'bomber'
-        ? { damage: enemy.def.damage * 1.4, speed: 300, color: '#ff6b6b' }
-        : { damage: enemy.def.damage, speed: 360, color: enemy.isBoss ? '#ffb347' : '#ff6b6b' };
-      spawnProjectile(
-        {
-          id: 'enemy',
-          damage: weapon.damage,
-          speed: weapon.speed,
-          color: weapon.color,
-          cooldown: 0,
-          energy: 0
-        },
-        enemy.x + dir.x * enemy.size,
-        enemy.y + dir.y * enemy.size,
-        dir,
-        false
-      );
+      let weapon = { damage: enemy.def.damage, speed: 360, color: enemy.isBoss ? '#ffb347' : '#ff6b6b' };
+      if (enemy.role === 'bomber') weapon = { damage: enemy.def.damage * 1.4, speed: 300, color: '#ff6b6b', splash: 18 };
+      if (enemy.role === 'gunship') weapon = { damage: enemy.def.damage * 1.2, speed: 340, color: '#ff9f6b', spread: 0.25, projectiles: 3 };
+      if (enemy.role === 'transport') weapon = { damage: enemy.def.damage, speed: 260, color: '#ffd166', spread: 0.45, projectiles: 4 };
+      if (enemy.role === 'carrier') weapon = { damage: enemy.def.damage * 1.1, speed: 280, color: '#ffb347', splash: 20 };
+      const count = weapon.projectiles || 1;
+      for (let i = 0; i < count; i += 1) {
+        const spread = weapon.spread ? (Math.random() - 0.5) * weapon.spread : 0;
+        const angle = Math.atan2(dir.y, dir.x) + spread;
+        const shotDir = { x: Math.cos(angle), y: Math.sin(angle) };
+        spawnProjectile(
+          {
+            id: 'enemy',
+            damage: weapon.damage,
+            speed: weapon.speed,
+            color: weapon.color,
+            cooldown: 0,
+            energy: 0,
+            splash: weapon.splash || 0
+          },
+          enemy.x + shotDir.x * enemy.size,
+          enemy.y + shotDir.y * enemy.size,
+          shotDir,
+          false
+        );
+      }
     }
   }
 
@@ -1537,7 +2026,58 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     entities.enemies.forEach((enemy) => {
       if (enemy.hp <= 0) return;
+      applyGravityToEntity(enemy, sector, dt);
       updateEnemyAI(enemy, dt);
+    });
+  }
+
+  function updateBases(dt) {
+    const sector = getCurrentSector();
+    if (!sector.objects.bases.length) return;
+    sector.objects.bases.forEach((base) => {
+      if (base.hp <= 0) return;
+      base.spawnTimer -= dt;
+      if (base.spawnTimer <= 0) {
+        const spawnList = base.def.spawn || ['scout'];
+        const spawnType = spawnList[Math.floor(Math.random() * spawnList.length)];
+        const angle = Math.random() * Math.PI * 2;
+        const radius = base.radius + 40;
+        spawnEnemy(spawnType, base.x + Math.cos(angle) * radius, base.y + Math.sin(angle) * radius, 1 + sector.depth * 0.08);
+        base.spawnTimer = 3.5 - Math.min(1.8, sector.depth * 0.12);
+      }
+
+      base.turrets.forEach((turret) => {
+        turret.cooldown -= dt;
+        if (turret.cooldown > 0) return;
+        const toPlayer = dist(base.x, base.y, player.x, player.y);
+        if (toPlayer > 620) return;
+        turret.cooldown = 1 + Math.random() * 0.6;
+        const dir = normalize(player.x - base.x, player.y - base.y);
+        spawnProjectile(
+          { id: 'base', damage: 14 + sector.depth * 2, speed: 380, color: base.def.color, cooldown: 0, energy: 0, splash: 12 },
+          base.x + dir.x * (base.radius * 0.6),
+          base.y + dir.y * (base.radius * 0.6),
+          dir,
+          false
+        );
+      });
+    });
+  }
+
+  function applyGravityToEntity(entity, sector, dt) {
+    if (!sector || !sector.objects.planets.length) return;
+    sector.objects.planets.forEach((planet) => {
+      const dx = planet.x - entity.x;
+      const dy = planet.y - entity.y;
+      const distSq = dx * dx + dy * dy;
+      const dist = Math.sqrt(distSq) || 1;
+      const influence = PHYSICS.gravityMaxRadius + planet.radius;
+      if (dist > influence) return;
+      const strength = (PHYSICS.gravityConstant * (planet.mass || 1)) / (distSq + 2000);
+      const falloff = 1 - clamp((dist - planet.radius) / influence, 0, 1);
+      const force = strength * falloff;
+      entity.vx += (dx / dist) * force * dt;
+      entity.vy += (dy / dist) * force * dt;
     });
   }
 
@@ -1545,6 +2085,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const updateList = (list) => {
       list.forEach((shot) => {
         shot.life -= dt;
+        if (shot.armed > 0) shot.armed -= dt;
         if (shot.homing && shot.target && shot.target.hp > 0) {
           const dir = normalize(shot.target.x - shot.x, shot.target.y - shot.y);
           const desiredAngle = Math.atan2(dir.y, dir.x);
@@ -1554,8 +2095,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           shot.vx = Math.cos(nextAngle) * speed;
           shot.vy = Math.sin(nextAngle) * speed;
         }
+        if (shot.mine) {
+          shot.vx *= 0.96;
+          shot.vy *= 0.96;
+        }
         shot.x += shot.vx * dt;
         shot.y += shot.vy * dt;
+        if (shot.trail && Math.random() < 0.4) {
+          spawnParticle(shot.x, shot.y, 'rgba(255,255,255,0.45)', 0.3, 2, -shot.vx * 0.05, -shot.vy * 0.05);
+        }
       });
       return list.filter((shot) => shot.life > 0);
     };
@@ -1628,6 +2176,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             if (contract.progress >= contract.target) completeContract();
           }
           awardCredits(40, 'Data shard recovered');
+          if (Math.random() < 0.6) unlockLoreEntry('data shard');
+        } else if (drop.type === 'salvage') {
+          if (getCargoCount() < cachedStats.cargoMax) {
+            player.inventory.cargo.salvage += drop.value || 1;
+            awardCredits(30, 'Salvage recovered');
+          } else {
+            noteStatus('Cargo bay full.');
+          }
+        } else if (drop.type === 'ammo') {
+          const ammoKeys = Object.keys(AMMO_TYPES);
+          const ammoType = ammoKeys[Math.floor(Math.random() * ammoKeys.length)];
+          player.ammo[ammoType] = (player.ammo[ammoType] || 0) + 3;
+          clampAmmo();
+          noteStatus(`${AMMO_TYPES[ammoType].label} +3`);
         }
       }
     });
@@ -1663,9 +2225,43 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         const push = normalize(player.x - asteroid.x, player.y - asteroid.y);
         player.x = asteroid.x + push.x * (asteroid.radius + cachedStats.size + 2);
         player.y = asteroid.y + push.y * (asteroid.radius + cachedStats.size + 2);
+        const relSpeed = player.vx * push.x + player.vy * push.y;
+        if (relSpeed < 0) {
+          player.vx -= (1 + PHYSICS.collisionElasticity) * relSpeed * push.x;
+          player.vy -= (1 + PHYSICS.collisionElasticity) * relSpeed * push.y;
+        }
+        player.vx *= PHYSICS.collisionDamp;
+        player.vy *= PHYSICS.collisionDamp;
         applyDamage(player, 14);
         spawnEffect(player.x, player.y, '#ff6b6b');
         addCameraShake(0.8, 0.2);
+      }
+    });
+
+    sector.objects.asteroids.forEach((asteroid) => {
+      entities.enemies.forEach((enemy) => {
+        if (enemy.hp <= 0) return;
+        const d = dist(enemy.x, enemy.y, asteroid.x, asteroid.y);
+        if (d < asteroid.radius + enemy.size) {
+          const push = normalize(enemy.x - asteroid.x, enemy.y - asteroid.y);
+          enemy.x = asteroid.x + push.x * (asteroid.radius + enemy.size + 2);
+          enemy.y = asteroid.y + push.y * (asteroid.radius + enemy.size + 2);
+          enemy.vx *= -0.4;
+          enemy.vy *= -0.4;
+          enemy.hp -= 8;
+        }
+      });
+    });
+
+    sector.objects.bases.forEach((base) => {
+      if (base.hp <= 0) return;
+      const d = dist(player.x, player.y, base.x, base.y);
+      if (d < base.radius + cachedStats.size) {
+        const push = normalize(player.x - base.x, player.y - base.y);
+        player.x = base.x + push.x * (base.radius + cachedStats.size + 4);
+        player.y = base.y + push.y * (base.radius + cachedStats.size + 4);
+        applyDamage(player, 22);
+        addCameraShake(0.9, 0.25);
       }
     });
 
@@ -1690,6 +2286,23 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
 
     entities.projectiles.forEach((shot) => {
+      if (shot.mine && shot.armed <= 0) {
+        entities.enemies.forEach((enemy) => {
+          if (enemy.hp <= 0) return;
+          if (dist(shot.x, shot.y, enemy.x, enemy.y) < enemy.size + 22) {
+            shot.life = 0;
+            applyDamage(enemy, shot.damage, { canCrit: true });
+            if (shot.splash) {
+              entities.enemies.forEach((other) => {
+                if (other !== enemy && dist(shot.x, shot.y, other.x, other.y) < shot.splash) {
+                  applyDamage(other, shot.damage * 0.55, { canCrit: false });
+                }
+              });
+            }
+          }
+        });
+      }
+
       entities.enemies.forEach((enemy) => {
         if (enemy.hp <= 0) return;
         if (dist(shot.x, shot.y, enemy.x, enemy.y) < enemy.size) {
@@ -1705,12 +2318,37 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           }
         }
       });
+
+      sector.objects.bases.forEach((base) => {
+        if (base.hp <= 0) return;
+        if (dist(shot.x, shot.y, base.x, base.y) < base.radius) {
+          shot.life = 0;
+          base.shield = Math.max(0, base.shield - shot.damage * 0.6);
+          const damage = base.shield > 0 ? shot.damage * 0.25 : shot.damage;
+          base.hp -= damage;
+          spawnEffect(base.x, base.y, base.def.color, 10);
+          if (base.hp <= 0) destroyBase(base, sector);
+        }
+      });
     });
 
     entities.enemyShots.forEach((shot) => {
       if (dist(shot.x, shot.y, player.x, player.y) < cachedStats.size + 6) {
         shot.life = 0;
         applyDamage(player, shot.damage);
+      }
+    });
+
+    entities.enemies.forEach((enemy) => {
+      if (enemy.hp <= 0) return;
+      if (dist(enemy.x, enemy.y, player.x, player.y) < enemy.size + cachedStats.size) {
+        const push = normalize(player.x - enemy.x, player.y - enemy.y);
+        player.vx += push.x * 40;
+        player.vy += push.y * 40;
+        enemy.vx -= push.x * 30;
+        enemy.vy -= push.y * 30;
+        applyDamage(player, 12 + enemy.size * 0.2);
+        enemy.hp -= 10;
       }
     });
 
@@ -1721,6 +2359,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
       return true;
     });
+
+    sector.objects.bases = sector.objects.bases.filter((base) => base.hp > 0);
+
+    sector.objects.wrecks.forEach((wreck) => {
+      if (dist(player.x, player.y, wreck.x, wreck.y) < wreck.radius + cachedStats.size) {
+        player.inventory.cargo.salvage += wreck.salvage;
+        awardCredits(60 + wreck.salvage * 20, 'Salvage recovered');
+        wreck.salvage = 0;
+      }
+    });
+    sector.objects.wrecks = sector.objects.wrecks.filter((wreck) => wreck.salvage > 0);
 
     sector.objects.caches.forEach((cache) => {
       if (dist(player.x, player.y, cache.x, cache.y) < cache.radius + cachedStats.size) {
@@ -1798,6 +2447,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         completeMission();
       }
     }
+    if ((mission.type === 'carrier' || mission.type === 'convoy') && !mission.spawned) {
+      const sector = getCurrentSector();
+      if (sector.key === mission.gateKey) {
+        const center = posFromGrid(sector.gx, sector.gy);
+        const count = mission.type === 'carrier' ? mission.target : mission.target + 1;
+        for (let i = 0; i < count; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const radius = 260 + i * 40;
+          spawnEnemy(mission.type === 'carrier' ? 'carrier' : 'transport', center.x + Math.cos(angle) * radius, center.y + Math.sin(angle) * radius, 1 + sector.depth * 0.12);
+        }
+        mission.spawned = true;
+      }
+    }
   }
 
   function completeMission() {
@@ -1817,6 +2479,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     mission.reward = 300 + player.chapterIndex * 80;
     mission.text = chapter.objective;
     mission.gateKey = world.gates[chapter.id] || '';
+    mission.enemyType = chapter.goal.enemy || '';
+    mission.spawned = false;
+    if (mission.type === 'base' && mission.gateKey) {
+      const [gx, gy] = mission.gateKey.split(',').map((value) => Number.parseInt(value, 10));
+      const sector = getSector(gx, gy);
+      const baseType = chapter.id >= 9 ? 'refinery' : 'outpost';
+      spawnBaseInSector(sector, baseType);
+    }
     pushStoryLog(chapter.intro);
   }
 
@@ -1854,6 +2524,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.mode !== 'flight') return;
     const sector = getCurrentSector();
     const station = sector.objects.stations.find((s) => dist(player.x, player.y, s.x, s.y) < s.radius + 40);
+    const home = world.homeBase && dist(player.x, player.y, world.homeBase.x, world.homeBase.y) < world.homeBase.radius + 50 ? world.homeBase : null;
     if (station) {
       noteStatus('Station in range. Press E to dock.');
       if (input.justPressed['KeyE']) {
@@ -1861,6 +2532,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         state.paused = true;
         state.menuSelection = 0;
         noteStatus('Docked at station.');
+      }
+      return;
+    }
+    if (home) {
+      noteStatus('Home base in range. Press E to dock.');
+      if (input.justPressed['KeyE']) {
+        state.mode = 'station';
+        state.paused = true;
+        state.menuSelection = 0;
+        noteStatus(`Docked at ${world.homeBase.name}.`);
       }
     }
   }
@@ -1880,7 +2561,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       { type: 'kills', text: 'Eliminate patrols', target: 8 + Math.floor(rng() * 6) },
       { type: 'collect', text: 'Recover data shards', target: 4 + Math.floor(rng() * 3) },
       { type: 'scan', text: 'Scan the anomaly field', target: 1 },
-      { type: 'distance', text: 'Fly a courier run', target: 8000 + Math.floor(rng() * 4000) }
+      { type: 'distance', text: 'Fly a courier run', target: 8000 + Math.floor(rng() * 4000) },
+      { type: 'convoy', text: 'Break transport convoy', target: 2 + Math.floor(rng() * 2) },
+      { type: 'carrier', text: 'Disable carrier hulls', target: 1 + Math.floor(rng() * 2) },
+      { type: 'base', text: 'Strike enemy outpost', target: 1 }
     ];
     const choice = templates[Math.floor(rng() * templates.length)];
     world.stationContracts[sector.key] = {
@@ -1924,15 +2608,26 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
+    if (input.justPressed['KeyT']) {
+      player.flightAssist = !player.flightAssist;
+      noteStatus(`Flight assist ${player.flightAssist ? 'engaged' : 'disengaged'}.`);
+    }
+
     if (input.justPressed['Digit1']) player.weapons.primary = 'laser';
-    if (input.justPressed['Digit2'] && player.unlocked.weapons.includes('plasma')) player.weapons.secondary = 'plasma';
-    if (input.justPressed['Digit3'] && player.unlocked.weapons.includes('missile')) player.weapons.secondary = 'missile';
-    if (input.justPressed['Digit4'] && player.unlocked.weapons.includes('emp')) player.weapons.secondary = 'emp';
+    if (input.justPressed['Digit2'] && player.unlocked.weapons.includes('pulse')) player.weapons.primary = 'pulse';
+    if (input.justPressed['Digit3'] && player.unlocked.weapons.includes('rail')) player.weapons.primary = 'rail';
+    if (input.justPressed['Digit4'] && player.unlocked.weapons.includes('plasma')) player.weapons.secondary = 'plasma';
+    if (input.justPressed['Digit5'] && player.unlocked.weapons.includes('missile')) player.weapons.secondary = 'missile';
+    if (input.justPressed['Digit6'] && player.unlocked.weapons.includes('torpedo')) player.weapons.secondary = 'torpedo';
+    if (input.justPressed['Digit7'] && player.unlocked.weapons.includes('flak')) player.weapons.secondary = 'flak';
+    if (input.justPressed['Digit8'] && player.unlocked.weapons.includes('emp')) player.weapons.secondary = 'emp';
+    if (input.justPressed['Digit9'] && player.unlocked.weapons.includes('mine')) player.weapons.secondary = 'mine';
 
     state.scanPulse = Math.max(0, state.scanPulse - dt);
 
     updatePlayer(dt);
     updateEnemies(dt);
+    updateBases(dt);
     updateProjectiles(dt);
     updateDrones(dt);
     updateLoot(dt);
@@ -1955,10 +2650,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (hudCredits) hudCredits.textContent = `Credits: ${Math.round(player.credits)}`;
     if (hudChapter) hudChapter.textContent = `Chapter: ${player.chapterIndex + 1}/${STORY.length}`;
     if (hudCheckpoint) hudCheckpoint.textContent = `Checkpoint: ${player.checkpointIndex}/3`;
-    if (hudScore) hudScore.textContent = `Distance: ${Math.floor(player.distanceTotal)} | Lvl ${player.level}`;
+    if (hudScore) hudScore.textContent = `Distance: ${Math.floor(player.distanceTotal)} | Lvl ${player.level} | Fuel ${Math.round(player.fuel)}`;
     const chapter = STORY[player.chapterIndex];
     if (hudObjective && chapter) {
-      const missionText = mission.active ? ` | Mission: ${mission.text}` : '';
+      const missionText = mission.active ? ` | Mission: ${mission.text} ${Math.round(mission.progress)}/${mission.target}` : '';
       const contractText = contract.active ? ` | Contract: ${contract.text} ${contract.progress}/${contract.target}` : '';
       hudObjective.textContent = `Objective: ${chapter.objective}${missionText}${contractText}`;
     }
@@ -2014,6 +2709,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.globalAlpha = 1;
   }
 
+  function drawVignette() {
+    const grad = ctx.createRadialGradient(
+      VIEW.centerX,
+      VIEW.centerY,
+      Math.min(VIEW.width, VIEW.height) * 0.2,
+      VIEW.centerX,
+      VIEW.centerY,
+      Math.max(VIEW.width, VIEW.height) * 0.65
+    );
+    grad.addColorStop(0, 'rgba(5,10,18,0)');
+    grad.addColorStop(1, 'rgba(5,10,18,0.55)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+  }
+
   function drawDust(camera) {
     const sector = getCurrentSector();
     const biome = BIOMES[sector.biome];
@@ -2066,6 +2776,87 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.restore();
   }
 
+  function drawBase(base, camera) {
+    const x = base.x - camera.x + VIEW.centerX;
+    const y = base.y - camera.y + VIEW.centerY;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(16,24,40,0.85)';
+    ctx.strokeStyle = base.def.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, base.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    for (let i = 0; i < 6; i += 1) {
+      const angle = (Math.PI * 2 * i) / 6;
+      const r = base.radius * 0.55;
+      if (i === 0) ctx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
+      else ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.stroke();
+
+    base.turrets.forEach((turret) => {
+      const tx = Math.cos(turret.angle) * base.radius * 0.85;
+      const ty = Math.sin(turret.angle) * base.radius * 0.85;
+      ctx.fillStyle = base.def.color;
+      ctx.beginPath();
+      ctx.arc(tx, ty, 4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    if (base.shield > 0) {
+      ctx.strokeStyle = 'rgba(109,240,255,0.4)';
+      ctx.beginPath();
+      ctx.arc(0, 0, base.radius + 10, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawHomeBase(camera, sector) {
+    const base = world.homeBase;
+    if (!base) return;
+    const grid = gridFromPos(base.x, base.y);
+    if (grid.gx !== sector.gx || grid.gy !== sector.gy) return;
+    const x = base.x - camera.x + VIEW.centerX;
+    const y = base.y - camera.y + VIEW.centerY;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = 'rgba(109,240,255,0.9)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, base.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, base.radius * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(109,240,255,0.12)';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawWreck(wreck, camera) {
+    const x = wreck.x - camera.x + VIEW.centerX;
+    const y = wreck.y - camera.y + VIEW.centerY;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = 'rgba(200,200,200,0.35)';
+    ctx.fillStyle = 'rgba(80,90,110,0.4)';
+    ctx.beginPath();
+    ctx.moveTo(-wreck.radius, -wreck.radius * 0.4);
+    ctx.lineTo(wreck.radius * 0.6, -wreck.radius * 0.2);
+    ctx.lineTo(wreck.radius * 0.3, wreck.radius * 0.6);
+    ctx.lineTo(-wreck.radius * 0.5, wreck.radius * 0.4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawSectorObjects(sector, camera) {
     sector.objects.planets.forEach((planet) => {
       const x = planet.x - camera.x + VIEW.centerX;
@@ -2077,6 +2868,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.beginPath();
       ctx.arc(x, y, planet.radius, 0, Math.PI * 2);
       ctx.fill();
+
+      ctx.strokeStyle = `rgba(255,255,255,0.25)`;
+      ctx.beginPath();
+      ctx.arc(x, y, planet.radius + 6, 0, Math.PI * 2);
+      ctx.stroke();
+      if (planet.ring) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(x, y, planet.radius * 1.6, planet.radius * 0.5, 0.2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
     });
 
     sector.objects.storms.forEach((storm) => {
@@ -2090,6 +2894,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     sector.objects.asteroids.forEach((asteroid) => drawAsteroid(asteroid, camera));
     sector.objects.stations.forEach((station) => drawStation(station, camera));
+    sector.objects.bases.forEach((base) => drawBase(base, camera));
+    sector.objects.wrecks.forEach((wreck) => drawWreck(wreck, camera));
+    drawHomeBase(camera, sector);
 
     sector.objects.anomalies.forEach((anomaly) => {
       const x = anomaly.x - camera.x + VIEW.centerX;
@@ -2170,6 +2977,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.arc(w * 0.22, h * 0.5, w * 0.12, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
+
+    ctx.fillStyle = 'rgba(125,252,154,0.35)';
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.5, h * 0.2);
+    ctx.lineTo(-w * 0.9, h * 0.5);
+    ctx.lineTo(-w * 0.4, h * 0.45);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.5, h * 0.2);
+    ctx.lineTo(w * 0.9, h * 0.5);
+    ctx.lineTo(w * 0.4, h * 0.45);
+    ctx.closePath();
+    ctx.fill();
+
+    if (state.shiftBoost.active) {
+      ctx.fillStyle = 'rgba(125,252,154,0.8)';
+      ctx.beginPath();
+      ctx.ellipse(0, h * 0.72, w * 0.2, h * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
 
     if (player.shield > 0) {
@@ -2199,6 +3027,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.lineTo(enemy.size * 0.7, enemy.size * 0.5);
       ctx.lineTo(0, enemy.size * 0.2);
       ctx.lineTo(-enemy.size * 0.7, enemy.size * 0.5);
+    } else if (enemy.role === 'interceptor') {
+      ctx.moveTo(0, -enemy.size * 1.2);
+      ctx.lineTo(enemy.size * 0.5, enemy.size * 0.6);
+      ctx.lineTo(0, enemy.size * 0.2);
+      ctx.lineTo(-enemy.size * 0.5, enemy.size * 0.6);
+    } else if (enemy.role === 'gunship') {
+      ctx.moveTo(0, -enemy.size * 0.9);
+      ctx.lineTo(enemy.size * 0.8, -enemy.size * 0.2);
+      ctx.lineTo(enemy.size * 0.6, enemy.size * 0.8);
+      ctx.lineTo(-enemy.size * 0.6, enemy.size * 0.8);
+      ctx.lineTo(-enemy.size * 0.8, -enemy.size * 0.2);
     } else if (enemy.role === 'bomber') {
       ctx.moveTo(0, -enemy.size * 0.8);
       ctx.lineTo(enemy.size * 0.9, enemy.size * 0.2);
@@ -2209,6 +3048,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.moveTo(0, -enemy.size * 1.1);
       ctx.lineTo(enemy.size * 0.5, enemy.size * 0.8);
       ctx.lineTo(-enemy.size * 0.5, enemy.size * 0.8);
+    } else if (enemy.role === 'transport') {
+      ctx.moveTo(-enemy.size * 1.1, -enemy.size * 0.6);
+      ctx.lineTo(enemy.size * 1.1, -enemy.size * 0.6);
+      ctx.lineTo(enemy.size * 0.9, enemy.size * 0.6);
+      ctx.lineTo(-enemy.size * 0.9, enemy.size * 0.6);
+    } else if (enemy.role === 'carrier') {
+      ctx.moveTo(0, -enemy.size * 1.0);
+      ctx.lineTo(enemy.size * 1.2, enemy.size * 0.7);
+      ctx.lineTo(0, enemy.size * 0.4);
+      ctx.lineTo(-enemy.size * 1.2, enemy.size * 0.7);
     } else {
       ctx.moveTo(0, -enemy.size);
       ctx.lineTo(enemy.size * 0.7, enemy.size);
@@ -2231,7 +3080,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     entities.loot.forEach((drop) => {
       const x = drop.x - camera.x + VIEW.centerX;
       const y = drop.y - camera.y + VIEW.centerY;
-      ctx.fillStyle = drop.type === 'credits' ? PALETTE.gold : drop.type === 'data' ? PALETTE.ice : PALETTE.glow;
+      ctx.fillStyle = drop.type === 'credits'
+        ? PALETTE.gold
+        : drop.type === 'data'
+          ? PALETTE.ice
+          : drop.type === 'salvage'
+            ? '#c7b28a'
+            : drop.type === 'ammo'
+              ? '#ff9f6b'
+              : PALETTE.glow;
       ctx.beginPath();
       ctx.arc(x, y, 5, 0, Math.PI * 2);
       ctx.fill();
@@ -2242,8 +3099,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const y = shot.y - camera.y + VIEW.centerY;
       ctx.fillStyle = shot.color;
       ctx.beginPath();
-      ctx.arc(x, y, shot.splash ? 4 : 2, 0, Math.PI * 2);
+      const radius = shot.mine ? 6 : shot.splash ? 4 : 2;
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
       ctx.fill();
+      if (shot.mine) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     });
 
     entities.enemyShots.forEach((shot) => {
@@ -2330,6 +3194,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           ctx.strokeStyle = PALETTE.gold;
           ctx.strokeRect(cellX + 1, cellY + 1, 8, 8);
         }
+        if (sector.objects.bases.length && !world.baseClaims?.[sector.key]) {
+          ctx.fillStyle = 'rgba(255,107,107,0.8)';
+          ctx.fillRect(cellX + 4, cellY + 4, 4, 4);
+        }
       }
     }
 
@@ -2339,19 +3207,43 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.beginPath();
     ctx.arc(playerX, playerY, 3, 0, Math.PI * 2);
     ctx.fill();
+
+    if (world.homeBase) {
+      const homeX = mapX + ((world.homeBase.x + WORLD.half) / WORLD.size) * mapSize;
+      const homeY = mapY + ((world.homeBase.y + WORLD.half) / WORLD.size) * mapSize;
+      ctx.fillStyle = 'rgba(109,240,255,0.9)';
+      ctx.beginPath();
+      ctx.arc(homeX, homeY, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   function drawShipStatus() {
     ctx.fillStyle = 'rgba(5,10,18,0.55)';
-    ctx.fillRect(12, VIEW.height - 100, 300, 88);
+    ctx.fillRect(12, VIEW.height - 110, 300, 100);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
-    ctx.strokeRect(12, VIEW.height - 100, 300, 88);
+    ctx.strokeRect(12, VIEW.height - 110, 300, 100);
     ctx.fillStyle = PALETTE.glow;
     ctx.font = '12px sans-serif';
-    ctx.fillText(`Hull ${Math.round(player.hp)}/${Math.round(cachedStats.maxHp)}`, 22, VIEW.height - 72);
-    ctx.fillText(`Shield ${Math.round(player.shield)}/${Math.round(cachedStats.maxShield)}`, 22, VIEW.height - 56);
-    ctx.fillText(`Energy ${Math.round(player.energy)}/${Math.round(cachedStats.energyMax)}`, 22, VIEW.height - 40);
-    ctx.fillText(`Boost ${Math.round(player.boost)}/${Math.round(cachedStats.boostMax)}`, 22, VIEW.height - 24);
+    ctx.fillText(`Hull ${Math.round(player.hp)}/${Math.round(cachedStats.maxHp)}`, 22, VIEW.height - 80);
+    ctx.fillText(`Shield ${Math.round(player.shield)}/${Math.round(cachedStats.maxShield)}`, 22, VIEW.height - 64);
+    ctx.fillText(`Energy ${Math.round(player.energy)}/${Math.round(cachedStats.energyMax)}`, 22, VIEW.height - 48);
+    ctx.fillText(`Boost ${Math.round(player.boost)}/${Math.round(cachedStats.boostMax)}`, 22, VIEW.height - 32);
+    ctx.fillText(`Fuel ${Math.round(player.fuel)}/${Math.round(cachedStats.fuelMax)}`, 22, VIEW.height - 16);
+
+    const primaryWeapon = WEAPONS[player.weapons.primary];
+    const secondaryWeapon = WEAPONS[player.weapons.secondary];
+    const primaryAmmo = primaryWeapon?.ammoType ? `${player.ammo[primaryWeapon.ammoType] || 0}` : '∞';
+    const secondaryAmmo = secondaryWeapon?.ammoType ? `${player.ammo[secondaryWeapon.ammoType] || 0}` : '∞';
+    ctx.fillStyle = 'rgba(5,10,18,0.6)';
+    ctx.fillRect(VIEW.width - 220, VIEW.height - 92, 200, 80);
+    ctx.strokeStyle = 'rgba(125,252,154,0.3)';
+    ctx.strokeRect(VIEW.width - 220, VIEW.height - 92, 200, 80);
+    ctx.fillStyle = PALETTE.glow;
+    ctx.fillText(`P: ${primaryWeapon?.label || 'None'} (${primaryAmmo})`, VIEW.width - 208, VIEW.height - 64);
+    ctx.fillText(`S: ${secondaryWeapon?.label || 'None'} (${secondaryAmmo})`, VIEW.width - 208, VIEW.height - 44);
+    ctx.fillText(`Cargo ${getCargoCount()}/${cachedStats.cargoMax}`, VIEW.width - 208, VIEW.height - 24);
+    ctx.fillText(`Assist: ${player.flightAssist ? 'ON' : 'OFF'}`, VIEW.width - 208, VIEW.height - 8);
   }
 
   function drawGalaxyMap() {
@@ -2362,6 +3254,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Aetherline Sector Grid', 24, 36);
     ctx.font = '12px sans-serif';
     ctx.fillText('Press M to close map.', 24, 54);
+    const currentSector = getCurrentSector();
+    ctx.fillStyle = '#e0f2ff';
+    ctx.fillText(`System: ${currentSector.name}`, 24, 74);
+    ctx.fillText(`Faction: ${currentSector.faction?.name || 'Unaligned'}`, 24, 92);
 
     const gridSize = WORLD.gridRadius * 2 + 1;
     const cell = 30;
@@ -2379,6 +3275,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         if (sector.gateChapter) {
           ctx.strokeStyle = PALETTE.gold;
           ctx.strokeRect(x + 2, y + 2, cell - 4, cell - 4);
+        }
+        if (sector.objects.bases.length && !world.baseClaims?.[sector.key]) {
+          ctx.fillStyle = 'rgba(255,107,107,0.9)';
+          ctx.fillRect(x + cell / 2 - 3, y + cell / 2 - 3, 6, 6);
         }
         if (sector.locked) {
           ctx.strokeStyle = 'rgba(255,255,255,0.12)';
@@ -2424,7 +3324,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       '3. Store - Supplies & Cosmetics',
       '4. Accept Contract',
       '5. Install Stored Blueprints',
-      '6. Undock'
+      '6. Undock',
+      '7. Sell Cargo',
+      '8. Bulk Ammo Restock (240 credits)'
     ];
     options.forEach((opt, idx) => {
       ctx.fillStyle = idx === state.menuSelection ? PALETTE.gold : '#e0f2ff';
@@ -2471,12 +3373,41 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Press Esc to exit store.', 24, 70 + STORE_ITEMS.length * 20 + 18);
   }
 
+  function drawLoreOverlay() {
+    ctx.fillStyle = 'rgba(5,10,18,0.9)';
+    ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+    ctx.fillStyle = PALETTE.glow;
+    ctx.font = '20px sans-serif';
+    ctx.fillText('Archive Logs', 24, 36);
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Press L to close. Use ↑/↓ to scroll.', 24, 54);
+
+    const unlocked = LORE_ENTRIES.filter((entry) => player.lore.has(entry.id));
+    const start = clamp(state.loreScroll, 0, Math.max(0, unlocked.length - 10));
+    const visible = unlocked.slice(start, start + 10);
+
+    ctx.font = '13px sans-serif';
+    visible.forEach((entry, idx) => {
+      const y = 90 + idx * 36;
+      ctx.fillStyle = PALETTE.gold;
+      ctx.fillText(entry.title, 24, y);
+      ctx.fillStyle = '#e0f2ff';
+      ctx.fillText(entry.text, 24, y + 18);
+    });
+
+    if (!unlocked.length) {
+      ctx.fillStyle = '#e0f2ff';
+      ctx.fillText('No archives recovered yet. Scan data shards to unlock logs.', 24, 90);
+    }
+  }
+
   function drawOverlay() {
     if (state.mode === 'map') drawGalaxyMap();
     if (state.mode === 'prompt') drawPromptOverlay();
     if (state.mode === 'station') drawStationOverlay();
     if (state.mode === 'shipyard') drawShipyardOverlay();
     if (state.mode === 'store') drawStoreOverlay();
+    if (state.mode === 'lore') drawLoreOverlay();
   }
 
   function render() {
@@ -2493,6 +3424,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drawEntities(camera);
     drawMiniMap();
     drawShipStatus();
+    drawVignette();
     drawOverlay();
   }
 
@@ -2602,11 +3534,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         shield: player.shield,
         boost: player.boost,
         energy: player.energy,
+        fuel: player.fuel,
+        angularVelocity: player.angularVelocity,
+        throttle: player.throttle,
+        flightAssist: player.flightAssist,
         credits: player.credits,
         upgrades: player.upgrades,
+        ammo: player.ammo,
         blueprints: Array.from(player.blueprints),
         cosmetics: Array.from(player.cosmetics),
         toys: Array.from(player.toys),
+        lore: Array.from(player.lore),
         modules: player.modules,
         weapons: player.weapons,
         unlocked: player.unlocked,
@@ -2619,11 +3557,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         credits: player.credits,
         blueprints: player.inventory.blueprints,
         skins: player.inventory.skins,
-        toys: player.inventory.toys
+        toys: player.inventory.toys,
+        cargo: player.inventory.cargo
       },
       mapProgress: {
         sectorsDiscovered: Array.from(world.discovered),
-        bossesDefeated: world.bossDefeated
+        bossesDefeated: world.bossDefeated,
+        basesDestroyed: world.baseClaims
       },
       settings: {
         audioVolume: 0.8,
@@ -2666,11 +3606,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.shield = savedPlayer.shield ?? player.shield;
     player.boost = savedPlayer.boost ?? player.boost;
     player.energy = savedPlayer.energy ?? player.energy;
+    player.fuel = savedPlayer.fuel ?? player.fuel;
+    player.angularVelocity = savedPlayer.angularVelocity ?? player.angularVelocity;
+    player.throttle = savedPlayer.throttle ?? player.throttle;
+    player.flightAssist = savedPlayer.flightAssist ?? player.flightAssist;
     player.credits = savedPlayer.credits ?? player.credits;
     player.upgrades = { ...player.upgrades, ...(savedPlayer.upgrades || {}) };
+    player.ammo = { ...player.ammo, ...(savedPlayer.ammo || {}) };
     player.blueprints = new Set(savedPlayer.blueprints || []);
     player.cosmetics = new Set(savedPlayer.cosmetics || []);
     player.toys = new Set(savedPlayer.toys || []);
+    player.lore = new Set(savedPlayer.lore || []);
     player.modules = savedPlayer.modules || player.modules;
     player.weapons = savedPlayer.weapons || player.weapons;
     player.unlocked = savedPlayer.unlocked || player.unlocked;
@@ -2682,9 +3628,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.inventory.blueprints = save.inventory?.blueprints || [];
     player.inventory.skins = save.inventory?.skins || ['nebula'];
     player.inventory.toys = save.inventory?.toys || [];
+    player.inventory.cargo = save.inventory?.cargo || { salvage: 0, alloys: 0, relics: 0 };
 
     world.discovered = new Set(save.mapProgress?.sectorsDiscovered || []);
     world.bossDefeated = save.mapProgress?.bossesDefeated || {};
+    world.baseClaims = save.mapProgress?.basesDestroyed || {};
 
     state.unlockedDepth = save.state?.unlockedDepth ?? state.unlockedDepth;
     state.storyLog = save.state?.storyLog || [];
@@ -2697,6 +3645,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       mission.reward = save.mission.reward || 0;
       mission.text = save.mission.text || '';
       mission.gateKey = save.mission.gateKey || '';
+      mission.enemyType = save.mission.enemyType || '';
+      mission.spawned = save.mission.spawned || false;
     }
 
     if (save.contract) {
@@ -2710,6 +3660,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     state.checkpoint = save.checkpoint || state.checkpoint;
 
+    clampAmmo();
     refreshStats({ keepRatios: true });
     spawnDrones();
     updateDifficulty();
@@ -2802,6 +3753,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         return;
       }
 
+      if (e.code === 'KeyL' && state.mode === 'flight') {
+        state.mode = 'lore';
+        state.paused = true;
+        return;
+      }
+      if (e.code === 'KeyL' && state.mode === 'lore') {
+        state.mode = 'flight';
+        state.paused = false;
+        return;
+      }
+
+      if (state.mode === 'lore') {
+        if (e.code === 'ArrowUp') state.loreScroll = Math.max(0, state.loreScroll - 1);
+        if (e.code === 'ArrowDown') state.loreScroll += 1;
+      }
+
       if (e.code === 'Escape') {
         if (state.mode === 'shipyard' || state.mode === 'store' || state.mode === 'station') {
           state.mode = 'station';
@@ -2837,6 +3804,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (code === 'Digit4') stationContract();
     if (code === 'Digit5') installStoredBlueprints();
     if (code === 'Digit6') undock();
+    if (code === 'Digit7') sellCargo();
+    if (code === 'Digit8') bulkRestockAmmo();
   }
 
   function handleShipyardInput(code) {
@@ -2876,7 +3845,33 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.shield = cachedStats.maxShield;
     player.boost = cachedStats.boostMax;
     player.energy = cachedStats.energyMax;
+    player.fuel = cachedStats.fuelMax;
     noteStatus('Station services applied.');
+  }
+
+  function sellCargo() {
+    const cargo = player.inventory.cargo;
+    const totalValue = cargo.salvage * 40 + cargo.alloys * 60 + cargo.relics * 110;
+    if (totalValue <= 0) {
+      noteStatus('No cargo to sell.');
+      return;
+    }
+    player.credits += totalValue;
+    player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0 };
+    noteStatus(`Cargo sold for ${totalValue} credits.`);
+  }
+
+  function bulkRestockAmmo() {
+    const cost = 240;
+    if (player.credits < cost) {
+      noteStatus('Insufficient credits for ammo restock.');
+      return;
+    }
+    player.credits -= cost;
+    Object.keys(AMMO_TYPES).forEach((key) => {
+      player.ammo[key] = AMMO_TYPES[key].max;
+    });
+    noteStatus('Ammo bays restocked.');
   }
 
   function openShipyard() {
@@ -2967,6 +3962,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (item.effect.hp) player.hp = clamp(player.hp + item.effect.hp, 0, cachedStats.maxHp);
       if (item.effect.energy) player.energy = clamp(player.energy + item.effect.energy, 0, cachedStats.energyMax);
       if (item.effect.boost) player.boost = clamp(player.boost + item.effect.boost, 0, cachedStats.boostMax);
+    }
+    if (item.type === 'ammo' && item.effect.ammo) {
+      Object.entries(item.effect.ammo).forEach(([key, amount]) => {
+        player.ammo[key] = (player.ammo[key] || 0) + amount;
+      });
+      clampAmmo();
     }
     if (item.type === 'cosmetic' && item.effect.cosmetic) {
       player.cosmetics.add(item.effect.cosmetic);
