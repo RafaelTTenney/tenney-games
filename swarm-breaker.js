@@ -50,24 +50,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   };
 
   const GAME_ID = 'spacex-exploration-flagship';
-  const SAVE_VERSION = 5;
+  const SAVE_VERSION = 6;
   const SAVE_KEY = `swarmBreakerSave_v${SAVE_VERSION}`;
-  const GALAXY_SEED = 1337;
+  const WORLD_SEED = 284113;
 
   const WORLD = {
-    ringSpacing: 900,
-    rings: 7,
-    nodeRadius: 220,
-    size: 8200,
-    half: 4100
+    sectorSize: 900,
+    gridRadius: 7,
+    maxDepth: 7
   };
-
-  const BASE = {
-    boostMax: 130,
-    boostRegen: 24,
-    energyMax: 110,
-    energyRegen: 19
-  };
+  WORLD.size = (WORLD.gridRadius * 2 + 1) * WORLD.sectorSize;
+  WORLD.half = WORLD.size / 2;
+  WORLD.boundary = WORLD.gridRadius * WORLD.sectorSize + WORLD.sectorSize * 0.4;
 
   const PALETTE = {
     ink: '#04070d',
@@ -77,24 +71,24 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     rose: '#ff6b6b',
     ice: '#6df0ff',
     violet: '#c77dff',
-    gold: '#ffd166'
+    gold: '#ffd166',
+    steel: '#283241'
   };
 
   const BIOMES = {
-    driftline: { name: 'Driftline', hue: 185, accent: '#6df0ff', fog: 'rgba(60,110,140,0.12)', dust: 'rgba(110,200,255,0.14)', threat: 0.9 },
+    driftline: { name: 'Driftline', hue: 185, accent: '#6df0ff', fog: 'rgba(60,110,140,0.12)', dust: 'rgba(110,200,255,0.14)', threat: 0.85 },
     glasswake: { name: 'Glasswake', hue: 210, accent: '#7dfc9a', fog: 'rgba(70,140,180,0.12)', dust: 'rgba(140,220,255,0.12)', threat: 1.05 },
-    stormvault: { name: 'Stormvault', hue: 260, accent: '#c77dff', fog: 'rgba(130,90,190,0.15)', dust: 'rgba(180,120,255,0.12)', threat: 1.2 },
-    redshift: { name: 'Redshift', hue: 20, accent: '#ff8b5c', fog: 'rgba(180,80,60,0.13)', dust: 'rgba(255,160,120,0.12)', threat: 1.35 },
-    bastion: { name: 'Bastion', hue: 135, accent: '#7dfc9a', fog: 'rgba(80,140,100,0.12)', dust: 'rgba(120,230,160,0.12)', threat: 1.45 },
-    darklane: { name: 'Darklane', hue: 240, accent: '#8899ff', fog: 'rgba(70,80,150,0.18)', dust: 'rgba(120,140,220,0.12)', threat: 1.6 },
-    starforge: { name: 'Starforge', hue: 45, accent: '#ffd166', fog: 'rgba(220,170,90,0.12)', dust: 'rgba(255,210,140,0.12)', threat: 1.8 }
+    stormvault: { name: 'Stormvault', hue: 260, accent: '#c77dff', fog: 'rgba(130,90,190,0.16)', dust: 'rgba(180,120,255,0.12)', threat: 1.25 },
+    redshift: { name: 'Redshift', hue: 20, accent: '#ff8b5c', fog: 'rgba(180,80,60,0.14)', dust: 'rgba(255,160,120,0.12)', threat: 1.4 },
+    bastion: { name: 'Bastion', hue: 135, accent: '#7dfc9a', fog: 'rgba(80,140,100,0.12)', dust: 'rgba(120,230,160,0.12)', threat: 1.55 },
+    darklane: { name: 'Darklane', hue: 240, accent: '#8899ff', fog: 'rgba(70,80,150,0.18)', dust: 'rgba(120,140,220,0.12)', threat: 1.7 },
+    starforge: { name: 'Starforge', hue: 45, accent: '#ffd166', fog: 'rgba(220,170,90,0.12)', dust: 'rgba(255,210,140,0.12)', threat: 1.9 }
   };
 
   const HULLS = {
-    courier: { id: 'courier', label: 'Courier Hull', baseHp: 110, baseShield: 80, size: 13, mass: 0.95, slots: { drones: 1 }, unlockLevel: 1 },
-    frontier: { id: 'frontier', label: 'Frontier Hull', baseHp: 145, baseShield: 110, size: 17, mass: 1.1, slots: { drones: 2 }, unlockLevel: 3 },
-    vanguard: { id: 'vanguard', label: 'Vanguard Hull', baseHp: 185, baseShield: 135, size: 20, mass: 1.2, slots: { drones: 3 }, unlockLevel: 6 },
-    titan: { id: 'titan', label: 'Titan Hull', baseHp: 230, baseShield: 170, size: 24, mass: 1.35, slots: { drones: 4 }, unlockLevel: 9 }
+    small: { id: 'small', label: 'Small Hull', baseHp: 110, baseShield: 80, size: 14, mass: 0.95, unlockLevel: 1 },
+    medium: { id: 'medium', label: 'Medium Hull', baseHp: 150, baseShield: 110, size: 18, mass: 1.1, unlockLevel: 3 },
+    large: { id: 'large', label: 'Large Hull', baseHp: 200, baseShield: 150, size: 24, mass: 1.3, unlockLevel: 6 }
   };
 
   const ENGINES = {
@@ -116,21 +110,26 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   };
 
   const WEAPONS = {
-    laser: { id: 'laser', label: 'Laser Blaster', slot: 'primary', damage: 12, cooldown: 0.12, speed: 980, energy: 0, color: '#7dfc9a', spread: 0.02 },
-    rail: { id: 'rail', label: 'Rail Driver', slot: 'primary', damage: 22, cooldown: 0.38, speed: 1400, energy: 6, color: '#6df0ff', pierce: true, spread: 0.01 },
-    pulse: { id: 'pulse', label: 'Pulse Scatter', slot: 'primary', damage: 9, cooldown: 0.16, speed: 880, energy: 0, color: '#7dfc9a', spread: 0.12, pellets: 3 },
+    laser: { id: 'laser', label: 'Laser Blaster', slot: 'primary', damage: 12, cooldown: 0.14, speed: 980, energy: 0, color: '#7dfc9a', hitscan: true },
     plasma: { id: 'plasma', label: 'Plasma Cannon', slot: 'secondary', damage: 36, cooldown: 0.9, speed: 520, energy: 28, color: '#ffb347', splash: 52 },
     missile: { id: 'missile', label: 'Missile Rack', slot: 'secondary', damage: 44, cooldown: 1.25, speed: 420, energy: 24, color: '#ff6b6b', homing: true, turn: 2.2 },
-    ion: { id: 'ion', label: 'Ion Lancer', slot: 'secondary', damage: 30, cooldown: 0.8, speed: 760, energy: 26, color: '#6df0ff', emp: 0.6 }
+    emp: { id: 'emp', label: 'EMP Burst', slot: 'secondary', damage: 18, cooldown: 1.4, speed: 780, energy: 35, color: '#6df0ff', emp: 1.0 }
+  };
+
+  const BASE = {
+    boostMax: 120,
+    boostRegen: 22,
+    energyMax: 100,
+    energyRegen: 18
   };
 
   const UPGRADE_DEFS = {
-    engine: { label: 'Engine Output', max: 5, baseCost: 260 },
-    blaster: { label: 'Weapon Pods', max: 5, baseCost: 280 },
-    capacitor: { label: 'Capacitor', max: 4, baseCost: 250 },
-    shield: { label: 'Shield Core', max: 4, baseCost: 270 },
-    hull: { label: 'Hull Plating', max: 4, baseCost: 300 },
-    booster: { label: 'Afterburner', max: 3, baseCost: 280 }
+    engine: { label: 'Engine Output', max: 5, baseCost: 240 },
+    blaster: { label: 'Weapon Pods', max: 5, baseCost: 260 },
+    capacitor: { label: 'Capacitor', max: 4, baseCost: 230 },
+    shield: { label: 'Shield Core', max: 4, baseCost: 250 },
+    hull: { label: 'Hull Plating', max: 4, baseCost: 280 },
+    booster: { label: 'Afterburner', max: 3, baseCost: 260 }
   };
 
   const BLUEPRINTS = {
@@ -139,30 +138,26 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     hyper_engine: { id: 'hyper_engine', name: 'Hyper Engine', unlock: { engine: 'hyper' }, effect: { speedMult: 1.15, thrustMult: 1.12 } },
     plasma_cannon: { id: 'plasma_cannon', name: 'Plasma Cannon', unlock: { weapon: 'plasma' }, effect: { damageMult: 1.08 } },
     missile_rack: { id: 'missile_rack', name: 'Missile Rack', unlock: { weapon: 'missile' }, effect: { damageMult: 1.04 } },
-    rail_driver: { id: 'rail_driver', name: 'Rail Driver', unlock: { weapon: 'rail' }, effect: { critBonus: 0.05 } },
-    ion_lancer: { id: 'ion_lancer', name: 'Ion Lancer', unlock: { weapon: 'ion' }, effect: { empBonus: 0.2 } },
+    emp_burst: { id: 'emp_burst', name: 'EMP Burst', unlock: { weapon: 'emp' }, effect: { empBonus: 0.2 } },
     drone_swarm: { id: 'drone_swarm', name: 'Drone Swarm', unlock: { drone: 'swarm' }, effect: { droneBonus: 2 } },
     nanofiber_shield: { id: 'nanofiber_shield', name: 'Nanofiber Shield', unlock: { shield: 'nanofiber' }, effect: { shieldRegenMult: 1.15 } },
     hull_reinforce: { id: 'hull_reinforce', name: 'Hull Reinforcement', unlock: {}, effect: { hullMult: 1.12 } },
-    pulse_scatter: { id: 'pulse_scatter', name: 'Pulse Scatter', unlock: { weapon: 'pulse' }, effect: { damageMult: 1.02 } },
-    nebula_skin: { id: 'nebula_skin', name: 'Nebula Skin', unlock: { cosmetic: 'nebula' }, effect: {} }
+    scanner_drone: { id: 'scanner_drone', name: 'Scanner Drone', unlock: { toy: 'scanner' }, effect: { scanRange: 1.2 } }
   };
 
   const STORE_ITEMS = [
-    { id: 'boost_pack', name: 'Boost Pack', type: 'consumable', price: 120, effect: { boost: 45 } },
-    { id: 'energy_cell', name: 'Energy Cell', type: 'consumable', price: 140, effect: { energy: 45 } },
-    { id: 'repair_kit', name: 'Repair Kit', type: 'consumable', price: 170, effect: { hp: 45 } },
-    { id: 'nebula_skin', name: 'Nebula Skin', type: 'cosmetic', price: 420, effect: { cosmetic: 'nebula' } },
-    { id: 'ember_skin', name: 'Ember Skin', type: 'cosmetic', price: 420, effect: { cosmetic: 'ember' } }
+    { id: 'boost_pack', name: 'Boost Pack', type: 'consumable', price: 120, effect: { boost: 45 }, category: 'Boosts' },
+    { id: 'energy_cell', name: 'Energy Cell', type: 'consumable', price: 140, effect: { energy: 45 }, category: 'Boosts' },
+    { id: 'repair_kit', name: 'Repair Kit', type: 'consumable', price: 170, effect: { hp: 45 }, category: 'Boosts' },
+    { id: 'nebula_skin', name: 'Nebula Skin', type: 'cosmetic', price: 420, effect: { cosmetic: 'nebula' }, category: 'Skins' },
+    { id: 'ember_skin', name: 'Ember Skin', type: 'cosmetic', price: 420, effect: { cosmetic: 'ember' }, category: 'Skins' }
   ];
 
   const ENEMY_TYPES = {
-    scout: { role: 'scout', hp: 24, speed: 150, fireRate: 1.4, damage: 6, size: 12, color: '#6df0ff' },
-    interceptor: { role: 'interceptor', hp: 38, speed: 135, fireRate: 1.1, damage: 8, size: 15, color: '#7dfc9a' },
-    fighter: { role: 'fighter', hp: 48, speed: 120, fireRate: 1.2, damage: 10, size: 16, color: '#ffb347' },
-    bomber: { role: 'bomber', hp: 78, speed: 90, fireRate: 1.8, damage: 16, size: 22, color: '#ff6b6b' },
+    scout: { role: 'scout', hp: 22, speed: 150, fireRate: 1.4, damage: 6, size: 12, color: '#6df0ff' },
+    fighter: { role: 'fighter', hp: 42, speed: 120, fireRate: 1.2, damage: 10, size: 16, color: '#ffb347' },
+    bomber: { role: 'bomber', hp: 75, speed: 90, fireRate: 1.8, damage: 16, size: 22, color: '#ff6b6b' },
     sniper: { role: 'sniper', hp: 34, speed: 110, fireRate: 2.3, damage: 18, size: 14, color: '#c77dff' },
-    carrier: { role: 'carrier', hp: 120, speed: 70, fireRate: 2.6, damage: 10, size: 30, color: '#8899ff' },
     turret: { role: 'turret', hp: 95, speed: 0, fireRate: 1.6, damage: 14, size: 24, color: '#8899ff', static: true }
   };
 
@@ -171,10 +166,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       id: 1,
       title: 'Driftline Exodus',
       kicker: 'Aetherline Initiative',
-      intro: 'Your courier hull slips past the Tenney Belt. The Driftline network is dark, and the only way forward is to relight the first relay.',
-      objective: 'Stabilize the Driftline relay gate.',
-      biome: 'driftline',
-      ring: 1,
+      intro: 'You leave the Tenney Belt with a cracked nav core. The Driftline is unstable, but the first relay must come back online.',
+      objective: 'Reach the Driftline relay gate.',
+      depth: 1,
       goal: { type: 'reach_gate' },
       optional: [
         { id: 'c1-a', type: 'kills', enemy: 'scout', target: 8, reward: 160, text: 'Destroy 8 scouts.' },
@@ -186,9 +180,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       title: 'Glasswake Run',
       kicker: 'Signal Archives',
       intro: 'A debris river cuts the route to the next gate. Your scanners show data caches hidden in the wake.',
-      objective: 'Cross the Glasswake and secure the signal cache.',
-      biome: 'glasswake',
-      ring: 2,
+      objective: 'Collect 4 data shards in Glasswake.',
+      depth: 2,
       goal: { type: 'collect', target: 4 },
       optional: [
         { id: 'c2-a', type: 'collect', target: 4, reward: 220, text: 'Collect 4 data shards.' },
@@ -200,9 +193,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       title: 'Signal Thief',
       kicker: 'Relay Security',
       intro: 'Pirates have latched onto the relay. Dislodge them before the signal degrades further.',
-      objective: 'Disable the thieves and keep the relay alive.',
-      biome: 'glasswake',
-      ring: 2,
+      objective: 'Disable 12 pirate ships.',
+      depth: 3,
       goal: { type: 'kills', target: 12 },
       optional: [
         { id: 'c3-a', type: 'kills', enemy: 'fighter', target: 7, reward: 240, text: 'Disable 7 fighters.' },
@@ -214,9 +206,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       title: 'Stormvault',
       kicker: 'Ion Clade',
       intro: 'Ion storms scramble everything. The vault lane is the only safe corridor, but it is heavily patrolled.',
-      objective: 'Navigate the stormvault and keep the nav core intact.',
-      biome: 'stormvault',
-      ring: 3,
+      objective: 'Reach the Stormvault relay gate.',
+      depth: 4,
       goal: { type: 'reach_gate' },
       optional: [
         { id: 'c4-a', type: 'noBoost', reward: 220, text: 'Reach the midpoint without boost.' },
@@ -228,9 +219,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       title: 'Redshift Pursuit',
       kicker: 'Pursuit Command',
       intro: 'An enemy cruiser has leapt ahead. Hold the pursuit line through the redshift tides.',
-      objective: 'Stay on the pursuit line and tag the cruiser.',
-      biome: 'redshift',
-      ring: 4,
+      objective: 'Cover 24,000 km in Redshift space.',
+      depth: 5,
       goal: { type: 'distance', target: 24000 },
       optional: [
         { id: 'c5-a', type: 'kills', enemy: 'bomber', target: 4, reward: 240, text: 'Destroy 4 bombers.' },
@@ -242,9 +232,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       title: 'Bastion Cross',
       kicker: 'Defense Lattice',
       intro: 'Automated bastion platforms guard the cross. Disable them before they lock the gate.',
-      objective: 'Cross the bastion and open the gate.',
-      biome: 'bastion',
-      ring: 5,
+      objective: 'Disable 14 bastion defenders.',
+      depth: 6,
       goal: { type: 'kills', target: 14 },
       optional: [
         { id: 'c6-a', type: 'kills', enemy: 'turret', target: 4, reward: 260, text: 'Destroy 4 bastion turrets.' },
@@ -256,9 +245,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       title: 'Darklane Refuge',
       kicker: 'Refuge Convoy',
       intro: 'Nebula shadows hide a refugee convoy. Protect them without drawing the full pursuit.',
-      objective: 'Reach Darklane and keep the convoy alive.',
-      biome: 'darklane',
-      ring: 6,
+      objective: 'Reach Darklane relay gate.',
+      depth: 7,
       goal: { type: 'reach_gate' },
       optional: [
         { id: 'c7-a', type: 'kills', enemy: 'scout', target: 10, reward: 260, text: 'Destroy 10 scouts.' },
@@ -270,9 +258,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       title: 'Starforge Arrival',
       kicker: 'Starforge Authority',
       intro: 'The final gate opens into a shipyard of myth. The guardian AI remains online. You must reclaim the forge.',
-      objective: 'Defeat the guardian and secure the Starforge.',
-      biome: 'starforge',
-      ring: 7,
+      objective: 'Defeat the Starforge Guardian.',
+      depth: 7,
       goal: { type: 'boss' },
       optional: [
         { id: 'c8-a', type: 'kills', enemy: 'bomber', target: 6, reward: 300, text: 'Destroy 6 bombers.' },
@@ -296,31 +283,31 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     bestDistance: 0,
     awaitingBrief: true,
     scanPulse: 0,
+    scanRadius: 540,
     mapOpen: false,
     storyLog: [],
-    storyIndex: 0,
-    unlockedRing: 1,
-    currentNodeId: null,
+    menuSelection: 0,
+    unlockedDepth: 1,
+    currentSectorKey: '0,0',
     cameraShake: 0,
     cameraShakeTimer: 0,
     cameraNoiseSeed: Math.random() * 10,
-    menuSelection: 0
+    shiftBoost: { active: false, timer: 0 },
+    prompt: null
   };
 
   const world = {
-    nodes: [],
-    edges: [],
-    nodeMap: new Map(),
-    nodeFields: new Map(),
+    sectors: new Map(),
+    gates: {},
     discovered: new Set(),
-    cacheClaims: {},
-    bossesDefeated: {},
+    bossDefeated: {},
     stationContracts: {}
   };
 
   const entities = {
     enemies: [],
     projectiles: [],
+    beams: [],
     enemyShots: [],
     drones: [],
     loot: [],
@@ -347,6 +334,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     distanceTotal: 0,
     chapterIndex: 0,
     checkpointIndex: 0,
+    modules: {
+      hullSize: 'small',
+      enginePack: 'standard',
+      shieldArray: 'standard',
+      droneBay: 'basic'
+    },
+    weapons: {
+      primary: 'laser',
+      secondary: 'plasma'
+    },
     upgrades: {
       engine: 0,
       blaster: 0,
@@ -355,23 +352,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       hull: 0,
       booster: 0
     },
-    ship: {
-      hullId: 'courier',
-      engineId: 'standard',
-      shieldId: 'standard',
-      primaryId: 'laser',
-      secondaryId: 'plasma',
-      droneBayId: 'basic'
-    },
     unlocked: {
-      hulls: ['courier'],
+      hulls: ['small'],
       engines: ['standard'],
       shields: ['standard'],
       drones: ['basic'],
-      weapons: ['laser', 'plasma']
+      weapons: ['laser', 'plasma'],
+      toys: []
     },
-    blueprints: new Set(),
+    inventory: {
+      credits: 0,
+      blueprints: [],
+      skins: ['nebula'],
+      toys: []
+    },
     cosmetics: new Set(),
+    blueprints: new Set(),
     toys: new Set()
   };
 
@@ -381,7 +377,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     target: 0,
     progress: 0,
     reward: 0,
-    text: ''
+    text: '',
+    gateKey: ''
   };
 
   const contract = {
@@ -397,8 +394,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     optional: new Map(),
     noHullDamage: true,
     noBoost: true,
-    dataShards: 0,
-    kills: {}
+    dataShards: 0
   };
 
   function mulberry32(seed) {
@@ -503,8 +499,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       speed,
       tint,
       stars: Array.from({ length: count }).map(() => ({
-        x: rng() * WORLD.size - WORLD.size / 2,
-        y: rng() * WORLD.size - WORLD.size / 2,
+        x: rng() * WORLD.size - WORLD.half,
+        y: rng() * WORLD.size - WORLD.half,
         size: randRange(rng, sizeMin, sizeMax),
         alpha: randRange(rng, 0.3, 1),
         twinkle: randRange(rng, 0.4, 1.4)
@@ -515,10 +511,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function createDustField({ seed, count }) {
     const rng = mulberry32(seed);
     return Array.from({ length: count }).map(() => ({
-      x: rng() * WORLD.size - WORLD.size / 2,
-      y: rng() * WORLD.size - WORLD.size / 2,
+      x: rng() * WORLD.size - WORLD.half,
+      y: rng() * WORLD.size - WORLD.half,
       size: randRange(rng, 10, 32),
-      alpha: randRange(rng, 0.1, 0.3)
+      alpha: randRange(rng, 0.08, 0.22)
     }));
   }
 
@@ -534,7 +530,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     createStarLayer({ seed: 2401, count: 120, sizeMin: 1.2, sizeMax: 2.8, speed: 0.95, tint: 'rgba(120,180,255,0.85)' })
   ];
 
-  const dustField = createDustField({ seed: 3001, count: 80 });
+  const dustField = createDustField({ seed: 3001, count: 90 });
 
   function noteStatus(message, duration = 3) {
     if (!statusText) return;
@@ -548,185 +544,158 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.statusTimer <= 0) statusText.textContent = '';
   }
 
-  function sectorKey(sx, sy) {
-    return `${sx},${sy}`;
+  function sectorKey(gx, gy) {
+    return `${gx},${gy}`;
   }
 
-  function buildGalaxyGraph() {
-    const rng = mulberry32(GALAXY_SEED);
-    const nodes = [];
-    const edges = [];
-    const nodeMap = new Map();
-
-    const namePrefixes = ['Tenney', 'Aster', 'Lumen', 'Orion', 'Kepler', 'Drift', 'Helios', 'Aurora', 'Atlas', 'Vesper'];
-    const nameSuffixes = ['Reach', 'Gate', 'Hold', 'Spire', 'Relay', 'Cross', 'Vale', 'Bastion', 'Harbor', 'Forge'];
-
-    let idCounter = 0;
-
-    for (let ring = 0; ring <= WORLD.rings; ring += 1) {
-      const count = ring === 0 ? 1 : Math.floor(randRange(rng, 4, 7) + ring * 0.6);
-      const radius = ring * WORLD.ringSpacing;
-      for (let i = 0; i < count; i += 1) {
-        const angle = randRange(rng, 0, Math.PI * 2);
-        const offset = randRange(rng, -WORLD.ringSpacing * 0.2, WORLD.ringSpacing * 0.2);
-        const x = Math.cos(angle) * (radius + offset);
-        const y = Math.sin(angle) * (radius + offset);
-        const prefix = namePrefixes[Math.floor(rng() * namePrefixes.length)];
-        const suffix = nameSuffixes[Math.floor(rng() * nameSuffixes.length)];
-        const biome = pickBiomeForRing(ring);
-        const node = {
-          id: `node-${idCounter++}`,
-          name: `${prefix} ${suffix}`,
-          x,
-          y,
-          ring,
-          biome,
-          isStation: rng() < 0.6 || ring === 0,
-          isGate: false,
-          isBoss: false
-        };
-        nodes.push(node);
-        nodeMap.set(node.id, node);
-      }
-    }
-
-    const nodesByRing = new Map();
-    nodes.forEach((node) => {
-      if (!nodesByRing.has(node.ring)) nodesByRing.set(node.ring, []);
-      nodesByRing.get(node.ring).push(node);
-    });
-
-    for (let ring = 1; ring <= WORLD.rings; ring += 1) {
-      const current = nodesByRing.get(ring) || [];
-      const previous = nodesByRing.get(ring - 1) || [];
-      current.forEach((node) => {
-        const target = previous.reduce((closest, candidate) => {
-          const d = dist(node.x, node.y, candidate.x, candidate.y);
-          if (!closest || d < closest.dist) return { node: candidate, dist: d };
-          return closest;
-        }, null);
-        if (target) edges.push([node.id, target.node.id]);
-      });
-      current.forEach((node, idx) => {
-        const neighbor = current[(idx + 1) % current.length];
-        if (neighbor) edges.push([node.id, neighbor.id]);
-      });
-      current.forEach((node) => {
-        if (rng() < 0.35 && previous.length > 1) {
-          const pick = previous[Math.floor(rng() * previous.length)];
-          if (pick) edges.push([node.id, pick.id]);
-        }
-      });
-    }
-
-    return { nodes, edges, nodeMap };
+  function depthFromGrid(gx, gy) {
+    return Math.max(Math.abs(gx), Math.abs(gy));
   }
 
-  function pickBiomeForRing(ring) {
-    if (ring <= 1) return 'driftline';
-    if (ring === 2) return 'glasswake';
-    if (ring === 3) return 'stormvault';
-    if (ring === 4) return 'redshift';
-    if (ring === 5) return 'bastion';
-    if (ring === 6) return 'darklane';
+  function gridFromPos(x, y) {
+    const half = WORLD.sectorSize / 2;
+    const gx = clamp(Math.floor((x + half) / WORLD.sectorSize), -WORLD.gridRadius, WORLD.gridRadius);
+    const gy = clamp(Math.floor((y + half) / WORLD.sectorSize), -WORLD.gridRadius, WORLD.gridRadius);
+    return { gx, gy };
+  }
+
+  function posFromGrid(gx, gy) {
+    return { x: gx * WORLD.sectorSize, y: gy * WORLD.sectorSize };
+  }
+
+  function pickBiome(depth) {
+    if (depth <= 1) return 'driftline';
+    if (depth === 2) return 'glasswake';
+    if (depth === 3) return 'stormvault';
+    if (depth === 4) return 'redshift';
+    if (depth === 5) return 'bastion';
+    if (depth === 6) return 'darklane';
     return 'starforge';
   }
 
-  function assignStoryNodes() {
+  function buildGateMap() {
+    const rng = mulberry32(WORLD_SEED);
+    const gates = {};
     STORY.forEach((chapter) => {
-      const candidates = world.nodes.filter((node) => node.ring === chapter.ring);
-      if (!candidates.length) return;
-      const gateNode = candidates.reduce((best, node) => {
-        if (!best) return node;
-        return dist(0, 0, node.x, node.y) > dist(0, 0, best.x, best.y) ? node : best;
-      }, null);
-      if (gateNode) gateNode.isGate = true;
-
-      if (chapter.goal.type === 'boss') {
-        const bossNode = candidates[Math.floor(candidates.length / 2)];
-        if (bossNode) bossNode.isBoss = true;
+      const depth = Math.min(WORLD.maxDepth, chapter.depth);
+      const ring = [];
+      for (let gx = -depth; gx <= depth; gx += 1) {
+        for (let gy = -depth; gy <= depth; gy += 1) {
+          if (depthFromGrid(gx, gy) !== depth) continue;
+          ring.push({ gx, gy });
+        }
       }
+      const pick = ring[Math.floor(rng() * ring.length)];
+      gates[chapter.id] = sectorKey(pick.gx, pick.gy);
     });
+    world.gates = gates;
   }
 
-  function buildGalaxy() {
-    const graph = buildGalaxyGraph();
-    world.nodes = graph.nodes;
-    world.edges = graph.edges;
-    world.nodeMap = graph.nodeMap;
-    assignStoryNodes();
+  function getSector(gx, gy) {
+    const key = sectorKey(gx, gy);
+    if (world.sectors.has(key)) return world.sectors.get(key);
+    const depth = depthFromGrid(gx, gy);
+    const biome = pickBiome(depth);
+    const sector = {
+      key,
+      gx,
+      gy,
+      depth,
+      biome,
+      discovered: false,
+      locked: depth > state.unlockedDepth,
+      revealedUntil: 0,
+      gateChapter: Object.entries(world.gates).find(([chapterId, gateKey]) => gateKey === key)?.[0] || null,
+      spawnTimer: 0,
+      threat: 1 + depth * 0.2,
+      objects: {
+        asteroids: [],
+        planets: [],
+        stations: [],
+        caches: [],
+        storms: [],
+        anomalies: []
+      }
+    };
+    generateSectorObjects(sector);
+    world.sectors.set(key, sector);
+    return sector;
   }
 
-  function generateNodeField(node) {
-    if (world.nodeFields.has(node.id)) return world.nodeFields.get(node.id);
-    const seed = GALAXY_SEED + node.ring * 91 + node.x * 0.01;
-    const rng = mulberry32(Math.floor(seed));
-    const biome = BIOMES[node.biome];
-    const asteroids = [];
-    const planets = [];
-    const stations = [];
-    const caches = [];
-    const storms = [];
-    const anomalies = [];
+  function generateAsteroidShape(rng, radius) {
+    const points = [];
+    const steps = 10 + Math.floor(rng() * 8);
+    for (let i = 0; i < steps; i += 1) {
+      const angle = (Math.PI * 2 * i) / steps;
+      const jitter = randRange(rng, -0.35, 0.35) * radius;
+      points.push({
+        x: Math.cos(angle) * (radius + jitter),
+        y: Math.sin(angle) * (radius + jitter)
+      });
+    }
+    return points;
+  }
 
-    const asteroidCount = Math.floor(randRange(rng, 10, 24) * biome.threat);
+  function generateSectorObjects(sector) {
+    const seed = WORLD_SEED + sector.gx * 991 + sector.gy * 1999;
+    const rng = mulberry32(Math.abs(seed));
+    const biome = BIOMES[sector.biome];
+    const center = posFromGrid(sector.gx, sector.gy);
+
+    const asteroidCount = Math.floor(randRange(rng, 8, 22) * biome.threat);
     for (let i = 0; i < asteroidCount; i += 1) {
-      asteroids.push({
-        x: node.x + randRange(rng, -340, 340),
-        y: node.y + randRange(rng, -340, 340),
-        radius: randRange(rng, 16, 52),
-        drift: randRange(rng, -6, 6),
-        spin: randRange(rng, -0.3, 0.3)
+      const radius = randRange(rng, 18, 58);
+      sector.objects.asteroids.push({
+        x: center.x + randRange(rng, -360, 360),
+        y: center.y + randRange(rng, -360, 360),
+        radius,
+        points: generateAsteroidShape(rng, radius)
       });
     }
 
     if (rng() < 0.35) {
-      planets.push({
-        x: node.x + randRange(rng, -420, 420),
-        y: node.y + randRange(rng, -420, 420),
+      sector.objects.planets.push({
+        x: center.x + randRange(rng, -420, 420),
+        y: center.y + randRange(rng, -420, 420),
         radius: randRange(rng, 60, 140),
         hue: randRange(rng, biome.hue - 20, biome.hue + 40)
       });
     }
 
-    if (node.isStation || rng() < 0.2) {
-      stations.push({
-        x: node.x + randRange(rng, -160, 160),
-        y: node.y + randRange(rng, -160, 160),
+    if (rng() < 0.4) {
+      sector.objects.stations.push({
+        x: center.x + randRange(rng, -200, 200),
+        y: center.y + randRange(rng, -200, 200),
         radius: randRange(rng, 42, 60)
       });
     }
 
-    if (rng() < 0.35 && !world.cacheClaims[node.id]) {
-      caches.push({
-        x: node.x + randRange(rng, -260, 260),
-        y: node.y + randRange(rng, -260, 260),
+    if (rng() < 0.35 && !world.cacheClaims?.[sector.key]) {
+      sector.objects.caches.push({
+        x: center.x + randRange(rng, -300, 300),
+        y: center.y + randRange(rng, -300, 300),
         radius: 18,
         blueprint: pickRandomBlueprint(rng)
       });
     }
 
     if (rng() < 0.45) {
-      storms.push({
-        x: node.x + randRange(rng, -280, 280),
-        y: node.y + randRange(rng, -280, 280),
+      sector.objects.storms.push({
+        x: center.x + randRange(rng, -320, 320),
+        y: center.y + randRange(rng, -320, 320),
         radius: randRange(rng, 120, 220),
         intensity: randRange(rng, 0.3, 0.7)
       });
     }
 
     if (rng() < 0.32) {
-      anomalies.push({
-        x: node.x + randRange(rng, -240, 240),
-        y: node.y + randRange(rng, -240, 240),
+      sector.objects.anomalies.push({
+        x: center.x + randRange(rng, -280, 280),
+        y: center.y + randRange(rng, -280, 280),
         radius: randRange(rng, 40, 70),
         charge: 0
       });
     }
-
-    const field = { asteroids, planets, stations, caches, storms, anomalies };
-    world.nodeFields.set(node.id, field);
-    return field;
   }
 
   function pickRandomBlueprint(rng) {
@@ -738,21 +707,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const result = { ...stats };
     const bonus = {
       droneBonus: 0,
-      critBonus: 0,
       empBonus: 0,
       damageMult: 1,
       shieldMult: 1,
       speedMult: 1,
       thrustMult: 1,
       shieldRegenMult: 1,
-      hullMult: 1
+      hullMult: 1,
+      scanRange: 1
     };
     player.blueprints.forEach((id) => {
       const blueprint = BLUEPRINTS[id];
       if (!blueprint) return;
       const effect = blueprint.effect || {};
       if (effect.droneBonus) bonus.droneBonus += effect.droneBonus;
-      if (effect.critBonus) bonus.critBonus += effect.critBonus;
       if (effect.empBonus) bonus.empBonus += effect.empBonus;
       if (effect.damageMult) bonus.damageMult *= effect.damageMult;
       if (effect.shieldMult) bonus.shieldMult *= effect.shieldMult;
@@ -760,6 +728,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (effect.thrustMult) bonus.thrustMult *= effect.thrustMult;
       if (effect.shieldRegenMult) bonus.shieldRegenMult *= effect.shieldRegenMult;
       if (effect.hullMult) bonus.hullMult *= effect.hullMult;
+      if (effect.scanRange) bonus.scanRange *= effect.scanRange;
     });
     result.maxHp *= bonus.hullMult;
     result.maxShield *= bonus.shieldMult;
@@ -768,15 +737,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     result.shieldRegen *= bonus.shieldRegenMult;
     result.damageMult = bonus.damageMult;
     result.droneBonus = bonus.droneBonus;
-    result.critBonus = bonus.critBonus;
     result.empBonus = bonus.empBonus;
+    result.scanRange = bonus.scanRange;
     return result;
   }
 
   function computeStats() {
-    const hull = HULLS[player.ship.hullId] || HULLS.courier;
-    const engine = ENGINES[player.ship.engineId] || ENGINES.standard;
-    const shield = SHIELDS[player.ship.shieldId] || SHIELDS.standard;
+    const hull = HULLS[player.modules.hullSize] || HULLS.small;
+    const engine = ENGINES[player.modules.enginePack] || ENGINES.standard;
+    const shield = SHIELDS[player.modules.shieldArray] || SHIELDS.standard;
     const upgrades = player.upgrades;
 
     const maxHp = hull.baseHp * (1 + upgrades.hull * 0.16);
@@ -836,6 +805,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.boost = cachedStats.boostMax;
       player.energy = cachedStats.energyMax;
     }
+    state.scanRadius = 540 * (cachedStats.scanRange || 1);
   }
 
   function computePlayerLevel() {
@@ -864,7 +834,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     missionTracker.noHullDamage = true;
     missionTracker.noBoost = true;
     missionTracker.dataShards = 0;
-    missionTracker.kills = {};
     const chapter = STORY[player.chapterIndex];
     if (!chapter) return;
     chapter.optional.forEach((opt) => {
@@ -912,6 +881,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     entities.enemies.length = 0;
     entities.projectiles.length = 0;
     entities.enemyShots.length = 0;
+    entities.beams.length = 0;
     entities.drones.length = 0;
     entities.loot.length = 0;
     entities.effects.length = 0;
@@ -922,34 +892,37 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.blueprints = new Set();
       player.cosmetics = new Set();
       player.toys = new Set();
-      player.ship = {
-        hullId: 'courier',
-        engineId: 'standard',
-        shieldId: 'standard',
-        primaryId: 'laser',
-        secondaryId: 'plasma',
-        droneBayId: 'basic'
+      player.modules = {
+        hullSize: 'small',
+        enginePack: 'standard',
+        shieldArray: 'standard',
+        droneBay: 'basic'
+      };
+      player.weapons = {
+        primary: 'laser',
+        secondary: 'plasma'
       };
       player.unlocked = {
-        hulls: ['courier'],
+        hulls: ['small'],
         engines: ['standard'],
         shields: ['standard'],
         drones: ['basic'],
-        weapons: ['laser', 'plasma']
+        weapons: ['laser', 'plasma'],
+        toys: []
       };
       player.chapterIndex = 0;
       player.distanceThisChapter = 0;
       player.distanceTotal = 0;
       player.checkpointIndex = 0;
-      state.storyIndex = 0;
-      state.unlockedRing = 1;
       state.storyLog = [];
+      state.unlockedDepth = 1;
       world.discovered.clear();
-      world.cacheClaims = {};
-      world.bossesDefeated = {};
+      world.bossDefeated = {};
       world.stationContracts = {};
-      world.nodeFields.clear();
+      world.sectors.clear();
       contract.active = false;
+      mission.active = false;
+      state.prompt = null;
     }
     initPlayerPosition();
     refreshStats({ keepRatios: false });
@@ -963,6 +936,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function awardCredits(amount, reason) {
     player.credits += amount;
+    player.inventory.credits = player.credits;
     if (reason) noteStatus(`${reason} +${amount} credits.`);
   }
 
@@ -1003,47 +977,74 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
   }
 
-  function getCurrentNode() {
-    const node = world.nodes.reduce((best, candidate) => {
-      const d = dist(player.x, player.y, candidate.x, candidate.y);
-      if (!best || d < best.dist) return { node: candidate, dist: d };
-      return best;
-    }, null);
-    if (node && node.dist < WORLD.nodeRadius) {
-      state.currentNodeId = node.node.id;
-      if (!world.discovered.has(node.node.id)) {
-        world.discovered.add(node.node.id);
-        awardCredits(50, 'Sector discovered');
-        pushStoryLog(`Discovered ${node.node.name}.`);
-      }
-      return node.node;
+  function getCurrentSector() {
+    const { gx, gy } = gridFromPos(player.x, player.y);
+    const sector = getSector(gx, gy);
+    state.currentSectorKey = sector.key;
+    if (!sector.discovered) {
+      sector.discovered = true;
+      sector.discoveredAt = Date.now();
+      world.discovered.add(sector.key);
+      awardCredits(50, 'Sector discovered');
+      pushStoryLog(`Discovered sector ${sector.gx},${sector.gy}.`);
     }
-    return null;
+    return sector;
   }
 
-  function applyBlueprint(blueprintId) {
+  function revealSectorsAround(x, y, radius) {
+    const now = state.time;
+    const range = radius;
+    for (let gx = -WORLD.gridRadius; gx <= WORLD.gridRadius; gx += 1) {
+      for (let gy = -WORLD.gridRadius; gy <= WORLD.gridRadius; gy += 1) {
+        const sector = getSector(gx, gy);
+        const center = posFromGrid(gx, gy);
+        const d = dist(x, y, center.x, center.y);
+        if (d <= range) {
+          sector.revealedUntil = Math.max(sector.revealedUntil, now + 6);
+        }
+      }
+    }
+  }
+
+  function applyBlueprint(blueprintId, installNow = true) {
     const blueprint = BLUEPRINTS[blueprintId];
-    if (!blueprint || player.blueprints.has(blueprintId)) return;
-    player.blueprints.add(blueprintId);
-    const unlock = blueprint.unlock || {};
-    if (unlock.weapon && !player.unlocked.weapons.includes(unlock.weapon)) {
-      player.unlocked.weapons.push(unlock.weapon);
+    if (!blueprint) return;
+    if (player.blueprints.has(blueprintId)) return;
+    if (installNow) {
+      player.blueprints.add(blueprintId);
+      const unlock = blueprint.unlock || {};
+      if (unlock.weapon && !player.unlocked.weapons.includes(unlock.weapon)) {
+        player.unlocked.weapons.push(unlock.weapon);
+      }
+      if (unlock.engine && !player.unlocked.engines.includes(unlock.engine)) {
+        player.unlocked.engines.push(unlock.engine);
+      }
+      if (unlock.shield && !player.unlocked.shields.includes(unlock.shield)) {
+        player.unlocked.shields.push(unlock.shield);
+      }
+      if (unlock.drone && !player.unlocked.drones.includes(unlock.drone)) {
+        player.unlocked.drones.push(unlock.drone);
+      }
+      if (unlock.hull && !player.unlocked.hulls.includes(unlock.hull)) {
+        player.unlocked.hulls.push(unlock.hull);
+      }
+      if (unlock.toy && !player.unlocked.toys.includes(unlock.toy)) {
+        player.unlocked.toys.push(unlock.toy);
+      }
+      refreshStats({ keepRatios: true });
+      spawnDrones();
+    } else {
+      if (!player.inventory.blueprints.includes(blueprintId)) {
+        player.inventory.blueprints.push(blueprintId);
+      }
     }
-    if (unlock.engine && !player.unlocked.engines.includes(unlock.engine)) {
-      player.unlocked.engines.push(unlock.engine);
-    }
-    if (unlock.shield && !player.unlocked.shields.includes(unlock.shield)) {
-      player.unlocked.shields.push(unlock.shield);
-    }
-    if (unlock.drone && !player.unlocked.drones.includes(unlock.drone)) {
-      player.unlocked.drones.push(unlock.drone);
-    }
-    if (unlock.hull && !player.unlocked.hulls.includes(unlock.hull)) {
-      player.unlocked.hulls.push(unlock.hull);
-    }
-    if (unlock.cosmetic) player.cosmetics.add(unlock.cosmetic);
-    refreshStats({ keepRatios: true });
-    spawnDrones();
+  }
+
+  function installStoredBlueprints() {
+    if (!player.inventory.blueprints.length) return;
+    player.inventory.blueprints.forEach((id) => applyBlueprint(id, true));
+    player.inventory.blueprints = [];
+    noteStatus('Installed stored blueprints.');
   }
 
   function addCameraShake(intensity = 1, duration = 0.3) {
@@ -1071,7 +1072,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       def,
       threat: scale,
       stunned: 0,
-      shield: def.role === 'carrier' ? 60 : 0
+      shield: def.role === 'bomber' ? 20 : 0
     });
   }
 
@@ -1084,13 +1085,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       vx: 0,
       vy: 0,
       angle: 0,
-      hp: 760 + player.level * 55,
-      maxHp: 760 + player.level * 55,
-      shield: 280,
-      maxShield: 280,
+      hp: 820 + player.level * 60,
+      maxHp: 820 + player.level * 60,
+      shield: 320,
+      maxShield: 320,
       fireCooldown: 0.9,
       state: 'chase',
-      size: 56,
+      size: 58,
       phase: 1,
       isBoss: true
     });
@@ -1128,7 +1129,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function spawnDrones() {
     entities.drones.length = 0;
-    const bay = DRONE_BAYS[player.ship.droneBayId] || DRONE_BAYS.basic;
+    const bay = DRONE_BAYS[player.modules.droneBay] || DRONE_BAYS.basic;
     const base = bay.count;
     const droneCount = base + Math.floor(player.upgrades.capacitor / 2) + (cachedStats.droneBonus || 0);
     for (let i = 0; i < droneCount; i += 1) {
@@ -1142,7 +1143,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function applyDamage(target, amount, options = {}) {
-    const critChance = 0.06 + (cachedStats.critBonus || 0);
+    const critChance = 0.06;
     let final = amount;
     if (options.canCrit && Math.random() < critChance) {
       final *= 1.65;
@@ -1150,9 +1151,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
     if (target === player) {
       if (player.shield > 0) {
-        const absorbed = Math.min(player.shield, final * 0.75);
-        player.shield -= absorbed;
-        final -= absorbed;
+        const shieldPercent = player.shield / cachedStats.maxShield;
+        const reduced = final * (1 - shieldPercent);
+        player.shield = Math.max(0, player.shield - final);
+        final = reduced;
       }
       if (final > 0) {
         player.hp -= final;
@@ -1165,6 +1167,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
       return;
     }
+
     if (target.isBoss && target.shield > 0) {
       const shieldAbsorb = Math.min(target.shield, final * 0.8);
       target.shield -= shieldAbsorb;
@@ -1176,9 +1179,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       final -= shieldAbsorb;
     }
     target.hp -= final;
-    if (target.hp <= 0) {
-      target.hp = 0;
-    }
+    if (target.hp <= 0) target.hp = 0;
   }
 
   function handlePlayerDeath() {
@@ -1207,15 +1208,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (Math.random() < 0.2) spawnLoot(enemy.x, enemy.y, 'energy', 18);
     if (Math.random() < 0.18) spawnLoot(enemy.x, enemy.y, 'data', 1);
     if (enemy.isBoss) {
-      world.bossesDefeated[player.chapterIndex] = true;
+      world.bossDefeated[player.chapterIndex] = true;
       awardCredits(700, 'Boss defeated');
       maybeAdvanceChapter(true);
     }
   }
 
   function spawnProjectile(weapon, originX, originY, dir, isPlayer = true) {
-    const spread = weapon.spread || 0;
-    const angle = Math.atan2(dir.y, dir.x) + randRange(Math.random, -spread, spread);
+    const angle = Math.atan2(dir.y, dir.x);
     const velocity = { x: Math.cos(angle) * weapon.speed, y: Math.sin(angle) * weapon.speed };
     const projectile = {
       x: originX,
@@ -1226,7 +1226,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       damage: weapon.damage,
       color: weapon.color,
       splash: weapon.splash || 0,
-      pierce: weapon.pierce || false,
       homing: weapon.homing || false,
       turn: weapon.turn || 0,
       emp: weapon.emp || 0,
@@ -1239,6 +1238,37 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     else entities.enemyShots.push(projectile);
   }
 
+  function fireLaser() {
+    const weapon = WEAPONS[player.weapons.primary];
+    if (!weapon || !weapon.hitscan) return;
+    const now = state.time;
+    if (now - player.lastShot < Math.max(cachedStats.fireDelay, weapon.cooldown)) return;
+    player.lastShot = now;
+
+    const dir = { x: Math.cos(player.angle), y: Math.sin(player.angle) };
+    const range = 800;
+    let hit = null;
+    let hitDist = range;
+    entities.enemies.forEach((enemy) => {
+      if (enemy.hp <= 0) return;
+      const toEnemy = { x: enemy.x - player.x, y: enemy.y - player.y };
+      const proj = toEnemy.x * dir.x + toEnemy.y * dir.y;
+      if (proj < 0 || proj > range) return;
+      const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+      if (perpDist < enemy.size && proj < hitDist) {
+        hitDist = proj;
+        hit = enemy;
+      }
+    });
+    const endX = player.x + dir.x * hitDist;
+    const endY = player.y + dir.y * hitDist;
+    entities.beams.push({ x1: player.x, y1: player.y, x2: endX, y2: endY, life: 0.08, color: weapon.color });
+    if (hit) {
+      const damage = weapon.damage * cachedStats.damage * (cachedStats.damageMult || 1);
+      applyDamage(hit, damage, { canCrit: true });
+    }
+  }
+
   function fireWeapon(weaponId, isPrimary = true) {
     const weapon = WEAPONS[weaponId];
     if (!weapon) return;
@@ -1246,13 +1276,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       noteStatus('Weapon locked.');
       return;
     }
+    if (weapon.hitscan) {
+      fireLaser();
+      return;
+    }
     const now = state.time;
-    const cooldown = weapon.cooldown;
     if (isPrimary) {
-      if (now - player.lastShot < Math.max(cachedStats.fireDelay, cooldown)) return;
+      if (now - player.lastShot < Math.max(cachedStats.fireDelay, weapon.cooldown)) return;
       player.lastShot = now;
     } else {
-      if (now - player.lastAltShot < cooldown) return;
+      if (now - player.lastAltShot < weapon.cooldown) return;
       player.lastAltShot = now;
     }
     if (player.energy < weapon.energy) {
@@ -1262,30 +1295,24 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.energy = clamp(player.energy - weapon.energy, 0, cachedStats.energyMax);
     const dir = { x: Math.cos(player.angle), y: Math.sin(player.angle) };
     const damage = weapon.damage * cachedStats.damage * (cachedStats.damageMult || 1);
-    if (weapon.pellets) {
-      for (let i = 0; i < weapon.pellets; i += 1) {
-        spawnProjectile({ ...weapon, damage: damage * 0.7 }, player.x + dir.x * 18, player.y + dir.y * 18, dir, true);
-      }
-    } else {
-      spawnProjectile({ ...weapon, damage }, player.x + dir.x * 18, player.y + dir.y * 18, dir, true);
-    }
+    spawnProjectile({ ...weapon, damage }, player.x + dir.x * 18, player.y + dir.y * 18, dir, true);
     spawnEffect(player.x + dir.x * 12, player.y + dir.y * 12, weapon.color, 6);
   }
 
-  function fireEMPBlast() {
+  function fireEMPBurst() {
     const now = state.time;
-    if (now - player.lastAltShot < 1.4) return;
+    if (now - player.lastAltShot < 1.5) return;
     if (player.energy < 45) {
       noteStatus('Not enough energy for EMP.');
       return;
     }
     player.energy -= 45;
     player.lastAltShot = now;
-    entities.effects.push({ x: player.x, y: player.y, radius: 30, life: 0.6, color: '#6df0ff', emp: true });
+    entities.effects.push({ x: player.x, y: player.y, radius: 36, life: 0.6, color: '#6df0ff', emp: true });
     entities.enemies.forEach((enemy) => {
-      if (dist(player.x, player.y, enemy.x, enemy.y) < 180) {
-        enemy.stunned = 1.4;
-        if (enemy.isBoss) enemy.shield = Math.max(0, enemy.shield - 40);
+      if (dist(player.x, player.y, enemy.x, enemy.y) < 200) {
+        enemy.stunned = 1.4 + (cachedStats.empBonus || 0);
+        if (enemy.isBoss) enemy.shield = Math.max(0, enemy.shield - 50);
       }
     });
     noteStatus('EMP burst engaged.');
@@ -1297,7 +1324,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const turningRight = input.keys['KeyD'] || input.keys['ArrowRight'];
     const thrusting = input.keys['KeyW'] || input.keys['ArrowUp'];
     const reversing = input.keys['KeyS'] || input.keys['ArrowDown'];
-    const boosting = input.keys['ShiftLeft'] || input.keys['ShiftRight'];
 
     if (turningLeft) player.angle -= cachedStats.turnRate * (dt * 60);
     if (turningRight) player.angle += cachedStats.turnRate * (dt * 60);
@@ -1306,26 +1332,35 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (thrusting) {
       player.vx += dir.x * cachedStats.thrust * dt;
       player.vy += dir.y * cachedStats.thrust * dt;
-      spawnParticle(player.x - dir.x * 18, player.y - dir.y * 18, 'rgba(125,252,154,0.6)', 0.4, 3, -dir.x * 40 + randRange(Math.random, -10, 10), -dir.y * 40 + randRange(Math.random, -10, 10));
+      spawnParticle(player.x - dir.x * 18, player.y - dir.y * 18, 'rgba(125,252,154,0.6)', 0.4, 3, -dir.x * 40, -dir.y * 40);
     }
     if (reversing) {
       player.vx -= dir.x * cachedStats.reverseThrust * dt;
       player.vy -= dir.y * cachedStats.reverseThrust * dt;
     }
 
-    if (boosting && player.boost > 0) {
-      player.vx += dir.x * cachedStats.thrust * 1.85 * dt;
-      player.vy += dir.y * cachedStats.thrust * 1.85 * dt;
-      player.boost = clamp(player.boost - 54 * dt, 0, cachedStats.boostMax);
+    if ((input.justPressed['KeyB'] || input.justPressed['ShiftLeft'] || input.justPressed['ShiftRight']) && player.boost > 20) {
+      state.shiftBoost.active = true;
+      state.shiftBoost.timer = 3;
+    }
+
+    if (state.shiftBoost.active) {
+      player.vx += dir.x * cachedStats.thrust * 1.5 * dt;
+      player.vy += dir.y * cachedStats.thrust * 1.5 * dt;
+      player.boost = clamp(player.boost - 35 * dt, 0, cachedStats.boostMax);
+      state.shiftBoost.timer -= dt;
       missionTracker.noBoost = false;
       spawnEffect(player.x - dir.x * 18, player.y - dir.y * 18, '#7dfc9a');
       spawnParticle(player.x - dir.x * 20, player.y - dir.y * 20, 'rgba(125,252,154,0.8)', 0.5, 4, -dir.x * 80, -dir.y * 80);
+      if (state.shiftBoost.timer <= 0 || player.boost <= 0) {
+        state.shiftBoost.active = false;
+      }
     } else {
       player.boost = clamp(player.boost + cachedStats.boostRegen * dt, 0, cachedStats.boostMax);
     }
 
     const speed = Math.hypot(player.vx, player.vy);
-    const maxSpeed = boosting ? cachedStats.maxSpeed * 1.35 : cachedStats.maxSpeed;
+    const maxSpeed = state.shiftBoost.active ? cachedStats.maxSpeed * 1.5 : cachedStats.maxSpeed;
     if (speed > maxSpeed) {
       const scale = maxSpeed / (speed || 1);
       player.vx *= scale;
@@ -1337,21 +1372,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.x += player.vx * dt;
     player.y += player.vy * dt;
 
-    const maxRadius = (state.unlockedRing + 1.25) * WORLD.ringSpacing;
     const radial = Math.hypot(player.x, player.y);
-    if (radial > maxRadius) {
+    const boundary = state.unlockedDepth * WORLD.sectorSize + WORLD.sectorSize * 0.35;
+    if (radial > boundary) {
       const dirBack = normalize(player.x, player.y);
-      player.x = dirBack.x * maxRadius;
-      player.y = dirBack.y * maxRadius;
+      player.x = dirBack.x * boundary;
+      player.y = dirBack.y * boundary;
       player.vx *= -0.2;
       player.vy *= -0.2;
       applyDamage(player, 8);
       noteStatus('Rift boundary destabilized.');
     }
 
-    if (input.keys['Space']) fireWeapon(player.ship.primaryId, true);
-    if (input.justPressed['KeyX']) fireWeapon(player.ship.secondaryId, false);
-    if (input.justPressed['KeyF']) fireEMPBlast();
+    if (input.keys['Space']) fireWeapon(player.weapons.primary, true);
+    if (input.justPressed['KeyX']) fireWeapon(player.weapons.secondary, false);
+    if (input.justPressed['KeyF']) fireEMPBurst();
     if (input.justPressed['KeyR']) applyCheckpoint(state.checkpoint);
 
     if (state.time - player.lastHit > cachedStats.shieldDelay) {
@@ -1360,25 +1395,25 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.energy = clamp(player.energy + cachedStats.energyRegen * dt, 0, cachedStats.energyMax);
   }
 
-  function spawnWave(node, dt) {
-    if (!node) return;
-    const biome = BIOMES[node.biome];
-    node.spawnTimer = (node.spawnTimer || 0) - dt;
-    if (node.spawnTimer > 0) return;
-    const maxEnemies = 4 + Math.floor(player.level * 1.6 + node.ring);
+  function spawnWave(sector, dt) {
+    if (!sector) return;
+    const biome = BIOMES[sector.biome];
+    sector.spawnTimer -= dt;
+    if (sector.spawnTimer > 0) return;
+    const maxEnemies = 4 + Math.floor(player.level * 1.5 + sector.depth);
     if (entities.enemies.length >= maxEnemies) return;
 
-    const rng = mulberry32(GALAXY_SEED + node.ring * 91 + Math.floor(state.time * 7));
-    const choices = ['scout', 'interceptor', 'fighter', 'bomber', 'sniper', 'carrier', 'turret'];
+    const rng = mulberry32(WORLD_SEED + sector.gx * 77 + sector.gy * 91 + Math.floor(state.time * 7));
+    const choices = ['scout', 'fighter', 'bomber', 'sniper', 'turret'];
     const threatScale = biome.threat + player.level * 0.05;
-    const count = clamp(Math.floor(randRange(rng, 1, 3) + node.ring * 0.3), 1, 4);
+    const count = clamp(Math.floor(randRange(rng, 1, 3) + sector.depth * 0.3), 1, 4);
     for (let i = 0; i < count; i += 1) {
       const type = choices[Math.floor(rng() * choices.length)];
       const angle = rng() * Math.PI * 2;
       const radius = randRange(rng, 240, 520);
       spawnEnemy(type, player.x + Math.cos(angle) * radius, player.y + Math.sin(angle) * radius, threatScale);
     }
-    node.spawnTimer = randRange(rng, 1.1, 2.4) / threatScale;
+    sector.spawnTimer = randRange(rng, 1.1, 2.4) / threatScale;
   }
 
   function updateEnemyAI(enemy, dt) {
@@ -1443,18 +1478,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           enemy.vx += dir.x * speed * 0.8 * dt;
           enemy.vy += dir.y * speed * 0.8 * dt;
         }
-      } else if (enemy.role === 'carrier') {
-        const dir = normalize(dx, dy);
-        if (distance < 500) {
-          enemy.vx -= dir.x * speed * 0.7 * dt;
-          enemy.vy -= dir.y * speed * 0.7 * dt;
-        } else {
-          enemy.vx += dir.x * speed * 0.5 * dt;
-          enemy.vy += dir.y * speed * 0.5 * dt;
-        }
-        if (Math.random() < 0.012) {
-          spawnEnemy('interceptor', enemy.x + randRange(Math.random, -40, 40), enemy.y + randRange(Math.random, -40, 40), 1.1);
-        }
       } else if (enemy.state === 'chase' || enemy.state === 'attack') {
         const dir = normalize(dx, dy);
         enemy.vx += dir.x * speed * dt;
@@ -1509,8 +1532,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function updateEnemies(dt) {
-    const node = getCurrentNode();
-    if (node) spawnWave(node, dt);
+    const sector = getCurrentSector();
+    spawnWave(sector, dt);
 
     entities.enemies.forEach((enemy) => {
       if (enemy.hp <= 0) return;
@@ -1538,14 +1561,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     };
     entities.projectiles = updateList(entities.projectiles);
     entities.enemyShots = updateList(entities.enemyShots);
+    entities.beams = entities.beams.filter((beam) => {
+      beam.life -= dt;
+      return beam.life > 0;
+    });
   }
 
   function updateDrones(dt) {
     entities.drones.forEach((drone, index) => {
       drone.angle += dt * 0.9;
       const offsetAngle = drone.angle + index * 0.4;
-      drone.x = player.x + Math.cos(offsetAngle) * drone.radius;
-      drone.y = player.y + Math.sin(offsetAngle) * drone.radius;
+      drone.x = player.x + Math.cos(offsetAngle) * (drone.radius || 36);
+      drone.y = player.y + Math.sin(offsetAngle) * (drone.radius || 36);
       drone.cooldown -= dt;
       if (drone.type === 'repair') {
         if (drone.cooldown <= 0 && player.hp < cachedStats.maxHp) {
@@ -1628,11 +1655,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function handleCollisions(dt) {
-    const node = getCurrentNode();
-    if (!node) return;
-    const field = generateNodeField(node);
+    const sector = getCurrentSector();
 
-    field.asteroids.forEach((asteroid) => {
+    sector.objects.asteroids.forEach((asteroid) => {
       const d = dist(player.x, player.y, asteroid.x, asteroid.y);
       if (d < asteroid.radius + cachedStats.size) {
         const push = normalize(player.x - asteroid.x, player.y - asteroid.y);
@@ -1644,14 +1669,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     });
 
-    field.storms.forEach((storm) => {
+    sector.objects.storms.forEach((storm) => {
       if (dist(player.x, player.y, storm.x, storm.y) < storm.radius) {
         player.shield = clamp(player.shield - storm.intensity * 16 * dt, 0, cachedStats.maxShield);
         player.energy = clamp(player.energy - storm.intensity * 9 * dt, 0, cachedStats.energyMax);
       }
     });
 
-    field.anomalies.forEach((anomaly) => {
+    sector.objects.anomalies.forEach((anomaly) => {
       const d = dist(player.x, player.y, anomaly.x, anomaly.y);
       if (d < anomaly.radius + cachedStats.size) {
         anomaly.charge = clamp(anomaly.charge + dt * 0.6, 0, 1);
@@ -1668,7 +1693,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       entities.enemies.forEach((enemy) => {
         if (enemy.hp <= 0) return;
         if (dist(shot.x, shot.y, enemy.x, enemy.y) < enemy.size) {
-          shot.life = shot.pierce ? shot.life : 0;
+          shot.life = 0;
           applyDamage(enemy, shot.damage, { canCrit: true });
           if (shot.emp) enemy.stunned = Math.max(enemy.stunned, shot.emp + (cachedStats.empBonus || 0));
           if (shot.splash) {
@@ -1697,14 +1722,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       return true;
     });
 
-    field.caches.forEach((cache) => {
+    sector.objects.caches.forEach((cache) => {
       if (dist(player.x, player.y, cache.x, cache.y) < cache.radius + cachedStats.size) {
-        if (!world.cacheClaims[node.id]) {
-          world.cacheClaims[node.id] = cache.blueprint;
-          applyBlueprint(cache.blueprint);
-          awardCredits(140, 'Blueprint cache secured');
-          spawnLoot(cache.x, cache.y, 'data', 1);
-          noteStatus(`Blueprint found: ${BLUEPRINTS[cache.blueprint].name}`);
+        if (!world.cacheClaims?.[sector.key]) {
+          world.cacheClaims = world.cacheClaims || {};
+          world.cacheClaims[sector.key] = cache.blueprint;
+          state.prompt = { type: 'blueprint', id: cache.blueprint, name: BLUEPRINTS[cache.blueprint].name };
+          state.mode = 'prompt';
+          state.paused = true;
         }
       }
     });
@@ -1713,8 +1738,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function maybeAdvanceChapter(bossDefeated = false) {
     const chapter = STORY[player.chapterIndex];
     if (!chapter) return;
-
-    if (mission.active && mission.progress < mission.target) return;
+    if (mission.active) return;
 
     finalizeOptionalChallenges();
     if (player.chapterIndex >= STORY.length - 1) {
@@ -1732,7 +1756,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.chapterIndex = Math.min(player.chapterIndex + 1, STORY.length - 1);
     player.distanceThisChapter = 0;
     player.checkpointIndex = 0;
-    state.unlockedRing = Math.min(WORLD.rings, state.unlockedRing + 1);
+    state.unlockedDepth = Math.min(WORLD.maxDepth, state.unlockedDepth + 1);
     resetChapterState();
     setCheckpoint();
     showBriefing();
@@ -1741,7 +1765,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const blueprintKeys = Object.keys(BLUEPRINTS);
       const reward = blueprintKeys[(player.chapterIndex + 2) % blueprintKeys.length];
       if (!player.blueprints.has(reward)) {
-        applyBlueprint(reward);
+        applyBlueprint(reward, true);
         noteStatus(`Chapter reward: ${BLUEPRINTS[reward].name}`);
       }
     }
@@ -1749,25 +1773,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function updateMissionProgress() {
     if (!mission.active) return;
-    if (mission.type === 'collect' && mission.progress >= mission.target) {
-      completeMission();
-    }
-    if (mission.type === 'kills' && mission.progress >= mission.target) {
-      completeMission();
-    }
     if (mission.type === 'distance' && player.distanceThisChapter >= mission.target) {
       mission.progress = mission.target;
       completeMission();
     }
     if (mission.type === 'reach_gate') {
-      const node = getCurrentNode();
-      if (node && node.isGate) {
+      const sector = getCurrentSector();
+      if (sector.key === mission.gateKey) {
         mission.progress = mission.target;
         completeMission();
       }
     }
     if (mission.type === 'boss') {
-      if (world.bossesDefeated[player.chapterIndex]) {
+      if (!world.bossDefeated[player.chapterIndex]) {
+        const sector = getCurrentSector();
+        if (sector.key === mission.gateKey && !entities.enemies.some((enemy) => enemy.isBoss)) {
+          const center = posFromGrid(sector.gx, sector.gy);
+          const angle = Math.random() * Math.PI * 2;
+          const radius = 220;
+          spawnBoss(center.x + Math.cos(angle) * radius, center.y + Math.sin(angle) * radius);
+        }
+      } else {
         mission.progress = mission.target;
         completeMission();
       }
@@ -1790,6 +1816,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     mission.progress = 0;
     mission.reward = 300 + player.chapterIndex * 80;
     mission.text = chapter.objective;
+    mission.gateKey = world.gates[chapter.id] || '';
     pushStoryLog(chapter.intro);
   }
 
@@ -1799,15 +1826,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.distanceThisChapter += speed * dt;
     player.distanceTotal += speed * dt;
 
-    const checkpoints = Math.min(3, Math.floor((player.distanceThisChapter / (WORLD.ringSpacing * 3)) * 3));
+    const checkpoints = Math.min(3, Math.floor((player.distanceThisChapter / (WORLD.sectorSize * 3)) * 3));
     if (checkpoints > player.checkpointIndex) {
       player.checkpointIndex = checkpoints;
       setCheckpoint();
       awardCredits(160, 'Checkpoint reached');
-    }
-
-    if (mission.type === 'distance') {
-      mission.progress = Math.min(mission.target, Math.floor(player.distanceThisChapter));
     }
 
     updateMissionProgress();
@@ -1829,10 +1852,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function updateStationInteraction() {
     if (state.mode !== 'flight') return;
-    const node = getCurrentNode();
-    if (!node) return;
-    const field = generateNodeField(node);
-    const station = field.stations.find((s) => dist(player.x, player.y, s.x, s.y) < s.radius + 40);
+    const sector = getCurrentSector();
+    const station = sector.objects.stations.find((s) => dist(player.x, player.y, s.x, s.y) < s.radius + 40);
     if (station) {
       noteStatus('Station in range. Press E to dock.');
       if (input.justPressed['KeyE']) {
@@ -1852,9 +1873,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
-  function createContractForNode(node) {
-    if (world.stationContracts[node.id]) return;
-    const rng = mulberry32(GALAXY_SEED + node.ring * 13 + node.x * 0.01);
+  function createContractForSector(sector) {
+    if (world.stationContracts[sector.key]) return;
+    const rng = mulberry32(WORLD_SEED + sector.gx * 13 + sector.gy * 29);
     const templates = [
       { type: 'kills', text: 'Eliminate patrols', target: 8 + Math.floor(rng() * 6) },
       { type: 'collect', text: 'Recover data shards', target: 4 + Math.floor(rng() * 3) },
@@ -1862,7 +1883,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       { type: 'distance', text: 'Fly a courier run', target: 8000 + Math.floor(rng() * 4000) }
     ];
     const choice = templates[Math.floor(rng() * templates.length)];
-    world.stationContracts[node.id] = {
+    world.stationContracts[sector.key] = {
       type: choice.type,
       target: choice.target,
       reward: 240 + choice.target * 22,
@@ -1870,8 +1891,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     };
   }
 
-  function acceptContract(node) {
-    const saved = world.stationContracts[node.id];
+  function acceptContract(sector) {
+    const saved = world.stationContracts[sector.key];
     if (!saved) return;
     contract.active = true;
     contract.type = saved.type;
@@ -1891,22 +1912,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function update(dt) {
     if (input.justPressed['KeyC']) {
-      if (player.energy >= 20) {
+      if (!player.blueprints.has('scanner_drone')) {
+        noteStatus('Scanner drone required.');
+      } else if (player.energy >= 20) {
         player.energy -= 20;
         state.scanPulse = 2.2;
+        revealSectorsAround(player.x, player.y, state.scanRadius);
         noteStatus('Scanner pulse active.');
       } else {
         noteStatus('Insufficient energy for scan.');
       }
     }
 
-    if (input.justPressed['Digit1']) player.ship.primaryId = 'laser';
-    if (input.justPressed['Digit2'] && player.unlocked.weapons.includes('pulse')) player.ship.primaryId = 'pulse';
-    if (input.justPressed['Digit3'] && player.unlocked.weapons.includes('rail')) player.ship.primaryId = 'rail';
-
-    if (input.justPressed['KeyQ'] && player.unlocked.weapons.includes('plasma')) player.ship.secondaryId = 'plasma';
-    if (input.justPressed['KeyZ'] && player.unlocked.weapons.includes('missile')) player.ship.secondaryId = 'missile';
-    if (input.justPressed['KeyV'] && player.unlocked.weapons.includes('ion')) player.ship.secondaryId = 'ion';
+    if (input.justPressed['Digit1']) player.weapons.primary = 'laser';
+    if (input.justPressed['Digit2'] && player.unlocked.weapons.includes('plasma')) player.weapons.secondary = 'plasma';
+    if (input.justPressed['Digit3'] && player.unlocked.weapons.includes('missile')) player.weapons.secondary = 'missile';
+    if (input.justPressed['Digit4'] && player.unlocked.weapons.includes('emp')) player.weapons.secondary = 'emp';
 
     state.scanPulse = Math.max(0, state.scanPulse - dt);
 
@@ -1994,8 +2015,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function drawDust(camera) {
-    const node = getCurrentNode();
-    const biome = node ? BIOMES[node.biome] : BIOMES.driftline;
+    const sector = getCurrentSector();
+    const biome = BIOMES[sector.biome];
     ctx.fillStyle = biome.dust;
     dustField.forEach((dust) => {
       const screenX = dust.x - camera.x * 0.25 + VIEW.centerX;
@@ -2009,11 +2030,44 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.globalAlpha = 1;
   }
 
-  function drawNodeField(node, camera) {
-    if (!node) return;
-    const field = generateNodeField(node);
+  function drawAsteroid(asteroid, camera) {
+    const x = asteroid.x - camera.x + VIEW.centerX;
+    const y = asteroid.y - camera.y + VIEW.centerY;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = PALETTE.steel;
+    ctx.beginPath();
+    asteroid.points.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    });
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(125,252,154,0.12)';
+    ctx.stroke();
+    ctx.restore();
+  }
 
-    field.planets.forEach((planet) => {
+  function drawStation(station, camera) {
+    const x = station.x - camera.x + VIEW.centerX;
+    const y = station.y - camera.y + VIEW.centerY;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = 'rgba(125,252,154,0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, station.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, station.radius * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(125,252,154,0.15)';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawSectorObjects(sector, camera) {
+    sector.objects.planets.forEach((planet) => {
       const x = planet.x - camera.x + VIEW.centerX;
       const y = planet.y - camera.y + VIEW.centerY;
       const grad = ctx.createRadialGradient(x - 20, y - 20, planet.radius * 0.2, x, y, planet.radius);
@@ -2025,7 +2079,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fill();
     });
 
-    field.storms.forEach((storm) => {
+    sector.objects.storms.forEach((storm) => {
       const x = storm.x - camera.x + VIEW.centerX;
       const y = storm.y - camera.y + VIEW.centerY;
       ctx.fillStyle = `rgba(90,160,255,${storm.intensity * 0.2})`;
@@ -2034,31 +2088,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fill();
     });
 
-    field.asteroids.forEach((asteroid) => {
-      const x = asteroid.x - camera.x + VIEW.centerX;
-      const y = asteroid.y - camera.y + VIEW.centerY;
-      ctx.fillStyle = '#283241';
-      ctx.beginPath();
-      ctx.arc(x, y, asteroid.radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(125,252,154,0.12)';
-      ctx.stroke();
-    });
+    sector.objects.asteroids.forEach((asteroid) => drawAsteroid(asteroid, camera));
+    sector.objects.stations.forEach((station) => drawStation(station, camera));
 
-    field.stations.forEach((station) => {
-      const x = station.x - camera.x + VIEW.centerX;
-      const y = station.y - camera.y + VIEW.centerY;
-      ctx.strokeStyle = 'rgba(125,252,154,0.8)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(x, y, station.radius, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(125,252,154,0.15)';
-      ctx.fill();
-      ctx.lineWidth = 1;
-    });
-
-    field.anomalies.forEach((anomaly) => {
+    sector.objects.anomalies.forEach((anomaly) => {
       const x = anomaly.x - camera.x + VIEW.centerX;
       const y = anomaly.y - camera.y + VIEW.centerY;
       ctx.strokeStyle = 'rgba(111,168,255,0.8)';
@@ -2069,8 +2102,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fill();
     });
 
-    field.caches.forEach((cache) => {
-      if (world.cacheClaims[node.id]) return;
+    sector.objects.caches.forEach((cache) => {
+      if (world.cacheClaims?.[sector.key]) return;
+      if (!player.blueprints.has('scanner_drone') && dist(player.x, player.y, cache.x, cache.y) > 120) return;
       if (state.scanPulse <= 0 && dist(player.x, player.y, cache.x, cache.y) > 200) return;
       const x = cache.x - camera.x + VIEW.centerX;
       const y = cache.y - camera.y + VIEW.centerY;
@@ -2083,11 +2117,121 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
   }
 
+  function drawShip(camera) {
+    const px = player.x - camera.x + VIEW.centerX;
+    const py = player.y - camera.y + VIEW.centerY;
+    const hull = HULLS[player.modules.hullSize] || HULLS.small;
+    const w = hull.size * 1.8;
+    const h = hull.size * 2.4;
+    const accent = player.cosmetics.has('ember') ? PALETTE.ember : PALETTE.glow;
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(player.angle + Math.PI / 2);
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = accent;
+    ctx.fillStyle = '#101b2f';
+    ctx.beginPath();
+    ctx.moveTo(0, -h * 0.7);
+    ctx.quadraticCurveTo(w * 0.6, -h * 0.2, w * 0.45, h * 0.35);
+    ctx.lineTo(w * 0.2, h * 0.55);
+    ctx.lineTo(0, h * 0.45);
+    ctx.lineTo(-w * 0.2, h * 0.55);
+    ctx.lineTo(-w * 0.45, h * 0.35);
+    ctx.quadraticCurveTo(-w * 0.6, -h * 0.2, 0, -h * 0.7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = 'rgba(125,252,154,0.7)';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    const canopy = ctx.createLinearGradient(0, -h * 0.4, 0, h * 0.2);
+    canopy.addColorStop(0, 'rgba(100,220,255,0.6)');
+    canopy.addColorStop(1, 'rgba(20,40,70,0.7)');
+    ctx.fillStyle = canopy;
+    ctx.beginPath();
+    ctx.moveTo(0, -h * 0.45);
+    ctx.quadraticCurveTo(w * 0.2, -h * 0.1, 0, h * 0.1);
+    ctx.quadraticCurveTo(-w * 0.2, -h * 0.1, 0, -h * 0.45);
+    ctx.fill();
+
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.rect(-w * 0.07, h * 0.2, w * 0.14, h * 0.3);
+    ctx.fill();
+
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = accent;
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.arc(-w * 0.22, h * 0.5, w * 0.12, 0, Math.PI * 2);
+    ctx.arc(w * 0.22, h * 0.5, w * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    if (player.shield > 0) {
+      ctx.strokeStyle = 'rgba(109,240,255,0.4)';
+      ctx.beginPath();
+      ctx.arc(px, py, hull.size + 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  function drawEnemy(enemy, camera) {
+    const x = enemy.x - camera.x + VIEW.centerX;
+    const y = enemy.y - camera.y + VIEW.centerY;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(enemy.angle || 0);
+    ctx.fillStyle = enemy.isBoss ? PALETTE.ember : enemy.def?.color || PALETTE.rose;
+    ctx.shadowBlur = enemy.isBoss ? 18 : 8;
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.beginPath();
+    if (enemy.isBoss) {
+      ctx.moveTo(0, -enemy.size * 0.9);
+      ctx.lineTo(enemy.size * 0.9, enemy.size * 0.8);
+      ctx.lineTo(-enemy.size * 0.9, enemy.size * 0.8);
+    } else if (enemy.role === 'scout') {
+      ctx.moveTo(0, -enemy.size);
+      ctx.lineTo(enemy.size * 0.7, enemy.size * 0.5);
+      ctx.lineTo(0, enemy.size * 0.2);
+      ctx.lineTo(-enemy.size * 0.7, enemy.size * 0.5);
+    } else if (enemy.role === 'bomber') {
+      ctx.moveTo(0, -enemy.size * 0.8);
+      ctx.lineTo(enemy.size * 0.9, enemy.size * 0.2);
+      ctx.lineTo(enemy.size * 0.6, enemy.size * 0.9);
+      ctx.lineTo(-enemy.size * 0.6, enemy.size * 0.9);
+      ctx.lineTo(-enemy.size * 0.9, enemy.size * 0.2);
+    } else if (enemy.role === 'sniper') {
+      ctx.moveTo(0, -enemy.size * 1.1);
+      ctx.lineTo(enemy.size * 0.5, enemy.size * 0.8);
+      ctx.lineTo(-enemy.size * 0.5, enemy.size * 0.8);
+    } else {
+      ctx.moveTo(0, -enemy.size);
+      ctx.lineTo(enemy.size * 0.7, enemy.size);
+      ctx.lineTo(-enemy.size * 0.7, enemy.size);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    if (enemy.isBoss && enemy.shield > 0) {
+      ctx.strokeStyle = 'rgba(125,252,154,0.6)';
+      ctx.beginPath();
+      ctx.arc(0, 0, enemy.size + 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawEntities(camera) {
     entities.loot.forEach((drop) => {
       const x = drop.x - camera.x + VIEW.centerX;
       const y = drop.y - camera.y + VIEW.centerY;
-      ctx.fillStyle = drop.type === 'credits' ? '#ffd166' : drop.type === 'data' ? '#6df0ff' : '#7dfc9a';
+      ctx.fillStyle = drop.type === 'credits' ? PALETTE.gold : drop.type === 'data' ? PALETTE.ice : PALETTE.glow;
       ctx.beginPath();
       ctx.arc(x, y, 5, 0, Math.PI * 2);
       ctx.fill();
@@ -2111,32 +2255,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fill();
     });
 
-    entities.enemies.forEach((enemy) => {
-      const x = enemy.x - camera.x + VIEW.centerX;
-      const y = enemy.y - camera.y + VIEW.centerY;
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(enemy.angle || 0);
-      ctx.fillStyle = enemy.isBoss ? '#ffb347' : enemy.def?.color || '#ff6b6b';
+    entities.beams.forEach((beam) => {
+      ctx.strokeStyle = beam.color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = beam.life * 6;
       ctx.beginPath();
-      if (enemy.isBoss) {
-        ctx.moveTo(0, -enemy.size);
-        ctx.lineTo(enemy.size * 0.9, enemy.size);
-        ctx.lineTo(-enemy.size * 0.9, enemy.size);
-      } else {
-        ctx.moveTo(0, -enemy.size);
-        ctx.lineTo(enemy.size * 0.7, enemy.size);
-        ctx.lineTo(-enemy.size * 0.7, enemy.size);
-      }
-      ctx.closePath();
-      ctx.fill();
-      if (enemy.isBoss && enemy.shield > 0) {
-        ctx.strokeStyle = 'rgba(125,252,154,0.6)';
-        ctx.beginPath();
-        ctx.arc(0, 0, enemy.size + 8, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.restore();
+      ctx.moveTo(beam.x1 - camera.x + VIEW.centerX, beam.y1 - camera.y + VIEW.centerY);
+      ctx.lineTo(beam.x2 - camera.x + VIEW.centerX, beam.y2 - camera.y + VIEW.centerY);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1;
+    });
+
+    entities.enemies.forEach((enemy) => {
+      drawEnemy(enemy, camera);
     });
 
     entities.drones.forEach((drone) => {
@@ -2172,29 +2304,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.globalAlpha = 1;
     });
 
-    const px = player.x - camera.x + VIEW.centerX;
-    const py = player.y - camera.y + VIEW.centerY;
-    ctx.save();
-    ctx.translate(px, py);
-    ctx.rotate(player.angle + Math.PI / 2);
-    ctx.fillStyle = '#7dfc9a';
-    ctx.beginPath();
-    ctx.moveTo(0, -cachedStats.size * 1.4);
-    ctx.lineTo(cachedStats.size * 0.9, cachedStats.size * 1.2);
-    ctx.lineTo(-cachedStats.size * 0.9, cachedStats.size * 1.2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-
-    if (player.shield > 0) {
-      ctx.strokeStyle = 'rgba(109,240,255,0.4)';
-      ctx.beginPath();
-      ctx.arc(px, py, cachedStats.size + 6, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    drawShip(camera);
   }
 
-  function drawMiniMap(camera) {
+  function drawMiniMap() {
     const mapSize = 130;
     const padding = 12;
     const mapX = VIEW.width - mapSize - padding;
@@ -2204,108 +2317,104 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.strokeStyle = 'rgba(125,252,154,0.4)';
     ctx.strokeRect(mapX, mapY, mapSize, mapSize);
 
-    world.nodes.forEach((node) => {
-      const nx = mapX + ((node.x + WORLD.size / 2) / WORLD.size) * mapSize;
-      const ny = mapY + ((node.y + WORLD.size / 2) / WORLD.size) * mapSize;
-      ctx.fillStyle = world.discovered.has(node.id) ? 'rgba(125,252,154,0.6)' : 'rgba(80,90,110,0.4)';
-      ctx.beginPath();
-      ctx.arc(nx, ny, node.isGate ? 4 : 2, 0, Math.PI * 2);
-      ctx.fill();
-    });
+    for (let gx = -WORLD.gridRadius; gx <= WORLD.gridRadius; gx += 1) {
+      for (let gy = -WORLD.gridRadius; gy <= WORLD.gridRadius; gy += 1) {
+        const key = sectorKey(gx, gy);
+        const sector = getSector(gx, gy);
+        const cellX = mapX + ((gx + WORLD.gridRadius) / (WORLD.gridRadius * 2 + 1)) * mapSize;
+        const cellY = mapY + ((gy + WORLD.gridRadius) / (WORLD.gridRadius * 2 + 1)) * mapSize;
+        const visible = sector.discovered || sector.revealedUntil > state.time;
+        ctx.fillStyle = visible ? 'rgba(125,252,154,0.6)' : 'rgba(80,90,110,0.3)';
+        ctx.fillRect(cellX + 2, cellY + 2, 6, 6);
+        if (sector.gateChapter) {
+          ctx.strokeStyle = PALETTE.gold;
+          ctx.strokeRect(cellX + 1, cellY + 1, 8, 8);
+        }
+      }
+    }
 
-    const px = mapX + ((player.x + WORLD.size / 2) / WORLD.size) * mapSize;
-    const py = mapY + ((player.y + WORLD.size / 2) / WORLD.size) * mapSize;
-    ctx.fillStyle = '#ffb347';
+    const playerX = mapX + ((player.x + WORLD.half) / WORLD.size) * mapSize;
+    const playerY = mapY + ((player.y + WORLD.half) / WORLD.size) * mapSize;
+    ctx.fillStyle = PALETTE.ember;
     ctx.beginPath();
-    ctx.arc(px, py, 3, 0, Math.PI * 2);
+    ctx.arc(playerX, playerY, 3, 0, Math.PI * 2);
     ctx.fill();
   }
 
   function drawShipStatus() {
     ctx.fillStyle = 'rgba(5,10,18,0.55)';
-    ctx.fillRect(12, VIEW.height - 96, 280, 84);
+    ctx.fillRect(12, VIEW.height - 100, 300, 88);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
-    ctx.strokeRect(12, VIEW.height - 96, 280, 84);
-    ctx.fillStyle = '#7dfc9a';
+    ctx.strokeRect(12, VIEW.height - 100, 300, 88);
+    ctx.fillStyle = PALETTE.glow;
     ctx.font = '12px sans-serif';
-    ctx.fillText(`Hull ${Math.round(player.hp)}/${Math.round(cachedStats.maxHp)}`, 22, VIEW.height - 68);
-    ctx.fillText(`Shield ${Math.round(player.shield)}/${Math.round(cachedStats.maxShield)}`, 22, VIEW.height - 52);
-    ctx.fillText(`Energy ${Math.round(player.energy)}/${Math.round(cachedStats.energyMax)}`, 22, VIEW.height - 36);
-    ctx.fillText(`Boost ${Math.round(player.boost)}/${Math.round(cachedStats.boostMax)}`, 22, VIEW.height - 20);
+    ctx.fillText(`Hull ${Math.round(player.hp)}/${Math.round(cachedStats.maxHp)}`, 22, VIEW.height - 72);
+    ctx.fillText(`Shield ${Math.round(player.shield)}/${Math.round(cachedStats.maxShield)}`, 22, VIEW.height - 56);
+    ctx.fillText(`Energy ${Math.round(player.energy)}/${Math.round(cachedStats.energyMax)}`, 22, VIEW.height - 40);
+    ctx.fillText(`Boost ${Math.round(player.boost)}/${Math.round(cachedStats.boostMax)}`, 22, VIEW.height - 24);
   }
 
   function drawGalaxyMap() {
     ctx.fillStyle = 'rgba(5,10,18,0.85)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
-    ctx.fillStyle = '#7dfc9a';
+    ctx.fillStyle = PALETTE.glow;
     ctx.font = '20px sans-serif';
-    ctx.fillText('Aetherline Sector Map', 24, 36);
+    ctx.fillText('Aetherline Sector Grid', 24, 36);
     ctx.font = '12px sans-serif';
     ctx.fillText('Press M to close map.', 24, 54);
 
-    ctx.strokeStyle = 'rgba(125,252,154,0.2)';
-    world.edges.forEach(([fromId, toId]) => {
-      const from = world.nodeMap.get(fromId);
-      const to = world.nodeMap.get(toId);
-      if (!from || !to) return;
-      const fx = (from.x / WORLD.size) * 520 + VIEW.centerX;
-      const fy = (from.y / WORLD.size) * 520 + VIEW.centerY;
-      const tx = (to.x / WORLD.size) * 520 + VIEW.centerX;
-      const ty = (to.y / WORLD.size) * 520 + VIEW.centerY;
-      ctx.beginPath();
-      ctx.moveTo(fx, fy);
-      ctx.lineTo(tx, ty);
-      ctx.stroke();
-    });
+    const gridSize = WORLD.gridRadius * 2 + 1;
+    const cell = 30;
+    const offsetX = VIEW.centerX - (gridSize * cell) / 2;
+    const offsetY = VIEW.centerY - (gridSize * cell) / 2;
 
-    world.nodes.forEach((node) => {
-      const x = (node.x / WORLD.size) * 520 + VIEW.centerX;
-      const y = (node.y / WORLD.size) * 520 + VIEW.centerY;
-      const discovered = world.discovered.has(node.id);
-      ctx.fillStyle = discovered ? BIOMES[node.biome].accent : 'rgba(80,90,110,0.5)';
-      ctx.beginPath();
-      ctx.arc(x, y, node.isGate ? 6 : 3, 0, Math.PI * 2);
-      ctx.fill();
-      if (node.isBoss) {
-        ctx.strokeStyle = 'rgba(255,179,71,0.8)';
-        ctx.strokeRect(x - 6, y - 6, 12, 12);
+    for (let gx = -WORLD.gridRadius; gx <= WORLD.gridRadius; gx += 1) {
+      for (let gy = -WORLD.gridRadius; gy <= WORLD.gridRadius; gy += 1) {
+        const sector = getSector(gx, gy);
+        const visible = sector.discovered || sector.revealedUntil > state.time;
+        const x = offsetX + (gx + WORLD.gridRadius) * cell;
+        const y = offsetY + (gy + WORLD.gridRadius) * cell;
+        ctx.fillStyle = visible ? BIOMES[sector.biome].accent : 'rgba(60,70,90,0.4)';
+        ctx.fillRect(x + 4, y + 4, cell - 8, cell - 8);
+        if (sector.gateChapter) {
+          ctx.strokeStyle = PALETTE.gold;
+          ctx.strokeRect(x + 2, y + 2, cell - 4, cell - 4);
+        }
+        if (sector.locked) {
+          ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+          ctx.beginPath();
+          ctx.moveTo(x + 6, y + 6);
+          ctx.lineTo(x + cell - 6, y + cell - 6);
+          ctx.stroke();
+        }
       }
-      if (node.isStation) {
-        ctx.strokeStyle = 'rgba(125,252,154,0.8)';
-        ctx.beginPath();
-        ctx.arc(x, y, 9, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    });
+    }
 
-    const px = (player.x / WORLD.size) * 520 + VIEW.centerX;
-    const py = (player.y / WORLD.size) * 520 + VIEW.centerY;
-    ctx.fillStyle = '#ffb347';
+    const px = offsetX + (gridFromPos(player.x, player.y).gx + WORLD.gridRadius) * cell + cell / 2;
+    const py = offsetY + (gridFromPos(player.x, player.y).gy + WORLD.gridRadius) * cell + cell / 2;
+    ctx.fillStyle = PALETTE.ember;
     ctx.beginPath();
     ctx.arc(px, py, 6, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  function drawStoryLog() {
-    ctx.fillStyle = 'rgba(5,10,18,0.85)';
+  function drawPromptOverlay() {
+    if (!state.prompt) return;
+    ctx.fillStyle = 'rgba(5,10,18,0.86)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
-    ctx.fillStyle = '#7dfc9a';
+    ctx.fillStyle = PALETTE.glow;
     ctx.font = '20px sans-serif';
-    ctx.fillText('Aetherline Log', 24, 36);
-    ctx.font = '12px sans-serif';
-    ctx.fillText('Press L to close log.', 24, 54);
-    ctx.fillStyle = '#e0f2ff';
+    ctx.fillText('Blueprint Cache Found', 24, 36);
     ctx.font = '13px sans-serif';
-    const log = state.storyLog.slice(-16);
-    log.forEach((entry, idx) => {
-      ctx.fillText(entry, 24, 80 + idx * 18);
-    });
+    ctx.fillStyle = '#e0f2ff';
+    ctx.fillText(`Unlock ${state.prompt.name}?`, 24, 70);
+    ctx.fillText('Press Y to install now or N to store for later.', 24, 92);
   }
 
   function drawStationOverlay() {
     ctx.fillStyle = 'rgba(5,10,18,0.78)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
-    ctx.fillStyle = '#7dfc9a';
+    ctx.fillStyle = PALETTE.glow;
     ctx.font = '20px sans-serif';
     ctx.fillText('Station Docked', 24, 36);
     ctx.font = '13px sans-serif';
@@ -2314,10 +2423,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       '2. Shipyard - Configure Modules',
       '3. Store - Supplies & Cosmetics',
       '4. Accept Contract',
-      '5. Undock'
+      '5. Install Stored Blueprints',
+      '6. Undock'
     ];
     options.forEach((opt, idx) => {
-      ctx.fillStyle = idx === state.menuSelection ? '#ffd166' : '#e0f2ff';
+      ctx.fillStyle = idx === state.menuSelection ? PALETTE.gold : '#e0f2ff';
       ctx.fillText(opt, 24, 80 + idx * 22);
     });
   }
@@ -2325,23 +2435,23 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function drawShipyardOverlay() {
     ctx.fillStyle = 'rgba(5,10,18,0.82)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
-    ctx.fillStyle = '#7dfc9a';
+    ctx.fillStyle = PALETTE.glow;
     ctx.font = '20px sans-serif';
     ctx.fillText('Shipyard Configuration', 24, 36);
     ctx.font = '13px sans-serif';
     const lines = [
-      `Hull: ${HULLS[player.ship.hullId].label}`,
-      `Engine: ${ENGINES[player.ship.engineId].label}`,
-      `Shield: ${SHIELDS[player.ship.shieldId].label}`,
-      `Primary: ${WEAPONS[player.ship.primaryId].label}`,
-      `Secondary: ${WEAPONS[player.ship.secondaryId].label}`,
-      `Drone Bay: ${DRONE_BAYS[player.ship.droneBayId].label}`
+      `Hull: ${HULLS[player.modules.hullSize].label}`,
+      `Engine: ${ENGINES[player.modules.enginePack].label}`,
+      `Shield: ${SHIELDS[player.modules.shieldArray].label}`,
+      `Primary: ${WEAPONS[player.weapons.primary].label}`,
+      `Secondary: ${WEAPONS[player.weapons.secondary].label}`,
+      `Drone Bay: ${DRONE_BAYS[player.modules.droneBay].label}`
     ];
     lines.forEach((line, idx) => {
       ctx.fillText(line, 24, 70 + idx * 20);
     });
-    ctx.fillStyle = '#ffd166';
-    ctx.fillText('Use number keys to cycle modules. Press B to exit.', 24, 210);
+    ctx.fillStyle = PALETTE.gold;
+    ctx.fillText('Use number keys to cycle modules. Press Esc to exit.', 24, 210);
     ctx.fillStyle = '#e0f2ff';
     ctx.fillText('1 Hull  2 Engine  3 Shield  4 Primary  5 Secondary  6 Drone', 24, 232);
   }
@@ -2349,21 +2459,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function drawStoreOverlay() {
     ctx.fillStyle = 'rgba(5,10,18,0.82)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
-    ctx.fillStyle = '#7dfc9a';
+    ctx.fillStyle = PALETTE.glow;
     ctx.font = '20px sans-serif';
     ctx.fillText('Station Store', 24, 36);
     ctx.font = '13px sans-serif';
     STORE_ITEMS.forEach((item, idx) => {
-      ctx.fillStyle = idx === state.menuSelection ? '#ffd166' : '#e0f2ff';
+      ctx.fillStyle = idx === state.menuSelection ? PALETTE.gold : '#e0f2ff';
       ctx.fillText(`${idx + 1}. ${item.name} - ${item.price} credits`, 24, 70 + idx * 20);
     });
-    ctx.fillStyle = '#ffd166';
-    ctx.fillText('Press B to exit store.', 24, 70 + STORE_ITEMS.length * 20 + 18);
+    ctx.fillStyle = PALETTE.gold;
+    ctx.fillText('Press Esc to exit store.', 24, 70 + STORE_ITEMS.length * 20 + 18);
   }
 
   function drawOverlay() {
     if (state.mode === 'map') drawGalaxyMap();
-    if (state.mode === 'log') drawStoryLog();
+    if (state.mode === 'prompt') drawPromptOverlay();
     if (state.mode === 'station') drawStationOverlay();
     if (state.mode === 'shipyard') drawShipyardOverlay();
     if (state.mode === 'store') drawStoreOverlay();
@@ -2378,10 +2488,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drawBackground(camera);
     drawDust(camera);
 
-    const node = getCurrentNode();
-    drawNodeField(node, camera);
+    const sector = getCurrentSector();
+    drawSectorObjects(sector, camera);
     drawEntities(camera);
-    drawMiniMap(camera);
+    drawMiniMap();
     drawShipStatus();
     drawOverlay();
   }
@@ -2454,7 +2564,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function showBriefing() {
     const chapter = STORY[player.chapterIndex];
     if (!chapter || !briefing) return;
-    if (briefKicker) briefKicker.textContent = chapter.kicker;
+    if (briefKicker) briefKicker.textContent = `Chapter ${chapter.id}`;
     if (briefTitle) briefTitle.textContent = chapter.title;
     if (briefBody) briefBody.textContent = chapter.intro;
     if (briefPrimary) briefPrimary.textContent = chapter.objective;
@@ -2497,21 +2607,30 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         blueprints: Array.from(player.blueprints),
         cosmetics: Array.from(player.cosmetics),
         toys: Array.from(player.toys),
-        ship: player.ship,
+        modules: player.modules,
+        weapons: player.weapons,
         unlocked: player.unlocked,
         chapterIndex: player.chapterIndex,
         distanceThisChapter: player.distanceThisChapter,
         distanceTotal: player.distanceTotal,
         checkpointIndex: player.checkpointIndex
       },
-      world: {
-        discovered: Array.from(world.discovered),
-        cacheClaims: world.cacheClaims,
-        bossesDefeated: world.bossesDefeated,
-        stationContracts: world.stationContracts
+      inventory: {
+        credits: player.credits,
+        blueprints: player.inventory.blueprints,
+        skins: player.inventory.skins,
+        toys: player.inventory.toys
+      },
+      mapProgress: {
+        sectorsDiscovered: Array.from(world.discovered),
+        bossesDefeated: world.bossDefeated
+      },
+      settings: {
+        audioVolume: 0.8,
+        graphicsQuality: 'high'
       },
       state: {
-        unlockedRing: state.unlockedRing,
+        unlockedDepth: state.unlockedDepth,
         storyLog: state.storyLog
       },
       mission,
@@ -2552,19 +2671,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.blueprints = new Set(savedPlayer.blueprints || []);
     player.cosmetics = new Set(savedPlayer.cosmetics || []);
     player.toys = new Set(savedPlayer.toys || []);
-    player.ship = savedPlayer.ship || player.ship;
+    player.modules = savedPlayer.modules || player.modules;
+    player.weapons = savedPlayer.weapons || player.weapons;
     player.unlocked = savedPlayer.unlocked || player.unlocked;
     player.chapterIndex = savedPlayer.chapterIndex ?? player.chapterIndex;
     player.distanceThisChapter = savedPlayer.distanceThisChapter ?? player.distanceThisChapter;
     player.distanceTotal = savedPlayer.distanceTotal ?? player.distanceTotal;
     player.checkpointIndex = savedPlayer.checkpointIndex ?? player.checkpointIndex;
 
-    world.discovered = new Set(save.world?.discovered || []);
-    world.cacheClaims = save.world?.cacheClaims || {};
-    world.bossesDefeated = save.world?.bossesDefeated || {};
-    world.stationContracts = save.world?.stationContracts || {};
+    player.inventory.blueprints = save.inventory?.blueprints || [];
+    player.inventory.skins = save.inventory?.skins || ['nebula'];
+    player.inventory.toys = save.inventory?.toys || [];
 
-    state.unlockedRing = save.state?.unlockedRing ?? state.unlockedRing;
+    world.discovered = new Set(save.mapProgress?.sectorsDiscovered || []);
+    world.bossDefeated = save.mapProgress?.bossesDefeated || {};
+
+    state.unlockedDepth = save.state?.unlockedDepth ?? state.unlockedDepth;
     state.storyLog = save.state?.storyLog || [];
 
     if (save.mission) {
@@ -2574,6 +2696,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       mission.progress = save.mission.progress || 0;
       mission.reward = save.mission.reward || 0;
       mission.text = save.mission.text || '';
+      mission.gateKey = save.mission.gateKey || '';
     }
 
     if (save.contract) {
@@ -2654,28 +2777,36 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       input.keys[e.code] = true;
       input.justPressed[e.code] = true;
 
-      if (e.code === 'KeyM') {
-        if (state.mode === 'flight') {
-          state.mapOpen = true;
-          state.mode = 'map';
-          state.paused = true;
-        } else if (state.mode === 'map') {
-          state.mapOpen = false;
-          state.mode = 'flight';
-          state.paused = false;
+      if (state.prompt && (e.code === 'KeyY' || e.code === 'KeyN')) {
+        if (e.code === 'KeyY') {
+          applyBlueprint(state.prompt.id, true);
+          noteStatus(`Blueprint installed: ${state.prompt.name}`);
+        } else {
+          applyBlueprint(state.prompt.id, false);
+          noteStatus(`Blueprint stored: ${state.prompt.name}`);
         }
+        state.prompt = null;
+        state.mode = 'flight';
+        state.paused = false;
         return;
       }
 
-      if (e.code === 'KeyL') {
-        if (state.mode === 'flight') {
-          state.mode = 'log';
-          state.paused = true;
-        } else if (state.mode === 'log') {
-          state.mode = 'flight';
-          state.paused = false;
-        }
+      if (e.code === 'KeyM' && state.mode === 'flight') {
+        state.mode = 'map';
+        state.paused = true;
         return;
+      }
+      if (e.code === 'KeyM' && state.mode === 'map') {
+        state.mode = 'flight';
+        state.paused = false;
+        return;
+      }
+
+      if (e.code === 'Escape') {
+        if (state.mode === 'shipyard' || state.mode === 'store' || state.mode === 'station') {
+          state.mode = 'station';
+          return;
+        }
       }
 
       if (state.mode === 'station') {
@@ -2704,11 +2835,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (code === 'Digit2') openShipyard();
     if (code === 'Digit3') openStore();
     if (code === 'Digit4') stationContract();
-    if (code === 'Digit5' || code === 'KeyB') undock();
+    if (code === 'Digit5') installStoredBlueprints();
+    if (code === 'Digit6') undock();
   }
 
   function handleShipyardInput(code) {
-    if (code === 'KeyB') {
+    if (code === 'Escape') {
       state.mode = 'station';
       return;
     }
@@ -2721,7 +2853,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function handleStoreInput(code) {
-    if (code === 'KeyB') {
+    if (code === 'Escape') {
       state.mode = 'station';
       return;
     }
@@ -2763,17 +2895,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function stationContract() {
-    const node = getCurrentNode();
-    if (!node) return;
-    createContractForNode(node);
-    acceptContract(node);
+    const sector = getCurrentSector();
+    createContractForSector(sector);
+    acceptContract(sector);
   }
 
   function cycleHull() {
     const hulls = player.unlocked.hulls;
-    const index = hulls.indexOf(player.ship.hullId);
+    const index = hulls.indexOf(player.modules.hullSize);
     const next = hulls[(index + 1) % hulls.length];
-    player.ship.hullId = next;
+    player.modules.hullSize = next;
     refreshStats({ keepRatios: true });
     spawnDrones();
     noteStatus(`Hull set to ${HULLS[next].label}.`);
@@ -2781,47 +2912,47 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function cycleEngine() {
     const engines = player.unlocked.engines;
-    const index = engines.indexOf(player.ship.engineId);
+    const index = engines.indexOf(player.modules.enginePack);
     const next = engines[(index + 1) % engines.length];
-    player.ship.engineId = next;
+    player.modules.enginePack = next;
     refreshStats({ keepRatios: true });
     noteStatus(`Engine set to ${ENGINES[next].label}.`);
   }
 
   function cycleShield() {
     const shields = player.unlocked.shields;
-    const index = shields.indexOf(player.ship.shieldId);
+    const index = shields.indexOf(player.modules.shieldArray);
     const next = shields[(index + 1) % shields.length];
-    player.ship.shieldId = next;
+    player.modules.shieldArray = next;
     refreshStats({ keepRatios: true });
     noteStatus(`Shield set to ${SHIELDS[next].label}.`);
   }
 
   function cyclePrimary() {
     const options = player.unlocked.weapons.filter((id) => WEAPONS[id]?.slot === 'primary');
-    const index = options.indexOf(player.ship.primaryId);
+    const index = options.indexOf(player.weapons.primary);
     const next = options[(index + 1) % options.length];
     if (next) {
-      player.ship.primaryId = next;
+      player.weapons.primary = next;
       noteStatus(`Primary weapon set to ${WEAPONS[next].label}.`);
     }
   }
 
   function cycleSecondary() {
     const options = player.unlocked.weapons.filter((id) => WEAPONS[id]?.slot === 'secondary');
-    const index = options.indexOf(player.ship.secondaryId);
+    const index = options.indexOf(player.weapons.secondary);
     const next = options[(index + 1) % options.length];
     if (next) {
-      player.ship.secondaryId = next;
+      player.weapons.secondary = next;
       noteStatus(`Secondary weapon set to ${WEAPONS[next].label}.`);
     }
   }
 
   function cycleDroneBay() {
     const bays = player.unlocked.drones;
-    const index = bays.indexOf(player.ship.droneBayId);
+    const index = bays.indexOf(player.modules.droneBay);
     const next = bays[(index + 1) % bays.length];
-    player.ship.droneBayId = next;
+    player.modules.droneBay = next;
     spawnDrones();
     noteStatus(`Drone bay set to ${DRONE_BAYS[next].label}.`);
   }
@@ -2872,7 +3003,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function pushStoryLog(entry) {
-    state.storyLog.push(`[${new Date().toLocaleTimeString()}] ${entry}`);
+    const stamp = new Date().toLocaleTimeString();
+    state.storyLog.push(`[${stamp}] ${entry}`);
   }
 
   function initSwarm() {
@@ -2891,7 +3023,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     }
 
-    buildGalaxy();
+    buildGateMap();
 
     const localSave = loadLocal();
     if (localSave) {
