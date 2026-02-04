@@ -50,7 +50,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   };
 
   const GAME_ID = 'spacex-exploration-flagship';
-  const SAVE_VERSION = 8;
+  const SAVE_VERSION = 9;
   const SAVE_KEY = `swarmBreakerSave_v${SAVE_VERSION}`;
   const WORLD_SEED = 284113;
 
@@ -94,6 +94,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     redshift: { name: 'Redshift', hue: 20, accent: '#ff8b5c', fog: 'rgba(180,80,60,0.14)', dust: 'rgba(255,160,120,0.12)', threat: 1.4 },
     bastion: { name: 'Bastion', hue: 135, accent: '#7dfc9a', fog: 'rgba(80,140,100,0.12)', dust: 'rgba(120,230,160,0.12)', threat: 1.55 },
     darklane: { name: 'Darklane', hue: 240, accent: '#8899ff', fog: 'rgba(70,80,150,0.18)', dust: 'rgba(120,140,220,0.12)', threat: 1.7 },
+    interstice: { name: 'Interstice Expanse', hue: 205, accent: '#9ad6ff', fog: 'rgba(70,100,130,0.1)', dust: 'rgba(120,170,220,0.08)', threat: 0.55 },
     starforge: { name: 'Starforge', hue: 45, accent: '#ffd166', fog: 'rgba(220,170,90,0.12)', dust: 'rgba(255,210,140,0.12)', threat: 1.9 },
     hollow: { name: 'Hollow Reach', hue: 300, accent: '#f5a6ff', fog: 'rgba(160,90,170,0.15)', dust: 'rgba(210,150,230,0.12)', threat: 2.05 },
     emberveil: { name: 'Emberveil', hue: 15, accent: '#ff9f6b', fog: 'rgba(190,80,60,0.14)', dust: 'rgba(255,150,120,0.12)', threat: 2.2 },
@@ -113,6 +114,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   const ZONE_TYPES = {
     cluster: { id: 'cluster', label: 'Cluster', boostMult: 1, spawnScale: 1, dustScale: 1 },
     lane: { id: 'lane', label: 'Transit Lane', boostMult: 1.35, spawnScale: 0.6, dustScale: 0.6 },
+    expanse: { id: 'expanse', label: 'Interstice Expanse', boostMult: 1.8, spawnScale: 0.25, dustScale: 0.25 },
     rift: { id: 'rift', label: 'Rift Channel', boostMult: 2.05, spawnScale: 0.4, dustScale: 0.4 }
   };
 
@@ -123,6 +125,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     redshift: ['fighter', 'bomber', 'gunship'],
     bastion: ['fighter', 'turret', 'gunship', 'bomber'],
     darklane: ['interceptor', 'sniper', 'fighter'],
+    interstice: ['scout', 'interceptor', 'transport'],
     starforge: ['gunship', 'bomber', 'turret'],
     hollow: ['interceptor', 'fighter', 'sniper'],
     emberveil: ['bomber', 'gunship', 'fighter'],
@@ -137,6 +140,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     redshift: ['plasma_flares', 'ember_flows'],
     bastion: ['defense_pylons', 'shield_nodes'],
     darklane: ['shadow_mines', 'void_buoys'],
+    interstice: ['wayline_arches', 'relay_spires'],
     starforge: ['forge_fragments', 'arc_emitters'],
     hollow: ['relic_spires', 'echo_stones'],
     emberveil: ['ash_ruins', 'flare_towers'],
@@ -188,6 +192,40 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     { id: 'engineer', label: 'Engineer Skiff', color: '#6df0ff', vibe: 'Trades upgrades for relics.' }
   ];
 
+  const STATION_THEMES = {
+    relay: {
+      label: 'Interstice Relay',
+      ringCount: 3,
+      spokeCount: 10,
+      finCount: 0,
+      coreShape: 'circle',
+      services: ['Refuel', 'Navigation Sync', 'Ammo']
+    },
+    outpost: {
+      label: 'Frontier Dock',
+      ringCount: 2,
+      spokeCount: 6,
+      finCount: 3,
+      coreShape: 'circle',
+      services: ['Shipyard', 'Store', 'Contracts', 'Ammo']
+    }
+  };
+
+  const BIOME_STATION_STYLES = {
+    driftline: { label: 'Driftline Observatory', ringCount: 2, spokeCount: 6, finCount: 3, coreShape: 'circle', services: ['Shipyard', 'Store', 'Contracts', 'Refuel', 'Ammo'] },
+    glasswake: { label: 'Glasswake Mirrorport', ringCount: 1, spokeCount: 5, finCount: 4, coreShape: 'diamond', services: ['Shipyard', 'Store', 'Contracts', 'Ammo'] },
+    stormvault: { label: 'Stormvault Coil Array', ringCount: 3, spokeCount: 8, finCount: 2, coreShape: 'hex', services: ['Shipyard', 'Store', 'Contracts', 'Refuel', 'Ammo'] },
+    redshift: { label: 'Redshift Emberdock', ringCount: 1, spokeCount: 7, finCount: 5, coreShape: 'tri', services: ['Shipyard', 'Store', 'Contracts', 'Ammo'] },
+    bastion: { label: 'Bastion Citadel', ringCount: 2, spokeCount: 7, finCount: 6, coreShape: 'hex', services: ['Shipyard', 'Store', 'Contracts', 'Refuel', 'Ammo'] },
+    darklane: { label: 'Darklane Refuge', ringCount: 1, spokeCount: 4, finCount: 2, coreShape: 'circle', services: ['Shipyard', 'Store', 'Contracts', 'Ammo'] },
+    interstice: { label: 'Interstice Relay', ringCount: 3, spokeCount: 10, finCount: 0, coreShape: 'circle', services: ['Refuel', 'Navigation Sync', 'Ammo'] },
+    starforge: { label: 'Starforge Foundry', ringCount: 2, spokeCount: 8, finCount: 4, coreShape: 'hex', services: ['Shipyard', 'Store', 'Contracts', 'Refuel', 'Ammo'] },
+    hollow: { label: 'Hollow Archive', ringCount: 2, spokeCount: 6, finCount: 3, coreShape: 'diamond', services: ['Shipyard', 'Store', 'Contracts', 'Ammo'] },
+    emberveil: { label: 'Emberveil Smelter', ringCount: 1, spokeCount: 7, finCount: 5, coreShape: 'tri', services: ['Shipyard', 'Store', 'Contracts', 'Ammo'] },
+    solstice: { label: 'Solstice Prism Dock', ringCount: 2, spokeCount: 6, finCount: 4, coreShape: 'circle', services: ['Shipyard', 'Store', 'Contracts', 'Refuel', 'Ammo'] },
+    blackout: { label: 'Blackout Bastille', ringCount: 1, spokeCount: 5, finCount: 4, coreShape: 'hex', services: ['Shipyard', 'Store', 'Contracts', 'Ammo'] }
+  };
+
   const LORE_ENTRIES = [
     { id: 'log_01', title: 'Tenney Belt Broadcast', text: 'The Aetherline Initiative opened recruitment for deep-range pilots.' },
     { id: 'log_02', title: 'Signal Ash', text: 'Ion Clade interference forced Relay Eighty-Seven into emergency drift.' },
@@ -198,7 +236,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     { id: 'log_07', title: 'Refuge Convoy', text: 'Darklane refugees have been moving in silent lanes to avoid patrols.' },
     { id: 'log_08', title: 'Stormvault Note', text: 'Ion storms invert shield harmonics. Use staggered recharge cycles.' },
     { id: 'log_09', title: 'Transponder Echo', text: 'Unregistered carriers broadcast a false Aetherline signature.' },
-    { id: 'log_10', title: 'Pilot Journal', text: 'The Hollow Reach bends sound. Keep eyes on the thruster glow.' },
+    { id: 'log_10', title: 'Pilot Journal', text: 'The Hollow Reach bends signals. Keep eyes on the thruster glow.' },
     { id: 'log_11', title: 'Aetherline Update', text: 'New cargo protocols prioritize salvage over mineral samples.' },
     { id: 'log_12', title: 'Redshift Advisory', text: 'Redshift tides disrupt homing missiles beyond 600 meters.' },
     { id: 'log_13', title: 'Ops Directive', text: 'Disable refinery cores to cut cartel transport reinforcements.' },
@@ -402,6 +440,23 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       'Navigation: Long-range pings steady.',
       'Lane Control: Keep a smooth burn.'
     ],
+    expanse: [
+      'Interstice: Deep space expanse ahead.',
+      'Navigation: Long-range void corridor detected.',
+      'Relay: Expanse relays active. Maintain vector.',
+      'Notice: Minimal debris across the expanse.',
+      'Transit: Super boost efficiency increased.',
+      'Signal: Wide-open drift confirmed.',
+      'Interstice: Keep eyes on the beacons.',
+      'Notice: No patrol clusters in the void.',
+      'Transit: Fuel draw reduced in open space.',
+      'Relay: Navigation sync stable.',
+      'Interstice: Rare ruins reported in the quiet.',
+      'Notice: Low turbulence. Burn fast.',
+      'Transit: Vast lanes ahead.',
+      'Comms: Relay traffic minimal.',
+      'Interstice: Keep boosters warm.'
+    ],
     rift: [
       'Rift Channel: Supercharge ready.',
       'Warning: Rift turbulence at the edges.',
@@ -494,6 +549,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       'Darklane: Drift speed reduced.',
       'Darklane: Watch for ambush.'
     ],
+    interstice: [
+      'Interstice: The void stretches wide.',
+      'Interstice: Relays keep the lane alive.',
+      'Interstice: Watch for faint ruin echoes.',
+      'Interstice: Long burn corridor ahead.',
+      'Interstice: Navigation lines aligned.',
+      'Interstice: Drift is calm.',
+      'Interstice: Keep boost charge ready.',
+      'Interstice: Silent beacons ahead.',
+      'Interstice: Rare caches hide in the dark.',
+      'Interstice: The expanse is clear.'
+    ],
     starforge: [
       'Starforge: Arc emitters active.',
       'Starforge: Forge fragments detected.',
@@ -512,7 +579,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       'Hollow: Comms distortion increasing.',
       'Hollow: Rift murmurs detected.',
       'Hollow: Keep tight formation.',
-      'Hollow: Sound bends strangely.',
+      'Hollow: Signals bend strangely.',
       'Hollow: Whisper patterns rising.',
       'Hollow: Relic glow spotted.',
       'Hollow: Sensors lagging.',
@@ -654,6 +721,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     'Rumor: A decoy beacon masks a ruin.',
     'Rumor: A gunship patrol guards a rare cache.',
     'Rumor: A transport route carries relics.',
+    'Rumor: Interstice relays point to a hidden cache.',
+    'Rumor: The expanse hides a silent outpost.',
     'Rumor: A faint light marks an outlaw trader.',
     'Rumor: A hollow echo repeats every 9 minutes.',
     'Rumor: A guardian probe was seen in Starforge.',
@@ -970,6 +1039,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     boundaryWarning: 0,
     broadcastCooldown: 0,
     activeTrader: null,
+    activeStation: null,
     traderSelection: 0,
     traderQuote: '',
     rumorCooldown: 0,
@@ -986,8 +1056,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     stationContracts: {},
     baseClaims: {},
     ruinClaims: {},
+    biomeStations: {},
+    relayStations: [],
     systemNames: new Map(),
-    homeBase: { x: 0, y: 0, radius: 80, name: 'Aetherline Bastion' }
+    homeBase: { x: 0, y: 0, radius: 80, name: 'Aetherline Bastion', label: 'Aetherline Bastion', services: ['Shipyard', 'Store', 'Contracts', 'Refuel', 'Ammo'] }
   };
 
   const entities = {
@@ -1326,11 +1398,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function pickBiome(depth, gx, gy) {
     const bandIndex = Math.min(REGION_BANDS.length - 1, Math.max(0, Math.floor((depth - 1) / 2)));
     const band = REGION_BANDS[bandIndex];
-    const rng = mulberry32(WORLD_SEED + gx * 41 + gy * 73 + depth * 11);
-    return band[Math.floor(rng() * band.length)];
+    const noiseScale = 0.12;
+    const n = smoothNoise(gx * noiseScale + depth * 0.07, gy * noiseScale - depth * 0.05, WORLD_SEED * 0.11 + bandIndex * 19);
+    if (depth > 1) {
+      const intersticeWidth = 0.08 + Math.min(0.06, depth * 0.004);
+      if (Math.abs(n - 0.5) < intersticeWidth) return 'interstice';
+    }
+    if (band.length === 1) return band[0];
+    return n < 0.5 ? band[0] : band[1];
   }
 
-  function pickZoneType(depth, gx, gy) {
+  function pickZoneType(depth, gx, gy, biome) {
+    if (biome === 'interstice') return 'expanse';
     if (depth <= 1) return 'cluster';
     const n = smoothNoise(gx * 0.35, gy * 0.35, WORLD_SEED * 0.17);
     if (n < 0.16) return 'rift';
@@ -1348,7 +1427,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       for (let gx = -depth; gx <= depth; gx += 1) {
         for (let gy = -depth; gy <= depth; gy += 1) {
           if (depthFromGrid(gx, gy) !== depth) continue;
-          if (pickZoneType(depth, gx, gy) === 'cluster') {
+          const biome = pickBiome(depth, gx, gy);
+          if (pickZoneType(depth, gx, gy, biome) === 'cluster') {
             ring.push({ gx, gy });
           }
         }
@@ -1377,12 +1457,60 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     world.gatePositions = gatePositions;
   }
 
+  function buildStationMap() {
+    const rng = mulberry32(WORLD_SEED * 19 + 911);
+    const biomeStations = {};
+    const relayStations = [];
+    const biomeIds = Object.keys(BIOMES).filter((id) => id !== 'interstice');
+
+    biomeIds.forEach((biomeId) => {
+      const candidates = [];
+      for (let gx = -WORLD.gridRadius; gx <= WORLD.gridRadius; gx += 1) {
+        for (let gy = -WORLD.gridRadius; gy <= WORLD.gridRadius; gy += 1) {
+          const depth = depthFromGrid(gx, gy);
+          if (depth <= 0 || depth > WORLD.maxDepth) continue;
+          const biome = pickBiome(depth, gx, gy);
+          if (biome !== biomeId) continue;
+          const zoneType = pickZoneType(depth, gx, gy, biome);
+          if (zoneType !== 'cluster') continue;
+          if (gx === 0 && gy === 0) continue;
+          candidates.push({ gx, gy });
+        }
+      }
+      if (!candidates.length) return;
+      const pick = candidates[Math.floor(rng() * candidates.length)];
+      biomeStations[biomeId] = { gx: pick.gx, gy: pick.gy, key: sectorKey(pick.gx, pick.gy) };
+    });
+
+    const relayCandidates = [];
+    for (let gx = -WORLD.gridRadius; gx <= WORLD.gridRadius; gx += 1) {
+      for (let gy = -WORLD.gridRadius; gy <= WORLD.gridRadius; gy += 1) {
+        const depth = depthFromGrid(gx, gy);
+        if (depth <= 1 || depth > WORLD.maxDepth) continue;
+        const biome = pickBiome(depth, gx, gy);
+        if (biome !== 'interstice') continue;
+        const zoneType = pickZoneType(depth, gx, gy, biome);
+        if (zoneType !== 'expanse') continue;
+        relayCandidates.push({ gx, gy });
+      }
+    }
+    const relayCount = Math.min(8, Math.max(4, Math.floor(WORLD.gridRadius / 2)));
+    for (let i = 0; i < relayCount && relayCandidates.length; i += 1) {
+      const pickIndex = Math.floor(rng() * relayCandidates.length);
+      const pick = relayCandidates.splice(pickIndex, 1)[0];
+      relayStations.push({ gx: pick.gx, gy: pick.gy, key: sectorKey(pick.gx, pick.gy) });
+    }
+
+    world.biomeStations = biomeStations;
+    world.relayStations = relayStations;
+  }
+
   function getSector(gx, gy) {
     const key = sectorKey(gx, gy);
     if (world.sectors.has(key)) return world.sectors.get(key);
     const depth = depthFromGrid(gx, gy);
     const biome = pickBiome(depth, gx, gy);
-    const zoneType = pickZoneType(depth, gx, gy);
+    const zoneType = pickZoneType(depth, gx, gy, biome);
     const zone = ZONE_TYPES[zoneType] || ZONE_TYPES.cluster;
     const sector = {
       key,
@@ -1435,6 +1563,31 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     return points;
   }
 
+  function makeStation({ x, y, radius, biome, type = 'outpost', name, hub = false }) {
+    const baseStyle = type === 'relay'
+      ? STATION_THEMES.relay
+      : type === 'outpost'
+        ? STATION_THEMES.outpost
+        : BIOME_STATION_STYLES[biome] || STATION_THEMES.outpost;
+    const label = name || baseStyle.label || 'Station';
+    const color = BIOMES[biome]?.accent || '#7dfc9a';
+    return {
+      x,
+      y,
+      radius,
+      biome,
+      type,
+      label,
+      color,
+      ringCount: baseStyle.ringCount,
+      spokeCount: baseStyle.spokeCount,
+      finCount: baseStyle.finCount,
+      coreShape: baseStyle.coreShape,
+      services: baseStyle.services || STATION_THEMES.outpost.services,
+      hub
+    };
+  }
+
   function generateSectorObjects(sector) {
     const seed = WORLD_SEED + sector.gx * 991 + sector.gy * 1999;
     const rng = mulberry32(Math.abs(seed));
@@ -1442,6 +1595,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const center = posFromGrid(sector.gx, sector.gy);
     const zone = sector.zone || ZONE_TYPES.cluster;
     const isCluster = sector.zoneType === 'cluster';
+    const isExpanse = sector.zoneType === 'expanse';
     const clearZones = [];
 
     if (isCluster && rng() < 0.75) {
@@ -1457,7 +1611,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     const inClearZone = (x, y) => clearZones.some((zone) => dist(x, y, zone.x, zone.y) < zone.radius);
 
-    const asteroidCount = sector.zoneType === 'rift'
+    const asteroidCount = sector.zoneType === 'rift' || sector.zoneType === 'expanse'
       ? 0
       : Math.floor(randRange(rng, 3, 12) * biome.threat * (isCluster ? 0.9 : zone.spawnScale * 0.35));
     for (let i = 0; i < asteroidCount; i += 1) {
@@ -1473,7 +1627,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     }
 
-    if (rng() < (isCluster ? 0.35 : zone.id === 'lane' ? 0.18 : 0.12)) {
+    if (rng() < (isCluster ? 0.35 : isExpanse ? 0.08 : zone.id === 'lane' ? 0.18 : 0.12)) {
       const planet = {
         x: center.x + randRange(rng, -420, 420),
         y: center.y + randRange(rng, -420, 420),
@@ -1503,12 +1657,39 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
-    if (rng() < (isCluster ? 0.4 : 0.16)) {
-      sector.objects.stations.push({
+    const hubKey = world.biomeStations?.[sector.biome]?.key;
+    const relayStation = world.relayStations?.find((entry) => entry.key === sector.key);
+    if (hubKey === sector.key) {
+      sector.objects.stations.push(makeStation({
+        x: center.x + randRange(rng, -140, 140),
+        y: center.y + randRange(rng, -140, 140),
+        radius: randRange(rng, 56, 78),
+        biome: sector.biome,
+        type: 'hub',
+        name: BIOME_STATION_STYLES[sector.biome]?.label,
+        hub: true
+      }));
+    }
+    if (relayStation) {
+      sector.objects.stations.push(makeStation({
+        x: center.x + randRange(rng, -180, 180),
+        y: center.y + randRange(rng, -180, 180),
+        radius: randRange(rng, 62, 86),
+        biome: 'interstice',
+        type: 'relay',
+        name: STATION_THEMES.relay.label
+      }));
+    }
+    const hasStation = sector.objects.stations.length > 0;
+    if (!hasStation && !isExpanse && rng() < (isCluster ? 0.32 : 0.14)) {
+      sector.objects.stations.push(makeStation({
         x: center.x + randRange(rng, -200, 200),
         y: center.y + randRange(rng, -200, 200),
-        radius: randRange(rng, 42, 60)
-      });
+        radius: randRange(rng, 46, 64),
+        biome: sector.biome,
+        type: 'outpost',
+        name: `${sector.name} Dock`
+      }));
     }
 
     if (sector.zoneType !== 'rift' && rng() < (isCluster ? 0.22 : 0.12)) {
@@ -1598,7 +1779,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     }
 
-    if (!world.ruinClaims?.[sector.key] && rng() < (sector.zoneType === 'rift' ? 0.22 : isCluster ? 0.16 : 0.12)) {
+    if (!world.ruinClaims?.[sector.key] && rng() < (sector.zoneType === 'rift' ? 0.22 : sector.zoneType === 'expanse' ? 0.18 : isCluster ? 0.16 : 0.12)) {
       sector.objects.ruins.push({
         id: `${sector.key}-ruin`,
         x: center.x + randRange(rng, -240, 240),
@@ -1611,7 +1792,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
 
     if (!isCluster) {
-      const beaconCount = sector.zoneType === 'rift' ? 3 : 1 + Math.floor(rng() * 2);
+      const beaconCount = sector.zoneType === 'rift'
+        ? 3
+        : sector.zoneType === 'expanse'
+          ? 2 + Math.floor(rng() * 2)
+          : 1 + Math.floor(rng() * 2);
       for (let i = 0; i < beaconCount; i += 1) {
         sector.objects.riftBeacons.push({
           x: center.x + randRange(rng, -420, 420),
@@ -1913,6 +2098,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.boundaryWarning = 0;
       state.broadcastCooldown = 0;
       state.activeTrader = null;
+      state.activeStation = null;
       state.traderSelection = 0;
       state.traderQuote = '';
       state.rumorCooldown = 0;
@@ -1923,9 +2109,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       world.stationContracts = {};
       world.baseClaims = {};
       world.ruinClaims = {};
+      world.biomeStations = {};
+      world.relayStations = [];
       world.systemNames = new Map();
       world.gatePositions = {};
       world.sectors.clear();
+      buildGateMap();
+      buildStationMap();
       contract.active = false;
       mission.active = false;
       state.prompt = null;
@@ -2172,6 +2362,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     let pool = ['comet', 'distress', 'driftwave'];
     if (sector.zoneType === 'rift') pool = ['riftflare', 'comet'];
     if (sector.zoneType === 'lane') pool = ['comet', 'distress', 'driftwave'];
+    if (sector.zoneType === 'expanse') pool = ['distress', 'driftwave', 'comet'];
     if (sector.zoneType === 'cluster') pool = ['distress', 'meteor', 'comet'];
     const type = pool[Math.floor(rng() * pool.length)];
     const def = EVENT_DEFS[type];
@@ -2511,8 +2702,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function tryRiftDash(sector) {
-    if (!sector || (sector.zoneType !== 'rift' && sector.zoneType !== 'lane')) {
-      noteStatus('Rift dash only in transit zones.');
+    if (!sector || (sector.zoneType !== 'rift' && sector.zoneType !== 'lane' && sector.zoneType !== 'expanse')) {
+      noteStatus('Rift dash only in transit or expanse zones.');
       return;
     }
     if (state.riftDash.cooldown > 0) {
@@ -2608,9 +2799,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const reversing = input.keys['KeyS'] || input.keys['ArrowDown'];
     const sector = getCurrentSector();
     const zoneBoost = sector.zone?.boostMult || 1;
-    const boostDrain = sector.zoneType === 'rift' ? 24 : sector.zoneType === 'lane' ? 30 : 35;
-    const fuelDrain = sector.zoneType === 'rift' ? 8 : sector.zoneType === 'lane' ? 10 : 12;
-    const chargeRate = sector.zoneType === 'rift' ? 18 : sector.zoneType === 'lane' ? 10 : -6;
+    const boostDrain = sector.zoneType === 'rift'
+      ? 24
+      : sector.zoneType === 'expanse'
+        ? 22
+        : sector.zoneType === 'lane'
+          ? 30
+          : 35;
+    const fuelDrain = sector.zoneType === 'rift'
+      ? 8
+      : sector.zoneType === 'expanse'
+        ? 7
+        : sector.zoneType === 'lane'
+          ? 10
+          : 12;
+    const chargeRate = sector.zoneType === 'rift'
+      ? 18
+      : sector.zoneType === 'expanse'
+        ? 16
+        : sector.zoneType === 'lane'
+          ? 10
+          : -6;
 
     if (state.riftDash.cooldown > 0) {
       state.riftDash.cooldown = Math.max(0, state.riftDash.cooldown - dt);
@@ -2655,9 +2864,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.fuel = clamp(player.fuel - fuelDrain * dt, 0, cachedStats.fuelMax);
       state.shiftBoost.timer -= dt;
       missionTracker.noBoost = false;
-      const boostColor = sector.zoneType === 'rift' ? '#ffd166' : '#7dfc9a';
+      const boostColor = sector.zoneType === 'rift' ? '#ffd166' : sector.zoneType === 'expanse' ? '#9ad6ff' : '#7dfc9a';
       spawnEffect(player.x - dir.x * 18, player.y - dir.y * 18, boostColor);
-      spawnParticle(player.x - dir.x * 20, player.y - dir.y * 20, `rgba(125,252,154,${sector.zoneType === 'rift' ? 0.9 : 0.8})`, 0.5, 4, -dir.x * 80, -dir.y * 80);
+      const boostAlpha = sector.zoneType === 'rift' ? 0.9 : sector.zoneType === 'expanse' ? 0.85 : 0.8;
+      const trailColor = sector.zoneType === 'rift'
+        ? `rgba(255,209,102,${boostAlpha})`
+        : sector.zoneType === 'expanse'
+          ? `rgba(154,214,255,${boostAlpha})`
+          : `rgba(125,252,154,${boostAlpha})`;
+      spawnParticle(player.x - dir.x * 20, player.y - dir.y * 20, trailColor, 0.5, 4, -dir.x * 80, -dir.y * 80);
       if (state.shiftBoost.timer <= 0 || player.boost <= 0 || player.fuel <= 0) {
         state.shiftBoost.active = false;
       }
@@ -3618,11 +3833,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const trader = sector.objects.traders.find((t) => dist(player.x, player.y, t.x, t.y) < t.radius + 60);
     const home = world.homeBase && dist(player.x, player.y, world.homeBase.x, world.homeBase.y) < world.homeBase.radius + 50 ? world.homeBase : null;
     if (station) {
-      noteStatus('Station in range. Press E to dock.');
+      noteStatus(`${station.label || 'Station'} in range. Press E to dock.`);
       if (input.justPressed['KeyE']) {
         state.mode = 'station';
         state.paused = true;
         state.menuSelection = 0;
+        state.activeStation = station;
         noteStatus('Docked at station.');
       }
       return;
@@ -3633,6 +3849,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         state.mode = 'station';
         state.paused = true;
         state.menuSelection = 0;
+        state.activeStation = { ...home, biome: sector.biome, type: 'home' };
         noteStatus(`Docked at ${world.homeBase.name}.`);
       }
       return;
@@ -3842,15 +4059,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.globalAlpha = 1;
 
     const sector = getCurrentSector();
-    if (sector.zoneType === 'rift' || sector.zoneType === 'lane') {
+    if (sector.zoneType === 'rift' || sector.zoneType === 'lane' || sector.zoneType === 'expanse') {
+      const isRift = sector.zoneType === 'rift';
+      const isExpanse = sector.zoneType === 'expanse';
       ctx.save();
-      ctx.globalAlpha = sector.zoneType === 'rift' ? 0.35 : 0.22;
-      ctx.strokeStyle = sector.zoneType === 'rift' ? 'rgba(255,209,102,0.6)' : 'rgba(125,252,154,0.4)';
-      for (let i = 0; i < 4; i += 1) {
-        const offset = (state.time * 40 + i * 120) % VIEW.height;
+      ctx.globalAlpha = isRift ? 0.35 : isExpanse ? 0.18 : 0.22;
+      ctx.strokeStyle = isRift ? 'rgba(255,209,102,0.6)' : isExpanse ? 'rgba(154,214,255,0.35)' : 'rgba(125,252,154,0.4)';
+      const lineCount = isExpanse ? 6 : 4;
+      for (let i = 0; i < lineCount; i += 1) {
+        const offset = (state.time * (isExpanse ? 26 : 40) + i * (isExpanse ? 90 : 120)) % VIEW.height;
         ctx.beginPath();
         ctx.moveTo(0, offset);
-        ctx.quadraticCurveTo(VIEW.centerX, offset - 60, VIEW.width, offset);
+        ctx.quadraticCurveTo(VIEW.centerX, offset - (isExpanse ? 90 : 60), VIEW.width, offset);
         ctx.stroke();
       }
       ctx.restore();
@@ -3932,18 +4152,92 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function drawStation(station, camera) {
     const x = station.x - camera.x + VIEW.centerX;
     const y = station.y - camera.y + VIEW.centerY;
+    const color = station.color || BIOMES[station.biome]?.accent || '#7dfc9a';
+    const ringCount = station.ringCount || 2;
+    const spokeCount = station.spokeCount || 6;
+    const finCount = station.finCount || 0;
+    const coreShape = station.coreShape || 'circle';
+    const radius = station.radius;
     ctx.save();
     ctx.translate(x, y);
-    ctx.strokeStyle = 'rgba(125,252,154,0.8)';
+    ctx.strokeStyle = color;
     ctx.lineWidth = 2;
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = color;
+
+    for (let i = 0; i < ringCount; i += 1) {
+      const r = radius * (1 - i * 0.22);
+      ctx.globalAlpha = 0.8 - i * 0.15;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 0.55;
+    for (let i = 0; i < spokeCount; i += 1) {
+      const angle = (Math.PI * 2 * i) / spokeCount;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * radius * 0.28, Math.sin(angle) * radius * 0.28);
+      ctx.lineTo(Math.cos(angle) * radius * 0.96, Math.sin(angle) * radius * 0.96);
+      ctx.stroke();
+    }
+
+    if (finCount > 0) {
+      ctx.globalAlpha = 0.6;
+      for (let i = 0; i < finCount; i += 1) {
+        const angle = (Math.PI * 2 * i) / finCount;
+        const tipX = Math.cos(angle) * radius * 1.05;
+        const tipY = Math.sin(angle) * radius * 1.05;
+        const leftX = Math.cos(angle - 0.2) * radius * 0.78;
+        const leftY = Math.sin(angle - 0.2) * radius * 0.78;
+        const rightX = Math.cos(angle + 0.2) * radius * 0.78;
+        const rightY = Math.sin(angle + 0.2) * radius * 0.78;
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(leftX, leftY);
+        ctx.lineTo(rightX, rightY);
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
+
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = 'rgba(10,18,32,0.9)';
     ctx.beginPath();
-    ctx.arc(0, 0, station.radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, 0, station.radius * 0.5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(125,252,154,0.15)';
+    if (coreShape === 'hex') {
+      for (let i = 0; i < 6; i += 1) {
+        const angle = (Math.PI * 2 * i) / 6;
+        const r = radius * 0.38;
+        if (i === 0) ctx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
+        else ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+      }
+    } else if (coreShape === 'diamond') {
+      const r = radius * 0.4;
+      ctx.moveTo(0, -r);
+      ctx.lineTo(r * 0.8, 0);
+      ctx.lineTo(0, r);
+      ctx.lineTo(-r * 0.8, 0);
+    } else if (coreShape === 'tri') {
+      const r = radius * 0.4;
+      ctx.moveTo(0, -r);
+      ctx.lineTo(r * 0.9, r * 0.6);
+      ctx.lineTo(-r * 0.9, r * 0.6);
+    } else {
+      ctx.arc(0, 0, radius * 0.38, 0, Math.PI * 2);
+    }
+    ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    const distance = dist(player.x, player.y, station.x, station.y);
+    if (distance < 260) {
+      ctx.font = '12px sans-serif';
+      ctx.fillStyle = '#e0f2ff';
+      ctx.fillText(station.label, radius + 10, -radius - 6);
+    }
     ctx.restore();
   }
 
@@ -4067,7 +4361,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-    } else if (prop.type === 'glass_shards' || prop.type === 'prism_arches') {
+    } else if (prop.type === 'glass_shards' || prop.type === 'prism_arches' || prop.type === 'wayline_arches') {
       ctx.beginPath();
       ctx.moveTo(-prop.size * 0.6, prop.size * 0.2);
       ctx.lineTo(0, -prop.size * 0.7);
@@ -4076,7 +4370,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-    } else if (prop.type === 'ion_pylons' || prop.type === 'defense_pylons' || prop.type === 'flare_towers' || prop.type === 'arc_emitters') {
+    } else if (prop.type === 'ion_pylons' || prop.type === 'defense_pylons' || prop.type === 'flare_towers' || prop.type === 'arc_emitters' || prop.type === 'relay_spires') {
       ctx.beginPath();
       ctx.rect(-prop.size * 0.25, -prop.size * 0.7, prop.size * 0.5, prop.size * 1.4);
       ctx.fill();
@@ -4609,6 +4903,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           ctx.fillStyle = 'rgba(80,90,110,0.3)';
         } else if (sector.zoneType === 'rift') {
           ctx.fillStyle = 'rgba(255,209,102,0.7)';
+        } else if (sector.zoneType === 'expanse') {
+          ctx.fillStyle = 'rgba(154,214,255,0.55)';
         } else if (sector.zoneType === 'lane') {
           ctx.fillStyle = 'rgba(125,252,154,0.6)';
         } else {
@@ -4749,6 +5045,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           ctx.strokeStyle = 'rgba(255,209,102,0.5)';
           ctx.strokeRect(x + 6, y + 6, cell - 12, cell - 12);
         }
+        if (sector.zoneType === 'expanse') {
+          ctx.strokeStyle = 'rgba(154,214,255,0.45)';
+          ctx.strokeRect(x + 5, y + 5, cell - 10, cell - 10);
+        }
         if (sector.objects.bases.length && !world.baseClaims?.[sector.key]) {
           ctx.fillStyle = 'rgba(255,107,107,0.9)';
           ctx.fillRect(x + cell / 2 - 3, y + cell / 2 - 3, 6, 6);
@@ -4789,7 +5089,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
     ctx.fillStyle = PALETTE.glow;
     ctx.font = '20px sans-serif';
-    ctx.fillText('Station Docked', 24, 36);
+    const activeStation = state.activeStation;
+    const stationName = activeStation?.label || 'Station Docked';
+    ctx.fillText(stationName, 24, 36);
+    ctx.font = '12px sans-serif';
+    const biomeName = activeStation?.biome ? BIOMES[activeStation.biome]?.name : null;
+    if (biomeName) {
+      ctx.fillStyle = '#e0f2ff';
+      ctx.fillText(`${biomeName} Services`, 24, 56);
+    }
+    if (activeStation?.services?.length) {
+      ctx.fillStyle = PALETTE.gold;
+      ctx.fillText(activeStation.services.join(' / '), 24, 74);
+    }
     ctx.font = '13px sans-serif';
     const options = [
       '1. Repair & Refuel (120 credits)',
@@ -5076,7 +5388,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ruinsDiscovered: world.ruinClaims
       },
       settings: {
-        audioVolume: 0.8,
         graphicsQuality: 'high'
       },
       state: {
@@ -5473,6 +5784,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function undock() {
     state.mode = 'flight';
     state.paused = false;
+    state.activeStation = null;
     noteStatus('Undocked.');
   }
 
@@ -5490,6 +5802,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     startChapterMission();
     state.mode = 'flight';
     state.paused = false;
+    state.activeStation = null;
     noteStatus('Chapter mission activated.');
   }
 
@@ -5623,6 +5936,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
 
     buildGateMap();
+    buildStationMap();
 
     const localSave = loadLocal();
     if (localSave) {
