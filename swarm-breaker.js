@@ -50,14 +50,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   };
 
   const GAME_ID = 'spacex-exploration-flagship';
-  const SAVE_VERSION = 7;
+  const SAVE_VERSION = 8;
   const SAVE_KEY = `swarmBreakerSave_v${SAVE_VERSION}`;
   const WORLD_SEED = 284113;
 
   const WORLD = {
-    sectorSize: 980,
-    gridRadius: 14,
-    maxDepth: 12
+    sectorSize: 1050,
+    gridRadius: 18,
+    maxDepth: 14
   };
   WORLD.size = (WORLD.gridRadius * 2 + 1) * WORLD.sectorSize;
   WORLD.half = WORLD.size / 2;
@@ -144,6 +144,24 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     blackout: ['obsidian_spires', 'silent_monoliths']
   };
 
+  const PROP_HAZARDS = {
+    ion_pylons: { energyDrain: 14, shieldDrain: 4 },
+    storm_coils: { energyDrain: 18, slow: 0.85 },
+    plasma_flares: { hullDamage: 6, shieldDrain: 10 },
+    ember_flows: { hullDamage: 4, energyDrain: 8 },
+    shadow_mines: { slow: 0.7 },
+    defense_pylons: { shieldDrain: 12 },
+    shield_nodes: { shieldDrain: 6, energyDrain: 6 }
+  };
+
+  const EVENT_DEFS = {
+    comet: { id: 'comet', label: 'Comet Trail', color: '#b8f9ff', life: 18, speed: 260, radius: 18, reward: { salvage: 2, credits: 80 } },
+    distress: { id: 'distress', label: 'Distress Beacon', color: '#ffd166', life: 22, radius: 48, reward: { credits: 180, loreChance: 0.6 } },
+    driftwave: { id: 'driftwave', label: 'Drift Wave', color: '#6df0ff', life: 14, radius: 120, effect: { boost: 20, energy: 12 } },
+    meteor: { id: 'meteor', label: 'Meteor Shower', color: '#ff9f6b', life: 12, speed: 380, radius: 10, damage: 12 },
+    riftflare: { id: 'riftflare', label: 'Rift Flare', color: '#ffd166', life: 10, radius: 80, effect: { boost: 30, fuel: 20 } }
+  };
+
   const SYSTEM_NAME_PARTS = {
     prefix: ['Aether', 'Vanta', 'Sol', 'Nova', 'Argo', 'Lyra', 'Kessel', 'Orion', 'Vesper', 'Echo', 'Cinder', 'Lux'],
     suffix: ['Reach', 'Gate', 'Belt', 'Span', 'Drift', 'Crown', 'Fall', 'Haven', 'Field', 'Run', 'Vault', 'Pass']
@@ -163,6 +181,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     refinery: { id: 'refinery', label: 'Refinery', hp: 340, shield: 180, radius: 86, turretCount: 4, spawn: ['interceptor', 'gunship'], color: '#ffd166' },
     relay: { id: 'relay', label: 'Relay Node', hp: 220, shield: 120, radius: 64, turretCount: 2, spawn: ['scout', 'interceptor'], color: '#6df0ff' }
   };
+
+  const TRADER_TYPES = [
+    { id: 'scavenger', label: 'Scavenger Barge', color: '#9fd3c7', vibe: 'Buys salvage and sells ammo.' },
+    { id: 'arms', label: 'Arms Freighter', color: '#ff9f6b', vibe: 'Stocks munitions and rare hardware.' },
+    { id: 'engineer', label: 'Engineer Skiff', color: '#6df0ff', vibe: 'Trades upgrades for relics.' }
+  ];
 
   const LORE_ENTRIES = [
     { id: 'log_01', title: 'Tenney Belt Broadcast', text: 'The Aetherline Initiative opened recruitment for deep-range pilots.' },
@@ -240,7 +264,440 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     { id: 'log_73', title: 'Aetherline Beacon', text: 'Aetherline beacons pulse when the storm clears.' },
     { id: 'log_74', title: 'Convoy Tale', text: 'A convoy once crossed the Hollow without lights.' },
     { id: 'log_75', title: 'Starforge Wake', text: 'Starforge wakes linger longer than expected.' },
-    { id: 'log_76', title: 'Guardian Whisper', text: 'The guardian listens for warp echoes.' }
+    { id: 'log_76', title: 'Guardian Whisper', text: 'The guardian listens for warp echoes.' },
+    { id: 'log_77', title: 'Lane Sketch', text: 'A pilot sketched a clear corridor through the lanes.' },
+    { id: 'log_78', title: 'Rift Ledger', text: 'Rift beacons restore fuel faster than expected.' },
+    { id: 'log_79', title: 'Scout Beacon', text: 'A scout wing placed buoys near a ruin.' },
+    { id: 'log_80', title: 'Salvage Note', text: 'Salvage values spike after convoy raids.' },
+    { id: 'log_81', title: 'Glasswake Lattice', text: 'Shard reflections can hide turrets.' },
+    { id: 'log_82', title: 'Stormvault Pulse', text: 'Ion coils resonate at three-second intervals.' },
+    { id: 'log_83', title: 'Redshift Wake', text: 'Boost trails linger in the redshift haze.' },
+    { id: 'log_84', title: 'Bastion Alert', text: 'Defense nodes rotate with the gate cycle.' },
+    { id: 'log_85', title: 'Darklane Drift', text: 'Shadow mines move when the lights flicker.' },
+    { id: 'log_86', title: 'Starforge Tone', text: 'Forge fragments hum on the half hour.' },
+    { id: 'log_87', title: 'Hollow Compass', text: 'Echo stones bend compass needles.' },
+    { id: 'log_88', title: 'Emberveil Debris', text: 'Ash ruins drift in slow spirals.' },
+    { id: 'log_89', title: 'Solstice Calm', text: 'Solstice lanes favor long burns.' },
+    { id: 'log_90', title: 'Blackout Signal', text: 'Silent monoliths dampen thrust noise.' },
+    { id: 'log_91', title: 'Rift Charter', text: 'Rift channels open wider during storms.' },
+    { id: 'log_92', title: 'Lane Memo', text: 'Transit lanes reduce enemy spawns.' },
+    { id: 'log_93', title: 'Convoy Schedule', text: 'Transports move every 40 minutes.' },
+    { id: 'log_94', title: 'Carrier Deck', text: 'Carrier hangars vent before launches.' },
+    { id: 'log_95', title: 'Ruin Map', text: 'Ruins appear near beacon echoes.' },
+    { id: 'log_96', title: 'Driftline Ice', text: 'Ice rings amplify scanner pulses.' },
+    { id: 'log_97', title: 'Glasswake Cache', text: 'Caches glitter under shard light.' },
+    { id: 'log_98', title: 'Stormvault Surge', text: 'Surges drain energy faster than fuel.' },
+    { id: 'log_99', title: 'Redshift Tide', text: 'Tides push ships off course.' },
+    { id: 'log_100', title: 'Bastion Patrol', text: 'Patrols tighten near relay gates.' },
+    { id: 'log_101', title: 'Darklane Refuge', text: 'Refuge beacons flicker in pairs.' },
+    { id: 'log_102', title: 'Starforge Echo', text: 'Guardian pings intensify after relic finds.' },
+    { id: 'log_103', title: 'Hollow Whisper', text: 'Whispers grow loud near ruins.' },
+    { id: 'log_104', title: 'Emberveil Heat', text: 'Heat blooms around flare towers.' },
+    { id: 'log_105', title: 'Solstice Arc', text: 'Light fins trace hidden corridors.' },
+    { id: 'log_106', title: 'Blackout Drift', text: 'Drift lines vanish in blackout fog.' },
+    { id: 'log_107', title: 'Rift Signal', text: 'Rift beacons sync to the nav core.' },
+    { id: 'log_108', title: 'Lane Calm', text: 'Transit lanes favor clean boosts.' },
+    { id: 'log_109', title: 'Trader Whisper', text: 'Traders barter relics for dampers.' },
+    { id: 'log_110', title: 'Salvage Code', text: 'Salvage crews mark wrecks with blue tags.' },
+    { id: 'log_111', title: 'Comet Trail', text: 'Comet shards fuel quick repairs.' },
+    { id: 'log_112', title: 'Distress Ping', text: 'Distress beacons often hide caches.' },
+    { id: 'log_113', title: 'Driftwave Note', text: 'Drift waves refill boost reserves.' },
+    { id: 'log_114', title: 'Meteor Warning', text: 'Meteor showers cut through lanes.' },
+    { id: 'log_115', title: 'Rift Flare', text: 'Rift flares restore fuel quickly.' },
+    { id: 'log_116', title: 'Engine Study', text: 'Hyper packs prefer stable vectors.' },
+    { id: 'log_117', title: 'Shield Study', text: 'Overdrive arrays recharge after storms.' },
+    { id: 'log_118', title: 'Hull Patch', text: 'Reinforced hulls survive base rams.' },
+    { id: 'log_119', title: 'Drone Log', text: 'Repair drones favor wide orbits.' },
+    { id: 'log_120', title: 'Weapon Note', text: 'Rail spears pierce thick armor.' },
+    { id: 'log_121', title: 'Missile Drift', text: 'Missiles curve in redshift haze.' },
+    { id: 'log_122', title: 'Plasma Bloom', text: 'Plasma splashes near shields.' },
+    { id: 'log_123', title: 'Flak Report', text: 'Flak spreads wider in lanes.' },
+    { id: 'log_124', title: 'Mine Chart', text: 'Mines hold position in calm zones.' },
+    { id: 'log_125', title: 'EMP Log', text: 'EMP bursts stutter carrier shields.' },
+    { id: 'log_126', title: 'Cargo Ledger', text: 'Relics trade high with engineers.' },
+    { id: 'log_127', title: 'Lane Whisper', text: 'A hidden corridor bypasses bastion patrols.' },
+    { id: 'log_128', title: 'Rift Echo', text: 'Warp echoes mask scout signatures.' },
+    { id: 'log_129', title: 'Driftline Rune', text: 'Ice spires align with old charts.' },
+    { id: 'log_130', title: 'Glasswake Note', text: 'Shard density hides abandoned stations.' },
+    { id: 'log_131', title: 'Stormvault Log', text: 'Ion storms bend nav lines.' },
+    { id: 'log_132', title: 'Redshift Ledger', text: 'Heat cycles peak every 5 minutes.' },
+    { id: 'log_133', title: 'Bastion Memo', text: 'Turrets track boost trails.' },
+    { id: 'log_134', title: 'Darklane Log', text: 'Shadow mines dim when scanned.' },
+    { id: 'log_135', title: 'Starforge Ledger', text: 'Forge echoes sharpen near gates.' },
+    { id: 'log_136', title: 'Hollow Note', text: 'Relic spires pulse when approached.' },
+    { id: 'log_137', title: 'Emberveil Signal', text: 'Flare towers point to ruins.' },
+    { id: 'log_138', title: 'Solstice Note', text: 'Light fins drift with solar winds.' },
+    { id: 'log_139', title: 'Blackout Memo', text: 'Monoliths drown out comms.' },
+    { id: 'log_140', title: 'Carrier Drift', text: 'Carriers turn slow but strike hard.' },
+    { id: 'log_141', title: 'Transport Log', text: 'Transports carry rare relics.' },
+    { id: 'log_142', title: 'Interceptor Note', text: 'Interceptors favor tight arcs.' },
+    { id: 'log_143', title: 'Gunship Note', text: 'Gunships keep mid-range distance.' },
+    { id: 'log_144', title: 'Bomber Note', text: 'Bombers retreat after strikes.' },
+    { id: 'log_145', title: 'Sniper Note', text: 'Snipers avoid close orbit.' },
+    { id: 'log_146', title: 'Turret Note', text: 'Turrets align with bastion nodes.' },
+    { id: 'log_147', title: 'Scout Note', text: 'Scouts flank during storms.' },
+    { id: 'log_148', title: 'Fighter Note', text: 'Fighters chase boost trails.' },
+    { id: 'log_149', title: 'Rift Manual', text: 'Rift dash stabilizes during beacons.' },
+    { id: 'log_150', title: 'Lane Manual', text: 'Flight assist saves fuel in lanes.' },
+    { id: 'log_151', title: 'Cluster Manual', text: 'Clusters hide caches in clear zones.' },
+    { id: 'log_152', title: 'Ruin Manual', text: 'Ruins often guard blueprint cores.' },
+    { id: 'log_153', title: 'Beacon Log', text: 'Rift beacons pulse with nav data.' },
+    { id: 'log_154', title: 'Relic Note', text: 'Relics hum near arc emitters.' },
+    { id: 'log_155', title: 'Salvage Note', text: 'Alloy fragments fetch high credits.' },
+    { id: 'log_156', title: 'Archive Note', text: 'New logs unlock after scans.' },
+    { id: 'log_157', title: 'Transit Note', text: 'Transit lanes reduce turbulence.' },
+    { id: 'log_158', title: 'Rift Note', text: 'Rift corridors amplify thrust.' },
+    { id: 'log_159', title: 'Home Base', text: 'Aetherline Bastion keeps a wide berth.' },
+    { id: 'log_160', title: 'Pilot Log', text: 'Fuel reserves stabilize after rift dash.' },
+    { id: 'log_161', title: 'Ops Note', text: 'Contracts pay more near deep zones.' },
+    { id: 'log_162', title: 'Mission Log', text: 'Base strikes open new gates.' },
+    { id: 'log_163', title: 'Shield Log', text: 'Nanofiber arrays prefer steady energy.' },
+    { id: 'log_164', title: 'Engine Log', text: 'Turbo packs run hot in redshift.' },
+    { id: 'log_165', title: 'Hull Log', text: 'Large hulls handle debris better.' },
+    { id: 'log_166', title: 'Drone Log', text: 'Attack drones track carrier bays.' },
+    { id: 'log_167', title: 'Store Log', text: 'Traders price ammo by lane traffic.' },
+    { id: 'log_168', title: 'Scan Log', text: 'Scanner drones detect ruin cores.' },
+    { id: 'log_169', title: 'Boost Log', text: 'Boost trails linger in rift light.' },
+    { id: 'log_170', title: 'EMP Log', text: 'EMP pulses strip base shields.' },
+    { id: 'log_171', title: 'Mine Log', text: 'Mines drift in calm cluster zones.' },
+    { id: 'log_172', title: 'Flak Log', text: 'Flak spreads wider near storms.' },
+    { id: 'log_173', title: 'Torpedo Log', text: 'Torpedoes crack fortified hulls.' },
+    { id: 'log_174', title: 'Rail Log', text: 'Rail spears pierce layered armor.' },
+    { id: 'log_175', title: 'Pulse Log', text: 'Pulse repeaters win close fights.' },
+    { id: 'log_176', title: 'Laser Log', text: 'Lasers track faster targets.' }
+  ];
+
+  const ZONE_BROADCASTS = {
+    cluster: [
+      'Aetherline: Cluster traffic heavy. Keep speed below 400.',
+      'Signal: Multiple pings detected. Sweep for salvage.',
+      'Ops: Enemy scouts reported near the inner ring.',
+      'Traffic: Watch for debris pockets ahead.',
+      'Relay: Navigation beacons stable.',
+      'Scan: Fog density above average.',
+      'Control: Keep engines cool through the belt.',
+      'Comms: Civilian convoy rerouting.',
+      'Aetherline: Repair bays operational.',
+      'Notice: Shield fluctuations detected.',
+      'Ops: Stay clear of base turrets.',
+      'Comms: Trade skiffs inbound.',
+      'Notice: Navigation drift stable.',
+      'Signal: Static interference cleared.',
+      'Ops: Maintain course through debris pockets.'
+    ],
+    lane: [
+      'Transit Lane: Boost windows open.',
+      'Lane Control: Maintain vector alignment.',
+      'Aetherline: Speed corridor clear.',
+      'Navigation: Drift current rising.',
+      'Relay: Keep scanners hot for hidden caches.',
+      'Notice: Minimal debris field ahead.',
+      'Transit: Signal latency reduced.',
+      'Comms: Highway convoys en route.',
+      'Lane Control: Keep a steady line.',
+      'Signal: Rift shimmer visible.',
+      'Lane Control: Drift margins widened.',
+      'Transit: Boost trail stable.',
+      'Notice: Cargo beacons active.',
+      'Navigation: Long-range pings steady.',
+      'Lane Control: Keep a smooth burn.'
+    ],
+    rift: [
+      'Rift Channel: Supercharge ready.',
+      'Warning: Rift turbulence at the edges.',
+      'Aetherline: Rift beacons active.',
+      'Transit: Boost fields detected.',
+      'Rift Control: Hold tight through the surge.',
+      'Comms: Warp echoes increasing.',
+      'Signal: Rare ruin traces in the channel.',
+      'Notice: Keep stabilizers engaged.',
+      'Rift Channel: Velocity spikes expected.',
+      'Ops: Enemy patrols scarce. Move fast.',
+      'Rift Channel: Surge window open.',
+      'Warning: High-velocity debris possible.',
+      'Rift Control: Stabilizers aligned.',
+      'Signal: Rift beacon harmonics green.',
+      'Transit: Warp echoes rising.'
+    ]
+  };
+
+  const BIOME_BROADCASTS = {
+    driftline: [
+      'Driftline: Blue haze stable.',
+      'Driftline: Ice spires ahead.',
+      'Driftline: Scan for cold caches.',
+      'Driftline: Fog density moderate.',
+      'Driftline: Relays show faint echoes.',
+      'Driftline: Slow winds detected.',
+      'Driftline: Ice rings glinting.',
+      'Driftline: Navigation calm.',
+      'Driftline: Relay tones steady.',
+      'Driftline: Low patrol density.'
+    ],
+    glasswake: [
+      'Glasswake: Shard fields active.',
+      'Glasswake: Watch for brittle debris.',
+      'Glasswake: Signal shards detected.',
+      'Glasswake: High reflection interference.',
+      'Glasswake: Drifting hulls sighted.',
+      'Glasswake: Mirror haze rising.',
+      'Glasswake: Shard fractures ahead.',
+      'Glasswake: Keep scanners tight.',
+      'Glasswake: Crystal echoes loud.',
+      'Glasswake: Hull scrape risk.'
+    ],
+    stormvault: [
+      'Stormvault: Ion spikes rising.',
+      'Stormvault: Shield harmonics unstable.',
+      'Stormvault: Coil pylons visible.',
+      'Stormvault: Electrical interference reported.',
+      'Stormvault: Flight assist advised.',
+      'Stormvault: Static arcing nearby.',
+      'Stormvault: Ion rain detected.',
+      'Stormvault: Coil intensity high.',
+      'Stormvault: Sensors flickering.',
+      'Stormvault: Keep distance from pylons.'
+    ],
+    redshift: [
+      'Redshift: Plasma currents active.',
+      'Redshift: Heat bloom detected.',
+      'Redshift: Ember flows ahead.',
+      'Redshift: Missile drift increased.',
+      'Redshift: Tides intensifying.',
+      'Redshift: Thermal haze rising.',
+      'Redshift: Flare towers bright.',
+      'Redshift: Hull temperature high.',
+      'Redshift: Boost burn faster.',
+      'Redshift: Heat shells visible.'
+    ],
+    bastion: [
+      'Bastion: Defense pylons online.',
+      'Bastion: Fortress lattices tracking.',
+      'Bastion: Turrets heavy in this ring.',
+      'Bastion: Shield nodes detected.',
+      'Bastion: High threat signature.',
+      'Bastion: Lattice beams sweeping.',
+      'Bastion: Patrol wing inbound.',
+      'Bastion: Fortified debris field.',
+      'Bastion: Turret arrays synced.',
+      'Bastion: Keep shields high.'
+    ],
+    darklane: [
+      'Darklane: Shadow mines suspected.',
+      'Darklane: Low light conditions.',
+      'Darklane: Refuge traffic nearby.',
+      'Darklane: Void buoys drifting.',
+      'Darklane: Sensor ghosts reported.',
+      'Darklane: Shadows shifting.',
+      'Darklane: Silence thick.',
+      'Darklane: Refuge beacons faint.',
+      'Darklane: Drift speed reduced.',
+      'Darklane: Watch for ambush.'
+    ],
+    starforge: [
+      'Starforge: Arc emitters active.',
+      'Starforge: Forge fragments detected.',
+      'Starforge: Signal clarity high.',
+      'Starforge: Guardian signature faint.',
+      'Starforge: High-value salvage likely.',
+      'Starforge: Forge glow visible.',
+      'Starforge: Core harmonics rising.',
+      'Starforge: Rare alloy readings.',
+      'Starforge: Guardian ping detected.',
+      'Starforge: Systems humming.'
+    ],
+    hollow: [
+      'Hollow: Echo stones resonating.',
+      'Hollow: Relic spires ahead.',
+      'Hollow: Comms distortion increasing.',
+      'Hollow: Rift murmurs detected.',
+      'Hollow: Keep tight formation.',
+      'Hollow: Sound bends strangely.',
+      'Hollow: Whisper patterns rising.',
+      'Hollow: Relic glow spotted.',
+      'Hollow: Sensors lagging.',
+      'Hollow: Stay on heading.'
+    ],
+    emberveil: [
+      'Emberveil: Ash ruins drifting.',
+      'Emberveil: Heat signature spiking.',
+      'Emberveil: Flare towers visible.',
+      'Emberveil: Refinery patrols active.',
+      'Emberveil: Avoid plasma flare arcs.',
+      'Emberveil: Ash rings ahead.',
+      'Emberveil: Heat haze thick.',
+      'Emberveil: Turbulence rising.',
+      'Emberveil: Patrol signature strong.',
+      'Emberveil: Keep cooling lines open.'
+    ],
+    solstice: [
+      'Solstice: Prism arches ahead.',
+      'Solstice: Light fins shimmering.',
+      'Solstice: Clear line of sight.',
+      'Solstice: Solar winds minimal.',
+      'Solstice: Long-range scans clear.',
+      'Solstice: Light currents calm.',
+      'Solstice: Navigation stable.',
+      'Solstice: Sensor bloom low.',
+      'Solstice: Clear runway ahead.',
+      'Solstice: Corridor open.'
+    ],
+    blackout: [
+      'Blackout: Obsidian spires detected.',
+      'Blackout: Silent monoliths reported.',
+      'Blackout: Sensor blackout risk.',
+      'Blackout: Visibility low.',
+      'Blackout: Keep manual control ready.',
+      'Blackout: Signal loss likely.',
+      'Blackout: Drift slow.',
+      'Blackout: Monolith shadows deep.',
+      'Blackout: Lights dim.',
+      'Blackout: Keep eyes on HUD.'
+    ]
+  };
+
+  const TRADER_DIALOGUE = {
+    scavenger: [
+      'Scavenger: Got spare hull plates for the right price.',
+      'Scavenger: Bring relics, leave with upgrades.',
+      'Scavenger: Salvage speaks louder than credits.',
+      'Scavenger: You fly, I barter.',
+      'Scavenger: Radar is clean. Keep it that way.',
+      'Scavenger: Driftline scraps still fetch good money.',
+      'Scavenger: Watch those storms out there.',
+      'Scavenger: I only trade in honest rust.',
+      'Scavenger: That thruster glow looks hot.',
+      'Scavenger: Need ammo? You know the price.',
+      'Scavenger: I can smell a good haul.',
+      'Scavenger: Don't let the cartel find me.',
+      'Scavenger: This sector has teeth.',
+      'Scavenger: Salvage keeps us alive.',
+      'Scavenger: Bring proof, get paid.'
+    ],
+    arms: [
+      'Arms: Fresh crates in the hold.',
+      'Arms: Missiles first, questions later.',
+      'Arms: Keep your barrels hot.',
+      'Arms: No refunds on plasma.',
+      'Arms: I stock what the lanes demand.',
+      'Arms: Brought you the good stuff.',
+      'Arms: Turrets love a full rack.',
+      'Arms: Ammo buys safety.',
+      "Arms: That's a clean hull.",
+      'Arms: Load up before the next gate.',
+      'Arms: Keep your rails charged.',
+      'Arms: I hear carriers in the next ring.',
+      'Arms: Beware redshift drift.',
+      'Arms: Never trust a quiet lane.',
+      "Arms: Your targets won't wait."
+    ],
+    engineer: [
+      'Engineer: Bring relics, leave faster.',
+      'Engineer: I tune engines for the bold.',
+      'Engineer: Stabilizers are overrated.',
+      'Engineer: I can fix that wobble.',
+      'Engineer: Rift coils still warm.',
+      'Engineer: Blueprints taste like ozone.',
+      'Engineer: You chasing the guardian?',
+      'Engineer: Keep your capacitors cool.',
+      'Engineer: I trade in secrets.',
+      'Engineer: Driftline tech still works.',
+      "Engineer: I don't ask where you got it.",
+      'Engineer: Clean lines, sharp turns.',
+      'Engineer: You fly better than most.',
+      'Engineer: Try the new dampers.',
+      'Engineer: Time is fuel.'
+    ]
+  };
+
+  const RUMOR_ENTRIES = [
+    'Rumor: A hidden ruin sleeps in the Stormvault shadows.',
+    'Rumor: Aetherline scouts saw a carrier drifting near Emberveil.',
+    'Rumor: A relic cache pulses under a Glasswake shard field.',
+    'Rumor: A quiet lane hides an abandoned convoy in Darklane.',
+    'Rumor: A beacon flickers in the Hollow Reach.',
+    'Rumor: Bastion turrets rotate to face a secret outpost.',
+    'Rumor: A redshift flare revealed a buried blueprint.',
+    'Rumor: Starforge fragments drift near the outer ring.',
+    'Rumor: Ion pylons mask a hidden gate.',
+    'Rumor: A shipyard ghost still broadcasts in Driftline.',
+    'Rumor: A scavenger mapped a safe corridor through blackout.',
+    'Rumor: Anomaly echoes align with rift beacons.',
+    'Rumor: A derelict carrier holds a coilgun schematic.',
+    'Rumor: A storm coil hums near a forgotten ruin.',
+    'Rumor: A convoy of refugees vanished near Solstice.',
+    'Rumor: A warp ripple marked a relic drift.',
+    'Rumor: Pirates cache credits in hollow debris.',
+    'Rumor: A shrine of stone floats in the Hollow.',
+    'Rumor: Rift channels expose hidden caches.',
+    'Rumor: A watchtower sleeps in Bastion cross.',
+    'Rumor: Driftline ice rings hide a data vault.',
+    'Rumor: Darklane shadow mines guard a ruin.',
+    'Rumor: Emberveil ash ruins hold a rare upgrade.',
+    'Rumor: Glasswake echoes lead to a lost station.',
+    'Rumor: A redshift tide uncovered a relic core.',
+    'Rumor: Stormvault lightning reveals a ruin map.',
+    'Rumor: Starforge debris hides a guardian key.',
+    'Rumor: A convoy beacon pulsed in a rift lane.',
+    'Rumor: Bastion nodes pay extra for base strikes.',
+    'Rumor: Aetherline pilots track a hidden relay.',
+    'Rumor: A silent monolith masks a warp trace.',
+    'Rumor: A shattered gate floats near Emberveil.',
+    'Rumor: A nebula tear swallowed a patrol wing.',
+    'Rumor: A flare tower houses a coil blueprint.',
+    'Rumor: A prism arch bends sensor lines.',
+    'Rumor: A scatter of wrecks forms a safe pocket.',
+    'Rumor: A convoy trail glows faintly in the lane.',
+    'Rumor: A salvage ring hides a plasma cache.',
+    'Rumor: A rift flare sharpens your boost.',
+    'Rumor: A distant broadcast whispers of relics.',
+    'Rumor: A decoy beacon masks a ruin.',
+    'Rumor: A gunship patrol guards a rare cache.',
+    'Rumor: A transport route carries relics.',
+    'Rumor: A faint light marks an outlaw trader.',
+    'Rumor: A hollow echo repeats every 9 minutes.',
+    'Rumor: A guardian probe was seen in Starforge.',
+    'Rumor: A lane corridor hides a fast warp.',
+    'Rumor: A convoy crashed near Glasswake.',
+    'Rumor: A storm vault has a hidden core.',
+    'Rumor: A rift beacon restored a dying ship.',
+    'Rumor: A relic spire hums when scanned.',
+    'Rumor: A scout wing vanished near a ruin.',
+    'Rumor: A shield node went dark.',
+    'Rumor: A black box floats near Bastion.',
+    'Rumor: A miner charted a quiet pocket.',
+    'Rumor: A rare skin blueprint circulates.',
+    'Rumor: A rift lane hides a long-lost nav key.',
+    'Rumor: A convoy heading to Solstice is late.',
+    'Rumor: A Driftline relay blinks twice at dusk.',
+    'Rumor: A hollow gate cracks open at low tide.',
+    'Rumor: A hidden cache lies beyond the rift flare.',
+    'Rumor: A carrier leaks fuel in the ember belt.',
+    'Rumor: A trader sells illegal dampers.',
+    'Rumor: A silent buoy transmits in bursts.',
+    'Rumor: A salvage tug went missing near redshift.',
+    'Rumor: A new outpost rises in the Bastion cross.',
+    'Rumor: A relay node broadcasts ancient tones.',
+    'Rumor: A storm coil hides a blueprint shard.',
+    'Rumor: A darklane convoy needs escort.',
+    'Rumor: A prism arch opens a secret path.',
+    'Rumor: A redshift flare exposed an alloy vein.',
+    'Rumor: A forge fragment pulses with heat.',
+    'Rumor: A rift whisper hints at a relic.',
+    'Rumor: A convoy beacon flickers near blackout.',
+    'Rumor: A hidden cove is free of patrols.',
+    'Rumor: A rift lane hums louder after storms.',
+    'Rumor: A derelict base still powers turrets.',
+    'Rumor: A turret cluster guards a hollow ruin.',
+    'Rumor: A stormvault gate half-opens at midnight.',
+    'Rumor: A glasswake shard points to a cache.',
+    'Rumor: A bastion monolith hides a relic.',
+    'Rumor: A silent trader parks in the lane.',
+    'Rumor: A carrier wing patrols the outer ring.',
+    'Rumor: A driftline void pocket holds salvage.',
+    'Rumor: A rift flare restores depleted fuel.',
+    'Rumor: A prism arch splits sensor echoes.',
+    "Rumor: A convoys' trail reveals a hidden belt."
   ];
 
   const HULLS = {
@@ -507,7 +964,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     cameraNoiseSeed: Math.random() * 10,
     shiftBoost: { active: false, timer: 0 },
     prompt: null,
-    loreScroll: 0
+    loreScroll: 0,
+    riftDash: { active: false, timer: 0, cooldown: 0 },
+    boundaryTimer: 0,
+    boundaryWarning: 0,
+    broadcastCooldown: 0,
+    activeTrader: null,
+    traderSelection: 0,
+    traderQuote: '',
+    rumorCooldown: 0
   };
 
   const world = {
@@ -549,6 +1014,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     boost: BASE.boostMax,
     energy: BASE.energyMax,
     fuel: 120,
+    riftCharge: 0,
     lastShot: 0,
     lastAltShot: 0,
     lastHit: 0,
@@ -652,6 +1118,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function lerp(a, b, t) {
     return a + (b - a) * t;
+  }
+
+  function hexToRgb(hex) {
+    const clean = hex.replace('#', '');
+    const value = clean.length === 3
+      ? clean.split('').map((c) => c + c).join('')
+      : clean;
+    const int = Number.parseInt(value, 16);
+    return {
+      r: (int >> 16) & 255,
+      g: (int >> 8) & 255,
+      b: int & 255
+    };
+  }
+
+  function mixColor(a, b, t) {
+    const ca = hexToRgb(a);
+    const cb = hexToRgb(b);
+    const r = Math.round(lerp(ca.r, cb.r, t));
+    const g = Math.round(lerp(ca.g, cb.g, t));
+    const bch = Math.round(lerp(ca.b, cb.b, t));
+    return `rgb(${r}, ${g}, ${bch})`;
   }
 
   function dist(ax, ay, bx, by) {
@@ -774,6 +1262,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.statusTimer = duration;
   }
 
+  function broadcastMessage(sector) {
+    if (!sector || state.broadcastCooldown > 0) return;
+    const zonePool = ZONE_BROADCASTS[sector.zoneType] || ZONE_BROADCASTS.cluster;
+    const biomePool = BIOME_BROADCASTS[sector.biome] || [];
+    const combined = [...zonePool, ...biomePool];
+    if (!combined.length) return;
+    const message = combined[Math.floor(Math.random() * combined.length)];
+    noteStatus(message, 4);
+    pushStoryLog(message);
+    state.broadcastCooldown = 8;
+  }
+
+  function triggerRumor() {
+    if (state.rumorCooldown > 0) return;
+    if (!RUMOR_ENTRIES.length) return;
+    const rumor = RUMOR_ENTRIES[Math.floor(Math.random() * RUMOR_ENTRIES.length)];
+    noteStatus(rumor, 4);
+    pushStoryLog(rumor);
+    state.rumorCooldown = 14;
+  }
+
   function updateStatusTimer(dt) {
     if (!statusText || state.statusTimer <= 0) return;
     state.statusTimer -= dt;
@@ -874,10 +1383,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ruins: [],
         riftBeacons: [],
         biomeProps: [],
+        traders: [],
         caches: [],
         storms: [],
         anomalies: []
-      }
+      },
+      events: []
     };
     generateSectorObjects(sector);
     world.sectors.set(key, sector);
@@ -905,29 +1416,65 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const center = posFromGrid(sector.gx, sector.gy);
     const zone = sector.zone || ZONE_TYPES.cluster;
     const isCluster = sector.zoneType === 'cluster';
+    const clearZones = [];
+
+    if (isCluster && rng() < 0.75) {
+      const clearCount = 1 + Math.floor(rng() * 2);
+      for (let i = 0; i < clearCount; i += 1) {
+        clearZones.push({
+          x: center.x + randRange(rng, -220, 220),
+          y: center.y + randRange(rng, -220, 220),
+          radius: randRange(rng, 160, 240)
+        });
+      }
+    }
+
+    const inClearZone = (x, y) => clearZones.some((zone) => dist(x, y, zone.x, zone.y) < zone.radius);
 
     const asteroidCount = sector.zoneType === 'rift'
       ? 0
-      : Math.floor(randRange(rng, 4, 18) * biome.threat * (isCluster ? 1 : zone.spawnScale * 0.4));
+      : Math.floor(randRange(rng, 3, 12) * biome.threat * (isCluster ? 0.9 : zone.spawnScale * 0.35));
     for (let i = 0; i < asteroidCount; i += 1) {
       const radius = randRange(rng, 18, 58);
+      const ax = center.x + randRange(rng, -360, 360);
+      const ay = center.y + randRange(rng, -360, 360);
+      if (inClearZone(ax, ay)) continue;
       sector.objects.asteroids.push({
-        x: center.x + randRange(rng, -360, 360),
-        y: center.y + randRange(rng, -360, 360),
+        x: ax,
+        y: ay,
         radius,
         points: generateAsteroidShape(rng, radius)
       });
     }
 
     if (rng() < (isCluster ? 0.35 : zone.id === 'lane' ? 0.18 : 0.12)) {
-      sector.objects.planets.push({
+      const planet = {
         x: center.x + randRange(rng, -420, 420),
         y: center.y + randRange(rng, -420, 420),
         radius: randRange(rng, 60, 140),
         hue: randRange(rng, biome.hue - 20, biome.hue + 40),
         mass: randRange(rng, 0.6, 1.2),
         ring: rng() < 0.45
-      });
+      };
+      sector.objects.planets.push(planet);
+      if (isCluster && rng() < 0.6) {
+        const beltCount = 12 + Math.floor(rng() * 18);
+        const beltRadius = planet.radius + randRange(rng, 50, 120);
+        for (let i = 0; i < beltCount; i += 1) {
+          const angle = rng() * Math.PI * 2;
+          const jitter = randRange(rng, -24, 24);
+          const radius = randRange(rng, 12, 34);
+          const ax = planet.x + Math.cos(angle) * (beltRadius + jitter);
+          const ay = planet.y + Math.sin(angle) * (beltRadius + jitter);
+          if (inClearZone(ax, ay)) continue;
+          sector.objects.asteroids.push({
+            x: ax,
+            y: ay,
+            radius,
+            points: generateAsteroidShape(rng, radius)
+          });
+        }
+      }
     }
 
     if (rng() < (isCluster ? 0.4 : 0.16)) {
@@ -935,6 +1482,23 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         x: center.x + randRange(rng, -200, 200),
         y: center.y + randRange(rng, -200, 200),
         radius: randRange(rng, 42, 60)
+      });
+    }
+
+    if (sector.zoneType !== 'rift' && rng() < (isCluster ? 0.22 : 0.12)) {
+      const traderType = TRADER_TYPES[Math.floor(rng() * TRADER_TYPES.length)];
+      sector.objects.traders.push({
+        id: `${sector.key}-trader`,
+        type: traderType.id,
+        label: traderType.label,
+        color: traderType.color,
+        vibe: traderType.vibe,
+        x: center.x + randRange(rng, -260, 260),
+        y: center.y + randRange(rng, -260, 260),
+        radius: randRange(rng, 22, 30),
+        driftX: randRange(rng, -12, 12),
+        driftY: randRange(rng, -12, 12),
+        phase: rng() * Math.PI * 2
       });
     }
 
@@ -1281,6 +1845,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (full) {
       player.credits = 0;
       player.fuel = BASE.boostMax;
+      player.riftCharge = 0;
       player.angularVelocity = 0;
       player.throttle = 0;
       player.flightAssist = true;
@@ -1317,6 +1882,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.loreScroll = 0;
       state.unlockedDepth = 1;
       state.lastZoneType = '';
+      state.riftDash = { active: false, timer: 0, cooldown: 0 };
+      state.boundaryTimer = 0;
+      state.boundaryWarning = 0;
+      state.broadcastCooldown = 0;
+      state.activeTrader = null;
+      state.traderSelection = 0;
+      state.traderQuote = '';
+      state.rumorCooldown = 0;
       world.discovered.clear();
       world.bossDefeated = {};
       world.stationContracts = {};
@@ -1396,9 +1969,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       pushStoryLog(`Discovered ${sector.name} (${sector.gx},${sector.gy}).`);
     }
     if (prevKey && prevKey !== sector.key && state.running) {
-      noteStatus(`Entered ${sector.name} • ${sector.zone?.label || 'Cluster'}`);
+      noteStatus(`Entered ${sector.name} - ${sector.zone?.label || 'Cluster'}`);
+      broadcastMessage(sector);
     } else if (prevZone && prevZone !== sector.zoneType && state.running) {
       noteStatus(`Entering ${sector.zone?.label || 'Cluster'}`);
+      broadcastMessage(sector);
     }
     return sector;
   }
@@ -1561,6 +2136,102 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
+  function spawnSectorEvent(sector) {
+    if (!sector) return;
+    const rng = mulberry32(WORLD_SEED + sector.gx * 23 + sector.gy * 37 + Math.floor(state.time * 3));
+    const center = posFromGrid(sector.gx, sector.gy);
+    let pool = ['comet', 'distress', 'driftwave'];
+    if (sector.zoneType === 'rift') pool = ['riftflare', 'comet'];
+    if (sector.zoneType === 'lane') pool = ['comet', 'distress', 'driftwave'];
+    if (sector.zoneType === 'cluster') pool = ['distress', 'meteor', 'comet'];
+    const type = pool[Math.floor(rng() * pool.length)];
+    const def = EVENT_DEFS[type];
+    if (!def) return;
+    const angle = rng() * Math.PI * 2;
+    const radius = randRange(rng, 200, 420);
+    const event = {
+      id: `${sector.key}-${type}-${Math.floor(state.time * 10)}`,
+      type,
+      x: center.x + Math.cos(angle) * radius,
+      y: center.y + Math.sin(angle) * radius,
+      vx: 0,
+      vy: 0,
+      radius: def.radius,
+      life: def.life,
+      def,
+      claimed: false,
+      pulse: rng() * Math.PI * 2
+    };
+    if (type === 'comet' || type === 'meteor') {
+      const dir = rng() * Math.PI * 2;
+      event.vx = Math.cos(dir) * def.speed;
+      event.vy = Math.sin(dir) * def.speed;
+    }
+    sector.events.push(event);
+  }
+
+  function updateEvents(dt) {
+    const sector = getCurrentSector();
+    if (!sector.events) sector.events = [];
+    if (sector.events.length < 2 && Math.random() < dt * 0.05) {
+      spawnSectorEvent(sector);
+    }
+    sector.events.forEach((event) => {
+      event.life -= dt;
+      if (event.type === 'comet' || event.type === 'meteor') {
+        event.x += event.vx * dt;
+        event.y += event.vy * dt;
+        event.vx *= 0.995;
+        event.vy *= 0.995;
+        spawnParticle(event.x, event.y, 'rgba(180,220,255,0.35)', 0.4, 2, -event.vx * 0.05, -event.vy * 0.05);
+      }
+      if (event.type === 'driftwave' || event.type === 'riftflare') {
+        event.pulse += dt * 2.2;
+      }
+    });
+    sector.events = sector.events.filter((event) => event.life > 0);
+  }
+
+  function drawEvents(sector, camera) {
+    if (!sector.events || !sector.events.length) return;
+    sector.events.forEach((event) => {
+      const x = event.x - camera.x + VIEW.centerX;
+      const y = event.y - camera.y + VIEW.centerY;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.strokeStyle = event.def.color;
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      if (event.type === 'comet') {
+        ctx.beginPath();
+        ctx.arc(0, 0, event.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-event.radius * 2, 0);
+        ctx.lineTo(event.radius * 2, 0);
+        ctx.stroke();
+      } else if (event.type === 'meteor') {
+        ctx.beginPath();
+        ctx.arc(0, 0, event.radius, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (event.type === 'distress') {
+        ctx.beginPath();
+        ctx.arc(0, 0, event.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, 0, event.radius * 0.5, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (event.type === 'driftwave' || event.type === 'riftflare') {
+        const pulse = 0.5 + Math.sin(event.pulse) * 0.5;
+        ctx.globalAlpha = 0.5 + pulse * 0.4;
+        ctx.beginPath();
+        ctx.arc(0, 0, event.radius + pulse * 20, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    });
+  }
+
   function applyDamage(target, amount, options = {}) {
     const critChance = 0.06;
     let final = amount;
@@ -1574,6 +2245,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         const reduced = final * (1 - shieldPercent);
         player.shield = Math.max(0, player.shield - final);
         final = reduced;
+      }
+      if (state.riftDash?.active) {
+        final *= 0.35;
       }
       final *= 1 - clamp(cachedStats.armor || 0, 0, 0.6);
       if (final > 0) {
@@ -1807,6 +2481,26 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     noteStatus('EMP burst engaged.');
   }
 
+  function tryRiftDash(sector) {
+    if (!sector || (sector.zoneType !== 'rift' && sector.zoneType !== 'lane')) {
+      noteStatus('Rift dash only in transit zones.');
+      return;
+    }
+    if (state.riftDash.cooldown > 0) {
+      noteStatus('Rift drive cooling.');
+      return;
+    }
+    if (player.riftCharge < 60) {
+      noteStatus('Rift charge insufficient.');
+      return;
+    }
+    state.riftDash.active = true;
+    state.riftDash.timer = 1.3;
+    state.riftDash.cooldown = 6;
+    player.riftCharge = 0;
+    noteStatus('Rift dash engaged.');
+  }
+
   function hasAmmo(weapon) {
     if (!weapon.ammoType) return true;
     const available = player.ammo[weapon.ammoType] || 0;
@@ -1857,6 +2551,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const zoneBoost = sector.zone?.boostMult || 1;
     const boostDrain = sector.zoneType === 'rift' ? 24 : sector.zoneType === 'lane' ? 30 : 35;
     const fuelDrain = sector.zoneType === 'rift' ? 8 : sector.zoneType === 'lane' ? 10 : 12;
+    const chargeRate = sector.zoneType === 'rift' ? 18 : sector.zoneType === 'lane' ? 10 : -6;
+
+    if (state.riftDash.cooldown > 0) {
+      state.riftDash.cooldown = Math.max(0, state.riftDash.cooldown - dt);
+    }
+    player.riftCharge = clamp(player.riftCharge + chargeRate * dt, 0, 100);
 
     if (turningLeft) player.angularVelocity -= cachedStats.torque * dt * 60;
     if (turningRight) player.angularVelocity += cachedStats.torque * dt * 60;
@@ -1903,6 +2603,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.fuel = clamp(player.fuel + cachedStats.fuelRegen * dt, 0, cachedStats.fuelMax);
     }
 
+    if (state.riftDash.active) {
+      state.shiftBoost.active = false;
+      const dashThrust = cachedStats.thrust * 2.8 * zoneBoost;
+      player.vx += dir.x * dashThrust * dt;
+      player.vy += dir.y * dashThrust * dt;
+      player.boost = clamp(player.boost - boostDrain * 0.4 * dt, 0, cachedStats.boostMax);
+      player.fuel = clamp(player.fuel - fuelDrain * 0.6 * dt, 0, cachedStats.fuelMax);
+      state.riftDash.timer -= dt;
+      spawnEffect(player.x - dir.x * 24, player.y - dir.y * 24, '#ffd166', 10);
+      spawnParticle(player.x - dir.x * 26, player.y - dir.y * 26, 'rgba(255,209,102,0.8)', 0.6, 5, -dir.x * 120, -dir.y * 120);
+      if (state.riftDash.timer <= 0 || player.fuel <= 0) {
+        state.riftDash.active = false;
+      }
+    }
+
     if (player.flightAssist) {
       const lateralSpeed = player.vx * lateral.x + player.vy * lateral.y;
       const assistForce = (1 - cachedStats.assistDamp) * dt * 60;
@@ -1914,7 +2629,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.vy *= Math.pow(cachedStats.linearDamp, dt * 60);
 
     const speed = Math.hypot(player.vx, player.vy);
-    const maxSpeed = cachedStats.maxSpeed * (state.shiftBoost.active ? 1.5 * zoneBoost : zoneBoost);
+    const dashMult = state.riftDash.active ? 2.2 : 1;
+    const maxSpeed = cachedStats.maxSpeed * zoneBoost * (state.shiftBoost.active ? 1.5 : 1) * dashMult;
     if (speed > maxSpeed) {
       const scale = maxSpeed / (speed || 1);
       player.vx *= scale;
@@ -1930,10 +2646,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const dirBack = normalize(player.x, player.y);
       player.x = dirBack.x * boundary;
       player.y = dirBack.y * boundary;
-      player.vx *= -0.2;
-      player.vy *= -0.2;
-      applyDamage(player, 8);
-      noteStatus('Rift boundary destabilized.');
+      player.vx *= -0.15;
+      player.vy *= -0.15;
+      state.boundaryTimer += dt;
+      if (state.boundaryTimer > 1.2) {
+        applyDamage(player, 10);
+        state.boundaryTimer = 0.6;
+      }
+      if (state.boundaryWarning <= 0) {
+        noteStatus('Rift boundary pressure rising.');
+        state.boundaryWarning = 2.5;
+      }
+    } else {
+      state.boundaryTimer = 0;
     }
 
     if (input.keys['Space']) fireWeapon(player.weapons.primary, true);
@@ -1974,7 +2699,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     sector.spawnTimer = randRange(rng, 1.1, 2.8) / (threatScale * zone.spawnScale);
   }
 
-  function updateEnemyAI(enemy, dt) {
+  function updateEnemyAI(enemy, dt, sector) {
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy);
@@ -2009,7 +2734,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (enemy.isBoss) speed = 80 + enemy.phase * 25;
 
     if (!isStatic) {
-    if (enemy.role === 'scout') {
+      if (enemy.role === 'scout') {
       const dir = normalize(dx, dy);
       if (distance > 200) {
         enemy.vx += dir.x * speed * 1.1 * dt;
@@ -2083,6 +2808,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
+    const avoid = computeAvoidance(enemy, sector);
+    enemy.vx += avoid.x * speed * 0.4 * dt;
+    enemy.vy += avoid.y * speed * 0.4 * dt;
+
     if (enemy.isBoss && enemy.phase >= 2 && Math.random() < 0.012) {
       const angle = Math.random() * Math.PI * 2;
       spawnEnemy('fighter', enemy.x + Math.cos(angle) * 60, enemy.y + Math.sin(angle) * 60, 1 + enemy.phase * 0.2);
@@ -2150,7 +2879,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     entities.enemies.forEach((enemy) => {
       if (enemy.hp <= 0) return;
       applyGravityToEntity(enemy, sector, dt);
-      updateEnemyAI(enemy, dt);
+      updateEnemyAI(enemy, dt, sector);
     });
   }
 
@@ -2187,6 +2916,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
   }
 
+  function updateTraders(dt) {
+    const sector = getCurrentSector();
+    if (!sector.objects.traders.length) return;
+    sector.objects.traders.forEach((trader) => {
+      trader.x += trader.driftX * dt;
+      trader.y += trader.driftY * dt;
+      trader.driftX *= 0.98;
+      trader.driftY *= 0.98;
+      trader.phase += dt * 0.8;
+    });
+  }
+
   function applyGravityToEntity(entity, sector, dt) {
     if (!sector || !sector.objects.planets.length) return;
     sector.objects.planets.forEach((planet) => {
@@ -2202,6 +2943,34 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       entity.vx += (dx / dist) * force * dt;
       entity.vy += (dy / dist) * force * dt;
     });
+  }
+
+  function computeAvoidance(entity, sector) {
+    if (!sector) return { x: 0, y: 0 };
+    const speed = Math.hypot(entity.vx, entity.vy);
+    const forward = speed > 8 ? normalize(entity.vx, entity.vy) : normalize(player.x - entity.x, player.y - entity.y);
+    const lookAhead = 120 + entity.size * 3 + speed * 0.4;
+    const ahead = { x: entity.x + forward.x * lookAhead, y: entity.y + forward.y * lookAhead };
+    let threat = null;
+    let threatDist = Infinity;
+
+    const checkObstacle = (ox, oy, radius) => {
+      const d = dist(ahead.x, ahead.y, ox, oy);
+      if (d < radius + entity.size + 18 && d < threatDist) {
+        threatDist = d;
+        threat = { x: ox, y: oy, radius };
+      }
+    };
+
+    sector.objects.asteroids.forEach((asteroid) => checkObstacle(asteroid.x, asteroid.y, asteroid.radius));
+    sector.objects.bases.forEach((base) => checkObstacle(base.x, base.y, base.radius));
+    sector.objects.planets.forEach((planet) => checkObstacle(planet.x, planet.y, planet.radius + 40));
+    sector.objects.ruins.forEach((ruin) => checkObstacle(ruin.x, ruin.y, ruin.radius));
+
+    if (!threat) return { x: 0, y: 0 };
+    const away = normalize(ahead.x - threat.x, ahead.y - threat.y);
+    const strength = Math.max(0.6, 1 - threatDist / (threat.radius + entity.size + 40));
+    return { x: away.x * strength, y: away.y * strength };
   }
 
   function updateProjectiles(dt) {
@@ -2355,7 +3124,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         }
         player.vx *= PHYSICS.collisionDamp;
         player.vy *= PHYSICS.collisionDamp;
-        applyDamage(player, 14);
+        const impact = clamp(Math.hypot(player.vx, player.vy) * 0.08, 6, 18);
+        applyDamage(player, impact);
         spawnEffect(player.x, player.y, '#ff6b6b');
         addCameraShake(0.8, 0.2);
       }
@@ -2383,7 +3153,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         const push = normalize(player.x - base.x, player.y - base.y);
         player.x = base.x + push.x * (base.radius + cachedStats.size + 4);
         player.y = base.y + push.y * (base.radius + cachedStats.size + 4);
-        applyDamage(player, 22);
+        const impact = clamp(Math.hypot(player.vx, player.vy) * 0.1, 10, 24);
+        applyDamage(player, impact);
         addCameraShake(0.9, 0.25);
       }
     });
@@ -2395,6 +3166,26 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     });
 
+    sector.objects.biomeProps.forEach((prop) => {
+      const hazard = PROP_HAZARDS[prop.type];
+      if (!hazard) return;
+      if (dist(player.x, player.y, prop.x, prop.y) < prop.size + cachedStats.size + 10) {
+        if (hazard.energyDrain) {
+          player.energy = clamp(player.energy - hazard.energyDrain * dt, 0, cachedStats.energyMax);
+        }
+        if (hazard.shieldDrain) {
+          player.shield = clamp(player.shield - hazard.shieldDrain * dt, 0, cachedStats.maxShield);
+        }
+        if (hazard.hullDamage) {
+          applyDamage(player, hazard.hullDamage * dt * 6);
+        }
+        if (hazard.slow) {
+          player.vx *= hazard.slow;
+          player.vy *= hazard.slow;
+        }
+      }
+    });
+
     sector.objects.riftBeacons.forEach((beacon) => {
       if (dist(player.x, player.y, beacon.x, beacon.y) < beacon.radius + 40) {
         player.boost = clamp(player.boost + 18 * dt, 0, cachedStats.boostMax);
@@ -2402,6 +3193,35 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         spawnParticle(player.x, player.y, 'rgba(255,209,102,0.45)', 0.25, 2, 0, 0);
       }
     });
+
+    if (sector.events && sector.events.length) {
+      sector.events.forEach((event) => {
+        if (event.claimed) return;
+        const distanceToEvent = dist(player.x, player.y, event.x, event.y);
+        if (event.type === 'distress' && distanceToEvent < event.radius + cachedStats.size) {
+          event.claimed = true;
+          awardCredits(event.def.reward.credits, 'Distress resolved');
+          if (Math.random() < event.def.reward.loreChance) unlockLoreEntry('distress');
+          event.life = 0;
+        } else if (event.type === 'comet' && distanceToEvent < event.radius + cachedStats.size) {
+          event.claimed = true;
+          if (getCargoCount() < cachedStats.cargoMax) {
+            player.inventory.cargo.salvage += event.def.reward.salvage;
+            awardCredits(event.def.reward.credits, 'Comet salvage secured');
+          } else {
+            noteStatus('Cargo bay full.');
+          }
+          event.life = 0;
+        } else if (event.type === 'meteor' && distanceToEvent < event.radius + cachedStats.size) {
+          applyDamage(player, event.def.damage);
+          event.life = 0;
+        } else if ((event.type === 'driftwave' || event.type === 'riftflare') && distanceToEvent < event.radius) {
+          player.boost = clamp(player.boost + (event.def.effect?.boost || 0) * dt, 0, cachedStats.boostMax);
+          player.energy = clamp(player.energy + (event.def.effect?.energy || 0) * dt, 0, cachedStats.energyMax);
+          player.fuel = clamp(player.fuel + (event.def.effect?.fuel || 0) * dt, 0, cachedStats.fuelMax);
+        }
+      });
+    }
 
     sector.objects.anomalies.forEach((anomaly) => {
       const d = dist(player.x, player.y, anomaly.x, anomaly.y);
@@ -2478,8 +3298,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         player.vy += push.y * 40;
         enemy.vx -= push.x * 30;
         enemy.vy -= push.y * 30;
-        applyDamage(player, 12 + enemy.size * 0.2);
-        enemy.hp -= 10;
+        const relSpeed = Math.hypot(player.vx - enemy.vx, player.vy - enemy.vy);
+        applyDamage(player, clamp(relSpeed * 0.05, 6, 20));
+        enemy.hp -= 8;
       }
     });
 
@@ -2696,6 +3517,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.mode !== 'flight') return;
     const sector = getCurrentSector();
     const station = sector.objects.stations.find((s) => dist(player.x, player.y, s.x, s.y) < s.radius + 40);
+    const trader = sector.objects.traders.find((t) => dist(player.x, player.y, t.x, t.y) < t.radius + 60);
     const home = world.homeBase && dist(player.x, player.y, world.homeBase.x, world.homeBase.y) < world.homeBase.radius + 50 ? world.homeBase : null;
     if (station) {
       noteStatus('Station in range. Press E to dock.');
@@ -2714,6 +3536,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         state.paused = true;
         state.menuSelection = 0;
         noteStatus(`Docked at ${world.homeBase.name}.`);
+      }
+      return;
+    }
+    if (trader) {
+      noteStatus('Trader in range. Press H to hail.');
+      if (input.justPressed['KeyH']) {
+        state.mode = 'trader';
+        state.paused = true;
+        state.traderSelection = 0;
+        state.activeTrader = trader;
+        const quotes = TRADER_DIALOGUE[trader.type] || [];
+        state.traderQuote = quotes.length ? quotes[Math.floor(Math.random() * quotes.length)] : trader.vibe;
+        noteStatus(`Hailing ${trader.label}.`);
       }
     }
   }
@@ -2779,9 +3614,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         state.scanPulse = 2.2;
         revealSectorsAround(player.x, player.y, state.scanRadius);
         noteStatus('Scanner pulse active.');
+        triggerRumor();
       } else {
         noteStatus('Insufficient energy for scan.');
       }
+    }
+
+    if (input.justPressed['KeyV']) {
+      tryRiftDash(getCurrentSector());
     }
 
     if (input.justPressed['KeyT']) {
@@ -2804,11 +3644,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     updatePlayer(dt);
     updateEnemies(dt);
     updateBases(dt);
+    updateTraders(dt);
     updateProjectiles(dt);
     updateDrones(dt);
     updateLoot(dt);
     updateEffects(dt);
     updateParticles(dt);
+    updateEvents(dt);
     handleCollisions(dt);
     updateProgress(dt);
     updateDifficulty();
@@ -2817,6 +3659,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     updateStatusTimer(dt);
     updateHud();
     updateUpgradeButtons();
+    if (state.boundaryWarning > 0) state.boundaryWarning = Math.max(0, state.boundaryWarning - dt);
+    if (state.broadcastCooldown > 0) state.broadcastCooldown = Math.max(0, state.broadcastCooldown - dt);
+    if (state.rumorCooldown > 0) state.rumorCooldown = Math.max(0, state.rumorCooldown - dt);
     input.justPressed = {};
   }
 
@@ -2903,6 +3748,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
+  function drawGalacticBand(camera) {
+    const sector = getCurrentSector();
+    const hue = BIOMES[sector.biome].hue;
+    const bandOffset = Math.sin(state.time * 0.2 + camera.x * 0.0002) * 80;
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = `hsla(${hue},70%,60%,0.4)`;
+    ctx.lineWidth = 26;
+    ctx.beginPath();
+    ctx.moveTo(-100, VIEW.centerY + bandOffset);
+    ctx.bezierCurveTo(
+      VIEW.width * 0.3,
+      VIEW.centerY - 120 + bandOffset,
+      VIEW.width * 0.7,
+      VIEW.centerY + 120 + bandOffset,
+      VIEW.width + 100,
+      VIEW.centerY + bandOffset
+    );
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawVignette() {
     const grad = ctx.createRadialGradient(
       VIEW.centerX,
@@ -2968,6 +3835,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.stroke();
     ctx.fillStyle = 'rgba(125,252,154,0.15)';
     ctx.fill();
+    ctx.restore();
+  }
+
+  function drawTrader(trader, camera) {
+    const x = trader.x - camera.x + VIEW.centerX;
+    const y = trader.y - camera.y + VIEW.centerY;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.sin(state.time + trader.phase) * 0.2);
+    ctx.fillStyle = trader.color;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = trader.color;
+    ctx.beginPath();
+    ctx.moveTo(0, -trader.radius * 1.1);
+    ctx.lineTo(trader.radius * 0.8, trader.radius * 0.4);
+    ctx.lineTo(0, trader.radius * 0.9);
+    ctx.lineTo(-trader.radius * 0.8, trader.radius * 0.4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -3102,6 +3991,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.moveTo(-prop.size * 0.6, 0);
       ctx.lineTo(prop.size * 0.6, 0);
       ctx.stroke();
+    } else if (prop.type === 'debris_cluster' || prop.type === 'ash_ruins') {
+      for (let i = 0; i < 4; i += 1) {
+        const angle = (Math.PI * 2 * i) / 4;
+        const r = prop.size * 0.4;
+        ctx.beginPath();
+        ctx.rect(Math.cos(angle) * r, Math.sin(angle) * r, prop.size * 0.2, prop.size * 0.2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    } else if (prop.type === 'silent_monoliths') {
+      ctx.beginPath();
+      ctx.rect(-prop.size * 0.25, -prop.size * 0.9, prop.size * 0.5, prop.size * 1.8);
+      ctx.fill();
+      ctx.stroke();
     } else if (prop.type === 'light_fins' || prop.type === 'ice_rings') {
       ctx.strokeStyle = glow;
       ctx.beginPath();
@@ -3199,6 +4102,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     sector.objects.asteroids.forEach((asteroid) => drawAsteroid(asteroid, camera));
     sector.objects.stations.forEach((station) => drawStation(station, camera));
+    sector.objects.traders.forEach((trader) => drawTrader(trader, camera));
     sector.objects.bases.forEach((base) => drawBase(base, camera));
     sector.objects.wrecks.forEach((wreck) => drawWreck(wreck, camera));
     sector.objects.biomeProps.forEach((prop) => drawBiomeProp(prop, camera));
@@ -3207,6 +4111,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       drawRuin(ruin, camera);
     });
     sector.objects.riftBeacons.forEach((beacon) => drawRiftBeacon(beacon, camera));
+    drawEvents(sector, camera);
     drawHomeBase(camera, sector);
 
     sector.objects.anomalies.forEach((anomaly) => {
@@ -3303,10 +4208,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.closePath();
     ctx.fill();
 
-    if (state.shiftBoost.active) {
+    if (state.shiftBoost.active || state.riftDash.active) {
       ctx.fillStyle = 'rgba(125,252,154,0.8)';
       ctx.beginPath();
       ctx.ellipse(0, h * 0.72, w * 0.2, h * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (state.riftDash.active) {
+      ctx.fillStyle = 'rgba(255,209,102,0.9)';
+      ctx.beginPath();
+      ctx.ellipse(0, h * 0.9, w * 0.35, h * 0.25, 0, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -3319,15 +4231,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
-  function drawEnemy(enemy, camera) {
+  function drawEnemy(enemy, camera, sector) {
     const x = enemy.x - camera.x + VIEW.centerX;
     const y = enemy.y - camera.y + VIEW.centerY;
+    const accent = sector ? BIOMES[sector.biome].accent : PALETTE.glow;
+    const baseColor = enemy.isBoss ? PALETTE.ember : enemy.def?.color || PALETTE.rose;
+    const hullColor = mixColor(baseColor, accent, enemy.isBoss ? 0.1 : 0.3);
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(enemy.angle || 0);
-    ctx.fillStyle = enemy.isBoss ? PALETTE.ember : enemy.def?.color || PALETTE.rose;
-    ctx.shadowBlur = enemy.isBoss ? 18 : 8;
-    ctx.shadowColor = ctx.fillStyle;
+    ctx.fillStyle = hullColor;
+    ctx.shadowBlur = enemy.isBoss ? 20 : 10;
+    ctx.shadowColor = hullColor;
     const size = enemy.size;
     ctx.beginPath();
     if (enemy.isBoss) {
@@ -3435,6 +4350,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fill();
     }
 
+    if (enemy.role === 'scout' || enemy.role === 'interceptor') {
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.beginPath();
+      ctx.moveTo(0, size * 0.9);
+      ctx.lineTo(0, size * 1.6);
+      ctx.stroke();
+    }
+
     if (enemy.isBoss && enemy.shield > 0) {
       ctx.strokeStyle = 'rgba(125,252,154,0.6)';
       ctx.beginPath();
@@ -3444,7 +4367,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.restore();
   }
 
-  function drawEntities(camera) {
+  function drawEntities(camera, sector) {
     entities.loot.forEach((drop) => {
       const x = drop.x - camera.x + VIEW.centerX;
       const y = drop.y - camera.y + VIEW.centerY;
@@ -3500,7 +4423,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
 
     entities.enemies.forEach((enemy) => {
-      drawEnemy(enemy, camera);
+      drawEnemy(enemy, camera, sector);
     });
 
     entities.drones.forEach((drone) => {
@@ -3596,21 +4519,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function drawShipStatus() {
     ctx.fillStyle = 'rgba(5,10,18,0.55)';
-    ctx.fillRect(12, VIEW.height - 110, 300, 100);
+    ctx.fillRect(12, VIEW.height - 122, 300, 112);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
-    ctx.strokeRect(12, VIEW.height - 110, 300, 100);
+    ctx.strokeRect(12, VIEW.height - 122, 300, 112);
     ctx.fillStyle = PALETTE.glow;
     ctx.font = '12px sans-serif';
-    ctx.fillText(`Hull ${Math.round(player.hp)}/${Math.round(cachedStats.maxHp)}`, 22, VIEW.height - 80);
-    ctx.fillText(`Shield ${Math.round(player.shield)}/${Math.round(cachedStats.maxShield)}`, 22, VIEW.height - 64);
-    ctx.fillText(`Energy ${Math.round(player.energy)}/${Math.round(cachedStats.energyMax)}`, 22, VIEW.height - 48);
-    ctx.fillText(`Boost ${Math.round(player.boost)}/${Math.round(cachedStats.boostMax)}`, 22, VIEW.height - 32);
-    ctx.fillText(`Fuel ${Math.round(player.fuel)}/${Math.round(cachedStats.fuelMax)}`, 22, VIEW.height - 16);
+    ctx.fillText(`Hull ${Math.round(player.hp)}/${Math.round(cachedStats.maxHp)}`, 22, VIEW.height - 94);
+    ctx.fillText(`Shield ${Math.round(player.shield)}/${Math.round(cachedStats.maxShield)}`, 22, VIEW.height - 78);
+    ctx.fillText(`Energy ${Math.round(player.energy)}/${Math.round(cachedStats.energyMax)}`, 22, VIEW.height - 62);
+    ctx.fillText(`Boost ${Math.round(player.boost)}/${Math.round(cachedStats.boostMax)}`, 22, VIEW.height - 46);
+    ctx.fillText(`Fuel ${Math.round(player.fuel)}/${Math.round(cachedStats.fuelMax)}`, 22, VIEW.height - 30);
+    ctx.fillText(`Rift ${Math.round(player.riftCharge)}%`, 22, VIEW.height - 14);
 
     const primaryWeapon = WEAPONS[player.weapons.primary];
     const secondaryWeapon = WEAPONS[player.weapons.secondary];
-    const primaryAmmo = primaryWeapon?.ammoType ? `${player.ammo[primaryWeapon.ammoType] || 0}` : '∞';
-    const secondaryAmmo = secondaryWeapon?.ammoType ? `${player.ammo[secondaryWeapon.ammoType] || 0}` : '∞';
+    const primaryAmmo = primaryWeapon?.ammoType ? `${player.ammo[primaryWeapon.ammoType] || 0}` : 'inf';
+    const secondaryAmmo = secondaryWeapon?.ammoType ? `${player.ammo[secondaryWeapon.ammoType] || 0}` : 'inf';
     ctx.fillStyle = 'rgba(5,10,18,0.6)';
     ctx.fillRect(VIEW.width - 220, VIEW.height - 92, 200, 80);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
@@ -3759,6 +4683,35 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Press Esc to exit store.', 24, 70 + STORE_ITEMS.length * 20 + 18);
   }
 
+  function drawTraderOverlay() {
+    const trader = state.activeTrader;
+    if (!trader) return;
+    ctx.fillStyle = 'rgba(5,10,18,0.82)';
+    ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+    ctx.fillStyle = PALETTE.glow;
+    ctx.font = '20px sans-serif';
+    ctx.fillText(`${trader.label}`, 24, 36);
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#e0f2ff';
+    ctx.fillText(trader.vibe, 24, 54);
+    if (state.traderQuote) {
+      ctx.fillStyle = PALETTE.gold;
+      ctx.fillText(state.traderQuote, 24, 72);
+    }
+    ctx.font = '13px sans-serif';
+    const options = [
+      '1. Ammo Restock (220 credits)',
+      '2. Sell Cargo',
+      '3. Trade Relic for Blueprint',
+      '4. Buy Mystery Blueprint (600 credits)',
+      '5. Leave'
+    ];
+    options.forEach((opt, idx) => {
+      ctx.fillStyle = idx === state.traderSelection ? PALETTE.gold : '#e0f2ff';
+      ctx.fillText(opt, 24, 90 + idx * 22);
+    });
+  }
+
   function drawLoreOverlay() {
     ctx.fillStyle = 'rgba(5,10,18,0.9)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
@@ -3766,7 +4719,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.font = '20px sans-serif';
     ctx.fillText('Archive Logs', 24, 36);
     ctx.font = '12px sans-serif';
-    ctx.fillText('Press L to close. Use ↑/↓ to scroll.', 24, 54);
+    ctx.fillText('Press L to close. Use Up/Down to scroll.', 24, 54);
 
     const unlocked = LORE_ENTRIES.filter((entry) => player.lore.has(entry.id));
     const start = clamp(state.loreScroll, 0, Math.max(0, unlocked.length - 10));
@@ -3794,6 +4747,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.mode === 'shipyard') drawShipyardOverlay();
     if (state.mode === 'store') drawStoreOverlay();
     if (state.mode === 'lore') drawLoreOverlay();
+    if (state.mode === 'trader') drawTraderOverlay();
   }
 
   function render() {
@@ -3803,11 +4757,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const camera = { x: player.x + shakeX, y: player.y + shakeY };
 
     drawBackground(camera);
+    drawGalacticBand(camera);
     drawDust(camera);
 
     const sector = getCurrentSector();
     drawSectorObjects(sector, camera);
-    drawEntities(camera);
+    drawEntities(camera, sector);
     drawMiniMap();
     drawShipStatus();
     drawVignette();
@@ -3921,6 +4876,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         boost: player.boost,
         energy: player.energy,
         fuel: player.fuel,
+        riftCharge: player.riftCharge,
         angularVelocity: player.angularVelocity,
         throttle: player.throttle,
         flightAssist: player.flightAssist,
@@ -3994,6 +4950,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.boost = savedPlayer.boost ?? player.boost;
     player.energy = savedPlayer.energy ?? player.energy;
     player.fuel = savedPlayer.fuel ?? player.fuel;
+    player.riftCharge = savedPlayer.riftCharge ?? player.riftCharge;
     player.angularVelocity = savedPlayer.angularVelocity ?? player.angularVelocity;
     player.throttle = savedPlayer.throttle ?? player.throttle;
     player.flightAssist = savedPlayer.flightAssist ?? player.flightAssist;
@@ -4162,6 +5119,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           state.mode = 'station';
           return;
         }
+        if (state.mode === 'trader') {
+          state.mode = 'flight';
+          state.paused = false;
+          state.activeTrader = null;
+          return;
+        }
       }
 
       if (state.mode === 'station') {
@@ -4170,6 +5133,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         handleShipyardInput(e.code);
       } else if (state.mode === 'store') {
         handleStoreInput(e.code);
+      } else if (state.mode === 'trader') {
+        handleTraderInput(e.code);
       }
     });
     window.addEventListener('keyup', (e) => {
@@ -4220,6 +5185,66 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const item = STORE_ITEMS[index];
     if (!item) return;
     purchaseStoreItem(item);
+  }
+
+  function handleTraderInput(code) {
+    if (code === 'Escape') {
+      state.mode = 'flight';
+      state.paused = false;
+      state.activeTrader = null;
+      return;
+    }
+    if (code.startsWith('Digit')) {
+      const idx = parseInt(code.replace('Digit', ''), 10) - 1;
+      if (!Number.isNaN(idx)) state.traderSelection = idx;
+    }
+    if (code === 'Digit1') traderAmmoRestock();
+    if (code === 'Digit2') sellCargo();
+    if (code === 'Digit3') tradeRelicForBlueprint();
+    if (code === 'Digit4') buyMysteryBlueprint();
+    if (code === 'Digit5') {
+      state.mode = 'flight';
+      state.paused = false;
+      state.activeTrader = null;
+    }
+  }
+
+  function traderAmmoRestock() {
+    const cost = 220;
+    if (player.credits < cost) {
+      noteStatus('Insufficient credits for restock.');
+      return;
+    }
+    player.credits -= cost;
+    Object.keys(AMMO_TYPES).forEach((key) => {
+      player.ammo[key] = clamp((player.ammo[key] || 0) + Math.floor(AMMO_TYPES[key].max * 0.5), 0, AMMO_TYPES[key].max);
+    });
+    noteStatus('Trader restocked ammo.');
+  }
+
+  function tradeRelicForBlueprint() {
+    if (player.inventory.cargo.relics <= 0) {
+      noteStatus('No relics to trade.');
+      return;
+    }
+    const keys = Object.keys(BLUEPRINTS);
+    const blueprint = keys[Math.floor(Math.random() * keys.length)];
+    player.inventory.cargo.relics -= 1;
+    applyBlueprint(blueprint, true);
+    noteStatus(`Relic traded for ${BLUEPRINTS[blueprint].name}.`);
+  }
+
+  function buyMysteryBlueprint() {
+    const cost = 600;
+    if (player.credits < cost) {
+      noteStatus('Insufficient credits for blueprint.');
+      return;
+    }
+    player.credits -= cost;
+    const keys = Object.keys(BLUEPRINTS);
+    const blueprint = keys[Math.floor(Math.random() * keys.length)];
+    applyBlueprint(blueprint, true);
+    noteStatus(`Blueprint acquired: ${BLUEPRINTS[blueprint].name}.`);
   }
 
   function stationRepair() {
