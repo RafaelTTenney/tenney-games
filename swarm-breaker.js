@@ -65,14 +65,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   const CLUSTER_FIELDS = {
     count: 6,
-    centerRadius: 3.4,
-    minRadius: 1.8,
-    maxRadius: 2.8,
-    spacingMin: 4.2,
-    spacingMax: 5.8,
-    voidThreshold: 0.42,
-    coreThreshold: 0.74,
-    richThreshold: 0.88
+    centerRadius: 3.1,
+    minRadius: 1.6,
+    maxRadius: 2.4,
+    spacingMin: 4.8,
+    spacingMax: 6.8,
+    minRatio: 0.65,
+    maxRatio: 1.35,
+    voidThreshold: 0.46,
+    coreThreshold: 0.72,
+    richThreshold: 0.86
   };
 
   const HYPER = {
@@ -182,6 +184,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     emberveil: ['ash_ruins', 'flare_towers'],
     solstice: ['prism_arches', 'light_fins'],
     blackout: ['obsidian_spires', 'silent_monoliths']
+  };
+
+  const BIOME_VFX = {
+    driftline: { veil: 0.22, ribbon: 0.45, spark: 0.45, pattern: 'ribbons' },
+    glasswake: { veil: 0.18, ribbon: 0.4, spark: 0.35, pattern: 'shards' },
+    stormvault: { veil: 0.28, ribbon: 0.2, spark: 0.35, pattern: 'storm' },
+    redshift: { veil: 0.26, ribbon: 0.35, spark: 0.5, pattern: 'embers' },
+    bastion: { veil: 0.2, ribbon: 0.3, spark: 0.3, pattern: 'grid' },
+    darklane: { veil: 0.25, ribbon: 0.15, spark: 0.25, pattern: 'void' },
+    interstice: { veil: 0.12, ribbon: 0.1, spark: 0.2, pattern: 'calm' },
+    starforge: { veil: 0.24, ribbon: 0.33, spark: 0.45, pattern: 'forge' },
+    hollow: { veil: 0.22, ribbon: 0.25, spark: 0.4, pattern: 'echo' },
+    emberveil: { veil: 0.3, ribbon: 0.35, spark: 0.55, pattern: 'embers' },
+    solstice: { veil: 0.2, ribbon: 0.45, spark: 0.4, pattern: 'prism' },
+    blackout: { veil: 0.32, ribbon: 0.12, spark: 0.2, pattern: 'void' }
   };
 
   const PROP_HAZARDS = {
@@ -1482,11 +1499,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function buildClusterMap() {
     const rng = mulberry32(WORLD_SEED * 7 + 123);
     const clusters = [];
+    const centerRatio = randRange(rng, 0.9, 1.2);
     clusters.push({
       x: 0,
       y: 0,
       radius: WORLD.sectorSize * CLUSTER_FIELDS.centerRadius,
-      strength: 1.15
+      strength: 1.15,
+      ratio: centerRatio,
+      angle: rng() * Math.PI * 2
     });
     for (let i = 1; i < CLUSTER_FIELDS.count; i += 1) {
       const angle = rng() * Math.PI * 2;
@@ -1494,14 +1514,29 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const ringMax = WORLD.sectorSize * CLUSTER_FIELDS.spacingMax;
       const radius = randRange(rng, ringMin, ringMax);
       const size = WORLD.sectorSize * randRange(rng, CLUSTER_FIELDS.minRadius, CLUSTER_FIELDS.maxRadius);
+      const ratio = randRange(rng, CLUSTER_FIELDS.minRatio, CLUSTER_FIELDS.maxRatio);
       clusters.push({
         x: Math.cos(angle) * radius,
         y: Math.sin(angle) * radius,
         radius: size,
-        strength: randRange(rng, 0.9, 1.1)
+        strength: randRange(rng, 0.9, 1.1),
+        ratio,
+        angle: rng() * Math.PI * 2
       });
     }
     world.clusterFields = clusters;
+  }
+
+  function getVoidCorridorFactor(gx, gy) {
+    const n = smoothNoise(gx * 0.055, gy * 0.055, WORLD_SEED * 0.19);
+    const band = 1 - Math.min(1, Math.abs(n - 0.5) / 0.11);
+    const pinch = smoothNoise(gx * 0.12 + 9, gy * 0.12 - 11, WORLD_SEED * 0.29);
+    return clamp((band - 0.35) * 1.6 * (0.7 + pinch * 0.5), 0, 1);
+  }
+
+  function getVoidPocketFactor(gx, gy) {
+    const n = smoothNoise(gx * 0.025 + 17, gy * 0.025 - 23, WORLD_SEED * 0.33);
+    return clamp((0.42 - n) * 2.4, 0, 1);
   }
 
   function getClusterDensity(gx, gy) {
@@ -1509,16 +1544,29 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const center = posFromGrid(gx, gy);
     let density = 0;
     world.clusterFields.forEach((cluster) => {
-      const d = dist(center.x, center.y, cluster.x, cluster.y);
-      if (d <= cluster.radius) {
-        const local = (1 - d / cluster.radius) * (cluster.strength || 1);
+      const dx = center.x - cluster.x;
+      const dy = center.y - cluster.y;
+      const ratio = cluster.ratio || 1;
+      const cosA = Math.cos(cluster.angle || 0);
+      const sinA = Math.sin(cluster.angle || 0);
+      const rx = cluster.radius * ratio;
+      const ry = cluster.radius / ratio;
+      const nx = (dx * cosA + dy * sinA) / rx;
+      const ny = (-dx * sinA + dy * cosA) / ry;
+      const d = Math.hypot(nx, ny);
+      if (d <= 1) {
+        const local = (1 - d) * (cluster.strength || 1);
         if (local > density) density = local;
       }
     });
     const ripple = smoothNoise(gx * 0.08, gy * 0.08, WORLD_SEED * 0.13);
     const radial = clamp(depthFromGrid(gx, gy) / (WORLD.gridRadius || 1), 0, 1);
     const falloff = lerp(1, 0.55, radial);
+    const corridor = getVoidCorridorFactor(gx, gy);
+    const pocket = getVoidPocketFactor(gx, gy);
     density *= (0.7 + ripple * 0.6) * falloff;
+    density *= 1 - corridor * 0.55;
+    density *= 1 - pocket * 0.35;
     return clamp(density, 0, 1);
   }
 
@@ -1526,8 +1574,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const depth = depthFromGrid(gx, gy);
     let biome = pickBiome(depth, gx, gy);
     const density = getClusterDensity(gx, gy);
+    const corridor = getVoidCorridorFactor(gx, gy);
+    const pocket = getVoidPocketFactor(gx, gy);
     const radial = clamp(depth / (WORLD.gridRadius || 1), 0, 1);
-    const voidThreshold = CLUSTER_FIELDS.voidThreshold + radial * 0.12;
+    const voidThreshold = CLUSTER_FIELDS.voidThreshold + radial * 0.14;
     if (biome === 'interstice' && density >= voidThreshold) {
       const bandIndex = Math.min(REGION_BANDS.length - 1, Math.max(0, Math.floor((depth - 1) / 2)));
       const band = REGION_BANDS[bandIndex];
@@ -1540,7 +1590,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
     let zoneType = pickZoneType(depth, gx, gy, biome);
     let isVoid = false;
-    if (density < voidThreshold) {
+    const openSpace = clamp(Math.max(corridor, pocket * 0.8), 0, 1);
+    if (density < voidThreshold || corridor > 0.78 || pocket > 0.9) {
       biome = 'interstice';
       zoneType = 'expanse';
       isVoid = true;
@@ -1551,6 +1602,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       zoneType,
       density,
       isVoid,
+      corridor,
+      openSpace,
       isCore: density >= CLUSTER_FIELDS.coreThreshold,
       isRich: density >= CLUSTER_FIELDS.richThreshold
     };
@@ -1673,6 +1726,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       zone,
       clusterDensity: profile.density,
       isVoid: profile.isVoid,
+      openSpace: profile.openSpace,
+      corridor: profile.corridor,
       isCore: profile.isCore,
       isRich: profile.isRich,
       name: getSystemName(gx, gy),
@@ -1755,10 +1810,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const isCluster = sector.zoneType === 'cluster';
     const isExpanse = sector.zoneType === 'expanse';
     const density = sector.clusterDensity ?? 0;
-    const densityScale = lerp(0.3, 1.9, density);
+    const openSpace = sector.openSpace || 0;
+    const densityScale = lerp(0.25, 1.9, density) * lerp(1, 0.55, openSpace);
     const coreBoost = sector.isCore ? 1.55 : 1;
     const richBoost = sector.isRich ? 1.35 : 1;
-    const fieldRadius = WORLD.sectorSize * (sector.isCore ? 0.08 : sector.isVoid ? 0.01 : 0.05);
+    const fieldRadius = WORLD.sectorSize * (sector.isCore ? 0.08 : sector.isVoid ? 0.008 : 0.05) * (1 + openSpace * 0.45);
     const innerField = fieldRadius * 0.6;
     const wideField = fieldRadius * 1.15;
     const clearZones = [];
@@ -1773,11 +1829,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         });
       }
     }
+    if (openSpace > 0.35) {
+      const clearCount = 1 + Math.floor(openSpace * 2.5);
+      for (let i = 0; i < clearCount; i += 1) {
+        clearZones.push({
+          x: center.x + randRange(rng, -wideField, wideField),
+          y: center.y + randRange(rng, -wideField, wideField),
+          radius: randRange(rng, fieldRadius * 0.5, fieldRadius * 0.8)
+        });
+      }
+    }
 
     const inClearZone = (x, y) => clearZones.some((zone) => dist(x, y, zone.x, zone.y) < zone.radius);
 
+    const asteroidChance = (sector.isCore ? 0.68 : 0.35) * (1 - openSpace * 0.75);
     const asteroidFields = isCluster && !sector.isVoid && sector.zoneType !== 'rift'
-      ? (rng() < (sector.isCore ? 0.7 : 0.4) ? 1 + Math.floor(rng() * 2) : 0)
+      ? (rng() < asteroidChance ? 1 + Math.floor(rng() * (openSpace > 0.45 ? 1 : 2)) : 0)
       : 0;
     for (let f = 0; f < asteroidFields; f += 1) {
       const fieldCenter = {
@@ -1785,7 +1852,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         y: center.y + randRange(rng, -fieldRadius, fieldRadius)
       };
       const fieldSpan = randRange(rng, fieldRadius * 0.25, fieldRadius * 0.55);
-      const count = Math.floor(randRange(rng, 6, 14) * densityScale * coreBoost);
+      const count = Math.floor(randRange(rng, 6, 14) * densityScale * coreBoost * (1 - openSpace * 0.55));
       for (let i = 0; i < count; i += 1) {
         const radius = randRange(rng, 14, 44);
         const ax = fieldCenter.x + randRange(rng, -fieldSpan, fieldSpan);
@@ -1811,7 +1878,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           : isExpanse
             ? 0.05 + density * 0.12
             : 0.14 + density * 0.25;
-    if (rng() < planetChance) {
+    const finalPlanetChance = planetChance * (1 - openSpace * 0.35);
+    if (rng() < finalPlanetChance) {
       const planetCount = sector.isCore && rng() < 0.55 ? 2 : 1;
       for (let p = 0; p < planetCount; p += 1) {
         const planet = {
@@ -1824,7 +1892,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         };
         sector.objects.planets.push(planet);
         if (isCluster && rng() < (sector.isCore ? 0.7 : 0.45)) {
-          const beltCount = 8 + Math.floor(rng() * 14 * densityScale);
+          const beltCount = Math.max(3, Math.floor((8 + rng() * 14) * densityScale * (1 - openSpace * 0.6)));
           const beltRadius = planet.radius + randRange(rng, 80, 170);
           for (let i = 0; i < beltCount; i += 1) {
             const angle = rng() * Math.PI * 2;
@@ -4572,6 +4640,173 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
+  function drawBiomeAtmosphere(camera) {
+    const sector = getCurrentSector();
+    const biome = BIOMES[sector.biome];
+    const vfx = BIOME_VFX[sector.biome] || { veil: 0.15, ribbon: 0.2, spark: 0.2, pattern: 'calm' };
+    const hue = biome.hue;
+    const time = state.time * 0.08;
+    const offsetX = VIEW.centerX + Math.sin(time + camera.x * 0.00004) * VIEW.width * 0.22;
+    const offsetY = VIEW.centerY + Math.cos(time * 1.2 + camera.y * 0.00005) * VIEW.height * 0.18;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const veil = ctx.createRadialGradient(
+      offsetX,
+      offsetY,
+      80,
+      VIEW.centerX,
+      VIEW.centerY,
+      Math.max(VIEW.width, VIEW.height) * 0.9
+    );
+    veil.addColorStop(0, `hsla(${hue},70%,32%,${0.18 + vfx.veil * 0.5})`);
+    veil.addColorStop(0.6, `hsla(${hue + 18},70%,18%,${vfx.veil})`);
+    veil.addColorStop(1, 'rgba(5,10,18,0)');
+    ctx.fillStyle = veil;
+    ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+
+    const ribbonCount = Math.max(1, Math.floor(2 + vfx.ribbon * 4));
+    for (let i = 0; i < ribbonCount; i += 1) {
+      const y = (i / ribbonCount) * VIEW.height + Math.sin(state.time * 0.2 + i) * 60;
+      ctx.strokeStyle = `hsla(${hue + 12},80%,60%,${0.06 + vfx.ribbon * 0.18})`;
+      ctx.lineWidth = 24 - i * 3;
+      ctx.beginPath();
+      ctx.moveTo(-100, y);
+      ctx.bezierCurveTo(
+        VIEW.width * 0.25,
+        y - 80 + Math.sin(time + i) * 40,
+        VIEW.width * 0.75,
+        y + 80 + Math.cos(time + i) * 40,
+        VIEW.width + 100,
+        y
+      );
+      ctx.stroke();
+    }
+
+    switch (vfx.pattern) {
+      case 'shards': {
+        ctx.globalAlpha = 0.25;
+        ctx.strokeStyle = `hsla(${hue + 30},80%,70%,0.6)`;
+        ctx.lineWidth = 1.2;
+        for (let i = 0; i < 4; i += 1) {
+          const px = (i * 0.28 + 0.1) * VIEW.width;
+          const py = (i * 0.22 + 0.1) * VIEW.height;
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(px + 120, py - 60);
+          ctx.lineTo(px + 220, py + 40);
+          ctx.lineTo(px + 80, py + 120);
+          ctx.closePath();
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case 'storm': {
+        ctx.strokeStyle = `hsla(${hue + 20},75%,65%,0.3)`;
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 3; i += 1) {
+          ctx.beginPath();
+          ctx.arc(VIEW.centerX, VIEW.centerY, 120 + i * 90, time + i, time + Math.PI + i);
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'grid': {
+        ctx.strokeStyle = `hsla(${hue},60%,60%,0.2)`;
+        ctx.lineWidth = 1;
+        for (let i = -2; i <= 2; i += 1) {
+          ctx.beginPath();
+          ctx.moveTo(0, VIEW.centerY + i * 120);
+          ctx.lineTo(VIEW.width, VIEW.centerY + i * 120 + 60);
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'forge': {
+        ctx.strokeStyle = `hsla(${hue + 10},80%,65%,0.35)`;
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 6; i += 1) {
+          const angle = (Math.PI * 2 * i) / 6 + time * 0.6;
+          ctx.beginPath();
+          ctx.moveTo(VIEW.centerX, VIEW.centerY);
+          ctx.lineTo(VIEW.centerX + Math.cos(angle) * VIEW.width * 0.6, VIEW.centerY + Math.sin(angle) * VIEW.height * 0.6);
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'echo': {
+        ctx.strokeStyle = `hsla(${hue + 40},70%,70%,0.25)`;
+        ctx.lineWidth = 1.6;
+        for (let i = 0; i < 4; i += 1) {
+          ctx.beginPath();
+          ctx.arc(VIEW.centerX, VIEW.centerY, 80 + i * 90, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'prism': {
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = `hsla(${hue + 30},80%,70%,0.4)`;
+        ctx.beginPath();
+        ctx.moveTo(VIEW.centerX - 60, VIEW.centerY - 160);
+        ctx.lineTo(VIEW.centerX + 180, VIEW.centerY);
+        ctx.lineTo(VIEW.centerX - 60, VIEW.centerY + 160);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case 'void': {
+        ctx.globalCompositeOperation = 'multiply';
+        const dark = ctx.createRadialGradient(
+          VIEW.centerX,
+          VIEW.centerY,
+          VIEW.width * 0.1,
+          VIEW.centerX,
+          VIEW.centerY,
+          VIEW.width * 0.9
+        );
+        dark.addColorStop(0, 'rgba(5,10,18,0)');
+        dark.addColorStop(1, 'rgba(5,10,18,0.55)');
+        ctx.fillStyle = dark;
+        ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+        ctx.globalCompositeOperation = 'screen';
+        break;
+      }
+      case 'embers': {
+        ctx.globalAlpha = 0.55;
+        for (let i = 0; i < 7; i += 1) {
+          const px = (Math.sin(time * 2 + i) * 0.4 + 0.5) * VIEW.width;
+          const py = (Math.cos(time * 1.6 + i * 0.7) * 0.4 + 0.5) * VIEW.height;
+          const r = 40 + i * 18;
+          const ember = ctx.createRadialGradient(px, py, 0, px, py, r);
+          ember.addColorStop(0, `hsla(${hue + 10},80%,60%,0.6)`);
+          ember.addColorStop(1, 'rgba(255,120,60,0)');
+          ctx.fillStyle = ember;
+          ctx.fillRect(px - r, py - r, r * 2, r * 2);
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      default:
+        break;
+    }
+
+    const sparkCount = 6 + Math.floor(vfx.spark * 10);
+    for (let i = 0; i < sparkCount; i += 1) {
+      const px = (Math.sin(time * 1.4 + i * 1.9) * 0.45 + 0.5) * VIEW.width;
+      const py = (Math.cos(time * 1.1 + i * 1.3) * 0.45 + 0.5) * VIEW.height;
+      const r = 6 + (i % 3) * 3;
+      ctx.fillStyle = `hsla(${hue + 12},80%,70%,${0.12 + vfx.spark * 0.2})`;
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
   function drawGalacticBand(camera) {
     const sector = getCurrentSector();
     const hue = BIOMES[sector.biome].hue;
@@ -4614,12 +4849,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const biome = BIOMES[sector.biome];
     const zone = sector.zone || ZONE_TYPES.cluster;
     const voidScale = sector.isVoid ? 0.35 : 1;
+    const openSpace = sector.openSpace || 0;
     ctx.fillStyle = biome.dust;
     dustField.forEach((dust) => {
       const screenX = dust.x - camera.x * 0.25 + VIEW.centerX;
       const screenY = dust.y - camera.y * 0.25 + VIEW.centerY;
       if (screenX < -50 || screenX > VIEW.width + 50 || screenY < -50 || screenY > VIEW.height + 50) return;
-      ctx.globalAlpha = dust.alpha * zone.dustScale * voidScale;
+      ctx.globalAlpha = dust.alpha * zone.dustScale * voidScale * (1 - openSpace * 0.6);
       ctx.beginPath();
       ctx.arc(screenX, screenY, dust.size, 0, Math.PI * 2);
       ctx.fill();
@@ -4764,39 +5000,97 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function drawBase(base, camera) {
     const x = base.x - camera.x + VIEW.centerX;
     const y = base.y - camera.y + VIEW.centerY;
+    const color = base.def.color;
+    const type = base.def.id;
+    const r = base.radius;
     ctx.save();
     ctx.translate(x, y);
-    ctx.fillStyle = 'rgba(16,24,40,0.85)';
-    ctx.strokeStyle = base.def.color;
-    ctx.lineWidth = 2;
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = color;
+    const coreGrad = ctx.createRadialGradient(0, -r * 0.4, r * 0.2, 0, 0, r * 1.1);
+    coreGrad.addColorStop(0, mixColor(color, '#ffffff', 0.35));
+    coreGrad.addColorStop(1, 'rgba(10,18,32,0.9)');
+    ctx.fillStyle = coreGrad;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.2;
+
     ctx.beginPath();
-    ctx.arc(0, 0, base.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.beginPath();
-    for (let i = 0; i < 6; i += 1) {
-      const angle = (Math.PI * 2 * i) / 6;
-      const r = base.radius * 0.55;
-      if (i === 0) ctx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
-      else ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+    if (type === 'fortress') {
+      for (let i = 0; i < 6; i += 1) {
+        const a = (Math.PI * 2 * i) / 6;
+        const rr = r * 0.95;
+        if (i === 0) ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+        else ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+    } else if (type === 'refinery') {
+      ctx.moveTo(0, -r * 0.95);
+      ctx.lineTo(r * 0.8, -r * 0.2);
+      ctx.lineTo(r * 0.6, r * 0.9);
+      ctx.lineTo(-r * 0.6, r * 0.9);
+      ctx.lineTo(-r * 0.8, -r * 0.2);
+    } else if (type === 'relay') {
+      ctx.moveTo(0, -r * 0.9);
+      ctx.lineTo(r * 0.85, 0);
+      ctx.lineTo(0, r * 0.9);
+      ctx.lineTo(-r * 0.85, 0);
+    } else {
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
     }
     ctx.closePath();
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.fill();
     ctx.stroke();
 
-    base.turrets.forEach((turret) => {
-      const tx = Math.cos(turret.angle) * base.radius * 0.85;
-      const ty = Math.sin(turret.angle) * base.radius * 0.85;
-      ctx.fillStyle = base.def.color;
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.65, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const armCount = type === 'fortress' ? 6 : type === 'refinery' ? 4 : 5;
+    ctx.strokeStyle = `rgba(255,255,255,0.2)`;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < armCount; i += 1) {
+      const angle = (Math.PI * 2 * i) / armCount;
       ctx.beginPath();
-      ctx.arc(tx, ty, 4, 0, Math.PI * 2);
+      ctx.moveTo(Math.cos(angle) * r * 0.35, Math.sin(angle) * r * 0.35);
+      ctx.lineTo(Math.cos(angle) * r * 0.95, Math.sin(angle) * r * 0.95);
+      ctx.stroke();
+    }
+
+    if (type === 'refinery') {
+      ctx.fillStyle = mixColor(color, '#141d2b', 0.4);
+      ctx.strokeStyle = color;
+      [-1, 1].forEach((dir) => {
+        ctx.beginPath();
+        ctx.arc(dir * r * 0.9, r * 0.25, r * 0.22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      });
+    }
+
+    base.turrets.forEach((turret) => {
+      ctx.save();
+      ctx.rotate(turret.angle);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(0, -r * 0.95);
+      ctx.lineTo(r * 0.08, -r * 0.75);
+      ctx.lineTo(-r * 0.08, -r * 0.75);
+      ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.beginPath();
+      ctx.moveTo(0, -r * 0.8);
+      ctx.lineTo(0, -r * 1.05);
+      ctx.stroke();
+      ctx.restore();
     });
 
     if (base.shield > 0) {
       ctx.strokeStyle = 'rgba(109,240,255,0.4)';
       ctx.beginPath();
-      ctx.arc(0, 0, base.radius + 10, 0, Math.PI * 2);
+      ctx.arc(0, 0, r + 12, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.restore();
@@ -4853,86 +5147,155 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const y = prop.y - camera.y + VIEW.centerY;
     ctx.save();
     ctx.translate(x, y);
-    const glow = `hsla(${prop.hue},70%,65%,0.6)`;
-    ctx.strokeStyle = glow;
-    ctx.fillStyle = `hsla(${prop.hue},45%,30%,0.5)`;
-    ctx.lineWidth = 1.4;
+    const size = prop.size;
+    const hue = prop.hue;
+    const glow = `hsla(${hue},80%,65%,0.7)`;
+    const core = `hsla(${hue + 10},70%,45%,0.85)`;
+    const shadow = `hsla(${hue - 10},40%,18%,0.55)`;
+    ctx.lineWidth = 1.6;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = glow;
+
     if (prop.type === 'ice_spires' || prop.type === 'obsidian_spires') {
+      const grad = ctx.createLinearGradient(0, -size, 0, size);
+      grad.addColorStop(0, core);
+      grad.addColorStop(1, shadow);
+      ctx.fillStyle = grad;
+      ctx.strokeStyle = glow;
+      for (let i = -1; i <= 1; i += 1) {
+        const offset = i * size * 0.35;
+        ctx.beginPath();
+        ctx.moveTo(offset, -size * 0.9);
+        ctx.lineTo(offset + size * 0.25, size * 0.6);
+        ctx.lineTo(offset - size * 0.25, size * 0.6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    } else if (prop.type === 'glass_shards') {
+      ctx.strokeStyle = glow;
+      ctx.fillStyle = `hsla(${hue},60%,40%,0.5)`;
+      for (let i = 0; i < 3; i += 1) {
+        const offsetX = (i - 1) * size * 0.3;
+        const offsetY = (i % 2 ? 1 : -1) * size * 0.15;
+        ctx.beginPath();
+        ctx.moveTo(offsetX, offsetY - size * 0.7);
+        ctx.lineTo(offsetX + size * 0.4, offsetY - size * 0.1);
+        ctx.lineTo(offsetX, offsetY + size * 0.6);
+        ctx.lineTo(offsetX - size * 0.4, offsetY - size * 0.1);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    } else if (prop.type === 'prism_arches' || prop.type === 'wayline_arches') {
+      ctx.strokeStyle = glow;
+      ctx.fillStyle = `hsla(${hue},60%,32%,0.45)`;
       ctx.beginPath();
-      ctx.moveTo(0, -prop.size);
-      ctx.lineTo(prop.size * 0.4, prop.size * 0.6);
-      ctx.lineTo(-prop.size * 0.4, prop.size * 0.6);
+      ctx.moveTo(-size * 0.8, size * 0.3);
+      ctx.lineTo(-size * 0.35, -size * 0.6);
+      ctx.lineTo(size * 0.35, -size * 0.6);
+      ctx.lineTo(size * 0.8, size * 0.3);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-    } else if (prop.type === 'glass_shards' || prop.type === 'prism_arches' || prop.type === 'wayline_arches') {
       ctx.beginPath();
-      ctx.moveTo(-prop.size * 0.6, prop.size * 0.2);
-      ctx.lineTo(0, -prop.size * 0.7);
-      ctx.lineTo(prop.size * 0.6, prop.size * 0.3);
-      ctx.lineTo(0, prop.size * 0.7);
-      ctx.closePath();
-      ctx.fill();
+      ctx.ellipse(0, size * 0.25, size * 0.55, size * 0.2, 0, 0, Math.PI);
       ctx.stroke();
     } else if (prop.type === 'ion_pylons' || prop.type === 'defense_pylons' || prop.type === 'flare_towers' || prop.type === 'arc_emitters' || prop.type === 'relay_spires') {
+      ctx.strokeStyle = glow;
+      ctx.fillStyle = shadow;
       ctx.beginPath();
-      ctx.rect(-prop.size * 0.25, -prop.size * 0.7, prop.size * 0.5, prop.size * 1.4);
+      ctx.rect(-size * 0.3, -size * 0.85, size * 0.6, size * 1.5);
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(0, -prop.size * 0.8, prop.size * 0.25, 0, Math.PI * 2);
+      ctx.arc(0, -size * 0.85, size * 0.28, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, size * 0.3, size * 0.35, 0, Math.PI * 2);
       ctx.stroke();
     } else if (prop.type === 'plasma_flares' || prop.type === 'ember_flows') {
       ctx.strokeStyle = glow;
+      ctx.fillStyle = `hsla(${hue + 5},70%,50%,0.45)`;
       ctx.beginPath();
-      ctx.moveTo(-prop.size * 0.6, 0);
-      ctx.quadraticCurveTo(0, -prop.size * 0.8, prop.size * 0.6, 0);
-      ctx.quadraticCurveTo(0, prop.size * 0.8, -prop.size * 0.6, 0);
+      ctx.moveTo(-size * 0.7, size * 0.1);
+      ctx.quadraticCurveTo(0, -size * 0.9, size * 0.7, size * 0.1);
+      ctx.quadraticCurveTo(0, size * 0.8, -size * 0.7, size * 0.1);
+      ctx.closePath();
+      ctx.fill();
       ctx.stroke();
     } else if (prop.type === 'shadow_mines' || prop.type === 'void_buoys') {
+      ctx.strokeStyle = glow;
+      ctx.fillStyle = 'rgba(20,26,40,0.7)';
       ctx.beginPath();
-      ctx.arc(0, 0, prop.size * 0.45, 0, Math.PI * 2);
+      ctx.arc(0, 0, size * 0.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(-prop.size * 0.6, 0);
-      ctx.lineTo(prop.size * 0.6, 0);
+      ctx.moveTo(-size * 0.7, 0);
+      ctx.lineTo(size * 0.7, 0);
+      ctx.moveTo(0, -size * 0.7);
+      ctx.lineTo(0, size * 0.7);
       ctx.stroke();
     } else if (prop.type === 'debris_cluster' || prop.type === 'ash_ruins') {
-      for (let i = 0; i < 4; i += 1) {
-        const angle = (Math.PI * 2 * i) / 4;
-        const r = prop.size * 0.4;
+      ctx.strokeStyle = glow;
+      ctx.fillStyle = `hsla(${hue},35%,30%,0.5)`;
+      for (let i = 0; i < 5; i += 1) {
+        const angle = (Math.PI * 2 * i) / 5;
+        const r = size * 0.45;
         ctx.beginPath();
-        ctx.rect(Math.cos(angle) * r, Math.sin(angle) * r, prop.size * 0.2, prop.size * 0.2);
+        ctx.rect(Math.cos(angle) * r, Math.sin(angle) * r, size * 0.25, size * 0.2);
         ctx.fill();
         ctx.stroke();
       }
     } else if (prop.type === 'silent_monoliths') {
+      ctx.strokeStyle = glow;
+      ctx.fillStyle = `hsla(${hue},30%,18%,0.6)`;
       ctx.beginPath();
-      ctx.rect(-prop.size * 0.25, -prop.size * 0.9, prop.size * 0.5, prop.size * 1.8);
+      ctx.rect(-size * 0.3, -size * 0.95, size * 0.6, size * 1.9);
       ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = `hsla(${hue + 20},60%,65%,0.3)`;
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.15, -size * 0.6);
+      ctx.lineTo(size * 0.15, -size * 0.1);
+      ctx.lineTo(-size * 0.05, size * 0.4);
       ctx.stroke();
     } else if (prop.type === 'light_fins' || prop.type === 'ice_rings') {
       ctx.strokeStyle = glow;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.ellipse(0, 0, prop.size * 0.7, prop.size * 0.3, 0.3, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, size * 0.8, size * 0.32, 0.2, 0, Math.PI * 2);
       ctx.stroke();
-    } else if (prop.type === 'forge_fragments' || prop.type === 'relic_spires' || prop.type === 'echo_stones') {
       ctx.beginPath();
-      ctx.moveTo(-prop.size * 0.5, -prop.size * 0.2);
-      ctx.lineTo(0, -prop.size * 0.7);
-      ctx.lineTo(prop.size * 0.6, -prop.size * 0.1);
-      ctx.lineTo(prop.size * 0.3, prop.size * 0.7);
-      ctx.lineTo(-prop.size * 0.4, prop.size * 0.4);
+      ctx.moveTo(-size * 0.4, -size * 0.1);
+      ctx.lineTo(size * 0.4, size * 0.1);
+      ctx.stroke();
+      ctx.lineWidth = 1.6;
+    } else if (prop.type === 'forge_fragments' || prop.type === 'relic_spires' || prop.type === 'echo_stones') {
+      ctx.strokeStyle = glow;
+      ctx.fillStyle = `hsla(${hue},40%,25%,0.6)`;
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.55, -size * 0.2);
+      ctx.lineTo(0, -size * 0.8);
+      ctx.lineTo(size * 0.6, -size * 0.1);
+      ctx.lineTo(size * 0.3, size * 0.7);
+      ctx.lineTo(-size * 0.45, size * 0.4);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-    } else {
       ctx.beginPath();
-      ctx.arc(0, 0, prop.size * 0.5, 0, Math.PI * 2);
+      ctx.arc(0, -size * 0.25, size * 0.18, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = glow;
+      ctx.fillStyle = shadow;
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
+    ctx.shadowBlur = 0;
     ctx.restore();
   }
 
@@ -5309,6 +5672,31 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.stroke();
     ctx.shadowBlur = 0;
 
+    ctx.strokeStyle = mixColor(hullColor, '#ffffff', 0.35);
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    if (enemy.role === 'bomber' || enemy.role === 'gunship') {
+      ctx.moveTo(-size * 0.6, 0);
+      ctx.lineTo(size * 0.6, 0);
+      ctx.moveTo(0, -size * 0.4);
+      ctx.lineTo(0, size * 0.6);
+    } else if (enemy.role === 'interceptor' || enemy.role === 'fighter') {
+      ctx.moveTo(-size * 0.4, -size * 0.1);
+      ctx.lineTo(size * 0.4, -size * 0.1);
+      ctx.moveTo(0, -size * 0.6);
+      ctx.lineTo(0, size * 0.4);
+    } else if (enemy.role === 'transport' || enemy.role === 'carrier') {
+      ctx.moveTo(-size * 0.9, -size * 0.2);
+      ctx.lineTo(size * 0.9, -size * 0.2);
+      ctx.moveTo(-size * 0.6, size * 0.35);
+      ctx.lineTo(size * 0.6, size * 0.35);
+    } else if (enemy.role === 'turret') {
+      ctx.moveTo(-size * 0.4, 0);
+      ctx.lineTo(size * 0.4, 0);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
     if (enemy.role === 'scout' || enemy.role === 'interceptor' || enemy.role === 'fighter' || enemy.role === 'gunship') {
       ctx.fillStyle = `rgba(220,240,255,${0.35 + trim * 0.25})`;
       ctx.beginPath();
@@ -5327,6 +5715,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.beginPath();
       ctx.rect(-size * 0.25, -size * 0.05, size * 0.5, size * 0.55);
       ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.strokeRect(-size * 0.45, size * 0.15, size * 0.9, size * 0.3);
     }
     if (enemy.role === 'sniper') {
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
@@ -5334,9 +5724,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.rect(-size * 0.08, -size * 0.95, size * 0.16, size * 1.4);
       ctx.fill();
     }
+    if (enemy.role === 'carrier') {
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.beginPath();
+      ctx.arc(-size * 0.7, size * 0.2, size * 0.22, 0, Math.PI * 2);
+      ctx.arc(size * 0.7, size * 0.2, size * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (enemy.role === 'turret') {
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.35, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.rect(-size * 0.08, -size * 0.6, size * 0.16, size * 0.5);
+      ctx.fill();
+    }
 
-    const engineColor = enemy.isBoss ? 'rgba(255,200,160,0.75)' : 'rgba(255,200,160,0.6)';
+    const engineColor = enemy.isBoss ? 'rgba(255,200,160,0.85)' : 'rgba(255,200,160,0.65)';
     ctx.fillStyle = engineColor;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = engineColor;
     const engines = [];
     if (enemy.isBoss) engines.push([-size * 0.7, size * 0.85], [size * 0.7, size * 0.85]);
     if (enemy.role === 'scout') engines.push([0, size * 0.7]);
@@ -5348,9 +5756,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (enemy.role === 'sniper') engines.push([0, size * 0.8]);
     engines.forEach((engine) => {
       ctx.beginPath();
-      ctx.arc(engine[0], engine[1], size * 0.1, 0, Math.PI * 2);
+      ctx.arc(engine[0], engine[1], size * (enemy.role === 'carrier' ? 0.12 : 0.1), 0, Math.PI * 2);
       ctx.fill();
     });
+    ctx.shadowBlur = 0;
 
     if (enemy.isBoss && enemy.shield > 0) {
       ctx.strokeStyle = 'rgba(125,252,154,0.6)';
@@ -6107,6 +6516,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const camera = { x: player.x + shakeX, y: player.y + shakeY };
 
     drawBackground(camera);
+    drawBiomeAtmosphere(camera);
     drawGalacticBand(camera);
     drawDust(camera);
 
