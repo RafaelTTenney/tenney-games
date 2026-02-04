@@ -569,7 +569,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       'Scavenger: That thruster glow looks hot.',
       'Scavenger: Need ammo? You know the price.',
       'Scavenger: I can smell a good haul.',
-      'Scavenger: Don't let the cartel find me.',
+      'Scavenger: Don\'t let the cartel find me.',
       'Scavenger: This sector has teeth.',
       'Scavenger: Salvage keeps us alive.',
       'Scavenger: Bring proof, get paid.'
