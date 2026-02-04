@@ -50,14 +50,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   };
 
   const GAME_ID = 'spacex-exploration-flagship';
-  const SAVE_VERSION = 9;
+  const SAVE_VERSION = 10;
   const SAVE_KEY = `swarmBreakerSave_v${SAVE_VERSION}`;
   const WORLD_SEED = 284113;
 
   const WORLD = {
-    sectorSize: 1050,
-    gridRadius: 18,
-    maxDepth: 14
+    sectorSize: 1350,
+    gridRadius: 30,
+    maxDepth: 20
   };
   WORLD.size = (WORLD.gridRadius * 2 + 1) * WORLD.sectorSize;
   WORLD.half = WORLD.size / 2;
@@ -86,6 +86,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     gold: '#ffd166',
     steel: '#283241'
   };
+
+  const ATLAS_SIGILS = [
+    { biome: 'driftline', name: 'Driftline Sigil' },
+    { biome: 'glasswake', name: 'Glasswake Sigil' },
+    { biome: 'stormvault', name: 'Stormvault Sigil' },
+    { biome: 'redshift', name: 'Redshift Sigil' },
+    { biome: 'bastion', name: 'Bastion Sigil' },
+    { biome: 'darklane', name: 'Darklane Sigil' },
+    { biome: 'starforge', name: 'Starforge Sigil' },
+    { biome: 'hollow', name: 'Hollow Sigil' },
+    { biome: 'emberveil', name: 'Emberveil Sigil' },
+    { biome: 'solstice', name: 'Solstice Sigil' },
+    { biome: 'blackout', name: 'Blackout Sigil' }
+  ];
+  const ATLAS_REQUIRED = 8;
 
   const BIOMES = {
     driftline: { name: 'Driftline', hue: 185, accent: '#6df0ff', fog: 'rgba(60,110,140,0.12)', dust: 'rgba(110,200,255,0.14)', threat: 0.85 },
@@ -1021,7 +1036,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     bestDistance: 0,
     awaitingBrief: true,
     scanPulse: 0,
-    scanRadius: 540,
+    scanRadius: 820,
     mapOpen: false,
     storyLog: [],
     menuSelection: 0,
@@ -1044,13 +1059,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     traderQuote: '',
     rumorCooldown: 0,
     failureLedger: {},
-    escape: { active: false, timer: 0 }
+    escape: { active: false, timer: 0 },
+    atlasUnlocked: false,
+    atlasCompleted: false
   };
 
   const world = {
     sectors: new Map(),
     gates: {},
     gatePositions: {},
+    convergenceGate: null,
     discovered: new Set(),
     bossDefeated: {},
     stationContracts: {},
@@ -1142,7 +1160,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     cosmetics: new Set(),
     blueprints: new Set(),
     toys: new Set(),
-    lore: new Set()
+    lore: new Set(),
+    atlasSigils: new Set()
   };
 
   const mission = {
@@ -1167,7 +1186,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     target: 0,
     progress: 0,
     reward: 0,
-    text: ''
+    text: '',
+    originKey: '',
+    originBiome: ''
   };
 
   const missionTracker = {
@@ -1376,6 +1397,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     return data;
   }
 
+  function getConvergenceGateData() {
+    if (!state.atlasUnlocked) return null;
+    if (!world.convergenceGate) return null;
+    return world.convergenceGate;
+  }
+
   function sectorKey(gx, gy) {
     return `${gx},${gy}`;
   }
@@ -1401,7 +1428,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const noiseScale = 0.12;
     const n = smoothNoise(gx * noiseScale + depth * 0.07, gy * noiseScale - depth * 0.05, WORLD_SEED * 0.11 + bandIndex * 19);
     if (depth > 1) {
-      const intersticeWidth = 0.08 + Math.min(0.06, depth * 0.004);
+      const intersticeWidth = 0.12 + Math.min(0.1, depth * 0.006);
       if (Math.abs(n - 0.5) < intersticeWidth) return 'interstice';
     }
     if (band.length === 1) return band[0];
@@ -1461,6 +1488,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const rng = mulberry32(WORLD_SEED * 19 + 911);
     const biomeStations = {};
     const relayStations = [];
+    let convergenceGate = null;
     const biomeIds = Object.keys(BIOMES).filter((id) => id !== 'interstice');
 
     biomeIds.forEach((biomeId) => {
@@ -1501,8 +1529,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       relayStations.push({ gx: pick.gx, gy: pick.gy, key: sectorKey(pick.gx, pick.gy) });
     }
 
+    if (relayCandidates.length) {
+      const pickIndex = Math.floor(rng() * relayCandidates.length);
+      const pick = relayCandidates[pickIndex];
+      const center = posFromGrid(pick.gx, pick.gy);
+      const offsetX = randRange(rng, -180, 180);
+      const offsetY = randRange(rng, -180, 180);
+      convergenceGate = {
+        x: center.x + offsetX,
+        y: center.y + offsetY,
+        key: sectorKey(pick.gx, pick.gy)
+      };
+    }
+
     world.biomeStations = biomeStations;
     world.relayStations = relayStations;
+    world.convergenceGate = convergenceGate;
   }
 
   function getSector(gx, gy) {
@@ -1681,7 +1723,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }));
     }
     const hasStation = sector.objects.stations.length > 0;
-    if (!hasStation && !isExpanse && rng() < (isCluster ? 0.32 : 0.14)) {
+    const stationField = smoothNoise(sector.gx * 0.18, sector.gy * 0.18, WORLD_SEED * 0.23);
+    const stationAllowed = stationField > 0.76;
+    if (!hasStation && !isExpanse && stationAllowed && rng() < (isCluster ? 0.22 : 0.08)) {
       sector.objects.stations.push(makeStation({
         x: center.x + randRange(rng, -200, 200),
         y: center.y + randRange(rng, -200, 200),
@@ -2065,6 +2109,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.cosmetics = new Set();
       player.toys = new Set();
       player.lore = new Set();
+      player.atlasSigils = new Set();
       player.modules = {
         hullSize: 'small',
         enginePack: 'standard',
@@ -2104,6 +2149,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.rumorCooldown = 0;
       state.failureLedger = {};
       state.escape = { active: false, timer: 0 };
+      state.atlasUnlocked = false;
+      state.atlasCompleted = false;
       world.discovered.clear();
       world.bossDefeated = {};
       world.stationContracts = {};
@@ -2113,6 +2160,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       world.relayStations = [];
       world.systemNames = new Map();
       world.gatePositions = {};
+      world.convergenceGate = null;
       world.sectors.clear();
       buildGateMap();
       buildStationMap();
@@ -2134,6 +2182,33 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.credits += amount;
     player.inventory.credits = player.credits;
     if (reason) noteStatus(`${reason} +${amount} credits.`);
+  }
+
+  function awardAtlasSigil(biome) {
+    if (!biome) return;
+    if (player.atlasSigils.has(biome)) return;
+    player.atlasSigils.add(biome);
+    const entry = ATLAS_SIGILS.find((sigil) => sigil.biome === biome);
+    noteStatus(`${entry?.name || 'Atlas Sigil'} acquired.`);
+    pushStoryLog(`Atlas updated: ${BIOMES[biome]?.name || biome}.`);
+    if (player.atlasSigils.size >= ATLAS_REQUIRED) {
+      state.atlasUnlocked = true;
+      noteStatus('Atlas Convergence unlocked. New gate detected.');
+      pushStoryLog('Atlas Convergence gate online.');
+    }
+  }
+
+  function completeAtlasConvergence() {
+    if (state.atlasCompleted) return;
+    state.atlasCompleted = true;
+    awardCredits(1400, 'Atlas Convergence');
+    const blueprintKeys = Object.keys(BLUEPRINTS);
+    const reward = blueprintKeys[(player.atlasSigils.size + 3) % blueprintKeys.length];
+    if (!player.blueprints.has(reward)) {
+      applyBlueprint(reward, true);
+      noteStatus(`Convergence reward: ${BLUEPRINTS[reward].name}`);
+    }
+    pushStoryLog('Convergence achieved. The atlas stabilizes.');
   }
 
   function updateOptionalProgress(type, payload) {
@@ -2919,23 +2994,38 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.y += player.vy * dt;
 
     const radial = Math.hypot(player.x, player.y);
-    const boundary = state.unlockedDepth * WORLD.sectorSize + WORLD.sectorSize * 0.35;
-    if (radial > boundary) {
+    const progressionBoundary = state.unlockedDepth * WORLD.sectorSize + WORLD.sectorSize * 0.35;
+    const hardBoundary = WORLD.boundary;
+    if (radial > hardBoundary) {
       const dirBack = normalize(player.x, player.y);
-      player.x = dirBack.x * boundary;
-      player.y = dirBack.y * boundary;
-      player.vx *= -0.15;
-      player.vy *= -0.15;
+      player.x = dirBack.x * hardBoundary;
+      player.y = dirBack.y * hardBoundary;
+      player.vx *= -0.2;
+      player.vy *= -0.2;
       state.boundaryTimer += dt;
-      if (state.boundaryTimer > 1.2) {
-        applyDamage(player, 10);
+      if (state.boundaryTimer > 1.1) {
+        applyDamage(player, 12);
         state.boundaryTimer = 0.6;
       }
       if (state.boundaryWarning <= 0) {
-        noteStatus('Rift boundary pressure rising.');
-        state.boundaryWarning = 2.5;
+        noteStatus('Sector boundary reached. Navigation locked.');
+        state.boundaryWarning = 3;
       }
-      if (radial > boundary + 80 && (state.riftDash.active || state.shiftBoost.active) && sector.zoneType !== 'cluster') {
+    } else if (radial > progressionBoundary) {
+      const driftPenalty = 1 - clamp((radial - progressionBoundary) / (WORLD.sectorSize * 1.4), 0, 0.08);
+      player.vx *= driftPenalty;
+      player.vy *= driftPenalty;
+      player.energy = clamp(player.energy - 6 * dt, 0, cachedStats.energyMax);
+      state.boundaryTimer += dt;
+      if (state.boundaryTimer > 1.8) {
+        applyDamage(player, 6);
+        state.boundaryTimer = 0.9;
+      }
+      if (state.boundaryWarning <= 0) {
+        noteStatus('Navigation interference beyond unlocked ring.');
+        state.boundaryWarning = 3;
+      }
+      if (radial > progressionBoundary + WORLD.sectorSize * 0.4 && (state.riftDash.active || state.shiftBoost.active) && sector.zoneType !== 'cluster') {
         triggerEscape(sector);
       }
     } else {
@@ -3804,6 +3894,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     updateMissionProgress();
 
+    if (state.atlasUnlocked && !state.atlasCompleted) {
+      const gate = getConvergenceGateData();
+      if (gate && dist(player.x, player.y, gate.x, gate.y) < 140) {
+        completeAtlasConvergence();
+      }
+    }
+
     if (mission.active && mission.timeRemaining > 0) {
       mission.timeRemaining -= dt;
       if (mission.timeRemaining <= 0) {
@@ -3910,14 +4007,24 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     contract.progress = 0;
     contract.reward = saved.reward;
     contract.text = saved.text;
+    contract.originKey = sector.key;
+    contract.originBiome = sector.biome;
     noteStatus(`Contract accepted: ${contract.text}`);
   }
 
   function completeContract() {
     if (!contract.active) return;
     awardCredits(contract.reward, 'Contract complete');
+    const originBiome = contract.originBiome;
+    const originKey = contract.originKey;
+    const hubKey = originBiome ? world.biomeStations?.[originBiome]?.key : null;
+    if (originBiome && originKey && hubKey && hubKey === originKey) {
+      awardAtlasSigil(originBiome);
+    }
     contract.active = false;
     contract.progress = 0;
+    contract.originKey = '';
+    contract.originBiome = '';
   }
 
   function update(dt) {
@@ -3998,7 +4105,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (hudCheckpoint) hudCheckpoint.textContent = `Checkpoint: ${player.checkpointIndex}/3`;
     if (hudScore) {
       const sector = getCurrentSector();
-      hudScore.textContent = `Distance: ${Math.floor(player.distanceTotal)} | Lvl ${player.level} | Fuel ${Math.round(player.fuel)} | ${sector.zone?.label || 'Cluster'}`;
+      hudScore.textContent = `Distance: ${Math.floor(player.distanceTotal)} | Lvl ${player.level} | Fuel ${Math.round(player.fuel)} | ${sector.zone?.label || 'Cluster'} | Atlas ${player.atlasSigils.size}/${ATLAS_REQUIRED}`;
     }
     const chapter = STORY[player.chapterIndex];
     if (hudObjective && chapter) {
@@ -4919,6 +5026,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           ctx.fillStyle = 'rgba(255,107,107,0.8)';
           ctx.fillRect(cellX + 4, cellY + 4, 4, 4);
         }
+        if (sector.objects.stations.length) {
+          const isHub = sector.objects.stations.some((station) => station.hub || station.type === 'relay');
+          ctx.fillStyle = isHub ? 'rgba(154,214,255,0.8)' : 'rgba(125,252,154,0.7)';
+          ctx.beginPath();
+          ctx.arc(cellX + 5, cellY + 5, isHub ? 3 : 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
 
@@ -4936,6 +5050,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.beginPath();
       ctx.arc(homeX, homeY, 3, 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (state.atlasUnlocked && world.convergenceGate) {
+      const gateX = mapX + ((world.convergenceGate.x + WORLD.half) / WORLD.size) * mapSize;
+      const gateY = mapY + ((world.convergenceGate.y + WORLD.half) / WORLD.size) * mapSize;
+      ctx.strokeStyle = 'rgba(154,214,255,0.9)';
+      ctx.beginPath();
+      ctx.arc(gateX, gateY, 4, 0, Math.PI * 2);
+      ctx.stroke();
     }
   }
 
@@ -5007,6 +5129,46 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
+  function drawConvergenceIndicator() {
+    if (state.atlasCompleted) return;
+    const gate = getConvergenceGateData();
+    if (!gate) return;
+    const dx = gate.x - player.x;
+    const dy = gate.y - player.y;
+    const distance = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const margin = 58;
+    const radius = Math.min(VIEW.centerX - margin, VIEW.centerY - margin);
+    const x = VIEW.centerX + Math.cos(angle) * radius;
+    const y = VIEW.centerY + Math.sin(angle) * radius;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.fillStyle = 'rgba(154,214,255,0.9)';
+    ctx.beginPath();
+    ctx.moveTo(16, 0);
+    ctx.lineTo(-10, 9);
+    ctx.lineTo(-7, 0);
+    ctx.lineTo(-10, -9);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = '#9ad6ff';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(`Atlas ${Math.round(distance)}m`, x - 34, y - 16);
+
+    if (distance < 420) {
+      const sx = gate.x - (player.x - VIEW.centerX);
+      const sy = gate.y - (player.y - VIEW.centerY);
+      ctx.strokeStyle = 'rgba(154,214,255,0.5)';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 60, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
   function drawGalaxyMap() {
     ctx.fillStyle = 'rgba(5,10,18,0.85)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
@@ -5021,7 +5183,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText(`Faction: ${currentSector.faction?.name || 'Unaligned'}`, 24, 92);
 
     const gridSize = WORLD.gridRadius * 2 + 1;
-    const cell = 30;
+    const cell = Math.max(10, Math.min(30, Math.floor((Math.min(VIEW.width, VIEW.height) - 140) / gridSize)));
     const offsetX = VIEW.centerX - (gridSize * cell) / 2;
     const offsetY = VIEW.centerY - (gridSize * cell) / 2;
 
@@ -5053,6 +5215,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           ctx.fillStyle = 'rgba(255,107,107,0.9)';
           ctx.fillRect(x + cell / 2 - 3, y + cell / 2 - 3, 6, 6);
         }
+        if (sector.objects.stations.length) {
+          const isHub = sector.objects.stations.some((station) => station.hub || station.type === 'relay');
+          ctx.fillStyle = isHub ? 'rgba(154,214,255,0.85)' : 'rgba(125,252,154,0.7)';
+          ctx.beginPath();
+          ctx.arc(x + cell / 2, y + cell / 2, isHub ? 4 : 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
         if (sector.locked) {
           ctx.strokeStyle = 'rgba(255,255,255,0.12)';
           ctx.beginPath();
@@ -5061,6 +5230,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           ctx.stroke();
         }
       }
+    }
+
+    if (state.atlasUnlocked && world.convergenceGate) {
+      const gateGrid = gridFromPos(world.convergenceGate.x, world.convergenceGate.y);
+      const gx = gateGrid.gx;
+      const gy = gateGrid.gy;
+      const x = offsetX + (gx + WORLD.gridRadius) * cell + cell / 2;
+      const y = offsetY + (gy + WORLD.gridRadius) * cell + cell / 2;
+      ctx.strokeStyle = '#9ad6ff';
+      ctx.beginPath();
+      ctx.arc(x, y, 7, 0, Math.PI * 2);
+      ctx.stroke();
     }
 
     const px = offsetX + (gridFromPos(player.x, player.y).gx + WORLD.gridRadius) * cell + cell / 2;
@@ -5218,6 +5399,37 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
+  function drawGoalsOverlay() {
+    ctx.fillStyle = 'rgba(5,10,18,0.9)';
+    ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+    ctx.fillStyle = PALETTE.glow;
+    ctx.font = '20px sans-serif';
+    ctx.fillText('Expedition Goals', 24, 36);
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#e0f2ff';
+    ctx.fillText('Press G to close.', 24, 54);
+    ctx.fillText(`Atlas Sigils: ${player.atlasSigils.size}/${ATLAS_REQUIRED}`, 24, 72);
+
+    const startY = 100;
+    ctx.font = '13px sans-serif';
+    ATLAS_SIGILS.forEach((sigil, idx) => {
+      const acquired = player.atlasSigils.has(sigil.biome);
+      ctx.fillStyle = acquired ? PALETTE.gold : '#9fb4d9';
+      ctx.fillText(`${acquired ? '●' : '○'} ${BIOMES[sigil.biome]?.name || sigil.biome}`, 24, startY + idx * 20);
+    });
+
+    if (state.atlasCompleted) {
+      ctx.fillStyle = PALETTE.gold;
+      ctx.fillText('Atlas Convergence complete. New tech secured.', 24, startY + ATLAS_SIGILS.length * 20 + 24);
+    } else if (state.atlasUnlocked) {
+      ctx.fillStyle = PALETTE.gold;
+      ctx.fillText('Atlas Convergence unlocked. Seek the new gate.', 24, startY + ATLAS_SIGILS.length * 20 + 24);
+    } else {
+      ctx.fillStyle = '#e0f2ff';
+      ctx.fillText('Complete hub contracts to acquire sigils.', 24, startY + ATLAS_SIGILS.length * 20 + 24);
+    }
+  }
+
   function drawOverlay() {
     if (state.mode === 'map') drawGalaxyMap();
     if (state.mode === 'prompt') drawPromptOverlay();
@@ -5226,6 +5438,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.mode === 'store') drawStoreOverlay();
     if (state.mode === 'lore') drawLoreOverlay();
     if (state.mode === 'trader') drawTraderOverlay();
+    if (state.mode === 'goals') drawGoalsOverlay();
   }
 
   function render() {
@@ -5244,6 +5457,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drawMiniMap();
     drawShipStatus();
     drawGateIndicator();
+    drawConvergenceIndicator();
     drawVignette();
     drawOverlay();
   }
@@ -5318,7 +5532,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (!chapter || !briefing) return;
     if (briefKicker) briefKicker.textContent = `Chapter ${chapter.id}`;
     if (briefTitle) briefTitle.textContent = chapter.title;
-    if (briefBody) briefBody.textContent = chapter.intro;
+    if (briefBody) {
+      const atlasLine = state.atlasUnlocked
+        ? 'Atlas objective: Convergence unlocked. Track the new gate.'
+        : `Atlas objective: collect ${ATLAS_REQUIRED} sigils by completing hub contracts.`;
+      briefBody.textContent = `${chapter.intro} ${atlasLine}`;
+    }
     if (briefPrimary) briefPrimary.textContent = chapter.objective;
     if (briefOptional) {
       briefOptional.innerHTML = '';
@@ -5366,6 +5585,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         cosmetics: Array.from(player.cosmetics),
         toys: Array.from(player.toys),
         lore: Array.from(player.lore),
+        atlasSigils: Array.from(player.atlasSigils),
         modules: player.modules,
         weapons: player.weapons,
         unlocked: player.unlocked,
@@ -5393,7 +5613,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state: {
         unlockedDepth: state.unlockedDepth,
         storyLog: state.storyLog,
-        failureLedger: state.failureLedger
+        failureLedger: state.failureLedger,
+        atlasUnlocked: state.atlasUnlocked,
+        atlasCompleted: state.atlasCompleted
       },
       mission,
       contract,
@@ -5440,6 +5662,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.cosmetics = new Set(savedPlayer.cosmetics || []);
     player.toys = new Set(savedPlayer.toys || []);
     player.lore = new Set(savedPlayer.lore || []);
+    player.atlasSigils = new Set(savedPlayer.atlasSigils || []);
     player.modules = savedPlayer.modules || player.modules;
     player.weapons = savedPlayer.weapons || player.weapons;
     player.unlocked = savedPlayer.unlocked || player.unlocked;
@@ -5461,6 +5684,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.unlockedDepth = save.state?.unlockedDepth ?? state.unlockedDepth;
     state.storyLog = save.state?.storyLog || [];
     state.failureLedger = save.state?.failureLedger || {};
+    state.atlasUnlocked = save.state?.atlasUnlocked ?? (player.atlasSigils.size >= ATLAS_REQUIRED);
+    state.atlasCompleted = save.state?.atlasCompleted || false;
 
     if (save.mission) {
       mission.active = save.mission.active || false;
@@ -5485,6 +5710,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       contract.progress = save.contract.progress || 0;
       contract.reward = save.contract.reward || 0;
       contract.text = save.contract.text || '';
+      contract.originKey = save.contract.originKey || '';
+      contract.originBiome = save.contract.originBiome || '';
     }
 
     state.checkpoint = save.checkpoint || state.checkpoint;
@@ -5593,6 +5820,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         return;
       }
 
+      if (e.code === 'KeyG' && state.mode === 'flight') {
+        state.mode = 'goals';
+        state.paused = true;
+        return;
+      }
+      if (e.code === 'KeyG' && state.mode === 'goals') {
+        state.mode = 'flight';
+        state.paused = false;
+        return;
+      }
+
       if (state.mode === 'lore') {
         if (e.code === 'ArrowUp') state.loreScroll = Math.max(0, state.loreScroll - 1);
         if (e.code === 'ArrowDown') state.loreScroll += 1;
@@ -5607,6 +5845,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           state.mode = 'flight';
           state.paused = false;
           state.activeTrader = null;
+          return;
+        }
+        if (state.mode === 'goals') {
+          state.mode = 'flight';
+          state.paused = false;
           return;
         }
       }
