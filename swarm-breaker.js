@@ -52,6 +52,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   const GAME_ID = 'spacex-exploration-flagship';
   const SAVE_VERSION = 11;
   const SAVE_KEY = `swarmBreakerSave_v${SAVE_VERSION}`;
+  const SAVE_BACKUP_KEY = `swarmBreakerSaveBackup_v${SAVE_VERSION}`;
   const WORLD_SEED = 284113;
 
   const WORLD = {
@@ -62,6 +63,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   WORLD.size = (WORLD.gridRadius * 2 + 1) * WORLD.sectorSize;
   WORLD.half = WORLD.size / 2;
   WORLD.boundary = WORLD.gridRadius * WORLD.sectorSize + WORLD.sectorSize * 0.4;
+
+  const START_CONFIG = {
+    ringMin: 2,
+    ringMax: 4,
+    offsetScale: 0.28
+  };
 
   const CLUSTER_FIELDS = {
     count: 6,
@@ -200,6 +207,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     solstice: { veil: 0.2, ribbon: 0.45, spark: 0.4, pattern: 'prism' },
     blackout: { veil: 0.32, ribbon: 0.12, spark: 0.2, pattern: 'void' }
   };
+
+  const BIOME_ATMOS_INTENSITY = 0.65;
 
   const BIOME_NOTES = {
     driftline: 'Cold fog, crystal spires, light patrols.',
@@ -1167,6 +1176,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     tutorialOrigin: { x: 0, y: 0 },
     spawnGrace: 0,
     escape: { active: false, timer: 0, reason: '' },
+    capture: { active: false, faction: '', label: '', origin: '' },
     atlasUnlocked: false,
     atlasCompleted: false
   };
@@ -1474,6 +1484,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   const STAR_MULT = Math.max(1, Math.round(WORLD.gridRadius / 18));
 
+  const SKYGRID_STAR_LAYERS = [
+    { count: 220, sizeMin: 0.6, sizeMax: 1.6, alphaMin: 0.3, alphaMax: 0.75, speed: 0.18, color: '215,240,255' },
+    { count: 150, sizeMin: 1.0, sizeMax: 2.3, alphaMin: 0.35, alphaMax: 0.9, speed: 0.38, color: '140,210,255' },
+    { count: 80, sizeMin: 1.5, sizeMax: 3.4, alphaMin: 0.4, alphaMax: 1, speed: 0.62, color: '125,252,154' }
+  ];
+
+  const skygridBackground = {
+    stars: [],
+    nebulae: [],
+    comets: [],
+    tileW: 0,
+    tileH: 0,
+    cometTimer: 0
+  };
+
   const nebulaLayers = [
     createNebulaLayer({ seed: 1201, hue: 200, alpha: 0.32 }),
     createNebulaLayer({ seed: 1402, hue: 240, alpha: 0.24 }),
@@ -1488,6 +1513,89 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   ];
 
   const dustField = createDustField({ seed: 3001, count: 160 * STAR_MULT });
+
+  function wrapOffset(value, size) {
+    const mod = value % size;
+    return mod < 0 ? mod + size : mod;
+  }
+
+  function buildSkygridBackground() {
+    const rng = mulberry32(WORLD_SEED * 11 + 504);
+    skygridBackground.stars = [];
+    skygridBackground.nebulae = [];
+    skygridBackground.comets = [];
+    skygridBackground.tileW = Math.max(VIEW.width * 2.7, 2600);
+    skygridBackground.tileH = Math.max(VIEW.height * 2.7, 1900);
+
+    const tileW = skygridBackground.tileW;
+    const tileH = skygridBackground.tileH;
+    const layerScale = Math.max(1, Math.round((VIEW.width + VIEW.height) / 1400));
+
+    SKYGRID_STAR_LAYERS.forEach((layer) => {
+      const count = layer.count * layerScale;
+      for (let i = 0; i < count; i += 1) {
+        skygridBackground.stars.push({
+          x: rng() * tileW,
+          y: rng() * tileH,
+          size: randRange(rng, layer.sizeMin, layer.sizeMax),
+          alpha: randRange(rng, layer.alphaMin, layer.alphaMax),
+          speed: layer.speed,
+          color: layer.color
+        });
+      }
+    });
+
+    const nebulaColors = [
+      '70,180,255',
+      '255,120,90',
+      '110,255,200'
+    ];
+    for (let i = 0; i < 3; i += 1) {
+      skygridBackground.nebulae.push({
+        x: rng() * tileW,
+        y: rng() * tileH,
+        radius: randRange(rng, 180, 320),
+        color: nebulaColors[i % nebulaColors.length],
+        alpha: randRange(rng, 0.18, 0.28)
+      });
+    }
+
+    skygridBackground.cometTimer = randRange(rng, 6, 12);
+  }
+
+  function spawnSkygridComet() {
+    const edge = Math.floor(Math.random() * 4);
+    let x = 0;
+    let y = 0;
+    if (edge === 0) { x = -80; y = randRange(Math.random, 0, VIEW.height); }
+    if (edge === 1) { x = VIEW.width + 80; y = randRange(Math.random, 0, VIEW.height); }
+    if (edge === 2) { x = randRange(Math.random, 0, VIEW.width); y = -80; }
+    if (edge === 3) { x = randRange(Math.random, 0, VIEW.width); y = VIEW.height + 80; }
+
+    const angle = randRange(Math.random, 0, Math.PI * 2);
+    const speed = randRange(Math.random, 220, 420);
+    skygridBackground.comets.push({
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: randRange(Math.random, 6, 12)
+    });
+  }
+
+  function updateSkygridBackground(dt) {
+    skygridBackground.cometTimer -= dt;
+    if (skygridBackground.cometTimer <= 0) {
+      spawnSkygridComet();
+      skygridBackground.cometTimer = randRange(Math.random, 5, 12);
+    }
+    skygridBackground.comets.forEach((comet) => {
+      comet.x += comet.vx * dt * 0.08;
+      comet.y += comet.vy * dt * 0.08;
+      comet.life -= dt;
+    });
+    skygridBackground.comets = skygridBackground.comets.filter((comet) => comet.life > 0);
+  }
 
   function noteStatus(message, duration = 3) {
     if (!statusText) return;
@@ -2592,13 +2700,38 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function initPlayerPosition() {
-    player.x = 0;
-    player.y = 0;
+    const start = getStartLocation();
+    player.x = start.x;
+    player.y = start.y;
     player.vx = 0;
     player.vy = 0;
     player.angle = -Math.PI / 2;
     player.angularVelocity = 0;
     player.throttle = 0;
+  }
+
+  function getStartLocation() {
+    const rng = mulberry32(WORLD_SEED * 5 + 833);
+    const candidates = [];
+    for (let ring = START_CONFIG.ringMin; ring <= START_CONFIG.ringMax; ring += 1) {
+      for (let gx = -ring; gx <= ring; gx += 1) {
+        for (let gy = -ring; gy <= ring; gy += 1) {
+          if (depthFromGrid(gx, gy) !== ring) continue;
+          const profile = getSectorProfile(gx, gy);
+          if (profile.zoneType !== 'expanse') continue;
+          if (gx === 0 && gy === 0) continue;
+          candidates.push({ gx, gy });
+        }
+      }
+      if (candidates.length) break;
+    }
+    const pick = candidates.length ? candidates[Math.floor(rng() * candidates.length)] : { gx: 2, gy: -1 };
+    const center = posFromGrid(pick.gx, pick.gy);
+    const offset = WORLD.sectorSize * START_CONFIG.offsetScale;
+    return {
+      x: center.x + randRange(rng, -offset, offset),
+      y: center.y + randRange(rng, -offset, offset)
+    };
   }
 
   function resetHomeDefense() {
@@ -2688,6 +2821,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.tutorialOrigin = { x: 0, y: 0 };
       state.spawnGrace = 25;
       state.escape = { active: false, timer: 0, reason: '' };
+      state.capture = { active: false, faction: '', label: '', origin: '' };
       state.atlasUnlocked = false;
       state.atlasCompleted = false;
       world.discovered.clear();
@@ -2706,6 +2840,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       buildClusterMap();
       buildGateMap();
       buildStationMap();
+      buildSkygridBackground();
       resetHomeDefense();
       contract.active = false;
       mission.active = false;
@@ -3178,9 +3313,90 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function handlePlayerDeath() {
+    if (attemptCapture()) return;
     state.running = false;
     noteStatus('Hull breach. Press Start to relaunch.');
     submitHighScore(GAME_ID, Math.floor(player.distanceTotal));
+  }
+
+  function attemptCapture() {
+    if (state.capture?.active) return true;
+    const sector = getCurrentSector();
+    if (!sector) return false;
+    const nearest = findClosestEnemy(player.x, player.y, 520);
+    if (!nearest) return false;
+    const captureChance = nearest.type === 'carrier' || nearest.type === 'transport' ? 0.85 : 0.55;
+    if (Math.random() > captureChance) return false;
+    const factionId = sector.faction?.id || 'redshift_cartel';
+    triggerCapture(factionId, sector.faction?.name || 'Unknown Fleet');
+    return true;
+  }
+
+  function triggerCapture(factionId, label) {
+    state.capture = {
+      active: true,
+      faction: factionId,
+      label: label || (FACTIONS.find((f) => f.id === factionId)?.name || 'Unknown Fleet'),
+      origin: getCurrentSector()?.name || 'Unknown'
+    };
+    state.mode = 'capture';
+    state.paused = true;
+    state.spawnGrace = Math.max(state.spawnGrace || 0, 8);
+    player.hp = Math.max(1, cachedStats.maxHp * 0.15);
+    player.shield = 0;
+    player.vx = 0;
+    player.vy = 0;
+    spawnEffect(player.x, player.y, '#ffb347', 90);
+    noteStatus('Captured. Negotiation channel open.');
+    pushStoryLog(`Captured by ${state.capture.label} in ${state.capture.origin}.`);
+  }
+
+  function assignFactionContract(factionId) {
+    const rng = mulberry32(WORLD_SEED + Math.floor(state.time * 13));
+    const templates = [
+      { type: 'kills', text: 'Prove loyalty: eliminate patrols', target: 6 + Math.floor(rng() * 4), reward: 260 },
+      { type: 'collect', text: 'Recover field data', target: 3 + Math.floor(rng() * 3), reward: 240 },
+      { type: 'scan', text: 'Scan a hostile anomaly', target: 1, reward: 220 }
+    ];
+    const pick = templates[Math.floor(rng() * templates.length)];
+    contract.active = true;
+    contract.type = pick.type;
+    contract.target = pick.target;
+    contract.progress = 0;
+    contract.reward = pick.reward + player.level * 20;
+    contract.text = pick.text;
+    contract.originKey = state.currentSectorKey;
+    contract.originBiome = getCurrentSector()?.biome || '';
+    contract.originFaction = factionId;
+    noteStatus(`Faction task assigned: ${contract.text}`);
+  }
+
+  function resolveCaptureJoin() {
+    const factionId = state.capture?.faction;
+    if (factionId) {
+      player.affiliation = factionId;
+      adjustFactionRep(factionId, 12, 'Joined faction');
+      assignFactionContract(factionId);
+    }
+    player.hp = Math.max(player.hp, cachedStats.maxHp * 0.55);
+    player.shield = Math.max(player.shield, cachedStats.maxShield * 0.35);
+    state.capture = { active: false, faction: '', label: '', origin: '' };
+    state.mode = 'flight';
+    state.paused = false;
+    noteStatus('Accepted into the fleet. New task issued.');
+  }
+
+  function resolveCaptureResist() {
+    const factionId = state.capture?.faction;
+    if (factionId) adjustFactionRep(factionId, -8, 'Defied capture');
+    player.credits = Math.max(0, player.credits - 180);
+    player.hp = Math.max(1, cachedStats.maxHp * 0.35);
+    player.shield = 0;
+    state.capture = { active: false, faction: '', label: '', origin: '' };
+    state.mode = 'flight';
+    state.paused = false;
+    state.spawnGrace = Math.max(state.spawnGrace || 0, 10);
+    noteStatus('You escaped the capture hold. Credits seized.');
   }
 
   function handleEnemyDeath(enemy) {
@@ -4938,6 +5154,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function update(dt) {
+    updateSkygridBackground(dt);
     if (updateEscape(dt)) {
       updateStatusTimer(dt);
       updateHud();
@@ -5156,22 +5373,68 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const sector = getCurrentSector();
     const { blend, weight, hue } = getBlendInfo(sector);
     const gradient = ctx.createLinearGradient(0, 0, 0, VIEW.height);
-    gradient.addColorStop(0, PALETTE.ink);
-    gradient.addColorStop(1, PALETTE.deep);
+    gradient.addColorStop(0, '#04060f');
+    gradient.addColorStop(0.6, '#060a16');
+    gradient.addColorStop(1, '#050814');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
-    drawSkyGrid(camera);
+
+    const tileW = skygridBackground.tileW || VIEW.width * 2.7;
+    const tileH = skygridBackground.tileH || VIEW.height * 2.7;
+    const camX = camera.x;
+    const camY = camera.y;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    skygridBackground.nebulae.forEach((nebula) => {
+      const offsetX = wrapOffset(camX * 0.08, tileW);
+      const offsetY = wrapOffset(camY * 0.08, tileH);
+      let x = nebula.x - offsetX;
+      let y = nebula.y - offsetY;
+      if (x < -nebula.radius) x += tileW;
+      if (y < -nebula.radius) y += tileH;
+      const gradient = ctx.createRadialGradient(x, y, 0, x, y, nebula.radius);
+      gradient.addColorStop(0, `rgba(${nebula.color},${nebula.alpha})`);
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(x, y, nebula.radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+
+    skygridBackground.stars.forEach((star) => {
+      const offsetX = wrapOffset(camX * star.speed, tileW);
+      const offsetY = wrapOffset(camY * star.speed, tileH);
+      let sx = star.x - offsetX;
+      let sy = star.y - offsetY;
+      if (sx < -star.size) sx += tileW;
+      if (sy < -star.size) sy += tileH;
+      ctx.fillStyle = `rgba(${star.color},${star.alpha})`;
+      ctx.fillRect(sx, sy, star.size, star.size);
+    });
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(200,230,255,0.6)';
+    ctx.lineWidth = 1.4;
+    skygridBackground.comets.forEach((comet) => {
+      ctx.beginPath();
+      ctx.moveTo(comet.x, comet.y);
+      ctx.lineTo(comet.x - comet.vx * 0.06, comet.y - comet.vy * 0.06);
+      ctx.stroke();
+    });
+    ctx.restore();
 
     const aura = ctx.createRadialGradient(
       VIEW.centerX,
       VIEW.centerY,
-      VIEW.height * 0.1,
+      VIEW.height * 0.12,
       VIEW.centerX,
       VIEW.centerY,
-      VIEW.height * 0.85
+      VIEW.height * 0.9
     );
-    aura.addColorStop(0, `hsla(${hue},70%,20%,0.32)`);
-    aura.addColorStop(0.55, `hsla(${hue + 20},65%,16%,0.14)`);
+    aura.addColorStop(0, `hsla(${hue},70%,22%,0.22)`);
+    aura.addColorStop(0.55, `hsla(${hue + 20},65%,16%,0.12)`);
     aura.addColorStop(1, 'rgba(5,10,18,0)');
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
@@ -5188,8 +5451,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         VIEW.centerY,
         VIEW.height * 0.9
       );
-      blendAura.addColorStop(0, `hsla(${blend.hue},70%,22%,${0.12 + weight * 0.2})`);
-      blendAura.addColorStop(0.6, `hsla(${blend.hue + 24},65%,16%,${0.08 + weight * 0.12})`);
+      blendAura.addColorStop(0, `hsla(${blend.hue},70%,22%,${0.1 + weight * 0.15})`);
+      blendAura.addColorStop(0.6, `hsla(${blend.hue + 24},65%,16%,${0.07 + weight * 0.1})`);
       blendAura.addColorStop(1, 'rgba(5,10,18,0)');
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
@@ -5197,45 +5460,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fillRect(0, 0, VIEW.width, VIEW.height);
       ctx.restore();
     }
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    nebulaLayers.forEach((layer, idx) => {
-      const scale = 1 + idx * 0.3;
-      const offsetX = -camera.x * 0.02 * (idx + 1);
-      const offsetY = -camera.y * 0.02 * (idx + 1);
-      ctx.globalAlpha = layer.alpha;
-      ctx.drawImage(
-        layer.canvas,
-        ((offsetX % layer.size) + layer.size) % layer.size - layer.size,
-        ((offsetY % layer.size) + layer.size) % layer.size - layer.size,
-        layer.size * scale,
-        layer.size * scale
-      );
-      ctx.drawImage(
-        layer.canvas,
-        ((offsetX % layer.size) + layer.size) % layer.size,
-        ((offsetY % layer.size) + layer.size) % layer.size,
-        layer.size * scale,
-        layer.size * scale
-      );
-    });
-    ctx.restore();
-
-    starLayers.forEach((layer) => {
-      ctx.fillStyle = layer.tint;
-      layer.stars.forEach((star) => {
-        const screenX = star.x - camera.x * layer.speed + VIEW.centerX;
-        const screenY = star.y - camera.y * layer.speed + VIEW.centerY;
-        if (screenX < -10 || screenX > VIEW.width + 10 || screenY < -10 || screenY > VIEW.height + 10) return;
-        const twinkle = 0.6 + Math.sin(state.time * star.twinkle + star.x) * 0.4;
-        ctx.globalAlpha = star.alpha * twinkle;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, star.size, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    });
-    ctx.globalAlpha = 1;
 
     if (sector.zoneType === 'rift' || sector.zoneType === 'lane' || sector.zoneType === 'expanse') {
       const isRift = sector.zoneType === 'rift';
@@ -5282,7 +5506,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const biome = BIOMES[biomeId] || BIOMES.interstice;
     const vfx = BIOME_VFX[biomeId] || { veil: 0.15, ribbon: 0.2, spark: 0.2, pattern: 'calm' };
     const hue = biome.hue;
-    const intensity = clamp(weight, 0.1, 1);
+    const intensity = clamp(weight * BIOME_ATMOS_INTENSITY, 0.08, 1);
     const time = state.time * 0.08 + seedOffset * 1.7;
     const offsetX = VIEW.centerX + Math.sin(time + camera.x * 0.00004 + seedOffset) * VIEW.width * 0.22;
     const offsetY = VIEW.centerY + Math.cos(time * 1.2 + camera.y * 0.00005 + seedOffset) * VIEW.height * 0.18;
@@ -6907,6 +7131,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function drawShipStatus() {
+    const hudAlpha = getHudAlpha();
+    ctx.save();
+    ctx.globalAlpha = hudAlpha;
     ctx.fillStyle = 'rgba(5,10,18,0.55)';
     ctx.fillRect(12, VIEW.height - 122, 300, 112);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
@@ -6933,6 +7160,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText(`S: ${secondaryWeapon?.label || 'None'} (${secondaryAmmo})`, VIEW.width - 208, VIEW.height - 44);
     ctx.fillText(`Cargo ${getCargoCount()}/${cachedStats.cargoMax}`, VIEW.width - 208, VIEW.height - 24);
     ctx.fillText(`Assist: ${player.flightAssist ? 'ON' : 'OFF'}`, VIEW.width - 208, VIEW.height - 8);
+    ctx.restore();
   }
 
   function drawGateIndicator() {
@@ -7050,10 +7278,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function drawNavigationHud(sector) {
+    const hudAlpha = getHudAlpha();
     const lines = [];
     const biomeName = BIOMES[sector.biome]?.name || sector.biome;
     const biomeNote = BIOME_NOTES[sector.biome] || 'Unknown conditions.';
     lines.push({ text: `Biome: ${biomeName} — ${biomeNote}`, color: '#e0f2ff' });
+    if (player.affiliation) {
+      const name = FACTIONS.find((f) => f.id === player.affiliation)?.name || player.affiliation;
+      lines.push({ text: `Alignment: ${name}`, color: '#9fb4d9' });
+    } else {
+      lines.push({ text: 'Alignment: Unaligned', color: '#9fb4d9' });
+    }
     const gate = getGateData();
     if (gate) {
       const distance = Math.hypot(gate.x - player.x, gate.y - player.y);
@@ -7085,6 +7320,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const height = lines.length * 16 + 12;
     const x = VIEW.centerX - width / 2;
     const y = 8;
+    ctx.save();
+    ctx.globalAlpha = hudAlpha;
     ctx.fillStyle = 'rgba(5,10,18,0.55)';
     ctx.fillRect(x, y, width, height);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
@@ -7094,6 +7331,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fillStyle = line.color;
       ctx.fillText(line.text, x + 12, y + 20 + index * 16);
     });
+    ctx.restore();
   }
 
   function drawHyperRadar() {
@@ -7105,7 +7343,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const centerX = VIEW.width - 92;
     const centerY = 210;
     const radius = 52;
-    const alpha = state.mode === 'hyper' ? 0.95 : 0.65;
+    const alpha = (state.mode === 'hyper' ? 0.95 : 0.65) * getHudAlpha();
 
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -7157,6 +7395,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fillStyle = 'rgba(159,180,217,0.7)';
       ctx.fillText('No echoes', centerX - 26, centerY + 4);
     }
+  }
+
+  function getHudAlpha() {
+    if (state.mode === 'hyper' || state.mode === 'map' || state.mode === 'capture') return 1;
+    const dangerEnemy = findClosestEnemy(player.x, player.y, 900);
+    if (dangerEnemy) return 1;
+    const sector = getCurrentSector();
+    const encounter = getNearestEncounter(sector);
+    if (encounter && dist(player.x, player.y, encounter.x, encounter.y) < 700) return 0.95;
+    return 0.75;
   }
 
   function getNearestEncounter(sector) {
@@ -7384,6 +7632,25 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Press Y to install now or N to store for later.', 24, 92);
   }
 
+  function drawCaptureOverlay() {
+    if (!state.capture?.active) return;
+    ctx.fillStyle = 'rgba(5,10,18,0.9)';
+    ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+    ctx.fillStyle = PALETTE.glow;
+    ctx.font = '22px sans-serif';
+    ctx.fillText('Capture Intercept', 24, 40);
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#e0f2ff';
+    ctx.fillText(`Captured by ${state.capture.label}.`, 24, 70);
+    ctx.fillText('They offer a pact: join their fleet or attempt a risky escape.', 24, 92);
+    ctx.fillStyle = PALETTE.gold;
+    ctx.fillText('1. Join the fleet (gain faction access and a contract).', 24, 130);
+    ctx.fillStyle = '#ffb347';
+    ctx.fillText('2. Resist and escape (lose credits, low hull).', 24, 152);
+    ctx.fillStyle = '#9fb4d9';
+    ctx.fillText('Press 1/2 or Y/N.', 24, 182);
+  }
+
   function drawStationOverlay() {
     ctx.fillStyle = 'rgba(5,10,18,0.78)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
@@ -7593,13 +7860,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Biome pockets hold stations and hazards. The Interstice is the quiet void between clusters.', 24, 180);
     ctx.fillText('Encounters are fixed points (patrols/convoys/ambushes) — you fly into them.', 24, 202);
     ctx.fillText('Home base is friendly and armed. Dock with E for repairs and upgrades.', 24, 224);
-    ctx.fillText('Press Enter to launch when all steps are complete. Press Esc to skip.', 24, 246);
+    ctx.fillText('You begin unaligned. Dock at any hub or accept a capture offer to join a faction.', 24, 246);
+    ctx.fillText('Press Enter to launch when all steps are complete. Press Esc to skip.', 24, 268);
   }
 
   function drawOverlay() {
     if (state.mode === 'map') drawGalaxyMap();
     if (state.mode === 'hyper') drawHyperMapOverlay();
     if (state.mode === 'prompt') drawPromptOverlay();
+    if (state.mode === 'capture') drawCaptureOverlay();
     if (state.mode === 'station') drawStationOverlay();
     if (state.mode === 'shipyard') drawShipyardOverlay();
     if (state.mode === 'store') drawStoreOverlay();
@@ -7825,6 +8094,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       checkpoint: state.checkpoint
     };
     try {
+      const existing = localStorage.getItem(SAVE_KEY);
+      if (existing) localStorage.setItem(SAVE_BACKUP_KEY, existing);
       localStorage.setItem(SAVE_KEY, JSON.stringify(save));
     } catch (err) {
       console.warn('Save failed', err);
@@ -7834,7 +8105,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function loadLocal() {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return null;
+      if (!raw) {
+        const backup = localStorage.getItem(SAVE_BACKUP_KEY);
+        if (!backup) return null;
+        const fallback = JSON.parse(backup);
+        if (!fallback || fallback.version !== SAVE_VERSION) return null;
+        return fallback;
+      }
       const save = JSON.parse(raw);
       if (!save || save.version !== SAVE_VERSION) return null;
       return save;
@@ -7903,6 +8180,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       chargeLevel: state.hyperNav?.chargeLevel || 10,
       targetIndex: 0
     };
+    state.capture = { active: false, faction: '', label: '', origin: '' };
 
     if (save.mission) {
       mission.active = save.mission.active || false;
@@ -8015,6 +8293,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         state.prompt = null;
         state.mode = 'flight';
         state.paused = false;
+        return;
+      }
+
+      if (state.mode === 'capture') {
+        if (e.code === 'Digit1' || e.code === 'KeyY') resolveCaptureJoin();
+        if (e.code === 'Digit2' || e.code === 'KeyN' || e.code === 'Escape') resolveCaptureResist();
         return;
       }
 
@@ -8406,6 +8690,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function handleStart() {
+    if (state.mode === 'capture') {
+      noteStatus('Resolve the capture negotiation first.');
+      return;
+    }
     if (state.awaitingBrief) {
       noteStatus('Review the briefing and press Begin Chapter.');
       return;
@@ -8453,14 +8741,34 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         btn.addEventListener('click', () => purchaseUpgrade(btn.dataset.swarmUpgrade));
       });
     }
+    if (!window.__swarmSaveBound) {
+      window.__swarmSaveBound = true;
+      window.addEventListener('beforeunload', () => {
+        saveLocal();
+        pushCloudSave();
+      });
+      window.addEventListener('pagehide', () => {
+        saveLocal();
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          saveLocal();
+          pushCloudSave();
+        }
+      });
+    }
 
     buildClusterMap();
     buildGateMap();
     buildStationMap();
+    buildSkygridBackground();
 
     const localSave = loadLocal();
     if (localSave) {
       applySave(localSave);
+      state.awaitingBrief = false;
+      state.mode = 'flight';
+      state.paused = true;
       noteStatus('Local save loaded.');
     } else {
       resetRun({ full: true });
@@ -8485,9 +8793,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.frameId) cancelAnimationFrame(state.frameId);
     state.frameId = null;
     saveLocal();
+    pushCloudSave();
   }
-
-  window.addEventListener('beforeunload', () => saveLocal());
 
   window.initSwarm = initSwarm;
   window.stopSwarm = stopSwarm;
