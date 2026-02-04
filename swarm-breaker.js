@@ -972,12 +972,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     activeTrader: null,
     traderSelection: 0,
     traderQuote: '',
-    rumorCooldown: 0
+    rumorCooldown: 0,
+    failureLedger: {},
+    escape: { active: false, timer: 0 }
   };
 
   const world = {
     sectors: new Map(),
     gates: {},
+    gatePositions: {},
     discovered: new Set(),
     bossDefeated: {},
     stationContracts: {},
@@ -1079,7 +1082,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     text: '',
     gateKey: '',
     enemyType: '',
-    spawned: false
+    spawned: false,
+    timeLimit: 0,
+    timeRemaining: 0,
+    failures: 0,
+    baseReward: 0
   };
 
   const contract = {
@@ -1289,6 +1296,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.statusTimer <= 0) statusText.textContent = '';
   }
 
+  function getGateData() {
+    const chapter = STORY[player.chapterIndex];
+    if (!chapter) return null;
+    const data = world.gatePositions?.[chapter.id];
+    if (!data) return null;
+    return data;
+  }
+
   function sectorKey(gx, gy) {
     return `${gx},${gy}`;
   }
@@ -1326,6 +1341,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function buildGateMap() {
     const rng = mulberry32(WORLD_SEED);
     const gates = {};
+    const gatePositions = {};
     STORY.forEach((chapter) => {
       const depth = Math.min(WORLD.maxDepth, chapter.depth);
       const ring = [];
@@ -1347,8 +1363,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
       const pick = ring[Math.floor(rng() * ring.length)];
       gates[chapter.id] = sectorKey(pick.gx, pick.gy);
+      const center = posFromGrid(pick.gx, pick.gy);
+      const gateRng = mulberry32(WORLD_SEED + pick.gx * 101 + pick.gy * 103 + chapter.id * 17);
+      const offsetX = randRange(gateRng, -160, 160);
+      const offsetY = randRange(gateRng, -160, 160);
+      gatePositions[chapter.id] = {
+        x: center.x + offsetX,
+        y: center.y + offsetY,
+        key: sectorKey(pick.gx, pick.gy)
+      };
     });
     world.gates = gates;
+    world.gatePositions = gatePositions;
   }
 
   function getSector(gx, gy) {
@@ -1890,12 +1916,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.traderSelection = 0;
       state.traderQuote = '';
       state.rumorCooldown = 0;
+      state.failureLedger = {};
+      state.escape = { active: false, timer: 0 };
       world.discovered.clear();
       world.bossDefeated = {};
       world.stationContracts = {};
       world.baseClaims = {};
       world.ruinClaims = {};
       world.systemNames = new Map();
+      world.gatePositions = {};
       world.sectors.clear();
       contract.active = false;
       mission.active = false;
@@ -2501,6 +2530,36 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     noteStatus('Rift dash engaged.');
   }
 
+  function triggerEscape(sector) {
+    if (state.escape.active) return;
+    state.escape.active = true;
+    state.escape.timer = 1.8;
+    state.paused = true;
+    state.mode = 'flight';
+    noteStatus(`Escape jump engaged from ${sector?.name || 'sector'}.`);
+    addCameraShake(1.4, 0.4);
+  }
+
+  function updateEscape(dt) {
+    if (!state.escape.active) return false;
+    state.escape.timer -= dt;
+    if (state.escape.timer <= 0) {
+      state.escape.active = false;
+      state.paused = false;
+      if (world.homeBase) {
+        player.x = world.homeBase.x + 120;
+        player.y = world.homeBase.y;
+        player.vx = 0;
+        player.vy = 0;
+      } else {
+        initPlayerPosition();
+      }
+      if (mission.active) failMission('escape');
+      noteStatus('Escape complete. Returned to base.');
+    }
+    return true;
+  }
+
   function hasAmmo(weapon) {
     if (!weapon.ammoType) return true;
     const available = player.ammo[weapon.ammoType] || 0;
@@ -2585,6 +2644,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
 
     if (state.shiftBoost.active) {
+      const boostHeld = input.keys['KeyB'] || input.keys['ShiftLeft'] || input.keys['ShiftRight'];
+      if (!boostHeld && state.shiftBoost.timer < 2.7) {
+        state.shiftBoost.active = false;
+      }
       const boostThrust = cachedStats.thrust * 1.8 * zoneBoost;
       player.vx += dir.x * boostThrust * dt;
       player.vy += dir.y * boostThrust * dt;
@@ -2656,6 +2719,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (state.boundaryWarning <= 0) {
         noteStatus('Rift boundary pressure rising.');
         state.boundaryWarning = 2.5;
+      }
+      if (radial > boundary + 80 && (state.riftDash.active || state.shiftBoost.active) && sector.zoneType !== 'cluster') {
+        triggerEscape(sector);
       }
     } else {
       state.boundaryTimer = 0;
@@ -3420,20 +3486,25 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       completeMission();
     }
     if (mission.type === 'reach_gate') {
-      const sector = getCurrentSector();
-      if (sector.key === mission.gateKey) {
-        mission.progress = mission.target;
-        completeMission();
+      const gate = getGateData();
+      if (gate) {
+        const gateDistance = dist(player.x, player.y, gate.x, gate.y);
+        mission.progress = clamp(Math.floor(mission.target - gateDistance * 0.05), 0, mission.target);
+        if (gateDistance < 120) {
+          mission.progress = mission.target;
+          completeMission();
+        }
       }
     }
     if (mission.type === 'boss') {
       if (!world.bossDefeated[player.chapterIndex]) {
         const sector = getCurrentSector();
         if (sector.key === mission.gateKey && !entities.enemies.some((enemy) => enemy.isBoss)) {
-          const center = posFromGrid(sector.gx, sector.gy);
+          const gate = getGateData();
+          const anchor = gate ? { x: gate.x, y: gate.y } : posFromGrid(sector.gx, sector.gy);
           const angle = Math.random() * Math.PI * 2;
           const radius = 220;
-          spawnBoss(center.x + Math.cos(angle) * radius, center.y + Math.sin(angle) * radius);
+          spawnBoss(anchor.x + Math.cos(angle) * radius, anchor.y + Math.sin(angle) * radius);
         }
       } else {
         mission.progress = mission.target;
@@ -3462,18 +3533,38 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     maybeAdvanceChapter(mission.type === 'boss');
   }
 
+  function failMission(reason) {
+    if (!mission.active) return;
+    const chapter = STORY[player.chapterIndex];
+    const penalty = 120 + chapter.depth * 40;
+    player.credits = Math.max(0, player.credits - penalty);
+    state.failureLedger[chapter.id] = (state.failureLedger[chapter.id] || 0) + 1;
+    mission.active = false;
+    mission.progress = 0;
+    mission.timeRemaining = 0;
+    mission.failures = state.failureLedger[chapter.id];
+    mission.reward = Math.round(mission.baseReward * Math.max(0.5, 1 - mission.failures * 0.08));
+    noteStatus(`Mission failed (${reason}). Penalty -${penalty} credits.`);
+    pushStoryLog(`Mission failed (${reason}).`);
+  }
+
   function startChapterMission() {
     const chapter = STORY[player.chapterIndex];
     if (!chapter) return;
     mission.active = true;
     mission.type = chapter.goal.type;
     mission.target = chapter.goal.target || 1;
+    if (mission.type === 'reach_gate') mission.target = 100;
     mission.progress = 0;
-    mission.reward = 300 + player.chapterIndex * 80;
+    mission.baseReward = 300 + player.chapterIndex * 80;
+    mission.failures = state.failureLedger[chapter.id] || 0;
+    mission.reward = Math.round(mission.baseReward * Math.max(0.5, 1 - mission.failures * 0.08));
     mission.text = chapter.objective;
     mission.gateKey = world.gates[chapter.id] || '';
     mission.enemyType = chapter.goal.enemy || '';
     mission.spawned = false;
+    mission.timeLimit = 420 + chapter.depth * 90;
+    mission.timeRemaining = mission.timeLimit;
     if (mission.type === 'base' && mission.gateKey) {
       const [gx, gy] = mission.gateKey.split(',').map((value) => Number.parseInt(value, 10));
       const sector = getSector(gx, gy);
@@ -3497,6 +3588,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
 
     updateMissionProgress();
+
+    if (mission.active && mission.timeRemaining > 0) {
+      mission.timeRemaining -= dt;
+      if (mission.timeRemaining <= 0) {
+        failMission('timeout');
+      }
+    }
   }
 
   function findClosestEnemy(x, y, range = 9999) {
@@ -3606,6 +3704,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function update(dt) {
+    if (updateEscape(dt)) {
+      updateStatusTimer(dt);
+      updateHud();
+      updateUpgradeButtons();
+      if (state.boundaryWarning > 0) state.boundaryWarning = Math.max(0, state.boundaryWarning - dt);
+      if (state.broadcastCooldown > 0) state.broadcastCooldown = Math.max(0, state.broadcastCooldown - dt);
+      if (state.rumorCooldown > 0) state.rumorCooldown = Math.max(0, state.rumorCooldown - dt);
+      input.justPressed = {};
+      return;
+    }
     if (input.justPressed['KeyC']) {
       if (!player.blueprints.has('scanner_drone')) {
         noteStatus('Scanner drone required.');
@@ -3677,7 +3785,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
     const chapter = STORY[player.chapterIndex];
     if (hudObjective && chapter) {
-      const missionText = mission.active ? ` | Mission: ${mission.text} ${Math.round(mission.progress)}/${mission.target}` : '';
+      const timeText = mission.active ? ` ${Math.max(0, Math.floor(mission.timeRemaining))}s` : '';
+      const missionText = mission.active ? ` | Mission: ${mission.text} ${Math.round(mission.progress)}/${mission.target}${timeText}` : '';
       const contractText = contract.active ? ` | Contract: ${contract.text} ${contract.progress}/${contract.target}` : '';
       hudObjective.textContent = `Objective: ${chapter.objective}${missionText}${contractText}`;
     }
@@ -4112,6 +4221,23 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
     sector.objects.riftBeacons.forEach((beacon) => drawRiftBeacon(beacon, camera));
     drawEvents(sector, camera);
+    const gate = getGateData();
+    if (gate && gate.key === sector.key) {
+      const gx = gate.x - camera.x + VIEW.centerX;
+      const gy = gate.y - camera.y + VIEW.centerY;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,209,102,0.8)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(gx, gy, 70, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,209,102,0.4)';
+      ctx.beginPath();
+      ctx.arc(gx, gy, 90, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
     drawHomeBase(camera, sector);
 
     sector.objects.anomalies.forEach((anomaly) => {
@@ -4546,6 +4672,45 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText(`Assist: ${player.flightAssist ? 'ON' : 'OFF'}`, VIEW.width - 208, VIEW.height - 8);
   }
 
+  function drawGateIndicator() {
+    const gate = getGateData();
+    if (!gate) return;
+    const dx = gate.x - player.x;
+    const dy = gate.y - player.y;
+    const distance = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const margin = 40;
+    const radius = Math.min(VIEW.centerX - margin, VIEW.centerY - margin);
+    const x = VIEW.centerX + Math.cos(angle) * radius;
+    const y = VIEW.centerY + Math.sin(angle) * radius;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.fillStyle = 'rgba(255,209,102,0.9)';
+    ctx.beginPath();
+    ctx.moveTo(14, 0);
+    ctx.lineTo(-8, 8);
+    ctx.lineTo(-6, 0);
+    ctx.lineTo(-8, -8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = '#ffd166';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(`Gate ${Math.round(distance)}m`, x - 32, y - 12);
+
+    if (distance < 420) {
+      const sx = gate.x - (player.x - VIEW.centerX);
+      const sy = gate.y - (player.y - VIEW.centerY);
+      ctx.strokeStyle = 'rgba(255,209,102,0.6)';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 50, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
   function drawGalaxyMap() {
     ctx.fillStyle = 'rgba(5,10,18,0.85)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
@@ -4632,9 +4797,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       '3. Store - Supplies & Cosmetics',
       '4. Accept Contract',
       '5. Install Stored Blueprints',
-      '6. Undock',
-      '7. Sell Cargo',
-      '8. Bulk Ammo Restock (240 credits)'
+      '6. Start Chapter Mission',
+      '7. Undock',
+      '8. Sell Cargo',
+      '9. Bulk Ammo Restock (240 credits)'
     ];
     options.forEach((opt, idx) => {
       ctx.fillStyle = idx === state.menuSelection ? PALETTE.gold : '#e0f2ff';
@@ -4765,6 +4931,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drawEntities(camera, sector);
     drawMiniMap();
     drawShipStatus();
+    drawGateIndicator();
     drawVignette();
     drawOverlay();
   }
@@ -4914,7 +5081,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       },
       state: {
         unlockedDepth: state.unlockedDepth,
-        storyLog: state.storyLog
+        storyLog: state.storyLog,
+        failureLedger: state.failureLedger
       },
       mission,
       contract,
@@ -4981,6 +5149,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     state.unlockedDepth = save.state?.unlockedDepth ?? state.unlockedDepth;
     state.storyLog = save.state?.storyLog || [];
+    state.failureLedger = save.state?.failureLedger || {};
 
     if (save.mission) {
       mission.active = save.mission.active || false;
@@ -4988,10 +5157,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       mission.target = save.mission.target || 0;
       mission.progress = save.mission.progress || 0;
       mission.reward = save.mission.reward || 0;
+      mission.baseReward = save.mission.baseReward || mission.reward || 0;
       mission.text = save.mission.text || '';
       mission.gateKey = save.mission.gateKey || '';
       mission.enemyType = save.mission.enemyType || '';
       mission.spawned = save.mission.spawned || false;
+      mission.timeLimit = save.mission.timeLimit || 0;
+      mission.timeRemaining = save.mission.timeRemaining || 0;
+      mission.failures = save.mission.failures || 0;
     }
 
     if (save.contract) {
@@ -5156,9 +5329,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (code === 'Digit3') openStore();
     if (code === 'Digit4') stationContract();
     if (code === 'Digit5') installStoredBlueprints();
-    if (code === 'Digit6') undock();
-    if (code === 'Digit7') sellCargo();
-    if (code === 'Digit8') bulkRestockAmmo();
+    if (code === 'Digit6') startMissionFromStation();
+    if (code === 'Digit7') undock();
+    if (code === 'Digit8') sellCargo();
+    if (code === 'Digit9') bulkRestockAmmo();
   }
 
   function handleShipyardInput(code) {
@@ -5306,6 +5480,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const sector = getCurrentSector();
     createContractForSector(sector);
     acceptContract(sector);
+  }
+
+  function startMissionFromStation() {
+    if (mission.active) {
+      noteStatus('Mission already active.');
+      return;
+    }
+    startChapterMission();
+    state.mode = 'flight';
+    state.paused = false;
+    noteStatus('Chapter mission activated.');
   }
 
   function cycleHull() {
