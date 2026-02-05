@@ -350,14 +350,73 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   const HOME_DEF = {
     id: 'home',
-    label: 'Aetherline Bastion',
+    label: 'Aetherline Bastion City',
     color: '#6df0ff',
-    radius: 92,
-    turretCount: 4,
-    maxShield: 420,
-    maxHp: 1600,
-    defenseRange: 960,
-    safeRadius: 760
+    radius: 150,
+    turretCount: 6,
+    maxShield: 680,
+    maxHp: 3000,
+    defenseRange: 1400,
+    safeRadius: 1200,
+    noFireRadius: 900
+  };
+
+  const CITY_DEF = {
+    radius: 120,
+    turretCount: 5,
+    maxShield: 520,
+    maxHp: 2400,
+    defenseRange: 1200,
+    safeRadius: 980,
+    noFireRadius: 760
+  };
+
+  const CITY_SERVICES = ['Shipyard', 'Store', 'Contracts', 'Refuel', 'Ammo', 'Navigation Sync', 'Refinery', 'Crew'];
+
+  const CITY_NAMES = [
+    'Driftline City',
+    'Solace Ring',
+    'Vespera Spire',
+    'Helio Anchorage',
+    'Argo Civic Port',
+    'Lyra Exchange'
+  ];
+
+  const HEAT = {
+    max: 100,
+    coolRate: 10,
+    scoopRate: 24,
+    innerRate: 48,
+    warning: 70,
+    critical: 90
+  };
+
+  const CIVIC_TUTORIAL = {
+    reward: 240
+  };
+
+  const NO_FIRE_ZONE = {
+    stationPadding: 120,
+    homePadding: 60,
+    warningCooldown: 2.6
+  };
+
+  const STAR_SCOOP = {
+    innerRatio: 1.1,
+    outerRatio: 2.6,
+    fuelRate: 24,
+    hyperRate: 14,
+    heatDamage: 28,
+    warningCooldown: 2.8
+  };
+
+  const SURVEY_BEACON = {
+    reward: 160,
+    revealRadius: 2400
+  };
+
+  const DISCOVERY_UPLOAD = {
+    rewardPerSector: 40
   };
 
   const TRADER_TYPES = [
@@ -609,6 +668,65 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     { id: 'log_175', title: 'Pulse Log', text: 'Pulse repeaters win close fights.' },
     { id: 'log_176', title: 'Laser Log', text: 'Lasers track faster targets.' },
     { id: 'log_177', title: 'Vault Transmission', text: 'Interstice vaults hum with pre-collapse power.' }
+  ];
+
+  const CODEX_ENTRIES = [
+    {
+      id: 'codex_heat',
+      title: 'Heat & Fuel Scooping',
+      lines: [
+        '- Skim star coronas to refill fuel/hyper, but heat rises fast.',
+        '- Back off above 70% heat; 90%+ risks critical damage.'
+      ]
+    },
+    {
+      id: 'codex_no_fire',
+      title: 'No-Fire Zones',
+      lines: [
+        '- Cities and major stations lock weapons inside their safety rings.',
+        '- Exit the ring to rearm. HUD shows NO-FIRE when active.'
+      ]
+    },
+    {
+      id: 'codex_discovery',
+      title: 'Discoveries & Uploads',
+      lines: [
+        '- New sectors award credits. Upload at Navigation Sync for more.',
+        '- Use Survey Beacons (violet) to reveal nearby sectors.'
+      ]
+    },
+    {
+      id: 'codex_hyper',
+      title: 'Hyper Navigation',
+      lines: [
+        '- Press V to open Hyper Nav, 1-9/0 to set charge, Enter to jump.',
+        '- Higher charge = longer range, higher hyper cost.'
+      ]
+    },
+    {
+      id: 'codex_signal',
+      title: 'Signal Scope',
+      lines: [
+        '- Amber is hostile, teal is trader/city, green is station, violet is survey.',
+        '- Use it to hunt convoys and find refuel points in open space.'
+      ]
+    },
+    {
+      id: 'codex_capture',
+      title: 'Capture & Alignment',
+      lines: [
+        '- Patrol carriers can capture you and offer a faction pact.',
+        '- Join to unlock contracts and faction discounts.'
+      ]
+    },
+    {
+      id: 'codex_civic',
+      title: 'Civic Cities',
+      lines: [
+        '- Cities are safe hubs in the expanse with full services.',
+        '- Civic Orientation: Repair, upload, then undock for a reward.'
+      ]
+    }
   ];
 
   const ZONE_BROADCASTS = {
@@ -1270,6 +1388,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     radioCooldown: 0,
     enemyQuietTimer: 0,
     hudMode: 'full',
+    inNoFireZone: false,
+    noFireCooldown: 0,
+    scoopCooldown: 0,
+    beaconHintCooldown: 0,
+    codexSeen: false,
+    codexScroll: 0,
+    codexReturn: 'flight',
+    civicTutorialDone: false,
+    civicTutorial: { active: false, step: 0, label: '' },
     introCompleted: false,
     intro: { active: false, phase: '', timer: 0, captureQueued: false },
     atlasUnlocked: false,
@@ -1286,8 +1413,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     bossDefeated: {},
     stationContracts: {},
     baseClaims: {},
+    beaconClaims: {},
     ruinClaims: {},
     landmarkClaims: {},
+    civicKeys: new Set(),
+    cityMap: new Map(),
+    cities: [],
     biomeStations: {},
     relayStations: [],
     systemNames: new Map(),
@@ -1304,11 +1435,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       maxShield: HOME_DEF.maxShield,
       defenseRange: HOME_DEF.defenseRange,
       safeRadius: HOME_DEF.safeRadius,
+      noFireRadius: HOME_DEF.noFireRadius,
       turrets: Array.from({ length: HOME_DEF.turretCount }).map((_, idx) => ({
         angle: (Math.PI * 2 * idx) / HOME_DEF.turretCount,
         cooldown: Math.random() * 0.8
       })),
-      services: ['Shipyard', 'Store', 'Contracts', 'Refuel', 'Ammo', 'Crew']
+      services: CITY_SERVICES
     }
   };
 
@@ -1340,6 +1472,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     energy: BASE.energyMax,
     fuel: 4800,
     hyperCharge: HYPER.maxCharge,
+    heat: 0,
     lastShot: 0,
     lastAltShot: 0,
     lastHit: 0,
@@ -1376,6 +1509,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       quartermaster: 0
     },
     milestones: new Set(),
+    discoveryUploads: new Set(),
     unlocked: {
       hulls: ['small'],
       engines: ['standard'],
@@ -1766,14 +1900,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function updateIntroSequence(dt) {
     if (!state.intro?.active) return;
-    const home = world.homeBase;
-    if (!home) return;
-    if (state.intro.phase === '') state.intro.phase = 'dock';
+    if (state.intro.phase === '') state.intro.phase = 'drift';
 
-    if (state.intro.phase === 'dock') {
+    if (state.intro.phase === 'drift') {
       if (state.mode === 'flight' && !state.paused) {
         state.intro.timer += dt;
-        if (state.intro.timer > 1.6) {
+        if (state.intro.timer > 1.8) {
           spawnStarterCaptureWing();
           state.intro.phase = 'intercept';
           state.intro.timer = 0;
@@ -1791,7 +1923,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         state.intro.captureQueued = true;
         state.intro.phase = 'captured';
       }
-      return;
     }
   }
 
@@ -2086,6 +2217,116 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     world.convergenceGate = convergenceGate;
   }
 
+  function buildCityMap() {
+    const rng = mulberry32(WORLD_SEED * 29 + 777);
+    const cities = [];
+    const civicKeys = new Set();
+    const cityMap = new Map();
+
+    const addCity = (city) => {
+      cities.push(city);
+      civicKeys.add(city.key);
+      cityMap.set(city.key, city);
+    };
+
+    const home = world.homeBase;
+    const homeGrid = gridFromPos(home.x, home.y);
+    const homeKey = sectorKey(homeGrid.gx, homeGrid.gy);
+    home.key = homeKey;
+    home.gx = homeGrid.gx;
+    home.gy = homeGrid.gy;
+    home.type = 'capital';
+    home.services = home.services || CITY_SERVICES;
+    addCity(home);
+
+    const desired = Math.max(2, Math.min(4, Math.floor(WORLD.gridRadius / 10)));
+    const minSeparation = 8;
+
+    const isReservedKey = (key) => {
+      if (key === homeKey) return true;
+      if (world.biomeStations) {
+        const entries = Object.values(world.biomeStations);
+        if (entries.some((entry) => entry.key === key)) return true;
+      }
+      if (world.relayStations && world.relayStations.some((entry) => entry.key === key)) return true;
+      if (world.convergenceGate && world.convergenceGate.key === key) return true;
+      return false;
+    };
+
+    const isFarEnough = (gx, gy) => cities.every((city) => {
+      const cgx = city.gx ?? gridFromPos(city.x, city.y).gx;
+      const cgy = city.gy ?? gridFromPos(city.x, city.y).gy;
+      return Math.hypot(gx - cgx, gy - cgy) >= minSeparation;
+    });
+
+    for (let i = 0; i < desired; i += 1) {
+      const targetDepth = Math.round(((i + 1) * WORLD.gridRadius) / (desired + 1));
+      let candidates = [];
+      for (let gx = -WORLD.gridRadius; gx <= WORLD.gridRadius; gx += 1) {
+        for (let gy = -WORLD.gridRadius; gy <= WORLD.gridRadius; gy += 1) {
+          const depth = depthFromGrid(gx, gy);
+          if (Math.abs(depth - targetDepth) > 1) continue;
+          const profile = getSectorProfile(gx, gy);
+          if (profile.isVoid) continue;
+          if (profile.zoneType !== 'expanse' && profile.zoneType !== 'lane') continue;
+          if (profile.openSpace < 0.35) continue;
+          const key = sectorKey(gx, gy);
+          if (isReservedKey(key)) continue;
+          if (!isFarEnough(gx, gy)) continue;
+          candidates.push({ gx, gy, key });
+        }
+      }
+      if (!candidates.length) {
+        for (let gx = -WORLD.gridRadius; gx <= WORLD.gridRadius; gx += 1) {
+          for (let gy = -WORLD.gridRadius; gy <= WORLD.gridRadius; gy += 1) {
+            const profile = getSectorProfile(gx, gy);
+            if (profile.isVoid) continue;
+            if (profile.zoneType === 'cluster') continue;
+            const key = sectorKey(gx, gy);
+            if (isReservedKey(key)) continue;
+            if (!isFarEnough(gx, gy)) continue;
+            candidates.push({ gx, gy, key });
+          }
+        }
+      }
+      if (!candidates.length) break;
+      const pick = candidates[Math.floor(rng() * candidates.length)];
+      const center = posFromGrid(pick.gx, pick.gy);
+      const offset = WORLD.sectorSize * 0.05;
+      const name = CITY_NAMES[(i + 1) % CITY_NAMES.length];
+      const city = {
+        id: `city-${i + 1}`,
+        type: 'city',
+        label: name,
+        name,
+        color: HOME_DEF.color,
+        radius: CITY_DEF.radius,
+        x: center.x + randRange(rng, -offset, offset),
+        y: center.y + randRange(rng, -offset, offset),
+        gx: pick.gx,
+        gy: pick.gy,
+        key: pick.key,
+        hp: CITY_DEF.maxHp,
+        maxHp: CITY_DEF.maxHp,
+        shield: CITY_DEF.maxShield,
+        maxShield: CITY_DEF.maxShield,
+        defenseRange: CITY_DEF.defenseRange,
+        safeRadius: CITY_DEF.safeRadius,
+        noFireRadius: CITY_DEF.noFireRadius,
+        turrets: Array.from({ length: CITY_DEF.turretCount }).map((_, idx) => ({
+          angle: (Math.PI * 2 * idx) / CITY_DEF.turretCount,
+          cooldown: rng() * 0.8
+        })),
+        services: CITY_SERVICES
+      };
+      addCity(city);
+    }
+
+    world.cities = cities;
+    world.civicKeys = civicKeys;
+    world.cityMap = cityMap;
+  }
+
   function getSector(gx, gy) {
     const key = sectorKey(gx, gy);
     if (world.sectors.has(key)) return world.sectors.get(key);
@@ -2112,6 +2353,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       seeds,
       isCore: profile.isCore,
       isRich: profile.isRich,
+      isCivic: world.civicKeys?.has(key) || false,
+      city: world.cityMap?.get(key) || null,
       name: getSystemName(gx, gy),
       faction: FACTIONS[(Math.abs(gx * 7 + gy * 13 + depth) % FACTIONS.length)],
       discovered: false,
@@ -2123,6 +2366,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       objects: {
         asteroids: [],
         planets: [],
+        stars: [],
         stations: [],
         bases: [],
         wrecks: [],
@@ -2130,6 +2374,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         landmarks: [],
         slipstreams: [],
         riftBeacons: [],
+        surveyBeacons: [],
         biomeProps: [],
         traders: [],
         civilians: [],
@@ -2200,6 +2445,98 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     return primary || blend || interstice || LANDMARK_TYPES[0];
   }
 
+  function populateCivicSector(sector, rng) {
+    const civicRng = rng || Math.random;
+    const city = sector.city || world.homeBase;
+    const center = city ? { x: city.x, y: city.y } : posFromGrid(sector.gx, sector.gy);
+    const civicFaction = FACTIONS.find((f) => f.id === 'aetherline');
+    if (civicFaction) sector.faction = civicFaction;
+
+    Object.keys(sector.objects).forEach((key) => {
+      sector.objects[key] = [];
+    });
+
+    const biome = BIOMES[sector.biome] || BIOMES.interstice;
+    const planetCount = 2;
+    for (let i = 0; i < planetCount; i += 1) {
+      sector.objects.planets.push({
+        x: center.x + randRange(civicRng, -3200, 3200),
+        y: center.y + randRange(civicRng, -3200, 3200),
+        radius: randRange(civicRng, 120, 210),
+        hue: randRange(civicRng, biome.hue - 20, biome.hue + 30),
+        mass: randRange(civicRng, 0.8, 1.4),
+        ring: civicRng() < 0.6
+      });
+    }
+
+    if (city) {
+      const stationTypes = ['depot', 'refinery', 'outpost', 'waystation', 'relay'];
+      const ringRadius = city.radius + 360;
+      stationTypes.forEach((type, idx) => {
+        const angle = (Math.PI * 2 * idx) / stationTypes.length;
+        sector.objects.stations.push(makeStation({
+          x: city.x + Math.cos(angle) * ringRadius,
+          y: city.y + Math.sin(angle) * ringRadius,
+          radius: randRange(civicRng, 60, 86),
+          biome: sector.biome,
+          type,
+          name: type === 'relay' ? `${city.label} Relay` : type === 'refinery' ? `${city.label} Refinery` : `${city.label} District Dock`,
+          hub: true
+        }));
+      });
+      for (let i = 0; i < 4; i += 1) {
+        const angle = randRange(civicRng, 0, Math.PI * 2);
+        const radius = randRange(civicRng, city.radius + 520, city.radius + 820);
+        sector.objects.stations.push(makeStation({
+          x: city.x + Math.cos(angle) * radius,
+          y: city.y + Math.sin(angle) * radius,
+          radius: randRange(civicRng, 52, 72),
+          biome: sector.biome,
+          type: 'depot',
+          name: `${city.label} Service Pier`
+        }));
+      }
+    }
+
+    const traderCount = 3 + Math.floor(civicRng() * 2);
+    for (let i = 0; i < traderCount; i += 1) {
+      const traderType = TRADER_TYPES[Math.floor(civicRng() * TRADER_TYPES.length)];
+      sector.objects.traders.push({
+        id: `${sector.key}-civic-trader-${i}`,
+        type: traderType.id,
+        label: traderType.label,
+        color: traderType.color,
+        vibe: traderType.vibe,
+        x: center.x + randRange(civicRng, -2400, 2400),
+        y: center.y + randRange(civicRng, -2400, 2400),
+        radius: randRange(civicRng, 22, 30),
+        driftX: randRange(civicRng, -10, 10),
+        driftY: randRange(civicRng, -10, 10),
+        phase: civicRng() * Math.PI * 2
+      });
+    }
+
+    const trafficCount = 8 + Math.floor(civicRng() * 6);
+    for (let i = 0; i < trafficCount; i += 1) {
+      const type = CIVILIAN_TYPES[Math.floor(civicRng() * CIVILIAN_TYPES.length)];
+      sector.objects.civilians.push({
+        id: `${sector.key}-civic-civ-${i}`,
+        type: type.id,
+        label: type.label,
+        x: center.x + randRange(civicRng, -3000, 3000),
+        y: center.y + randRange(civicRng, -3000, 3000),
+        angle: civicRng() * Math.PI * 2,
+        speed: randRange(civicRng, type.speed * 0.8, type.speed * 1.35),
+        size: type.size,
+        color: type.color,
+        turn: randRange(civicRng, -0.08, 0.08),
+        sway: civicRng() * Math.PI * 2
+      });
+    }
+
+    sector.encounters = [];
+  }
+
   function generateSectorObjects(sector) {
     const seeds = sector.seeds || getSectorSeeds(sector.gx, sector.gy);
     const terrainRng = mulberry32(Math.abs(seeds.terrain));
@@ -2223,6 +2560,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const innerField = fieldRadius * 0.6;
     const wideField = fieldRadius * 1.15;
     const clearZones = [];
+
+    if (sector.isCivic) {
+      populateCivicSector(sector, terrainRng);
+      return;
+    }
 
     if (isCluster && rng() < (sector.isCore ? 0.9 : 0.7)) {
       const clearCount = 1 + Math.floor(rng() * 2);
@@ -2315,6 +2657,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             });
           }
         }
+      }
+    }
+
+    const starChance = sector.isVoid
+      ? 0.2
+      : isExpanse
+        ? 0.1
+        : isCluster
+          ? 0.04
+          : 0.06;
+    if (rng() < starChance) {
+      const starCount = sector.isCore && rng() < 0.35 ? 2 : 1;
+      for (let s = 0; s < starCount; s += 1) {
+        const radius = randRange(rng, 160, 260);
+        sector.objects.stars.push({
+          x: center.x + randRange(rng, -wideField, wideField),
+          y: center.y + randRange(rng, -wideField, wideField),
+          radius,
+          hue: randRange(rng, biome.hue - 30, biome.hue + 45),
+          corona: radius * randRange(rng, 1.4, 1.9),
+          scoopRadius: radius * STAR_SCOOP.outerRatio
+        });
       }
     }
 
@@ -2471,6 +2835,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         radius: 18,
         blueprint: pickRandomBlueprint(rng)
       });
+    }
+
+    if (!sector.isVoid && !world.beaconClaims?.[sector.key]) {
+      const beaconChance = isExpanse ? 0.28 : isCluster ? 0.14 : 0.18;
+      if (rng() < beaconChance * densityScale) {
+        sector.objects.surveyBeacons.push({
+          id: `${sector.key}-survey`,
+          x: center.x + randRange(rng, -fieldRadius * 0.9, fieldRadius * 0.9),
+          y: center.y + randRange(rng, -fieldRadius * 0.9, fieldRadius * 0.9),
+          radius: randRange(rng, 28, 42),
+          pulse: rng() * Math.PI * 2
+        });
+      }
     }
 
     if (!sector.isVoid && rng() < (isCluster ? 0.38 : isExpanse ? 0.03 : 0.06) * densityScale) {
@@ -2904,14 +3281,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function initPlayerPosition() {
-    if (state.intro?.active && world.homeBase) {
-      player.x = world.homeBase.x + world.homeBase.radius + 140;
-      player.y = world.homeBase.y + 40;
-    } else {
-      const start = getStartLocation();
-      player.x = start.x;
-      player.y = start.y;
-    }
+    const start = getStartLocation();
+    player.x = start.x;
+    player.y = start.y;
     player.vx = 0;
     player.vy = 0;
     player.angle = -Math.PI / 2;
@@ -2974,6 +3346,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.affiliation = '';
       player.factionRep = {};
       player.hyperCharge = HYPER.maxCharge;
+      player.heat = 0;
       player.angularVelocity = 0;
       player.throttle = 0;
       player.flightAssist = true;
@@ -3006,6 +3379,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0 };
       player.crew = { navigator: 0, engineer: 0, quartermaster: 0 };
       player.milestones = new Set();
+      player.discoveryUploads = new Set();
       player.chapterIndex = 0;
       player.distanceThisChapter = 0;
       player.distanceTotal = 0;
@@ -3041,19 +3415,32 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.radioCooldown = 0;
       state.enemyQuietTimer = 0;
       state.hudMode = 'full';
+      state.inNoFireZone = false;
+      state.noFireCooldown = 0;
+      state.scoopCooldown = 0;
+      state.beaconHintCooldown = 0;
+      state.codexSeen = false;
+      state.codexScroll = 0;
+      state.codexReturn = 'flight';
+      state.civicTutorialDone = false;
+      state.civicTutorial = { active: false, step: 0, label: '' };
       state.introCompleted = false;
-      state.intro = { active: true, phase: 'dock', timer: 0, captureQueued: false };
+      state.intro = { active: true, phase: 'drift', timer: 0, captureQueued: false };
       state.atlasUnlocked = false;
       state.atlasCompleted = false;
       world.discovered.clear();
       world.bossDefeated = {};
       world.stationContracts = {};
       world.baseClaims = {};
+      world.beaconClaims = {};
       world.ruinClaims = {};
       world.landmarkClaims = {};
       world.biomeStations = {};
       world.relayStations = [];
       world.systemNames = new Map();
+      world.cities = [];
+      world.civicKeys = new Set();
+      world.cityMap = new Map();
       world.gatePositions = {};
       world.convergenceGate = null;
       world.clusterFields = [];
@@ -3061,6 +3448,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       buildClusterMap();
       buildGateMap();
       buildStationMap();
+      buildCityMap();
       buildSkygridBackground();
       resetHomeDefense();
       contract.active = false;
@@ -3356,10 +3744,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function spawnStarterCaptureWing() {
     const sector = getCurrentSector();
     if (!sector) return;
+    if (sector.isCivic) return;
     const angle = Math.random() * Math.PI * 2;
-    const home = world.homeBase;
-    const baseDistance = home?.defenseRange ? home.defenseRange + 140 : 760;
-    const radius = state.intro?.active ? randRange(Math.random, baseDistance, baseDistance + 220) : randRange(Math.random, 620, 820);
+    const radius = state.intro?.active ? randRange(Math.random, 520, 720) : randRange(Math.random, 620, 820);
     const anchorX = player.x + Math.cos(angle) * radius;
     const anchorY = player.y + Math.sin(angle) * radius;
     spawnEnemy('transport', anchorX, anchorY, 1.1, { captureBias: 1.1, patrolTag: 'starter' });
@@ -3383,6 +3770,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function spawnRoamingPatrol(sector) {
     if (!sector) return;
+    if (sector.isCivic) return;
     const angle = Math.random() * Math.PI * 2;
     const radius = randRange(Math.random, PATROL_SPAWN.minDistance, PATROL_SPAWN.maxDistance);
     const anchorX = player.x + Math.cos(angle) * radius;
@@ -3487,6 +3875,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function updateEvents(dt) {
     const sector = getCurrentSector();
+    if (sector.isCivic) {
+      sector.events = [];
+      return;
+    }
     if (!sector.events) sector.events = [];
     if (sector.events.length < 2 && Math.random() < dt * 0.05) {
       spawnSectorEvent(sector);
@@ -3658,6 +4050,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       adjustFactionRep(factionId, 12, 'Joined faction');
       assignFactionContract(factionId);
     }
+    const home = world.homeBase;
+    if (home) {
+      const homeGrid = gridFromPos(home.x, home.y);
+      const homeSector = getSector(homeGrid.gx, homeGrid.gy);
+      homeSector.discovered = true;
+      world.discovered.add(homeSector.key);
+      noteStatus('Bastion City coordinates uploaded.');
+    }
     player.hp = Math.max(player.hp, cachedStats.maxHp * 0.55);
     player.shield = Math.max(player.shield, cachedStats.maxShield * 0.35);
     state.capture = { active: false, faction: '', label: '', origin: '' };
@@ -3798,6 +4198,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function fireLaser(weapon, isPrimary = true) {
     if (!weapon || !weapon.hitscan) return;
+    if (blockWeaponsForNoFire()) return;
     const now = state.time;
     if (now - player.lastShot < Math.max(cachedStats.fireDelay, weapon.cooldown)) return;
     if (player.energy < weapon.energy) {
@@ -3835,6 +4236,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function fireWeapon(weaponId, isPrimary = true) {
     const weapon = WEAPONS[weaponId];
     if (!weapon) return;
+    if (blockWeaponsForNoFire()) return;
     if (!player.unlocked.weapons.includes(weaponId)) {
       noteStatus('Weapon locked.');
       return;
@@ -3877,6 +4279,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function fireEMPBurst() {
     const now = state.time;
+    if (blockWeaponsForNoFire()) return;
     if (now - player.lastAltShot < 1.5) return;
     if (player.energy < 45) {
       noteStatus('Not enough energy for EMP.');
@@ -3961,7 +4364,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
 
     if (world.homeBase) {
-      targets.push(buildHyperTarget('home', 'Aetherline Bastion', world.homeBase.x, world.homeBase.y, world.homeBase.radius || 60, 'home'));
+      targets.push(buildHyperTarget('home', 'Bastion City', world.homeBase.x, world.homeBase.y, world.homeBase.radius || 60, 'home'));
+    }
+
+    if (world.cities && world.cities.length) {
+      world.cities.forEach((city) => {
+        if (city.type === 'capital') return;
+        targets.push(buildHyperTarget(city.id, city.label, city.x, city.y, city.radius || 60, 'city'));
+      });
     }
 
     return targets
@@ -4062,7 +4472,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const escapeReason = state.escape.reason || 'retreat';
       state.escape.reason = '';
       if (mission.active) failMission(escapeReason);
-      noteStatus('Return complete. Docked at base.');
+      noteStatus('Return complete. Docked at city.');
     }
     return true;
   }
@@ -4096,6 +4506,129 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function getCargoCount() {
     const cargo = player.inventory.cargo;
     return cargo.salvage + cargo.alloys + cargo.relics;
+  }
+
+  function isNoFireZone(x, y) {
+    if (world.cities && world.cities.length) {
+      for (let i = 0; i < world.cities.length; i += 1) {
+        const city = world.cities[i];
+        const padding = city.type === 'capital' ? (NO_FIRE_ZONE.homePadding || 0) : (NO_FIRE_ZONE.homePadding || 0) * 0.7;
+        const radius = (city.noFireRadius || city.safeRadius || city.radius) + padding;
+        if (dist(x, y, city.x, city.y) < radius) return true;
+      }
+    }
+    const sector = getCurrentSector();
+    if (sector?.objects?.stations?.length) {
+      const padding = NO_FIRE_ZONE.stationPadding || 0;
+      for (let i = 0; i < sector.objects.stations.length; i += 1) {
+        const station = sector.objects.stations[i];
+        if (dist(x, y, station.x, station.y) < station.radius + padding) return true;
+      }
+    }
+    return false;
+  }
+
+  function updateNoFireZone(dt) {
+    if (state.noFireCooldown > 0) {
+      state.noFireCooldown = Math.max(0, state.noFireCooldown - dt);
+    }
+    if (state.scoopCooldown > 0) {
+      state.scoopCooldown = Math.max(0, state.scoopCooldown - dt);
+    }
+    if (state.beaconHintCooldown > 0) {
+      state.beaconHintCooldown = Math.max(0, state.beaconHintCooldown - dt);
+    }
+    if (state.mode !== 'flight') return;
+    const inZone = isNoFireZone(player.x, player.y);
+    if (inZone !== state.inNoFireZone) {
+      state.inNoFireZone = inZone;
+      noteStatus(inZone ? 'No-fire zone engaged. Weapons locked.' : 'Exiting no-fire zone. Weapons live.');
+    }
+  }
+
+  function blockWeaponsForNoFire() {
+    if (!state.inNoFireZone) return false;
+    if (state.noFireCooldown <= 0) {
+      noteStatus('Weapons locked in no-fire zone.');
+      state.noFireCooldown = NO_FIRE_ZONE.warningCooldown;
+    }
+    return true;
+  }
+
+  function getPendingDiscoveryCount() {
+    if (!world.discovered) return 0;
+    const uploads = player.discoveryUploads || new Set();
+    let pending = 0;
+    world.discovered.forEach((key) => {
+      if (!uploads.has(key)) pending += 1;
+    });
+    return pending;
+  }
+
+  function uploadDiscoveries() {
+    const station = state.activeStation;
+    if (!station?.services?.includes('Navigation Sync')) {
+      noteStatus('Navigation sync unavailable.');
+      return;
+    }
+    const uploads = player.discoveryUploads || new Set();
+    const pending = [];
+    world.discovered.forEach((key) => {
+      if (!uploads.has(key)) pending.push(key);
+    });
+    if (!pending.length) {
+      noteStatus('No new discoveries to upload.');
+      advanceCivicTutorial('upload');
+      return;
+    }
+    pending.forEach((key) => uploads.add(key));
+    player.discoveryUploads = uploads;
+    const reward = pending.length * DISCOVERY_UPLOAD.rewardPerSector;
+    awardCredits(reward, 'Discovery upload');
+    pushStoryLog(`Uploaded ${pending.length} discovery logs.`);
+    saveLocal();
+    advanceCivicTutorial('upload');
+  }
+
+  function openCodex(returnMode = 'flight') {
+    state.codexReturn = returnMode;
+    state.codexSeen = true;
+    state.codexScroll = clamp(state.codexScroll || 0, 0, Math.max(0, CODEX_ENTRIES.length - 1));
+    state.mode = 'codex';
+    state.paused = true;
+  }
+
+  function closeCodex() {
+    const returnMode = state.codexReturn || 'flight';
+    state.mode = returnMode;
+    state.paused = returnMode !== 'flight';
+  }
+
+  function beginCivicTutorial(label) {
+    if (state.civicTutorialDone || state.civicTutorial?.active) return;
+    state.civicTutorial = { active: true, step: 0, label: label || 'Civic Hub' };
+    noteStatus('Civic orientation started.');
+  }
+
+  function advanceCivicTutorial(action) {
+    if (!state.civicTutorial?.active) return;
+    if (state.civicTutorial.step === 0 && action === 'repair') {
+      state.civicTutorial.step = 1;
+      noteStatus('Civic: refuel complete. Upload discoveries next.');
+      return;
+    }
+    if (state.civicTutorial.step === 1 && action === 'upload') {
+      state.civicTutorial.step = 2;
+      noteStatus('Civic: discovery upload logged. Undock to continue.');
+      return;
+    }
+    if (state.civicTutorial.step === 2 && action === 'undock') {
+      state.civicTutorial.active = false;
+      state.civicTutorialDone = true;
+      awardCredits(CIVIC_TUTORIAL.reward, 'Civic orientation');
+      pushStoryLog('Civic orientation complete.');
+      noteStatus('Civic orientation complete.');
+    }
   }
 
   function unlockLoreEntry(source = 'data shard') {
@@ -4253,6 +4786,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function spawnWave(sector, dt) {
     if (!sector) return;
+    if (sector.isCivic) {
+      sector.spawnTimer = 3;
+      return;
+    }
     const biome = BIOMES[sector.biome];
     const zone = sector.zone || ZONE_TYPES.cluster;
     const isExpanse = sector.zoneType === 'expanse';
@@ -4360,6 +4897,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy);
     const isStatic = enemy.def?.static;
+    if (world.cities && world.cities.length) {
+      for (let i = 0; i < world.cities.length; i += 1) {
+        const city = world.cities[i];
+        if (dist(enemy.x, enemy.y, city.x, city.y) < (city.noFireRadius || city.safeRadius || city.radius)) {
+          enemy.state = 'retreat';
+          break;
+        }
+      }
+    }
 
     if (enemy.stunned) {
       enemy.stunned = Math.max(0, enemy.stunned - dt);
@@ -4506,6 +5052,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     enemy.fireCooldown -= dt;
     if (enemy.state === 'attack' && enemy.fireCooldown <= 0) {
+      if (isNoFireZone(enemy.x, enemy.y)) {
+        enemy.fireCooldown = 0.6 + Math.random() * 0.4;
+        return;
+      }
       enemy.fireCooldown = enemy.isBoss ? 0.5 : enemy.def.fireRate;
       const dir = normalize(player.x - enemy.x, player.y - enemy.y);
       let weapon = { damage: enemy.def.damage, speed: 360, color: enemy.isBoss ? '#ffb347' : '#ff6b6b' };
@@ -4597,26 +5147,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function updateHomeDefense(dt) {
-    const base = world.homeBase;
-    if (!base) return;
+    if (!world.cities || world.cities.length === 0) return;
     const sector = getCurrentSector();
-    const grid = gridFromPos(base.x, base.y);
-    if (grid.gx !== sector.gx || grid.gy !== sector.gy) return;
-    base.shield = clamp(base.shield + dt * 8, 0, base.maxShield);
-    base.turrets.forEach((turret) => {
-      turret.cooldown -= dt;
-      if (turret.cooldown > 0) return;
-      const target = findClosestEnemy(base.x, base.y, base.defenseRange || 900);
-      if (!target) return;
-      turret.cooldown = 0.7 + Math.random() * 0.5;
-      const dir = normalize(target.x - base.x, target.y - base.y);
-      spawnProjectile(
-        { id: 'home', damage: 16 + player.level * 1.2, speed: 460, color: base.color, cooldown: 0, energy: 0, splash: 10 },
-        base.x + dir.x * (base.radius * 0.65),
-        base.y + dir.y * (base.radius * 0.65),
-        dir,
-        true
-      );
+    world.cities.forEach((base) => {
+      const grid = gridFromPos(base.x, base.y);
+      if (grid.gx !== sector.gx || grid.gy !== sector.gy) return;
+      base.shield = clamp(base.shield + dt * 8, 0, base.maxShield);
+      if (!base.turrets) return;
+      base.turrets.forEach((turret) => {
+        turret.cooldown -= dt;
+        if (turret.cooldown > 0) return;
+        const target = findClosestEnemy(base.x, base.y, base.defenseRange || 900);
+        if (!target) return;
+        turret.cooldown = 0.7 + Math.random() * 0.5;
+        const dir = normalize(target.x - base.x, target.y - base.y);
+        spawnProjectile(
+          { id: 'city', damage: 16 + player.level * 1.2, speed: 460, color: base.color, cooldown: 0, energy: 0, splash: 10 },
+          base.x + dir.x * (base.radius * 0.65),
+          base.y + dir.y * (base.radius * 0.65),
+          dir,
+          true
+        );
+      });
     });
   }
 
@@ -4691,6 +5243,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
     sector.objects.bases.forEach((base) => checkObstacle(base.x, base.y, base.radius));
     sector.objects.planets.forEach((planet) => checkObstacle(planet.x, planet.y, planet.radius + 40));
+    sector.objects.stars.forEach((star) => checkObstacle(star.x, star.y, star.radius * 1.2));
     sector.objects.ruins.forEach((ruin) => checkObstacle(ruin.x, ruin.y, ruin.radius));
 
     if (!threat) return { x: 0, y: 0 };
@@ -4836,6 +5389,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function handleCollisions(dt) {
     const sector = getCurrentSector();
+    let heatRate = -HEAT.coolRate;
 
     sector.objects.asteroids.forEach((asteroid) => {
       if (asteroid.ghost) return;
@@ -4900,6 +5454,37 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     });
 
+    sector.objects.stars.forEach((star) => {
+      const d = dist(player.x, player.y, star.x, star.y);
+      const inner = star.radius * STAR_SCOOP.innerRatio;
+      const scoopRadius = star.scoopRadius || star.radius * STAR_SCOOP.outerRatio;
+      if (d < inner) {
+        heatRate = Math.max(heatRate, HEAT.innerRate * (1 - d / inner));
+        applyDamage(player, STAR_SCOOP.heatDamage * dt * 4);
+        addCameraShake(0.6, 0.2);
+        if (state.scoopCooldown <= 0) {
+          noteStatus('Star heat spike. Pull back.');
+          state.scoopCooldown = STAR_SCOOP.warningCooldown;
+        }
+      } else if (d < scoopRadius) {
+        heatRate = Math.max(heatRate, HEAT.scoopRate * (1 - d / scoopRadius));
+        player.fuel = clamp(player.fuel + STAR_SCOOP.fuelRate * dt, 0, cachedStats.fuelMax);
+        player.hyperCharge = clamp(player.hyperCharge + STAR_SCOOP.hyperRate * dt, 0, HYPER.maxCharge);
+        spawnParticle(player.x, player.y, 'rgba(255,209,102,0.45)', 0.3, 3, 0, 0);
+        if (state.scoopCooldown <= 0) {
+          noteStatus('Fuel scooping engaged.');
+          state.scoopCooldown = STAR_SCOOP.warningCooldown;
+        }
+      }
+    });
+
+    if (player.heat === undefined) player.heat = 0;
+    player.heat = clamp(player.heat + heatRate * dt, 0, HEAT.max);
+    if (player.heat >= HEAT.warning && state.scoopCooldown <= 0) {
+      noteStatus(player.heat >= HEAT.critical ? 'Heat critical. Break off immediately.' : 'Heat rising. Reduce scoop.');
+      state.scoopCooldown = STAR_SCOOP.warningCooldown;
+    }
+
     sector.objects.biomeProps.forEach((prop) => {
       const hazard = PROP_HAZARDS[prop.type];
       if (!hazard) return;
@@ -4926,6 +5511,24 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         player.fuel = clamp(player.fuel + 10 * dt, 0, cachedStats.fuelMax);
         player.hyperCharge = clamp(player.hyperCharge + 24 * dt, 0, HYPER.maxCharge);
         spawnParticle(player.x, player.y, beacon.color || 'rgba(255,209,102,0.45)', 0.25, 2, 0, 0);
+      }
+    });
+
+    sector.objects.surveyBeacons.forEach((beacon) => {
+      if (world.beaconClaims?.[sector.key]) return;
+      const d = dist(player.x, player.y, beacon.x, beacon.y);
+      if (d < beacon.radius + 30) {
+        if (state.scanPulse > 0 || player.blueprints.has('scanner_drone')) {
+          world.beaconClaims = world.beaconClaims || {};
+          world.beaconClaims[sector.key] = true;
+          awardCredits(SURVEY_BEACON.reward, 'Survey beacon uplink');
+          revealSectorsAround(beacon.x, beacon.y, SURVEY_BEACON.revealRadius);
+          updateOptionalProgress('scan', { amount: 1 });
+          noteStatus('Survey uplink complete.');
+        } else if (state.beaconHintCooldown <= 0) {
+          noteStatus('Survey beacon found. Pulse scan to uplink.');
+          state.beaconHintCooldown = 3.2;
+        }
       }
     });
 
@@ -5379,7 +5982,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const sector = getCurrentSector();
     const station = sector.objects.stations.find((s) => dist(player.x, player.y, s.x, s.y) < s.radius + 40);
     const trader = sector.objects.traders.find((t) => dist(player.x, player.y, t.x, t.y) < t.radius + 60);
+    const city = world.cities
+      ? world.cities.find((entry) => dist(player.x, player.y, entry.x, entry.y) < entry.radius + 50 && entry.type !== 'capital')
+      : null;
     const home = world.homeBase && dist(player.x, player.y, world.homeBase.x, world.homeBase.y) < world.homeBase.radius + 50 ? world.homeBase : null;
+    if (city) {
+      noteStatus(`${city.label} in range. Press E to dock.`);
+      if (input.justPressed['KeyE']) {
+        state.mode = 'station';
+        state.paused = true;
+        state.menuSelection = 0;
+        state.activeStation = { ...city, biome: sector.biome, type: 'city', faction: sector.faction?.id || 'aetherline' };
+        if (!player.affiliation) {
+          player.affiliation = 'aetherline';
+          noteStatus('Aligned with Aetherline.');
+          pushStoryLog('Joined Aetherline Command.');
+        }
+        if (!state.civicTutorialDone) beginCivicTutorial(city.label);
+        noteStatus(`Docked at ${city.label}.`);
+      }
+      return;
+    }
     if (station) {
       noteStatus(`${station.label || 'Station'} in range. Press E to dock.`);
       if (input.justPressed['KeyE']) {
@@ -5397,7 +6020,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       return;
     }
     if (home) {
-      noteStatus('Home base in range. Press E to dock.');
+      noteStatus('Bastion City in range. Press E to dock.');
       if (input.justPressed['KeyE']) {
         state.mode = 'station';
         state.paused = true;
@@ -5408,6 +6031,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           noteStatus('Aligned with Aetherline.');
           pushStoryLog('Joined Aetherline Command.');
         }
+        if (!state.civicTutorialDone) beginCivicTutorial(home.label);
         noteStatus(`Docked at ${world.homeBase.name}.`);
       }
       return;
@@ -5600,6 +6224,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.scanPulse = Math.max(0, state.scanPulse - dt);
 
     updatePlayer(dt);
+    updateNoFireZone(dt);
     updateEnemies(dt);
     updateBases(dt);
     updateHomeDefense(dt);
@@ -5634,7 +6259,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (hudScore) {
       const sector = getCurrentSector();
       const biomeName = BIOMES[sector.biome]?.name || sector.biome;
-      hudScore.textContent = `Distance: ${Math.floor(player.distanceTotal)} | Lvl ${player.level} | Fuel ${Math.round(player.fuel)} | ${biomeName} / ${sector.zone?.label || 'Cluster'} | Atlas ${player.atlasSigils.size}/${ATLAS_REQUIRED}`;
+      const heatValue = Math.round(player.heat || 0);
+      hudScore.textContent = `Distance: ${Math.floor(player.distanceTotal)} | Lvl ${player.level} | Fuel ${Math.round(player.fuel)} | Heat ${heatValue}% | ${biomeName} / ${sector.zone?.label || 'Cluster'} | Atlas ${player.atlasSigils.size}/${ATLAS_REQUIRED}`;
     }
     const chapter = STORY[player.chapterIndex];
     if (hudObjective && chapter) {
@@ -5647,7 +6273,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       hudObjective.textContent = `Objective: ${chapter.objective}${missionText}${contractText}${gateText}`;
     }
     if (upgradeNote) {
-      upgradeNote.textContent = 'Upgrades persist. Dock at stations for shipyard and store access.';
+      upgradeNote.textContent = state.codexSeen
+        ? 'Upgrades persist. Dock at stations for shipyard and store access.'
+        : 'Tip: Press K for the Pilot Codex (fuel, heat, docking, uploads).';
     }
   }
 
@@ -6380,37 +7008,80 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.restore();
   }
 
-  function drawHomeBase(camera, sector) {
-    const base = world.homeBase;
+  function drawCityHub(base, camera) {
     if (!base) return;
-    const grid = gridFromPos(base.x, base.y);
-    if (grid.gx !== sector.gx || grid.gy !== sector.gy) return;
     const x = base.x - camera.x + VIEW.centerX;
     const y = base.y - camera.y + VIEW.centerY;
     ctx.save();
     ctx.translate(x, y);
     const color = base.color || '#6df0ff';
-    ctx.shadowBlur = 16;
+    const r = base.radius;
+    ctx.shadowBlur = 22;
     ctx.shadowColor = color;
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2.4;
+    ctx.lineWidth = 2.6;
     ctx.beginPath();
-    ctx.arc(0, 0, base.radius, 0, Math.PI * 2);
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
+
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = 'rgba(109,240,255,0.65)';
+    for (let i = 0; i < 8; i += 1) {
+      const start = (Math.PI * 2 * i) / 8;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.85, start, start + Math.PI / 5.5);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = 'rgba(109,240,255,0.4)';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.65, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.42, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(8,16,30,0.85)';
+    ctx.strokeStyle = 'rgba(109,240,255,0.55)';
     ctx.beginPath();
     for (let i = 0; i < 6; i += 1) {
-      const angle = (Math.PI * 2 * i) / 6;
-      const r = base.radius * 0.58;
-      if (i === 0) ctx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
-      else ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+      const angle = (Math.PI * 2 * i) / 6 + Math.PI / 6;
+      const coreR = r * 0.28;
+      const px = Math.cos(angle) * coreR;
+      const py = Math.sin(angle) * coreR;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
     }
     ctx.closePath();
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(109,240,255,0.1)';
-    ctx.beginPath();
-    ctx.arc(0, 0, base.radius * 0.6, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(109,240,255,0.3)';
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 6; i += 1) {
+      const angle = (Math.PI * 2 * i) / 6;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * r * 0.5, Math.sin(angle) * r * 0.5);
+      ctx.lineTo(Math.cos(angle) * r * 0.95, Math.sin(angle) * r * 0.95);
+      ctx.stroke();
+    }
+
+    for (let i = 0; i < 4; i += 1) {
+      ctx.save();
+      ctx.rotate((Math.PI / 2) * i);
+      ctx.fillStyle = 'rgba(109,240,255,0.18)';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.08, -r * 0.96);
+      ctx.lineTo(r * 0.08, -r * 0.96);
+      ctx.lineTo(r * 0.16, -r * 0.72);
+      ctx.lineTo(-r * 0.16, -r * 0.72);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
 
     if (base.turrets) {
       base.turrets.forEach((turret) => {
@@ -6418,10 +7089,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ctx.rotate(turret.angle);
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.moveTo(0, -base.radius * 0.95);
-        ctx.lineTo(base.radius * 0.06, -base.radius * 0.75);
-        ctx.lineTo(-base.radius * 0.06, -base.radius * 0.75);
-        ctx.closePath();
+        ctx.rect(-r * 0.05, -r * 0.98, r * 0.1, r * 0.18);
         ctx.fill();
         ctx.restore();
       });
@@ -6430,19 +7098,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (base.shield > 0) {
       const shieldRatio = clamp(base.shield / (base.maxShield || 1), 0.2, 1);
       ctx.strokeStyle = `rgba(109,240,255,${0.2 + shieldRatio * 0.35})`;
-      ctx.lineWidth = 1.6;
+      ctx.lineWidth = 1.8;
       ctx.beginPath();
-      ctx.arc(0, 0, base.radius + 14, 0, Math.PI * 2);
+      ctx.arc(0, 0, r + 16, 0, Math.PI * 2);
       ctx.stroke();
       ctx.lineWidth = 1;
     }
     const distance = dist(player.x, player.y, base.x, base.y);
-    if (distance < 260) {
+    if (distance < 300) {
       ctx.fillStyle = '#e0f2ff';
       ctx.font = '12px sans-serif';
-      ctx.fillText(base.label, base.radius + 10, -base.radius - 6);
+      ctx.fillText(base.label, r + 10, -r - 8);
     }
     ctx.restore();
+  }
+
+  function drawCityHubs(camera, sector) {
+    if (!world.cities || !world.cities.length) return;
+    world.cities.forEach((city) => {
+      const grid = gridFromPos(city.x, city.y);
+      if (grid.gx !== sector.gx || grid.gy !== sector.gy) return;
+      drawCityHub(city, camera);
+    });
   }
 
   function drawWreck(wreck, camera) {
@@ -6878,6 +7555,67 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.restore();
   }
 
+  function drawSurveyBeacon(beacon, camera) {
+    const x = beacon.x - camera.x + VIEW.centerX;
+    const y = beacon.y - camera.y + VIEW.centerY;
+    const pulse = 0.6 + Math.sin(state.time * 2.1 + beacon.pulse) * 0.4;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = 'rgba(199,125,255,0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, beacon.radius + pulse * 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(199,125,255,0.35)';
+    ctx.beginPath();
+    ctx.arc(0, 0, beacon.radius * 0.55, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(199,125,255,0.15)';
+    ctx.beginPath();
+    ctx.arc(0, 0, beacon.radius * 0.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawStar(star, camera) {
+    const x = star.x - camera.x + VIEW.centerX;
+    const y = star.y - camera.y + VIEW.centerY;
+    const pulse = 0.7 + Math.sin(state.time * 0.5 + star.radius) * 0.3;
+    const hue = star.hue || 40;
+    const corona = star.corona || star.radius * 1.7;
+    ctx.save();
+    ctx.translate(x, y);
+    const glow = ctx.createRadialGradient(0, 0, star.radius * 0.2, 0, 0, corona);
+    glow.addColorStop(0, `hsla(${hue},85%,65%,0.95)`);
+    glow.addColorStop(0.6, `hsla(${hue + 15},80%,55%,0.35)`);
+    glow.addColorStop(1, `hsla(${hue + 25},90%,50%,0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, 0, corona * pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = `hsla(${hue},80%,60%,0.9)`;
+    ctx.beginPath();
+    ctx.arc(0, 0, star.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, star.radius * 0.92, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = `hsla(${hue + 10},90%,70%,0.45)`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-star.radius * 1.25, 0);
+    ctx.lineTo(star.radius * 1.25, 0);
+    ctx.moveTo(0, -star.radius * 1.25);
+    ctx.lineTo(0, star.radius * 1.25);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawSlipstream(stream, camera) {
     const x = stream.x - camera.x + VIEW.centerX;
     const y = stream.y - camera.y + VIEW.centerY;
@@ -6901,6 +7639,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function drawSectorObjects(sector, camera) {
+    sector.objects.stars.forEach((star) => drawStar(star, camera));
     sector.objects.planets.forEach((planet) => {
       const x = planet.x - camera.x + VIEW.centerX;
       const y = planet.y - camera.y + VIEW.centerY;
@@ -6953,6 +7692,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       drawLandmark(landmark, camera);
     });
     sector.objects.riftBeacons.forEach((beacon) => drawRiftBeacon(beacon, camera));
+    sector.objects.surveyBeacons.forEach((beacon) => {
+      if (world.beaconClaims?.[sector.key]) return;
+      drawSurveyBeacon(beacon, camera);
+    });
     drawEvents(sector, camera);
     const gate = getGateData();
     if (gate && gate.key === sector.key) {
@@ -6977,7 +7720,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fillText('Relay Gate', gx + 96, gy - 10);
       ctx.restore();
     }
-    drawHomeBase(camera, sector);
+    drawCityHubs(camera, sector);
 
     sector.objects.anomalies.forEach((anomaly) => {
       const x = anomaly.x - camera.x + VIEW.centerX;
@@ -7536,18 +8279,38 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const hudAlpha = getHudAlpha();
     ctx.save();
     ctx.globalAlpha = hudAlpha;
+    const panelTop = VIEW.height - 138;
     ctx.fillStyle = 'rgba(5,10,18,0.55)';
-    ctx.fillRect(12, VIEW.height - 122, 300, 112);
+    ctx.fillRect(12, panelTop, 300, 128);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
-    ctx.strokeRect(12, VIEW.height - 122, 300, 112);
+    ctx.strokeRect(12, panelTop, 300, 128);
     ctx.fillStyle = PALETTE.glow;
     ctx.font = '12px sans-serif';
-    ctx.fillText(`Hull ${Math.round(player.hp)}/${Math.round(cachedStats.maxHp)}`, 22, VIEW.height - 94);
-    ctx.fillText(`Shield ${Math.round(player.shield)}/${Math.round(cachedStats.maxShield)}`, 22, VIEW.height - 78);
-    ctx.fillText(`Energy ${Math.round(player.energy)}/${Math.round(cachedStats.energyMax)}`, 22, VIEW.height - 62);
-    ctx.fillText(`Boost ${Math.round(player.boost)}/${Math.round(cachedStats.boostMax)}`, 22, VIEW.height - 46);
-    ctx.fillText(`Fuel ${Math.round(player.fuel)}/${Math.round(cachedStats.fuelMax)}`, 22, VIEW.height - 30);
-    ctx.fillText(`Hyper ${Math.round(player.hyperCharge)}% | Dial ${getHyperChargeLevel() * 10}%`, 22, VIEW.height - 14);
+    let lineY = panelTop + 18;
+    if (state.inNoFireZone) {
+      ctx.fillStyle = PALETTE.gold;
+      ctx.fillText('NO-FIRE ZONE', 22, lineY);
+      ctx.fillStyle = PALETTE.glow;
+      lineY += 16;
+    }
+    const heatValue = player.heat || 0;
+    const heatPct = Math.round((heatValue / HEAT.max) * 100);
+    const heatColor = heatPct >= 90 ? '#ff6b6b' : heatPct >= 70 ? '#ffd166' : '#7dfc9a';
+    ctx.fillStyle = heatColor;
+    ctx.fillText(`Heat ${heatPct}%`, 22, lineY);
+    ctx.fillStyle = PALETTE.glow;
+    lineY += 16;
+    ctx.fillText(`Hull ${Math.round(player.hp)}/${Math.round(cachedStats.maxHp)}`, 22, lineY);
+    lineY += 16;
+    ctx.fillText(`Shield ${Math.round(player.shield)}/${Math.round(cachedStats.maxShield)}`, 22, lineY);
+    lineY += 16;
+    ctx.fillText(`Energy ${Math.round(player.energy)}/${Math.round(cachedStats.energyMax)}`, 22, lineY);
+    lineY += 16;
+    ctx.fillText(`Boost ${Math.round(player.boost)}/${Math.round(cachedStats.boostMax)}`, 22, lineY);
+    lineY += 16;
+    ctx.fillText(`Fuel ${Math.round(player.fuel)}/${Math.round(cachedStats.fuelMax)}`, 22, lineY);
+    lineY += 16;
+    ctx.fillText(`Hyper ${Math.round(player.hyperCharge)}% | Dial ${getHyperChargeLevel() * 10}%`, 22, lineY);
 
     const primaryWeapon = WEAPONS[player.weapons.primary];
     const secondaryWeapon = WEAPONS[player.weapons.secondary];
@@ -7634,7 +8397,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     ctx.fillStyle = 'rgba(109,240,255,0.9)';
     ctx.font = '11px sans-serif';
-    ctx.fillText(`Home ${Math.round(distance)}m`, x - 32, y - 12);
+    ctx.fillText(`City ${Math.round(distance)}m`, x - 30, y - 12);
   }
 
   function drawConvergenceIndicator() {
@@ -7713,8 +8476,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ? `Cooling ${state.hyperDrive.cooldown.toFixed(1)}s`
       : `${Math.round(player.hyperCharge)}%`;
     lines.push({ text: `Hyper Map (V): ${hyperLabel} | Dial ${hyperLevel * 10}% | Jump (Enter)`, color: '#9ad6ff' });
-    lines.push({ text: 'Return Jump (J): Base retreat with mission penalty', color: '#9fb4d9' });
-    lines.push({ text: 'Signal Scope: amber=hostile, teal=trader, green=station', color: '#9fb4d9' });
+    lines.push({ text: 'Return Jump (J): City retreat with mission penalty', color: '#9fb4d9' });
+    lines.push({ text: 'Signal Scope: amber=hostile, teal=trader/city, green=station, violet=survey', color: '#9fb4d9' });
     if (!lines.length) return;
     const width = 520;
     const height = lines.length * 16 + 12;
@@ -7756,8 +8519,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
     sector.objects.traders.forEach((trader) => addContact('trader', trader.x, trader.y, '#6df0ff', 2.4));
     sector.objects.stations.forEach((station) => addContact('station', station.x, station.y, '#7dfc9a', 3));
+    if (world.cities && world.cities.length) {
+      world.cities.forEach((city) => {
+        if (city.type === 'capital' || dist(city.x, city.y, player.x, player.y) > range) return;
+        addContact('city', city.x, city.y, '#6df0ff', 3.6);
+      });
+    }
     sector.objects.bases.forEach((base) => addContact('base', base.x, base.y, '#ff6b6b', 3.4));
     sector.objects.civilians.forEach((ship) => addContact('civil', ship.x, ship.y, 'rgba(159,180,217,0.7)', 2));
+    sector.objects.surveyBeacons.forEach((beacon) => {
+      if (world.beaconClaims?.[sector.key]) return;
+      addContact('survey', beacon.x, beacon.y, '#c77dff', 2.6);
+    });
 
     contacts.sort((a, b) => a.distance - b.distance);
 
@@ -8019,6 +8792,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fill();
     }
 
+    if (world.cities && world.cities.length) {
+      world.cities.forEach((city) => {
+        if (city.type === 'capital') return;
+        const grid = gridFromPos(city.x, city.y);
+        const sector = getSector(grid.gx, grid.gy);
+        if (!sector.discovered && sector.revealedUntil <= state.time) return;
+        const cx = offsetX + Math.floor((grid.gx + WORLD.gridRadius) / stride) * cell + cell / 2;
+        const cy = offsetY + Math.floor((grid.gy + WORLD.gridRadius) / stride) * cell + cell / 2;
+        ctx.fillStyle = 'rgba(154,214,255,0.75)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
     if (state.atlasUnlocked && world.convergenceGate) {
       const gateGrid = gridFromPos(world.convergenceGate.x, world.convergenceGate.y);
       const gx = gateGrid.gx;
@@ -8153,6 +8941,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
     ctx.fillStyle = '#9fb4d9';
     ctx.fillText(`Alignment: ${player.affiliation ? (FACTIONS.find((f) => f.id === player.affiliation)?.name || player.affiliation) : 'Unaligned'}`, 24, 108);
+    let infoY = 124;
+    if (!state.codexSeen) {
+      ctx.fillStyle = '#9fb4d9';
+      ctx.fillText('Press K for Pilot Codex (systems & logistics).', 24, infoY);
+      infoY += 16;
+    }
+    if (activeStation?.services?.includes('Navigation Sync')) {
+      const pending = getPendingDiscoveryCount();
+      const reward = pending * DISCOVERY_UPLOAD.rewardPerSector;
+      ctx.fillStyle = pending ? PALETTE.gold : '#9fb4d9';
+      ctx.fillText(`Press P to upload discoveries (${pending} pending, +${reward} credits)`, 24, infoY);
+      infoY += 16;
+    }
     ctx.font = '13px sans-serif';
     const repairCost = applyFactionPrice(120, factionId);
     const ammoCost = applyFactionPrice(240, factionId);
@@ -8170,10 +8971,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ];
     options.forEach((opt, idx) => {
       ctx.fillStyle = idx === state.menuSelection ? PALETTE.gold : '#e0f2ff';
-      ctx.fillText(opt, 24, 132 + idx * 22);
+      ctx.fillText(opt, 24, infoY + idx * 22);
     });
     ctx.fillStyle = '#e0f2ff';
-    ctx.fillText(`Cargo: Salvage ${player.inventory.cargo.salvage} | Alloys ${player.inventory.cargo.alloys} | Relics ${player.inventory.cargo.relics}`, 24, 132 + options.length * 22 + 8);
+    ctx.fillText(`Cargo: Salvage ${player.inventory.cargo.salvage} | Alloys ${player.inventory.cargo.alloys} | Relics ${player.inventory.cargo.relics}`, 24, infoY + options.length * 22 + 8);
+
+    if (state.civicTutorial?.active && (activeStation?.type === 'city' || activeStation?.type === 'home')) {
+      const baseY = infoY + options.length * 22 + 34;
+      ctx.fillStyle = PALETTE.gold;
+      ctx.fillText(`${state.civicTutorial.label} Orientation`, 24, baseY);
+      ctx.fillStyle = '#9fb4d9';
+      const steps = [
+        { id: 0, text: '1) Repair/Refuel (press 1).' },
+        { id: 1, text: '2) Upload discoveries (press P).' },
+        { id: 2, text: '3) Undock and resume (press 7).' }
+      ];
+      steps.forEach((step, idx) => {
+        const done = state.civicTutorial.step > step.id;
+        ctx.fillStyle = done ? PALETTE.glow : '#9fb4d9';
+        ctx.fillText(`${done ? '●' : '○'} ${step.text}`, 24, baseY + 20 + idx * 18);
+      });
+    }
   }
 
   function drawShipyardOverlay() {
@@ -8300,6 +9118,31 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
+  function drawCodexOverlay() {
+    ctx.fillStyle = 'rgba(5,10,18,0.9)';
+    ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+    ctx.fillStyle = PALETTE.glow;
+    ctx.font = '20px sans-serif';
+    ctx.fillText('Pilot Codex', 24, 36);
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Press K or Esc to close. Use Up/Down to scroll.', 24, 54);
+
+    const maxVisible = 5;
+    const start = clamp(state.codexScroll, 0, Math.max(0, CODEX_ENTRIES.length - maxVisible));
+    const visible = CODEX_ENTRIES.slice(start, start + maxVisible);
+    let y = 90;
+    ctx.font = '13px sans-serif';
+    visible.forEach((entry) => {
+      ctx.fillStyle = PALETTE.gold;
+      ctx.fillText(entry.title, 24, y);
+      ctx.fillStyle = '#e0f2ff';
+      entry.lines.forEach((line, idx) => {
+        ctx.fillText(line, 24, y + 18 + idx * 16);
+      });
+      y += 18 + entry.lines.length * 16 + 12;
+    });
+  }
+
   function drawGoalsOverlay() {
     ctx.fillStyle = 'rgba(5,10,18,0.9)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
@@ -8333,8 +9176,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     ctx.fillStyle = '#9fb4d9';
     ctx.fillText('Flow: Cross the expanse, dock at biome hubs, run contracts, unlock sigils.', 24, flowY + 22);
-    ctx.fillText('Tip: Use V for Hyper Navigation, set charge 1-9/0, Enter to jump. J returns to base.', 24, flowY + 40);
-    ctx.fillText('Status: Start unaligned, join a faction by docking at a hub or the Aetherline Bastion.', 24, flowY + 58);
+    ctx.fillText('Tip: Use V for Hyper Navigation, set charge 1-9/0, Enter to jump. J returns to city.', 24, flowY + 40);
+    ctx.fillText('Status: Start unaligned, join a faction by docking at a hub or Bastion City.', 24, flowY + 58);
     ctx.fillText('Final step: reach the Atlas Convergence gate in the Interstice.', 24, flowY + 76);
 
     const nextMilestone = EXPLORATION_MILESTONES.find((milestone) => !player.milestones.has(milestone.id));
@@ -8368,8 +9211,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Biome pockets hold stations and hazards. The Interstice is the quiet void between clusters.', 24, 180);
     ctx.fillText('Use Signal Scope to find traders (teal) and stations (green) for fuel and ammo.', 24, 202);
     ctx.fillText('Fuel and hyper charge do not regenerate. Dock or hail traders to resupply.', 24, 224);
-    ctx.fillText('You begin unaligned. Patrols may capture you; joining grants faction access.', 24, 246);
-    ctx.fillText('Press U to toggle minimal HUD. Press Enter to launch or Esc to skip.', 24, 268);
+    ctx.fillText('Bastion City is a safe no-fire hub with fuel, ammo, and discovery uploads.', 24, 246);
+    ctx.fillText('You begin unaligned. Patrols may capture you; joining grants faction access.', 24, 268);
+    ctx.fillText('Press U to toggle minimal HUD. Press Enter to launch or Esc to skip.', 24, 290);
   }
 
   function drawOverlay() {
@@ -8382,6 +9226,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.mode === 'store') drawStoreOverlay();
     if (state.mode === 'crew') drawCrewOverlay();
     if (state.mode === 'lore') drawLoreOverlay();
+    if (state.mode === 'codex') drawCodexOverlay();
     if (state.mode === 'trader') drawTraderOverlay();
     if (state.mode === 'goals') drawGoalsOverlay();
     if (state.tutorialActive) drawTutorialOverlay();
@@ -8493,7 +9338,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const affiliationLine = player.affiliation
         ? `Alignment: ${FACTIONS.find((f) => f.id === player.affiliation)?.name || player.affiliation}.`
         : 'Status: Unaligned pilot. Dock at any hub to join a faction.';
-      const introLine = state.intro?.active ? 'Start at Aetherline Bastion. Dock to stock fuel and ammo before you launch.' : '';
+      const introLine = state.intro?.active ? 'Start adrift. A patrol will intercept and offer a pact; the Bastion City coordinates unlock after first contact.' : '';
       briefBody.textContent = `${chapter.intro} ${atlasLine} ${navLine} ${affiliationLine} ${introLine}`;
     }
     if (briefPrimary) briefPrimary.textContent = chapter.objective;
@@ -8555,6 +9400,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         energy: player.energy,
         fuel: player.fuel,
         hyperCharge: player.hyperCharge,
+        heat: player.heat,
         angularVelocity: player.angularVelocity,
         throttle: player.throttle,
         flightAssist: player.flightAssist,
@@ -8565,6 +9411,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         upgrades: player.upgrades,
         crew: player.crew,
         milestones: Array.from(player.milestones || []),
+        discoveryUploads: Array.from(player.discoveryUploads || []),
         ammo: player.ammo,
         blueprints: Array.from(player.blueprints),
         cosmetics: Array.from(player.cosmetics),
@@ -8590,6 +9437,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         sectorsDiscovered: Array.from(world.discovered),
         bossesDefeated: world.bossDefeated,
         basesDestroyed: world.baseClaims,
+        beaconsClaimed: world.beaconClaims,
         ruinsDiscovered: world.ruinClaims,
         landmarksDiscovered: world.landmarkClaims
       },
@@ -8602,6 +9450,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         failureLedger: state.failureLedger,
         tutorialSeen: state.tutorialSeen,
         hudMode: state.hudMode,
+        codexSeen: state.codexSeen,
+        civicTutorialDone: state.civicTutorialDone,
         introCompleted: state.introCompleted,
         atlasUnlocked: state.atlasUnlocked,
         atlasCompleted: state.atlasCompleted
@@ -8651,6 +9501,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.energy = savedPlayer.energy ?? player.energy;
     player.fuel = savedPlayer.fuel ?? player.fuel;
     player.hyperCharge = savedPlayer.hyperCharge ?? savedPlayer.riftCharge ?? player.hyperCharge;
+    player.heat = savedPlayer.heat ?? player.heat ?? 0;
+    player.heat = clamp(player.heat, 0, HEAT.max);
     player.hyperCharge = clamp(player.hyperCharge, 0, HYPER.maxCharge);
     player.angularVelocity = savedPlayer.angularVelocity ?? player.angularVelocity;
     player.throttle = savedPlayer.throttle ?? player.throttle;
@@ -8662,6 +9514,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.upgrades = { ...player.upgrades, ...(savedPlayer.upgrades || {}) };
     player.crew = { ...player.crew, ...(savedPlayer.crew || {}) };
     player.milestones = new Set(savedPlayer.milestones || []);
+    player.discoveryUploads = new Set(savedPlayer.discoveryUploads || []);
     player.ammo = { ...player.ammo, ...(savedPlayer.ammo || {}) };
     player.blueprints = new Set(savedPlayer.blueprints || []);
     player.cosmetics = new Set(savedPlayer.cosmetics || []);
@@ -8684,6 +9537,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     world.discovered = new Set(save.mapProgress?.sectorsDiscovered || []);
     world.bossDefeated = save.mapProgress?.bossesDefeated || {};
     world.baseClaims = save.mapProgress?.basesDestroyed || {};
+    world.beaconClaims = save.mapProgress?.beaconsClaimed || {};
     world.ruinClaims = save.mapProgress?.ruinsDiscovered || {};
     world.landmarkClaims = save.mapProgress?.landmarksDiscovered || {};
 
@@ -8692,8 +9546,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.failureLedger = save.state?.failureLedger || {};
     state.tutorialSeen = save.state?.tutorialSeen ?? state.tutorialSeen;
     state.hudMode = save.state?.hudMode || state.hudMode || 'full';
+    state.codexSeen = save.state?.codexSeen ?? state.codexSeen;
+    state.codexScroll = 0;
+    state.codexReturn = 'flight';
+    state.civicTutorialDone = save.state?.civicTutorialDone ?? state.civicTutorialDone;
+    state.civicTutorial = { active: false, step: 0, label: '' };
     state.introCompleted = save.state?.introCompleted ?? state.introCompleted;
-    state.intro = { active: !state.introCompleted, phase: 'dock', timer: 0, captureQueued: false };
+    state.intro = { active: !state.introCompleted, phase: 'drift', timer: 0, captureQueued: false };
     state.tutorialActive = false;
     state.tutorialReady = false;
     state.tutorialFlags = { moved: false, boosted: false, scanned: false };
@@ -8712,6 +9571,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.startEncounterSeeded = true;
     state.radioCooldown = 0;
     state.enemyQuietTimer = 0;
+    state.inNoFireZone = false;
+    state.noFireCooldown = 0;
+    state.scoopCooldown = 0;
+    state.beaconHintCooldown = 0;
 
     if (save.mission) {
       mission.active = save.mission.active || false;
@@ -8891,6 +9754,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         return;
       }
 
+      if (e.code === 'KeyK') {
+        if (state.mode === 'flight') {
+          openCodex('flight');
+          return;
+        }
+        if (state.mode === 'station') {
+          openCodex('station');
+          return;
+        }
+        if (state.mode === 'codex') {
+          closeCodex();
+          return;
+        }
+      }
+
       if (e.code === 'KeyU' && state.mode === 'flight') {
         state.hudMode = state.hudMode === 'minimal' ? 'full' : 'minimal';
         noteStatus(`HUD ${state.hudMode === 'minimal' ? 'minimal' : 'full'} mode.`);
@@ -8900,6 +9778,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (state.mode === 'lore') {
         if (e.code === 'ArrowUp') state.loreScroll = Math.max(0, state.loreScroll - 1);
         if (e.code === 'ArrowDown') state.loreScroll += 1;
+      }
+      if (state.mode === 'codex') {
+        if (e.code === 'ArrowUp') state.codexScroll = Math.max(0, state.codexScroll - 1);
+        if (e.code === 'ArrowDown') state.codexScroll += 1;
       }
 
       if (e.code === 'Escape') {
@@ -8916,6 +9798,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         if (state.mode === 'goals') {
           state.mode = 'flight';
           state.paused = false;
+          return;
+        }
+        if (state.mode === 'codex') {
+          closeCodex();
           return;
         }
       }
@@ -8958,6 +9844,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (code === 'Digit8') stationCargoAction();
     if (code === 'Digit9') bulkRestockAmmo();
     if (code === 'Digit0') openCrewBoard();
+    if (code === 'KeyP') uploadDiscoveries();
   }
 
   function handleHyperInput(code) {
@@ -9121,7 +10008,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.energy = cachedStats.energyMax;
     player.fuel = cachedStats.fuelMax;
     player.hyperCharge = HYPER.maxCharge;
+    player.heat = 0;
     noteStatus('Station services applied.');
+    advanceCivicTutorial('repair');
   }
 
   function sellCargo() {
@@ -9226,6 +10115,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.mode = 'flight';
     state.paused = false;
     state.activeStation = null;
+    advanceCivicTutorial('undock');
     noteStatus('Undocked.');
   }
 
@@ -9402,6 +10292,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     buildClusterMap();
     buildGateMap();
     buildStationMap();
+    buildCityMap();
     buildSkygridBackground();
 
     const localSave = loadLocal();
