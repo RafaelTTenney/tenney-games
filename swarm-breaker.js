@@ -433,9 +433,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   ];
 
   const FRIENDLY_TYPES = [
-    { id: 'escort', label: 'Escort Wing', role: 'escort', size: 18, speed: 96, color: '#6df0ff', fireRate: 0.9, damage: 10, range: 520 },
-    { id: 'patrol', label: 'Patrol Craft', role: 'patrol', size: 22, speed: 82, color: '#9ad6ff', fireRate: 1.1, damage: 12, range: 560 },
-    { id: 'guardian', label: 'Guardian Frigate', role: 'guardian', size: 34, speed: 62, color: '#7dfc9a', fireRate: 1.4, damage: 16, range: 640 }
+    { id: 'escort', label: 'Escort Wing', role: 'escort', size: 18, speed: 96, color: '#6df0ff', fireRate: 0.9, damage: 10, range: 520, hp: 70, shield: 24 },
+    { id: 'patrol', label: 'Patrol Craft', role: 'patrol', size: 22, speed: 82, color: '#9ad6ff', fireRate: 1.1, damage: 12, range: 560, hp: 95, shield: 36 },
+    { id: 'guardian', label: 'Guardian Frigate', role: 'guardian', size: 34, speed: 62, color: '#7dfc9a', fireRate: 1.4, damage: 16, range: 640, hp: 160, shield: 70 }
   ];
 
   const TRADE_ROUTE_CONFIG = {
@@ -463,6 +463,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     civilian: 'rgba(159,180,217,0.7)',
     hostile: '#ffb347',
     hostileHeavy: '#ffd166'
+  };
+
+  const LIVERY_COLORS = {
+    aetherline: { primary: '#6df0ff', secondary: '#c7f7ff' },
+    ion_clade: { primary: '#c77dff', secondary: '#f0c1ff' },
+    redshift_cartel: { primary: '#ff8b5c', secondary: '#ffd2bf' },
+    bastion_order: { primary: '#7dfc9a', secondary: '#d5ffe6' },
+    darklane_refuge: { primary: '#8899ff', secondary: '#cfd8ff' },
+    neutral: { primary: '#9fb4d9', secondary: '#e0f2ff' }
   };
 
   const STATION_THEMES = {
@@ -2561,6 +2570,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const trafficCount = 8 + Math.floor(civicRng() * 6);
     for (let i = 0; i < trafficCount; i += 1) {
       const type = CIVILIAN_TYPES[Math.floor(civicRng() * CIVILIAN_TYPES.length)];
+      const civFaction = 'aetherline';
+      const livery = getLiveryForFaction(civFaction);
       sector.objects.civilians.push({
         id: `${sector.key}-civic-civ-${i}`,
         type: type.id,
@@ -2571,6 +2582,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         speed: randRange(civicRng, type.speed * 0.8, type.speed * 1.35),
         size: type.size,
         color: type.color,
+        faction: civFaction,
+        livery,
         turn: randRange(civicRng, -0.08, 0.08),
         sway: civicRng() * Math.PI * 2
       });
@@ -2891,6 +2904,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           const routeDir = rng() < 0.5 ? 1 : -1;
           const offset = randRange(rng, -route.width * 0.4, route.width * 0.4);
           const speed = randRange(rng, type.speed * 0.9, type.speed * 1.4);
+          const civFaction = sector.faction?.id && rng() < 0.65 ? sector.faction.id : 'neutral';
+          const livery = getLiveryForFaction(civFaction);
           sector.objects.civilians.push({
             id: `${sector.key}-route-${r}-civ-${i}`,
             type: type.id,
@@ -2901,6 +2916,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             speed,
             size: type.size,
             color: type.color,
+            faction: civFaction,
+            livery,
             routeId: route.id,
             routeT,
             routeDir,
@@ -2933,23 +2950,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     const trafficChance = (isCluster ? 0.65 : isExpanse ? 0.58 : 0.5) * (1 - openSpace * 0.35);
     if (!sector.isVoid && rng() < trafficChance) {
-      const trafficCount = 1 + Math.floor(rng() * (sector.isCore ? 3 : 2));
-      for (let i = 0; i < trafficCount; i += 1) {
-        const type = CIVILIAN_TYPES[Math.floor(rng() * CIVILIAN_TYPES.length)];
-        sector.objects.civilians.push({
-          id: `${sector.key}-civ-${i}`,
-          type: type.id,
-          label: type.label,
-          x: center.x + randRange(rng, -innerField, innerField),
-          y: center.y + randRange(rng, -innerField, innerField),
-          angle: rng() * Math.PI * 2,
-          speed: randRange(rng, type.speed * 0.7, type.speed * 1.3),
-          size: type.size,
-          color: type.color,
-          turn: randRange(rng, -0.12, 0.12),
-          sway: rng() * Math.PI * 2
-        });
-      }
+        const trafficCount = 1 + Math.floor(rng() * (sector.isCore ? 3 : 2));
+        for (let i = 0; i < trafficCount; i += 1) {
+          const type = CIVILIAN_TYPES[Math.floor(rng() * CIVILIAN_TYPES.length)];
+          const civFaction = sector.faction?.id && rng() < 0.55 ? sector.faction.id : 'neutral';
+          const livery = getLiveryForFaction(civFaction);
+          sector.objects.civilians.push({
+            id: `${sector.key}-civ-${i}`,
+            type: type.id,
+            label: type.label,
+            x: center.x + randRange(rng, -innerField, innerField),
+            y: center.y + randRange(rng, -innerField, innerField),
+            angle: rng() * Math.PI * 2,
+            speed: randRange(rng, type.speed * 0.7, type.speed * 1.3),
+            size: type.size,
+            color: type.color,
+            faction: civFaction,
+            livery,
+            turn: randRange(rng, -0.12, 0.12),
+            sway: rng() * Math.PI * 2
+          });
+        }
     }
 
     if (isCluster && !sector.isVoid && rng() < (0.2 + sector.depth * 0.02) * densityScale * coreBoost && !world.baseClaims?.[sector.key] && !(sector.gx === 0 && sector.gy === 0)) {
@@ -3632,6 +3653,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     return match?.color || fallback;
   }
 
+  function getLiveryForFaction(factionId) {
+    if (!factionId) return LIVERY_COLORS.neutral;
+    return LIVERY_COLORS[factionId] || LIVERY_COLORS.neutral;
+  }
+
   function getFactionRep(factionId) {
     if (!factionId) return 0;
     return clamp(player.factionRep?.[factionId] || 0, -100, 100);
@@ -3878,6 +3904,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (!def) return null;
     const rng = options.rng || Math.random;
     const scale = options.scale || 1;
+    const maxHp = (def.hp || 80) * scale;
     const friendly = {
       id: options.id || `${typeId}-${Math.floor(rng() * 1e6)}`,
       type: def.id,
@@ -3895,6 +3922,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       range: def.range,
       cooldown: randRange(rng, 0.2, def.fireRate),
       faction: options.faction || 'aetherline',
+      hp: maxHp,
+      maxHp,
+      shield: (def.shield || 0) * scale,
+      maxShield: (def.shield || 0) * scale,
+      armor: def.role === 'guardian' ? 0.12 : def.role === 'patrol' ? 0.08 : 0.04,
       routeId: options.routeId || '',
       routeT: options.routeT || 0,
       routeDir: options.routeDir || 1,
@@ -4601,6 +4633,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       .sort((a, b) => a.distance - b.distance);
   }
 
+  function getRouteDensityForSector(gx, gy) {
+    const profile = getSectorProfile(gx, gy);
+    const isExpanse = profile.zoneType === 'expanse';
+    const base = profile.isVoid
+      ? TRADE_ROUTE_CONFIG.voidChance
+      : profile.zoneType === 'lane'
+        ? TRADE_ROUTE_CONFIG.laneChance
+        : isExpanse
+          ? TRADE_ROUTE_CONFIG.expanseChance
+          : TRADE_ROUTE_CONFIG.clusterChance;
+    let density = base * (0.6 + profile.density * 0.8);
+    density *= 1 - profile.openSpace * 0.3;
+    if (profile.zoneType === 'cluster') density *= 0.85;
+    return clamp(density, 0, 1);
+  }
+
   function getSelectedHyperTarget(targets) {
     if (!targets.length) return null;
     const index = clamp(state.hyperNav?.targetIndex || 0, 0, targets.length - 1);
@@ -5116,9 +5164,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function updateEnemyAI(enemy, dt, sector) {
-    const dx = player.x - enemy.x;
-    const dy = player.y - enemy.y;
-    const distance = Math.hypot(dx, dy);
+    const playerDx = player.x - enemy.x;
+    const playerDy = player.y - enemy.y;
+    const playerDist = Math.hypot(playerDx, playerDy);
+    let target = player;
+    let targetIsPlayer = true;
+    let dx = playerDx;
+    let dy = playerDy;
+    let distance = playerDist;
+    const friendly = findClosestFriendly(enemy.x, enemy.y, 720, sector);
+    if (friendly) {
+      const friendlyDist = dist(enemy.x, enemy.y, friendly.x, friendly.y);
+      const preferFriendly = (playerDist > 800 && friendlyDist < playerDist * 0.9)
+        || (friendlyDist < 420 && playerDist > 520)
+        || (Math.random() < 0.08 && friendlyDist < 520);
+      if (preferFriendly) {
+        target = friendly;
+        targetIsPlayer = false;
+        dx = friendly.x - enemy.x;
+        dy = friendly.y - enemy.y;
+        distance = friendlyDist;
+      }
+    }
     const isStatic = enemy.def?.static;
     if (world.cities && world.cities.length) {
       for (let i = 0; i < world.cities.length; i += 1) {
@@ -5284,13 +5351,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         return;
       }
       enemy.fireCooldown = enemy.isBoss ? 0.5 : enemy.def.fireRate;
-      const dir = normalize(player.x - enemy.x, player.y - enemy.y);
+      const dir = normalize(target.x - enemy.x, target.y - enemy.y);
       let weapon = { damage: enemy.def.damage, speed: 360, color: enemy.isBoss ? '#ffb347' : '#ff6b6b' };
       if (enemy.role === 'bomber') weapon = { damage: enemy.def.damage * 1.4, speed: 300, color: '#ff6b6b', splash: 18 };
       if (enemy.role === 'gunship') weapon = { damage: enemy.def.damage * 1.2, speed: 340, color: '#ff9f6b', spread: 0.25, projectiles: 3 };
       if (enemy.role === 'transport') weapon = { damage: enemy.def.damage, speed: 260, color: '#ffd166', spread: 0.45, projectiles: 4 };
       if (enemy.role === 'carrier') weapon = { damage: enemy.def.damage * 1.1, speed: 280, color: '#ffb347', splash: 20 };
-      const captureMode = (enemy.role === 'carrier' || enemy.role === 'transport') && (state.captureWindow > 0 || enemy.captureBias > 0);
+      const captureMode = targetIsPlayer && (enemy.role === 'carrier' || enemy.role === 'transport') && (state.captureWindow > 0 || enemy.captureBias > 0);
       if (captureMode && Math.random() < (0.25 + enemy.captureBias * 0.45)) {
         weapon = {
           damage: Math.max(6, enemy.def.damage * 0.45),
@@ -5464,6 +5531,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const routes = sector.objects.tradeRoutes || [];
     const routeMap = routes.length ? new Map(routes.map((route) => [route.id, route])) : null;
     sector.objects.friendlies.forEach((ship) => {
+      if (ship.shield !== undefined) {
+        const maxShield = ship.maxShield ?? (ship.maxHp ? ship.maxHp * 0.45 : 60);
+        ship.shield = clamp(ship.shield + dt * 6, 0, maxShield);
+      }
       if (ship.routeId && routeMap) {
         const route = routeMap.get(ship.routeId);
         advanceRouteEntity(ship, route, dt);
@@ -5500,6 +5571,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           ship.cooldown = 0.4;
         }
       }
+    });
+    sector.objects.friendlies = sector.objects.friendlies.filter((ship) => {
+      if (ship.hp !== undefined && ship.hp <= 0) {
+        spawnExplosion(ship.x, ship.y, ship.color || IFF_COLORS.friendly);
+        spawnEffect(ship.x, ship.y, ship.color || IFF_COLORS.friendly, 40);
+        return false;
+      }
+      return true;
     });
   }
 
@@ -5936,6 +6015,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
 
     entities.enemyShots.forEach((shot) => {
+      if (shot.life <= 0) return;
       if (dist(shot.x, shot.y, player.x, player.y) < cachedStats.size + 6) {
         shot.life = 0;
         if (shot.capture) {
@@ -5947,6 +6027,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           }
         }
         applyDamage(player, shot.damage);
+        return;
+      }
+      if (sector.objects.friendlies?.length) {
+        for (let i = 0; i < sector.objects.friendlies.length; i += 1) {
+          const friendly = sector.objects.friendlies[i];
+          if (!friendly || friendly.hp <= 0) continue;
+          if (dist(shot.x, shot.y, friendly.x, friendly.y) < (friendly.size || 16)) {
+            shot.life = 0;
+            applyDamage(friendly, shot.damage);
+            spawnEffect(friendly.x, friendly.y, friendly.color || IFF_COLORS.friendly, 12);
+            break;
+          }
+        }
       }
     });
 
@@ -6276,6 +6369,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const d = dist(x, y, enemy.x, enemy.y);
       if (d < bestDist) {
         best = enemy;
+        bestDist = d;
+      }
+    });
+    return best;
+  }
+
+  function findClosestFriendly(x, y, range = 9999, sector = null) {
+    const current = sector || getCurrentSector();
+    if (!current?.objects?.friendlies?.length) return null;
+    let best = null;
+    let bestDist = range;
+    current.objects.friendlies.forEach((ship) => {
+      if (ship.hp !== undefined && ship.hp <= 0) return;
+      const d = dist(x, y, ship.x, ship.y);
+      if (d < bestDist) {
+        best = ship;
         bestDist = d;
       }
     });
@@ -7186,6 +7295,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const y = ship.y - camera.y + VIEW.centerY;
     const size = ship.size || 20;
     const color = ship.color || '#9ad6ff';
+    const livery = ship.livery || getLiveryForFaction(ship.faction);
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(ship.angle + Math.PI / 2);
@@ -7212,6 +7322,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.arc(size * 1.1, size * 0.2, size * 0.35, 0, Math.PI * 2);
       ctx.arc(-size * 1.1, size * 0.2, size * 0.35, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = livery.primary;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.9, -size * 0.2);
+      ctx.lineTo(size * 0.9, -size * 0.2);
+      ctx.stroke();
     } else if (ship.type === 'freighter') {
       ctx.beginPath();
       ctx.moveTo(0, -size * 1.6);
@@ -7229,6 +7345,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ctx.rect(-size * 0.45, py, size * 0.9, size * 0.18);
         ctx.fill();
       }
+      ctx.strokeStyle = livery.primary;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.55, -size * 0.9);
+      ctx.lineTo(-size * 0.15, size * 1.1);
+      ctx.moveTo(size * 0.55, -size * 0.9);
+      ctx.lineTo(size * 0.15, size * 1.1);
+      ctx.stroke();
     } else if (ship.type === 'liner') {
       ctx.beginPath();
       ctx.ellipse(0, 0, size * 0.75, size * 1.25, 0, 0, Math.PI * 2);
@@ -7246,6 +7370,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.lineTo(size * 0.6, size * 0.3);
       ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = livery.primary;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, size * 0.1, size * 0.9, Math.PI * 0.2, Math.PI * 0.8);
+      ctx.stroke();
     } else {
       ctx.beginPath();
       ctx.moveTo(0, -size * 1.2);
@@ -7260,6 +7389,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.beginPath();
       ctx.ellipse(0, -size * 0.35, size * 0.22, size * 0.35, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = livery.primary;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.15, -size * 0.9);
+      ctx.lineTo(size * 0.15, -size * 0.3);
+      ctx.stroke();
     }
 
     ctx.shadowBlur = 0;
@@ -7270,7 +7405,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.lineTo(0, size * 0.7);
     ctx.stroke();
     ctx.globalAlpha = 0.8;
-    ctx.fillStyle = 'rgba(255,220,180,0.55)';
+    ctx.fillStyle = livery.secondary;
     ctx.beginPath();
     ctx.arc(-size * 0.3, size * 1.05, size * 0.12, 0, Math.PI * 2);
     ctx.arc(size * 0.3, size * 1.05, size * 0.12, 0, Math.PI * 2);
@@ -9336,6 +9471,43 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     ctx.fillStyle = '#e0f2ff';
     ctx.fillText(`Charge Dial: ${chargePercent}% | Cost: ${cost}% | Range: ${Math.round(maxRange)}m (Radar ${Math.round(radarRange)}m)`, 24, 98);
+
+    const currentGrid = gridFromPos(player.x, player.y);
+    const mapRadius = 4;
+    const cell = 12;
+    const mapSize = (mapRadius * 2 + 1) * cell;
+    const mapX = VIEW.width - mapSize - 32;
+    const mapY = 132;
+    ctx.fillStyle = 'rgba(5,10,18,0.55)';
+    ctx.fillRect(mapX - 12, mapY - 28, mapSize + 24, mapSize + 52);
+    ctx.strokeStyle = 'rgba(109,240,255,0.25)';
+    ctx.strokeRect(mapX - 12, mapY - 28, mapSize + 24, mapSize + 52);
+    ctx.fillStyle = '#9fb4d9';
+    ctx.fillText('Traffic Density', mapX - 2, mapY - 10);
+
+    for (let gy = -mapRadius; gy <= mapRadius; gy += 1) {
+      for (let gx = -mapRadius; gx <= mapRadius; gx += 1) {
+        const sgx = currentGrid.gx + gx;
+        const sgy = currentGrid.gy + gy;
+        const cellX = mapX + (gx + mapRadius) * cell;
+        const cellY = mapY + (gy + mapRadius) * cell;
+        if (Math.abs(sgx) > WORLD.gridRadius || Math.abs(sgy) > WORLD.gridRadius) {
+          ctx.fillStyle = 'rgba(10,16,28,0.55)';
+          ctx.fillRect(cellX, cellY, cell - 1, cell - 1);
+          continue;
+        }
+        const density = getRouteDensityForSector(sgx, sgy);
+        const profile = getSectorProfile(sgx, sgy);
+        const alpha = 0.08 + density * 0.7;
+        const tint = profile.zoneType === 'lane' ? `rgba(255,209,102,${alpha})` : `rgba(109,240,255,${alpha})`;
+        ctx.fillStyle = tint;
+        ctx.fillRect(cellX, cellY, cell - 1, cell - 1);
+      }
+    }
+    ctx.strokeStyle = 'rgba(255,209,102,0.6)';
+    ctx.strokeRect(mapX + mapRadius * cell, mapY + mapRadius * cell, cell - 1, cell - 1);
+    ctx.fillStyle = '#9fb4d9';
+    ctx.fillText('Lane tiles glow gold.', mapX - 2, mapY + mapSize + 18);
 
     const listX = 24;
     let listY = 128;
