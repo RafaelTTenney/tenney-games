@@ -124,6 +124,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     y: 248
   };
 
+  const EXPLORATION_MILESTONES = [
+    { id: 'm1', distance: 260000, reward: { credits: 500 }, label: 'Outer Drift Marker' },
+    { id: 'm2', distance: 620000, reward: { blueprint: 'scanner_drone', credits: 650 }, label: 'Deep Survey Relay' },
+    { id: 'm3', distance: 1100000, reward: { blueprint: 'turbo_engine', credits: 800 }, label: 'Interstice Run' },
+    { id: 'm4', distance: 1800000, reward: { blueprint: 'shield_overdrive', credits: 1000 }, label: 'Voidline Record' },
+    { id: 'm5', distance: 2600000, reward: { blueprint: 'hyper_engine', credits: 1400 }, label: 'Frontier Longhaul' }
+  ];
+
+  const CREW_ROLES = [
+    { id: 'navigator', label: 'Navigator', max: 3, baseCost: 320, summary: 'Hyper efficiency + range' },
+    { id: 'engineer', label: 'Engineer', max: 3, baseCost: 300, summary: 'Fuel efficiency + hull stability' },
+    { id: 'quartermaster', label: 'Quartermaster', max: 3, baseCost: 280, summary: 'Cargo capacity + salvage yield' }
+  ];
+
   const CAPTURE_SYSTEM = {
     maxPressure: 100,
     hit: 18,
@@ -375,6 +389,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       finCount: 2,
       coreShape: 'diamond',
       services: ['Refuel', 'Store', 'Ammo']
+    },
+    refinery: {
+      label: 'Refinery Outpost',
+      ringCount: 2,
+      spokeCount: 7,
+      finCount: 3,
+      coreShape: 'hex',
+      services: ['Refuel', 'Refinery', 'Ammo', 'Crew']
+    },
+    depot: {
+      label: 'Supply Depot',
+      ringCount: 1,
+      spokeCount: 6,
+      finCount: 1,
+      coreShape: 'diamond',
+      services: ['Refuel', 'Ammo', 'Crew']
     },
     outpost: {
       label: 'Frontier Dock',
@@ -1239,6 +1269,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     startEncounterSeeded: false,
     radioCooldown: 0,
     enemyQuietTimer: 0,
+    hudMode: 'full',
+    introCompleted: false,
+    intro: { active: false, phase: '', timer: 0, captureQueued: false },
     atlasUnlocked: false,
     atlasCompleted: false
   };
@@ -1275,7 +1308,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         angle: (Math.PI * 2 * idx) / HOME_DEF.turretCount,
         cooldown: Math.random() * 0.8
       })),
-      services: ['Shipyard', 'Store', 'Contracts', 'Refuel', 'Ammo']
+      services: ['Shipyard', 'Store', 'Contracts', 'Refuel', 'Ammo', 'Crew']
     }
   };
 
@@ -1337,6 +1370,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       hull: 0,
       booster: 0
     },
+    crew: {
+      navigator: 0,
+      engineer: 0,
+      quartermaster: 0
+    },
+    milestones: new Set(),
     unlocked: {
       hulls: ['small'],
       engines: ['standard'],
@@ -1725,6 +1764,37 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
   }
 
+  function updateIntroSequence(dt) {
+    if (!state.intro?.active) return;
+    const home = world.homeBase;
+    if (!home) return;
+    if (state.intro.phase === '') state.intro.phase = 'dock';
+
+    if (state.intro.phase === 'dock') {
+      if (state.mode === 'flight' && !state.paused) {
+        state.intro.timer += dt;
+        if (state.intro.timer > 1.6) {
+          spawnStarterCaptureWing();
+          state.intro.phase = 'intercept';
+          state.intro.timer = 0;
+          noteStatus('Unknown patrol vectoring in. Signal Scope updated.');
+        }
+      }
+      return;
+    }
+
+    if (state.intro.phase === 'intercept') {
+      state.intro.timer += dt;
+      const threat = findClosestEnemy(player.x, player.y, 620);
+      if (!state.intro.captureQueued && (state.intro.timer > 5 || threat)) {
+        triggerCapture('ion_clade', 'Ion Clade Intercept');
+        state.intro.captureQueued = true;
+        state.intro.phase = 'captured';
+      }
+      return;
+    }
+  }
+
   function getGateData() {
     const chapter = STORY[player.chapterIndex];
     if (!chapter) return null;
@@ -2094,9 +2164,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ? STATION_THEMES.relay
       : type === 'waystation'
         ? STATION_THEMES.waystation
-        : type === 'outpost'
-          ? STATION_THEMES.outpost
-          : BIOME_STATION_STYLES[biome] || STATION_THEMES.outpost;
+        : type === 'refinery'
+          ? STATION_THEMES.refinery
+          : type === 'depot'
+            ? STATION_THEMES.depot
+            : type === 'outpost'
+              ? STATION_THEMES.outpost
+              : BIOME_STATION_STYLES[biome] || STATION_THEMES.outpost;
     const label = name || baseStyle.label || 'Station';
     const color = BIOMES[biome]?.accent || '#7dfc9a';
     return {
@@ -2268,7 +2342,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         name: STATION_THEMES.relay.label
       }));
     }
-    const hasStation = sector.objects.stations.length > 0;
+    let hasStation = sector.objects.stations.length > 0;
+    if (!hasStation && isCluster && !sector.isVoid) {
+      const refineryChance = sector.isCore ? 0.22 : 0.08;
+      if (rng() < refineryChance) {
+        sector.objects.stations.push(makeStation({
+          x: center.x + randRange(rng, -innerField * 0.7, innerField * 0.7),
+          y: center.y + randRange(rng, -innerField * 0.7, innerField * 0.7),
+          radius: randRange(rng, 62, 86),
+          biome: sector.biome,
+          type: 'refinery',
+          name: STATION_THEMES.refinery.label
+        }));
+        hasStation = true;
+      }
+    }
     if (!hasStation && isExpanse && rng() < (sector.isVoid ? 0.02 : 0.04)) {
       sector.objects.stations.push(makeStation({
         x: center.x + randRange(rng, -innerField, innerField),
@@ -2278,6 +2366,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         type: 'waystation',
         name: 'Interstice Waystation'
       }));
+      hasStation = true;
     }
     const stationField = smoothNoise(sector.gx * 0.18, sector.gy * 0.18, WORLD_SEED * 0.23);
     const stationAllowed = stationField > 0.76;
@@ -2290,6 +2379,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         type: 'outpost',
         name: `${sector.name} Dock`
       }));
+      hasStation = true;
+    }
+    if (!hasStation && !sector.isVoid && rng() < 0.04) {
+      sector.objects.stations.push(makeStation({
+        x: center.x + randRange(rng, -innerField, innerField),
+        y: center.y + randRange(rng, -innerField, innerField),
+        radius: randRange(rng, 54, 74),
+        biome: sector.biome,
+        type: 'depot',
+        name: STATION_THEMES.depot.label
+      }));
+      hasStation = true;
     }
 
     const traderChance = (isCluster ? 0.38 * densityScale * coreBoost : 0.2 * densityScale) * (isExpanse ? 0.75 : 1);
@@ -2646,6 +2747,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const upgrades = player.upgrades;
     const droneBay = DRONE_BAYS[player.modules.droneBay] || DRONE_BAYS.basic;
 
+    const crew = player.crew || { navigator: 0, engineer: 0, quartermaster: 0 };
+    const navLevel = crew.navigator || 0;
+    const engLevel = crew.engineer || 0;
+    const quarterLevel = crew.quartermaster || 0;
+
     const maxHp = hull.baseHp * (1 + upgrades.hull * 0.16);
     const maxShield = hull.baseShield * (1 + upgrades.shield * 0.18 + shield.capacityBonus);
     const mass = (hull.mass + engine.mass + droneBay.mass) * (1 + upgrades.hull * 0.04);
@@ -2669,7 +2775,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const shieldRegen = shield.regen * (1 + upgrades.shield * 0.12);
     const shieldDelay = Math.max(0.6, shield.delay - upgrades.shield * 0.05);
     const armor = hull.armor + upgrades.hull * 0.02 + shield.resist;
-    const cargoMax = hull.cargo + upgrades.hull * 2;
+    const cargoMax = hull.cargo + upgrades.hull * 2 + quarterLevel * 2;
     const massRatio = clamp(mass / 0.28, 0.7, 1.6);
     const linearDamp = clamp(PHYSICS.linearDamp + (massRatio - 1) * 0.004, 0.984, 0.996);
     const assistDamp = clamp(PHYSICS.assistDamp + (1 - massRatio) * 0.06, 0.82, 0.94);
@@ -2690,6 +2796,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       boostRegen,
       fuelMax,
       fuelRegen,
+      fuelEfficiency: clamp(1 - engLevel * 0.04, 0.7, 1),
       energyMax,
       energyRegen,
       shieldRegen,
@@ -2701,6 +2808,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       assistDamp,
       angularDamp,
       maxAngular,
+      hyperEfficiency: clamp(1 - navLevel * 0.04, 0.7, 1),
+      hyperRangeMult: 1 + navLevel * 0.06,
       size: hull.size
     };
 
@@ -2795,9 +2904,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function initPlayerPosition() {
-    const start = getStartLocation();
-    player.x = start.x;
-    player.y = start.y;
+    if (state.intro?.active && world.homeBase) {
+      player.x = world.homeBase.x + world.homeBase.radius + 140;
+      player.y = world.homeBase.y + 40;
+    } else {
+      const start = getStartLocation();
+      player.x = start.x;
+      player.y = start.y;
+    }
     player.vx = 0;
     player.vy = 0;
     player.angle = -Math.PI / 2;
@@ -2890,6 +3004,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.fuel = computeStats().fuelMax;
       player.ammo = { slugs: 60, missiles: 12, torpedoes: 4, flak: 50, mines: 6 };
       player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0 };
+      player.crew = { navigator: 0, engineer: 0, quartermaster: 0 };
+      player.milestones = new Set();
       player.chapterIndex = 0;
       player.distanceThisChapter = 0;
       player.distanceTotal = 0;
@@ -2921,9 +3037,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.capturePressure = 0;
       state.captureWindow = 120;
       state.startEncounterTimer = 4;
-      state.startEncounterSeeded = false;
+      state.startEncounterSeeded = true;
       state.radioCooldown = 0;
       state.enemyQuietTimer = 0;
+      state.hudMode = 'full';
+      state.introCompleted = false;
+      state.intro = { active: true, phase: 'dock', timer: 0, captureQueued: false };
       state.atlasUnlocked = false;
       state.atlasCompleted = false;
       world.discovered.clear();
@@ -3238,7 +3357,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const sector = getCurrentSector();
     if (!sector) return;
     const angle = Math.random() * Math.PI * 2;
-    const radius = randRange(Math.random, 620, 820);
+    const home = world.homeBase;
+    const baseDistance = home?.defenseRange ? home.defenseRange + 140 : 760;
+    const radius = state.intro?.active ? randRange(Math.random, baseDistance, baseDistance + 220) : randRange(Math.random, 620, 820);
     const anchorX = player.x + Math.cos(angle) * radius;
     const anchorY = player.y + Math.sin(angle) * radius;
     spawnEnemy('transport', anchorX, anchorY, 1.1, { captureBias: 1.1, patrolTag: 'starter' });
@@ -3542,6 +3663,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.capture = { active: false, faction: '', label: '', origin: '' };
     state.mode = 'flight';
     state.paused = false;
+    state.intro.active = false;
+    state.introCompleted = true;
     noteStatus('Accepted into the fleet. New task issued.');
   }
 
@@ -3555,6 +3678,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.mode = 'flight';
     state.paused = false;
     state.spawnGrace = Math.max(state.spawnGrace || 0, 10);
+    state.intro.active = false;
+    state.introCompleted = true;
     noteStatus('You escaped the capture hold. Credits seized.');
   }
 
@@ -3601,7 +3726,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (Math.random() < 0.2) spawnLoot(enemy.x, enemy.y, 'energy', 18);
     if (Math.random() < 0.18) spawnLoot(enemy.x, enemy.y, 'data', 1);
     if (enemy.type === 'transport' || enemy.type === 'carrier') {
-      spawnLoot(enemy.x, enemy.y, 'salvage', 1);
+      const quarterLevel = player.crew?.quartermaster || 0;
+      const salvageBonus = quarterLevel > 0 ? 1 : 0;
+      spawnLoot(enemy.x, enemy.y, 'salvage', 1 + salvageBonus);
       if (Math.random() < 0.5) spawnLoot(enemy.x, enemy.y, 'ammo', 1);
     }
     if (enemy.isBoss) {
@@ -3622,7 +3749,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
     adjustFactionRep('aetherline', 1.5);
     if (getCargoCount() < cachedStats.cargoMax) {
-      player.inventory.cargo.salvage += 2 + Math.floor(sector.depth * 0.4);
+      const quarterLevel = player.crew?.quartermaster || 0;
+      const salvageGain = 2 + Math.floor(sector.depth * 0.4) + Math.floor(quarterLevel * 0.5);
+      player.inventory.cargo.salvage += salvageGain;
     } else {
       noteStatus('Cargo bay full.');
     }
@@ -3775,12 +3904,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function getHyperChargeCost(level = getHyperChargeLevel()) {
-    return Math.ceil(HYPER.maxCharge * getHyperChargePercent(level));
+    const efficiency = cachedStats.hyperEfficiency || 1;
+    return Math.ceil(HYPER.maxCharge * getHyperChargePercent(level) * efficiency);
   }
 
   function getHyperBaseRange() {
     const boostSpeed = cachedStats.maxSpeed * 1.5 * (ZONE_TYPES.expanse?.boostMult || 1.6);
-    return boostSpeed * 60 * HYPER.maxJumpMinutes;
+    const rangeMult = cachedStats.hyperRangeMult || 1;
+    return boostSpeed * 60 * HYPER.maxJumpMinutes * rangeMult;
   }
 
   function getHyperRange(chargePercent = getHyperChargePercent()) {
@@ -3998,6 +4129,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         : sector.zoneType === 'lane'
           ? 2.2
           : 2.6;
+    const fuelEfficiency = cachedStats.fuelEfficiency || 1;
 
     if (state.hyperDrive.cooldown > 0) {
       state.hyperDrive.cooldown = Math.max(0, state.hyperDrive.cooldown - dt);
@@ -4038,7 +4170,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.vx += dir.x * boostThrust * dt;
       player.vy += dir.y * boostThrust * dt;
       player.boost = clamp(player.boost - boostDrain * dt, 0, cachedStats.boostMax);
-      player.fuel = clamp(player.fuel - fuelDrain * dt, 0, cachedStats.fuelMax);
+      player.fuel = clamp(player.fuel - fuelDrain * dt * fuelEfficiency, 0, cachedStats.fuelMax);
       state.shiftBoost.timer -= dt;
       missionTracker.noBoost = false;
       const boostColor = sector.zoneType === 'rift' ? '#ffd166' : sector.zoneType === 'expanse' ? '#9ad6ff' : '#7dfc9a';
@@ -5181,6 +5313,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.distanceThisChapter += speed * dt;
     player.distanceTotal += speed * dt;
 
+    updateExplorationMilestones();
+
     const checkpoints = Math.min(3, Math.floor((player.distanceThisChapter / (WORLD.sectorSize * 3)) * 3));
     if (checkpoints > player.checkpointIndex) {
       player.checkpointIndex = checkpoints;
@@ -5203,6 +5337,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         failMission('timeout');
       }
     }
+  }
+
+  function updateExplorationMilestones() {
+    if (!EXPLORATION_MILESTONES.length) return;
+    const reached = EXPLORATION_MILESTONES.filter(
+      (milestone) => player.distanceTotal >= milestone.distance && !player.milestones.has(milestone.id)
+    );
+    if (!reached.length) return;
+    reached.forEach((milestone) => {
+      player.milestones.add(milestone.id);
+      const reward = milestone.reward || {};
+      if (reward.credits) awardCredits(reward.credits, 'Exploration milestone');
+      if (reward.blueprint) {
+        applyBlueprint(reward.blueprint, true);
+        noteStatus(`Milestone: ${milestone.label} (Blueprint secured).`);
+        pushStoryLog(`Milestone reached: ${milestone.label}. Blueprint secured.`);
+      } else {
+        noteStatus(`Milestone: ${milestone.label}.`);
+        pushStoryLog(`Milestone reached: ${milestone.label}.`);
+      }
+    });
   }
 
   function findClosestEnemy(x, y, range = 9999) {
@@ -5248,7 +5403,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         state.paused = true;
         state.menuSelection = 0;
         state.activeStation = { ...home, biome: sector.biome, type: 'home', faction: sector.faction?.id || 'aetherline' };
-        if (!player.affiliation) {
+        if (!player.affiliation && !state.intro?.active) {
           player.affiliation = 'aetherline';
           noteStatus('Aligned with Aetherline.');
           pushStoryLog('Joined Aetherline Command.');
@@ -5367,7 +5522,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.radioCooldown = Math.max(0, state.radioCooldown - dt);
     }
 
-    if (!state.startEncounterSeeded) {
+    updateIntroSequence(dt);
+
+    if (!state.intro?.active && !state.startEncounterSeeded) {
       state.startEncounterTimer -= dt;
       if (state.startEncounterTimer <= 0) {
         spawnStarterCaptureWing();
@@ -8007,8 +8164,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       '5. Install Stored Blueprints',
       '6. Start Chapter Mission',
       '7. Undock',
-      '8. Sell Cargo',
-      `9. Bulk Ammo Restock (${ammoCost} credits)`
+      '8. Sell/Refine Cargo',
+      `9. Bulk Ammo Restock (${ammoCost} credits)`,
+      '0. Crew Board'
     ];
     options.forEach((opt, idx) => {
       ctx.fillStyle = idx === state.menuSelection ? PALETTE.gold : '#e0f2ff';
@@ -8055,6 +8213,33 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
     ctx.fillStyle = PALETTE.gold;
     ctx.fillText('Press Esc to exit store.', 24, 70 + STORE_ITEMS.length * 20 + 18);
+  }
+
+  function drawCrewOverlay() {
+    ctx.fillStyle = 'rgba(5,10,18,0.85)';
+    ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+    ctx.fillStyle = PALETTE.glow;
+    ctx.font = '20px sans-serif';
+    ctx.fillText('Crew Board', 24, 36);
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#e0f2ff';
+    ctx.fillText('Hire specialists to improve efficiency. Press Esc to return.', 24, 56);
+
+    const startY = 90;
+    ctx.font = '13px sans-serif';
+    CREW_ROLES.forEach((role, idx) => {
+      const level = player.crew?.[role.id] || 0;
+      const cost = getCrewCost(role.id);
+      const locked = level >= role.max;
+      ctx.fillStyle = idx === state.menuSelection ? PALETTE.gold : '#e0f2ff';
+      ctx.fillText(
+        `${idx + 1}. ${role.label} Lv.${level}/${role.max} ${locked ? '(MAX)' : `- ${cost} credits`}`,
+        24,
+        startY + idx * 26
+      );
+      ctx.fillStyle = '#9fb4d9';
+      ctx.fillText(role.summary, 44, startY + idx * 26 + 16);
+    });
   }
 
   function drawTraderOverlay() {
@@ -8151,6 +8336,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Tip: Use V for Hyper Navigation, set charge 1-9/0, Enter to jump. J returns to base.', 24, flowY + 40);
     ctx.fillText('Status: Start unaligned, join a faction by docking at a hub or the Aetherline Bastion.', 24, flowY + 58);
     ctx.fillText('Final step: reach the Atlas Convergence gate in the Interstice.', 24, flowY + 76);
+
+    const nextMilestone = EXPLORATION_MILESTONES.find((milestone) => !player.milestones.has(milestone.id));
+    if (nextMilestone) {
+      ctx.fillText(`Next milestone: ${nextMilestone.label} at ${Math.round(nextMilestone.distance)}m.`, 24, flowY + 96);
+    }
   }
 
   function drawTutorialOverlay() {
@@ -8179,7 +8369,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Use Signal Scope to find traders (teal) and stations (green) for fuel and ammo.', 24, 202);
     ctx.fillText('Fuel and hyper charge do not regenerate. Dock or hail traders to resupply.', 24, 224);
     ctx.fillText('You begin unaligned. Patrols may capture you; joining grants faction access.', 24, 246);
-    ctx.fillText('Press Enter to launch when all steps are complete. Press Esc to skip.', 24, 268);
+    ctx.fillText('Press U to toggle minimal HUD. Press Enter to launch or Esc to skip.', 24, 268);
   }
 
   function drawOverlay() {
@@ -8190,6 +8380,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.mode === 'station') drawStationOverlay();
     if (state.mode === 'shipyard') drawShipyardOverlay();
     if (state.mode === 'store') drawStoreOverlay();
+    if (state.mode === 'crew') drawCrewOverlay();
     if (state.mode === 'lore') drawLoreOverlay();
     if (state.mode === 'trader') drawTraderOverlay();
     if (state.mode === 'goals') drawGoalsOverlay();
@@ -8210,9 +8401,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const sector = getCurrentSector();
     drawSectorObjects(sector, camera);
     drawEntities(camera, sector);
-    drawMiniMap();
+    const hudMode = state.hudMode || 'full';
+    if (hudMode === 'full') drawMiniMap();
     drawShipStatus();
-    drawNavigationHud(sector);
+    if (hudMode === 'full') drawNavigationHud(sector);
     drawSignalScope();
     drawHyperRadar();
     drawGateIndicator();
@@ -8301,7 +8493,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const affiliationLine = player.affiliation
         ? `Alignment: ${FACTIONS.find((f) => f.id === player.affiliation)?.name || player.affiliation}.`
         : 'Status: Unaligned pilot. Dock at any hub to join a faction.';
-      briefBody.textContent = `${chapter.intro} ${atlasLine} ${navLine} ${affiliationLine}`;
+      const introLine = state.intro?.active ? 'Start at Aetherline Bastion. Dock to stock fuel and ammo before you launch.' : '';
+      briefBody.textContent = `${chapter.intro} ${atlasLine} ${navLine} ${affiliationLine} ${introLine}`;
     }
     if (briefPrimary) briefPrimary.textContent = chapter.objective;
     if (briefOptional) {
@@ -8370,6 +8563,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         affiliation: player.affiliation,
         factionRep: player.factionRep,
         upgrades: player.upgrades,
+        crew: player.crew,
+        milestones: Array.from(player.milestones || []),
         ammo: player.ammo,
         blueprints: Array.from(player.blueprints),
         cosmetics: Array.from(player.cosmetics),
@@ -8406,6 +8601,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         storyLog: state.storyLog,
         failureLedger: state.failureLedger,
         tutorialSeen: state.tutorialSeen,
+        hudMode: state.hudMode,
+        introCompleted: state.introCompleted,
         atlasUnlocked: state.atlasUnlocked,
         atlasCompleted: state.atlasCompleted
       },
@@ -8463,6 +8660,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.affiliation = savedPlayer.affiliation ?? player.affiliation ?? '';
     player.factionRep = savedPlayer.factionRep || player.factionRep || {};
     player.upgrades = { ...player.upgrades, ...(savedPlayer.upgrades || {}) };
+    player.crew = { ...player.crew, ...(savedPlayer.crew || {}) };
+    player.milestones = new Set(savedPlayer.milestones || []);
     player.ammo = { ...player.ammo, ...(savedPlayer.ammo || {}) };
     player.blueprints = new Set(savedPlayer.blueprints || []);
     player.cosmetics = new Set(savedPlayer.cosmetics || []);
@@ -8492,6 +8691,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.storyLog = save.state?.storyLog || [];
     state.failureLedger = save.state?.failureLedger || {};
     state.tutorialSeen = save.state?.tutorialSeen ?? state.tutorialSeen;
+    state.hudMode = save.state?.hudMode || state.hudMode || 'full';
+    state.introCompleted = save.state?.introCompleted ?? state.introCompleted;
+    state.intro = { active: !state.introCompleted, phase: 'dock', timer: 0, captureQueued: false };
     state.tutorialActive = false;
     state.tutorialReady = false;
     state.tutorialFlags = { moved: false, boosted: false, scanned: false };
@@ -8646,6 +8848,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         return;
       }
 
+      if (state.mode === 'crew') {
+        handleCrewInput(e.code);
+        return;
+      }
+
       if (e.code === 'KeyV' && state.mode === 'flight') {
         openHyperMap();
         return;
@@ -8684,13 +8891,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         return;
       }
 
+      if (e.code === 'KeyU' && state.mode === 'flight') {
+        state.hudMode = state.hudMode === 'minimal' ? 'full' : 'minimal';
+        noteStatus(`HUD ${state.hudMode === 'minimal' ? 'minimal' : 'full'} mode.`);
+        return;
+      }
+
       if (state.mode === 'lore') {
         if (e.code === 'ArrowUp') state.loreScroll = Math.max(0, state.loreScroll - 1);
         if (e.code === 'ArrowDown') state.loreScroll += 1;
       }
 
       if (e.code === 'Escape') {
-        if (state.mode === 'shipyard' || state.mode === 'store' || state.mode === 'station') {
+        if (state.mode === 'shipyard' || state.mode === 'store' || state.mode === 'station' || state.mode === 'crew') {
           state.mode = 'station';
           return;
         }
@@ -8713,6 +8926,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         handleShipyardInput(e.code);
       } else if (state.mode === 'store') {
         handleStoreInput(e.code);
+      } else if (state.mode === 'crew') {
+        handleCrewInput(e.code);
       } else if (state.mode === 'trader') {
         handleTraderInput(e.code);
       }
@@ -8728,8 +8943,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function handleStationMenuInput(code) {
     if (code.startsWith('Digit')) {
-      const idx = parseInt(code.replace('Digit', ''), 10) - 1;
-      if (!Number.isNaN(idx)) state.menuSelection = idx;
+      const digit = parseInt(code.replace('Digit', ''), 10);
+      if (!Number.isNaN(digit)) {
+        state.menuSelection = digit === 0 ? 9 : digit - 1;
+      }
     }
     if (code === 'Digit1') stationRepair();
     if (code === 'Digit2') openShipyard();
@@ -8738,8 +8955,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (code === 'Digit5') installStoredBlueprints();
     if (code === 'Digit6') startMissionFromStation();
     if (code === 'Digit7') undock();
-    if (code === 'Digit8') sellCargo();
+    if (code === 'Digit8') stationCargoAction();
     if (code === 'Digit9') bulkRestockAmmo();
+    if (code === 'Digit0') openCrewBoard();
   }
 
   function handleHyperInput(code) {
@@ -8798,6 +9016,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const item = STORE_ITEMS[index];
     if (!item) return;
     purchaseStoreItem(item);
+  }
+
+  function handleCrewInput(code) {
+    if (code === 'Escape') {
+      state.mode = 'station';
+      return;
+    }
+    if (code.startsWith('Digit')) {
+      const idx = parseInt(code.replace('Digit', ''), 10) - 1;
+      if (!Number.isNaN(idx)) state.menuSelection = idx;
+    }
+    if (code === 'Digit1') hireCrew('navigator');
+    if (code === 'Digit2') hireCrew('engineer');
+    if (code === 'Digit3') hireCrew('quartermaster');
   }
 
   function handleTraderInput(code) {
@@ -8904,6 +9136,34 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     noteStatus(`Cargo sold for ${totalValue} credits.`);
   }
 
+  function stationCargoAction() {
+    const station = state.activeStation;
+    if (station?.services?.includes('Refinery')) {
+      refineCargo();
+    } else {
+      sellCargo();
+    }
+  }
+
+  function refineCargo() {
+    const cargo = player.inventory.cargo;
+    const salvage = cargo.salvage || 0;
+    const alloys = cargo.alloys || 0;
+    const relics = cargo.relics || 0;
+    if (salvage + alloys + relics <= 0) {
+      noteStatus('No cargo to refine.');
+      return;
+    }
+    const fuelGain = salvage * 28 + alloys * 40;
+    const hyperGain = alloys * 6 + relics * 4;
+    const creditGain = salvage * 18 + alloys * 30 + relics * 120;
+    player.fuel = clamp(player.fuel + fuelGain, 0, cachedStats.fuelMax);
+    player.hyperCharge = clamp(player.hyperCharge + hyperGain, 0, HYPER.maxCharge);
+    player.credits += creditGain;
+    player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0 };
+    noteStatus('Refinery processed cargo into fuel cells.');
+  }
+
   function bulkRestockAmmo() {
     const factionId = state.activeStation?.faction || '';
     const cost = applyFactionPrice(240, factionId);
@@ -8916,6 +9176,41 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       player.ammo[key] = AMMO_TYPES[key].max;
     });
     noteStatus('Ammo bays restocked.');
+  }
+
+  function openCrewBoard() {
+    if (!state.activeStation?.services?.includes('Crew')) {
+      noteStatus('Crew board unavailable at this station.');
+      return;
+    }
+    state.mode = 'crew';
+    state.menuSelection = 0;
+  }
+
+  function getCrewCost(roleId) {
+    const role = CREW_ROLES.find((entry) => entry.id === roleId);
+    if (!role) return 0;
+    const level = player.crew?.[roleId] || 0;
+    return Math.round(role.baseCost * Math.pow(1.6, level));
+  }
+
+  function hireCrew(roleId) {
+    const role = CREW_ROLES.find((entry) => entry.id === roleId);
+    if (!role) return;
+    const level = player.crew?.[roleId] || 0;
+    if (level >= role.max) {
+      noteStatus(`${role.label} already maxed.`);
+      return;
+    }
+    const cost = getCrewCost(roleId);
+    if (player.credits < cost) {
+      noteStatus('Insufficient credits for crew hire.');
+      return;
+    }
+    player.credits -= cost;
+    player.crew[roleId] = level + 1;
+    refreshStats({ keepRatios: true });
+    noteStatus(`${role.label} hired. Level ${level + 1}.`);
   }
 
   function openShipyard() {
