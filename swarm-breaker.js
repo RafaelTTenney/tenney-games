@@ -10811,6 +10811,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const chargeLevel = getHyperChargeLevel();
     const chargePercent = Math.round(getHyperChargePercent(chargeLevel) * 100);
     const cost = getHyperChargeCost(chargeLevel);
+    const maxCost = getHyperChargeCost(100);
     const targets = getHyperTargets(maxRange);
     const selected = getSelectedHyperTarget(targets);
 
