@@ -240,7 +240,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     redshift: ['fighter', 'bomber', 'gunship'],
     bastion: ['fighter', 'turret', 'gunship', 'bomber'],
     darklane: ['interceptor', 'sniper', 'fighter'],
-    interstice: ['scout', 'interceptor', 'transport'],
+    interstice: ['scout', 'interceptor', 'fighter'],
     starforge: ['gunship', 'bomber', 'turret'],
     hollow: ['interceptor', 'fighter', 'sniper'],
     emberveil: ['bomber', 'gunship', 'fighter'],
@@ -1455,7 +1455,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     loreScroll: 0,
     hyperDrive: { cooldown: 0 },
     hyperNav: { chargeLevel: 10, targetIndex: 0 },
-    hyperJumpFx: { timer: 0, duration: 1.35 },
+    hyperJumpFx: { timer: 0, duration: 1.0, pending: null },
     lastBiome: '',
     biomeHintTimer: 0,
     boundaryTimer: 0,
@@ -1519,6 +1519,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     biomeStations: {},
     relayStations: [],
     systemNames: new Map(),
+    tradeLanes: [],
     homeBase: {
       x: 0,
       y: 0,
@@ -2061,6 +2062,35 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     return { x: gx * WORLD.sectorSize, y: gy * WORLD.sectorSize };
   }
 
+  function clipLineToBox(x1, y1, x2, y2, minX, maxX, minY, maxY) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    let t0 = 0;
+    let t1 = 1;
+    const p = [-dx, dx, -dy, dy];
+    const q = [x1 - minX, maxX - x1, y1 - minY, maxY - y1];
+    for (let i = 0; i < 4; i += 1) {
+      if (p[i] === 0) {
+        if (q[i] < 0) return null;
+      } else {
+        const r = q[i] / p[i];
+        if (p[i] < 0) {
+          if (r > t1) return null;
+          if (r > t0) t0 = r;
+        } else {
+          if (r < t0) return null;
+          if (r < t1) t1 = r;
+        }
+      }
+    }
+    return {
+      x1: x1 + t0 * dx,
+      y1: y1 + t0 * dy,
+      x2: x1 + t1 * dx,
+      y2: y1 + t1 * dy
+    };
+  }
+
   function pickBiome(depth, gx, gy) {
     const bandIndex = Math.min(REGION_BANDS.length - 1, Math.max(0, Math.floor((depth - 1) / 2)));
     const band = REGION_BANDS[bandIndex];
@@ -2487,6 +2517,108 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     world.cityMap = cityMap;
   }
 
+  function buildTradeLanes() {
+    const rng = mulberry32(WORLD_SEED * 31 + 515);
+    const lanes = [];
+    const cities = world.cities || [];
+    if (!cities.length) {
+      world.tradeLanes = lanes;
+      return;
+    }
+    const degrees = new Map();
+    const edgeSet = new Set();
+    cities.forEach((city) => degrees.set(city.id, 0));
+
+    const addLane = (a, b) => {
+      if (!a || !b || a.id === b.id) return;
+      const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
+      if (edgeSet.has(key)) return;
+      edgeSet.add(key);
+      degrees.set(a.id, (degrees.get(a.id) || 0) + 1);
+      degrees.set(b.id, (degrees.get(b.id) || 0) + 1);
+      const distance = dist(a.x, a.y, b.x, b.y);
+      const width = randRange(rng, 180, 260);
+      const trafficBoost = 1.2 + Math.min(0.9, distance / (WORLD.sectorSize * 6));
+      lanes.push({
+        id: `lane-${key}`,
+        from: a.id,
+        to: b.id,
+        x1: a.x,
+        y1: a.y,
+        x2: b.x,
+        y2: b.y,
+        width,
+        trafficBoost
+      });
+    };
+
+    cities.forEach((city) => {
+      const desired = city.type === 'capital' ? 3 : 2;
+      const others = cities
+        .filter((other) => other.id !== city.id)
+        .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
+        .sort((a, b) => a.d - b.d);
+      for (let i = 0; i < Math.min(desired, others.length); i += 1) {
+        addLane(city, others[i].other);
+      }
+    });
+
+    const maxFixPasses = 4;
+    for (let pass = 0; pass < maxFixPasses; pass += 1) {
+      const lowCities = cities.filter((city) => (degrees.get(city.id) || 0) < 2);
+      if (!lowCities.length) break;
+      lowCities.forEach((city) => {
+        const others = cities
+          .filter((other) => other.id !== city.id)
+          .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
+          .sort((a, b) => a.d - b.d);
+        for (let i = 0; i < others.length; i += 1) {
+          if ((degrees.get(city.id) || 0) >= 2) break;
+          addLane(city, others[i].other);
+        }
+      });
+    }
+
+    world.tradeLanes = lanes;
+  }
+
+  function addTradeLanesToSector(sector) {
+    if (!world.tradeLanes?.length) return [];
+    const center = posFromGrid(sector.gx, sector.gy);
+    const half = WORLD.sectorSize / 2;
+    const minX = center.x - half;
+    const maxX = center.x + half;
+    const minY = center.y - half;
+    const maxY = center.y + half;
+    const routes = [];
+    world.tradeLanes.forEach((lane) => {
+      const clipped = clipLineToBox(lane.x1, lane.y1, lane.x2, lane.y2, minX, maxX, minY, maxY);
+      if (!clipped) return;
+      const dx = clipped.x2 - clipped.x1;
+      const dy = clipped.y2 - clipped.y1;
+      const length = Math.hypot(dx, dy);
+      if (length < 60) return;
+      routes.push({
+        id: `${lane.id}-${sector.key}`,
+        x1: clipped.x1,
+        y1: clipped.y1,
+        x2: clipped.x2,
+        y2: clipped.y2,
+        width: lane.width,
+        length,
+        angle: Math.atan2(dy, dx),
+        nx: -dy / (length || 1),
+        ny: dx / (length || 1),
+        source: 'lane',
+        trafficBoost: lane.trafficBoost || 1.4
+      });
+    });
+    if (routes.length) {
+      sector.objects.tradeRoutes.push(...routes);
+    }
+    return routes;
+  }
+
   function getSector(gx, gy) {
     const key = sectorKey(gx, gy);
     if (world.sectors.has(key)) {
@@ -2759,6 +2891,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         sway: civicRng() * Math.PI * 2
       });
     }
+
+    const laneRoutes = addTradeLanesToSector(sector);
+    laneRoutes.forEach((route) => {
+      seedRouteTraffic(sector, route, civicRng, route.trafficBoost || 1.6);
+      seedRouteEncounters(sector, route, civicRng, city);
+    });
+    if (city) attachCitySpurs(sector, city, laneRoutes);
 
     if (city) {
       const escortCount = 4 + Math.floor(civicRng() * 3);
@@ -3088,6 +3227,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
+    const laneRoutes = addTradeLanesToSector(sector);
+    laneRoutes.forEach((route) => {
+      seedRouteTraffic(sector, route, rng, route.trafficBoost || 1.6);
+      seedRouteEncounters(sector, route, rng, null);
+    });
+
     const routeChance = sector.isVoid
       ? TRADE_ROUTE_CONFIG.voidChance
       : sector.zoneType === 'lane'
@@ -3128,64 +3273,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         route.nx = -dy / (route.length || 1);
         route.ny = dx / (route.length || 1);
         sector.objects.tradeRoutes.push(route);
-
-        const convoyMax = sector.zoneType === 'lane'
-          ? TRADE_ROUTE_CONFIG.convoyMaxLane
-          : isExpanse
-            ? TRADE_ROUTE_CONFIG.convoyMaxExpanse
-            : TRADE_ROUTE_CONFIG.convoyMin + 1;
-        const convoyCount = TRADE_ROUTE_CONFIG.convoyMin + Math.floor(rng() * (convoyMax - TRADE_ROUTE_CONFIG.convoyMin + 1));
-        for (let i = 0; i < convoyCount; i += 1) {
-          const type = CIVILIAN_TYPES[Math.floor(rng() * CIVILIAN_TYPES.length)];
-          const routeT = rng();
-          const routeDir = rng() < 0.5 ? 1 : -1;
-          const offset = randRange(rng, -route.width * 0.4, route.width * 0.4);
-          const speed = randRange(rng, type.speed * 0.9, type.speed * 1.4);
-          const civFaction = sector.faction?.id && rng() < 0.65 ? sector.faction.id : 'neutral';
-          const livery = getLiveryForFaction(civFaction);
-          sector.objects.civilians.push({
-            id: `${sector.key}-route-${r}-civ-${i}`,
-            type: type.id,
-            label: type.label,
-            x: route.x1 + dx * routeT + route.nx * offset,
-            y: route.y1 + dy * routeT + route.ny * offset,
-            angle: route.angle + (routeDir < 0 ? Math.PI : 0),
-            speed,
-            size: type.size,
-            color: type.color,
-            faction: civFaction,
-            livery,
-            hp: type.hp,
-            maxHp: type.hp,
-            shield: type.id === 'freighter' ? 18 : type.id === 'hauler' ? 12 : 0,
-            armor: type.id === 'freighter' ? 0.08 : 0.04,
-            routeId: route.id,
-            routeT,
-            routeDir,
-            routeOffset: offset,
-            sway: rng() * Math.PI * 2
-          });
-        }
-
-        if (rng() < TRADE_ROUTE_CONFIG.escortChance) {
-          const escortCount = TRADE_ROUTE_CONFIG.escortMin + Math.floor(rng() * (TRADE_ROUTE_CONFIG.escortMax - TRADE_ROUTE_CONFIG.escortMin + 1));
-          for (let i = 0; i < escortCount; i += 1) {
-            const def = FRIENDLY_TYPES[Math.floor(rng() * FRIENDLY_TYPES.length)];
-            const routeT = rng();
-            const routeDir = rng() < 0.5 ? 1 : -1;
-            const offset = randRange(rng, -route.width * 0.35, route.width * 0.35);
-            spawnFriendly(def.id, route.x1 + dx * routeT + route.nx * offset, route.y1 + dy * routeT + route.ny * offset, {
-              sector,
-              angle: route.angle + (routeDir < 0 ? Math.PI : 0),
-              faction: 'aetherline',
-              routeId: route.id,
-              routeT,
-              routeDir,
-              routeOffset: offset,
-              rng
-            });
-          }
-        }
+        seedRouteTraffic(sector, route, rng, 1);
       }
     }
 
@@ -4008,7 +4096,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.lastZoneType = '';
       state.hyperDrive = { cooldown: 0 };
       state.hyperNav = { chargeLevel: 10, targetIndex: 0 };
-      state.hyperJumpFx = { timer: 0, duration: 1.35 };
+      state.hyperJumpFx = { timer: 0, duration: 1.0, pending: null };
       state.boundaryTimer = 0;
       state.boundaryWarning = 0;
       state.broadcastCooldown = 0;
@@ -4070,6 +4158,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       buildGateMap();
       buildStationMap();
       buildCityMap();
+      buildTradeLanes();
       buildSkygridBackground();
       resetHomeDefense();
       contract.active = false;
@@ -4491,6 +4580,116 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     };
     sector.objects.civilians.push(ship);
     return ship;
+  }
+
+  function seedRouteTraffic(sector, route, rng, boost = 1) {
+    if (!sector || !route) return;
+    const convoyMax = sector.zoneType === 'lane'
+      ? TRADE_ROUTE_CONFIG.convoyMaxLane
+      : sector.zoneType === 'expanse'
+        ? TRADE_ROUTE_CONFIG.convoyMaxExpanse
+        : TRADE_ROUTE_CONFIG.convoyMin + 1;
+    const baseCount = TRADE_ROUTE_CONFIG.convoyMin + Math.floor(rng() * (convoyMax - TRADE_ROUTE_CONFIG.convoyMin + 1));
+    const convoyCount = Math.max(1, Math.round(baseCount * boost));
+    for (let i = 0; i < convoyCount; i += 1) {
+      spawnCivilianShip(sector, { rng, route });
+    }
+    const escortChance = Math.min(1, TRADE_ROUTE_CONFIG.escortChance * (0.9 + boost * 0.2));
+    if (rng() < escortChance) {
+      const baseEscorts = TRADE_ROUTE_CONFIG.escortMin + Math.floor(rng() * (TRADE_ROUTE_CONFIG.escortMax - TRADE_ROUTE_CONFIG.escortMin + 1));
+      const escortCount = Math.max(1, Math.round(baseEscorts * (0.7 + boost * 0.3)));
+      for (let i = 0; i < escortCount; i += 1) {
+        const def = FRIENDLY_TYPES[Math.floor(rng() * FRIENDLY_TYPES.length)];
+        const routeT = rng();
+        const offset = randRange(rng, -route.width * 0.25, route.width * 0.25);
+        const dx = route.x2 - route.x1;
+        const dy = route.y2 - route.y1;
+        spawnFriendly(def.id, route.x1 + dx * routeT + route.nx * offset, route.y1 + dy * routeT + route.ny * offset, {
+          sector,
+          angle: route.angle,
+          faction: player.affiliation || 'aetherline',
+          routeId: route.id,
+          routeT,
+          routeDir: rng() < 0.5 ? 1 : -1,
+          routeOffset: offset,
+          rng
+        });
+      }
+    }
+  }
+
+  function seedRouteEncounters(sector, route, rng, city = null) {
+    if (!sector || !route) return;
+    const encounters = sector.encounters || (sector.encounters = []);
+    const existing = encounters.filter((enc) => enc && !enc.cleared);
+    if (existing.length > 4) return;
+    const midX = (route.x1 + route.x2) / 2 + route.nx * randRange(rng, -route.width * 0.25, route.width * 0.25);
+    const midY = (route.y1 + route.y2) / 2 + route.ny * randRange(rng, -route.width * 0.25, route.width * 0.25);
+    if (city && dist(midX, midY, city.x, city.y) < (city.safeRadius || city.radius + 200)) return;
+    const raidChance = route.source === 'lane' ? 0.55 : 0.28;
+    const convoyChance = route.source === 'lane' ? 0.4 : 0.2;
+    if (rng() < convoyChance) {
+      encounters.push({
+        id: `${sector.key}-enc-convoy-${Math.floor(rng() * 9999)}`,
+        type: 'convoy',
+        x: midX,
+        y: midY,
+        strength: randRange(rng, 0.9, 1.25),
+        sight: randRange(rng, 620, 900),
+        radius: randRange(rng, 160, 260),
+        waves: 1,
+        cooldown: randRange(rng, 2, 4),
+        cleared: false
+      });
+    }
+    if (rng() < raidChance) {
+      encounters.push({
+        id: `${sector.key}-enc-raid-${Math.floor(rng() * 9999)}`,
+        type: 'raid',
+        x: midX,
+        y: midY,
+        strength: randRange(rng, 0.95, 1.35),
+        sight: randRange(rng, 640, 920),
+        radius: randRange(rng, 160, 260),
+        waves: 1,
+        cooldown: randRange(rng, 2, 4),
+        cleared: false
+      });
+    }
+  }
+
+  function attachCitySpurs(sector, city, routes) {
+    if (!sector || !city || !routes?.length) return;
+    routes.forEach((route) => {
+      if (!route || route.hidden) return;
+      const dx = route.x2 - route.x1;
+      const dy = route.y2 - route.y1;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq <= 1) return;
+      const t = clamp(((city.x - route.x1) * dx + (city.y - route.y1) * dy) / lenSq, 0, 1);
+      const px = route.x1 + dx * t;
+      const py = route.y1 + dy * t;
+      const distToCity = Math.hypot(px - city.x, py - city.y);
+      if (distToCity < (city.radius || 120) * 1.2) return;
+      const sx = city.x;
+      const sy = city.y;
+      const spurDx = px - sx;
+      const spurDy = py - sy;
+      const spurLen = Math.hypot(spurDx, spurDy) || 1;
+      sector.objects.tradeRoutes.push({
+        id: `${route.id}-spur-${city.id}`,
+        x1: sx,
+        y1: sy,
+        x2: px,
+        y2: py,
+        width: Math.max(90, route.width * 0.6),
+        length: spurLen,
+        angle: Math.atan2(spurDy, spurDx),
+        nx: -spurDy / spurLen,
+        ny: spurDx / spurLen,
+        source: 'spur'
+      });
+    });
   }
 
   function spawnBoss(x, y) {
@@ -5136,6 +5335,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     return Math.ceil(HYPER.maxCharge * getHyperChargePercent(level) * efficiency);
   }
 
+  function getHyperJumpCost(distance, level = getHyperChargeLevel()) {
+    const maxRange = getHyperRange(getHyperChargePercent(level));
+    const maxCost = getHyperChargeCost(level);
+    if (maxRange <= 0) return maxCost;
+    const ratio = clamp(distance / maxRange, 0.1, 1);
+    const cost = Math.ceil(maxCost * ratio);
+    return Math.max(Math.ceil(maxCost * 0.1), cost);
+  }
+
   function getHyperBaseRange() {
     const boostSpeed = cachedStats.maxSpeed * 1.5 * (ZONE_TYPES.expanse?.boostMult || 1.6);
     const rangeMult = cachedStats.hyperRangeMult || 1;
@@ -5272,26 +5480,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.paused = false;
   }
 
-  function executeHyperJump(target) {
-    if (!target) {
-      noteStatus('Select a hyper target.');
-      return false;
-    }
-    if (state.hyperDrive.cooldown > 0) {
-      noteStatus('Hyper drive cooling.');
-      return false;
-    }
-    const chargeLevel = getHyperChargeLevel();
-    const maxRange = getHyperRange(getHyperChargePercent(chargeLevel));
-    const cost = getHyperChargeCost(chargeLevel);
-    if (player.hyperCharge < cost) {
-      noteStatus('Hyper charge depleted. Refuel at a station.');
-      return false;
-    }
-    if (target.distance > maxRange) {
-      noteStatus('Target out of range for current dial.');
-      return false;
-    }
+  function completeHyperJump(pending) {
+    if (!pending) return;
+    const { target, cost } = pending;
     player.hyperCharge = Math.max(0, player.hyperCharge - cost);
     state.hyperDrive.cooldown = HYPER.cooldown;
     const offset = (target.radius || 60) * 0.35;
@@ -5302,10 +5493,38 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.vy = 0;
     addCameraShake(1.4, 0.3);
     spawnEffect(player.x, player.y, 'rgba(154,214,255,0.9)', 80);
-    if (state.hyperJumpFx) {
-      state.hyperJumpFx.timer = state.hyperJumpFx.duration || 1.35;
-    }
     noteStatus(`Hyper jump complete (${target.label}).`);
+  }
+
+  function executeHyperJump(target) {
+    if (state.hyperJumpFx?.pending) {
+      noteStatus('Hyper drive charging.');
+      return false;
+    }
+    if (!target) {
+      noteStatus('Select a hyper target.');
+      return false;
+    }
+    if (state.hyperDrive.cooldown > 0) {
+      noteStatus('Hyper drive cooling.');
+      return false;
+    }
+    const chargeLevel = getHyperChargeLevel();
+    const maxRange = getHyperRange(getHyperChargePercent(chargeLevel));
+    const cost = getHyperJumpCost(target.distance, chargeLevel);
+    if (player.hyperCharge < cost) {
+      noteStatus('Hyper charge depleted. Refuel at a station.');
+      return false;
+    }
+    if (target.distance > maxRange) {
+      noteStatus('Target out of range for current dial.');
+      return false;
+    }
+    if (state.hyperJumpFx) {
+      state.hyperJumpFx.pending = { target, cost };
+      state.hyperJumpFx.timer = state.hyperJumpFx.duration || 1;
+    }
+    noteStatus('Hyper jump charging...');
     return true;
   }
 
@@ -5835,6 +6054,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       return;
     }
 
+    if (enemy.role === 'transport' && enemy.hp < enemy.maxHp * 0.25) {
+      enemy.disabled = true;
+      enemy.state = 'disabled';
+    }
+    if (enemy.disabled) {
+      enemy.vx *= 0.92;
+      enemy.vy *= 0.92;
+      enemy.fireCooldown = Math.max(enemy.fireCooldown, 1);
+      return;
+    }
+
     if (enemy.isBoss) {
       if (enemy.shield <= 0 && enemy.phase === 1) {
         enemy.phase = 2;
@@ -6036,6 +6266,37 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       applyGravityToEntity(enemy, sector, dt);
       updateEnemyAI(enemy, dt, sector);
     });
+  }
+
+  function handleTransportCapture() {
+    const sector = getCurrentSector();
+    if (!sector) return;
+    let target = null;
+    for (let i = 0; i < entities.enemies.length; i += 1) {
+      const enemy = entities.enemies[i];
+      if (!enemy || enemy.hp <= 0) continue;
+      if (enemy.role !== 'transport' || !enemy.disabled) continue;
+      if (dist(player.x, player.y, enemy.x, enemy.y) < enemy.size + 40) {
+        target = enemy;
+        break;
+      }
+    }
+    if (!target) return;
+    noteStatus('Press E to seize transport cargo.');
+    if (!input.justPressed['KeyE']) return;
+    const cargoRoll = 2 + Math.floor(Math.random() * 3);
+    if (getCargoCount() + cargoRoll <= cachedStats.cargoMax) {
+      player.inventory.cargo.salvage += cargoRoll;
+      if (Math.random() < 0.4) player.inventory.cargo.alloys += 1;
+      if (Math.random() < 0.2) player.inventory.cargo.relics += 1;
+      awardCredits(140 + cargoRoll * 30, 'Cargo seized');
+    } else {
+      awardCredits(120, 'Cargo seized');
+      noteStatus('Cargo bay full. Converted to credits.');
+    }
+    if (target.faction) adjustFactionRep(target.faction, -4, 'Transport seized');
+    spawnExplosion(target.x, target.y, target.color || '#ffd166');
+    target.hp = 0;
   }
 
   function updateBases(dt) {
@@ -7481,8 +7742,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.radioCooldown > 0) {
       state.radioCooldown = Math.max(0, state.radioCooldown - dt);
     }
-    if (state.hyperJumpFx?.timer > 0) {
+    if (state.hyperJumpFx?.pending) {
       state.hyperJumpFx.timer = Math.max(0, state.hyperJumpFx.timer - dt);
+      if (state.hyperJumpFx.timer <= 0) {
+        completeHyperJump(state.hyperJumpFx.pending);
+        state.hyperJumpFx.pending = null;
+      }
+      updateStatusTimer(dt);
+      updateHud();
+      input.justPressed = {};
+      return;
     }
 
     updateIntroSequence(dt);
@@ -7585,6 +7854,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     handleCollisions(dt);
     updateProgress(dt);
     updateDifficulty();
+    handleTransportCapture();
     updateStationInteraction();
     updateContractProgress();
     updateEscortContract(dt);
@@ -10281,6 +10551,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const fx = state.hyperJumpFx;
     if (!fx || fx.timer <= 0) return;
     const t = clamp(fx.timer / (fx.duration || 1), 0, 1);
+    const progress = 1 - t;
     const alpha = 0.15 + t * 0.6;
     const cx = VIEW.centerX;
     const cy = VIEW.centerY;
@@ -10295,17 +10566,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillStyle = core;
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
 
-    const streakCount = 26;
+    const streakCount = 30;
     ctx.strokeStyle = `rgba(154,214,255,${0.25 + t * 0.35})`;
     ctx.lineWidth = 1.2;
     for (let i = 0; i < streakCount; i += 1) {
-      const angle = (Math.PI * 2 * i) / streakCount + state.time * 0.4;
-      const length = lerp(80, 320, t) + Math.random() * 40;
-      const inner = 30 + Math.random() * 40;
+      const angle = (Math.PI * 2 * i) / streakCount + state.time * 0.6;
+      const jitter = Math.sin(state.time * 2 + i) * 12;
+      const inner = lerp(10, 140, progress) + jitter * 0.2;
+      const outer = inner + lerp(120, 360, progress);
       const x1 = cx + Math.cos(angle) * inner;
       const y1 = cy + Math.sin(angle) * inner;
-      const x2 = cx + Math.cos(angle) * length;
-      const y2 = cy + Math.sin(angle) * length;
+      const x2 = cx + Math.cos(angle) * outer;
+      const y2 = cy + Math.sin(angle) * outer;
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
@@ -10314,7 +10586,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     ctx.strokeStyle = `rgba(109,240,255,${0.25 + t * 0.35})`;
     for (let i = 0; i < 3; i += 1) {
-      const radius = lerp(60, 220, 1 - t) + i * 26;
+      const radius = lerp(40, 260, progress) + i * 24;
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.stroke();
@@ -10552,8 +10824,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Press 1-9 for 10-90% or 0 for 100% charge. Use arrows to pick a target.', 24, 58);
     ctx.fillText('Press Enter to jump. Press V or Esc to close.', 24, 76);
 
+    const estCost = selected ? getHyperJumpCost(selected.distance, chargeLevel) : maxCost;
     ctx.fillStyle = '#e0f2ff';
-    ctx.fillText(`Charge Dial: ${chargePercent}% | Cost: ${cost}% | Range: ${Math.round(maxRange)}m (Radar ${Math.round(radarRange)}m)`, 24, 98);
+    ctx.fillText(`Charge Dial: ${chargePercent}% | Max Cost: ${maxCost}% | Est: ${estCost}% | Range: ${Math.round(maxRange)}m (Radar ${Math.round(radarRange)}m)`, 24, 98);
 
     const currentGrid = gridFromPos(player.x, player.y);
     const mapRadius = 4;
@@ -12090,6 +12363,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     buildGateMap();
     buildStationMap();
     buildCityMap();
+    buildTradeLanes();
     buildSkygridBackground();
 
     const localSave = loadLocal();
