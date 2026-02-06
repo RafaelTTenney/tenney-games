@@ -1455,6 +1455,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     loreScroll: 0,
     hyperDrive: { cooldown: 0 },
     hyperNav: { chargeLevel: 10, targetIndex: 0 },
+    hyperJumpFx: { timer: 0, duration: 1.35 },
     lastBiome: '',
     biomeHintTimer: 0,
     boundaryTimer: 0,
@@ -4007,6 +4008,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.lastZoneType = '';
       state.hyperDrive = { cooldown: 0 };
       state.hyperNav = { chargeLevel: 10, targetIndex: 0 };
+      state.hyperJumpFx = { timer: 0, duration: 1.35 };
       state.boundaryTimer = 0;
       state.boundaryWarning = 0;
       state.broadcastCooldown = 0;
@@ -5204,6 +5206,35 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       .sort((a, b) => a.distance - b.distance);
   }
 
+  function getNearestHubTarget() {
+    let best = null;
+    const consider = (label, x, y, type) => {
+      if (x == null || y == null) return;
+      const distance = Math.hypot(x - player.x, y - player.y);
+      if (!best || distance < best.distance) {
+        best = { label, x, y, distance, type };
+      }
+    };
+
+    if (world.homeBase) {
+      consider('Bastion City', world.homeBase.x, world.homeBase.y, 'home');
+    }
+    if (world.cities && world.cities.length) {
+      world.cities.forEach((city) => {
+        if (!city) return;
+        consider(city.label || city.name || 'City', city.x, city.y, 'city');
+      });
+    }
+    Object.entries(world.biomeStations || {}).forEach(([biomeId, entry]) => {
+      const sector = getSector(entry.gx, entry.gy);
+      const station = sector.objects.stations.find((s) => s.hub) || sector.objects.stations[0];
+      const pos = station || posFromGrid(entry.gx, entry.gy);
+      const label = `${BIOMES[biomeId]?.name || biomeId} Hub`;
+      consider(label, pos.x, pos.y, 'hub');
+    });
+    return best;
+  }
+
   function getRouteDensityForSector(gx, gy) {
     const profile = getSectorProfile(gx, gy);
     const isExpanse = profile.zoneType === 'expanse';
@@ -5271,6 +5302,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.vy = 0;
     addCameraShake(1.4, 0.3);
     spawnEffect(player.x, player.y, 'rgba(154,214,255,0.9)', 80);
+    if (state.hyperJumpFx) {
+      state.hyperJumpFx.timer = state.hyperJumpFx.duration || 1.35;
+    }
     noteStatus(`Hyper jump complete (${target.label}).`);
     return true;
   }
@@ -7447,6 +7481,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.radioCooldown > 0) {
       state.radioCooldown = Math.max(0, state.radioCooldown - dt);
     }
+    if (state.hyperJumpFx?.timer > 0) {
+      state.hyperJumpFx.timer = Math.max(0, state.hyperJumpFx.timer - dt);
+    }
 
     updateIntroSequence(dt);
 
@@ -7587,8 +7624,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const gate = getGateData();
       const gateDistance = gate ? Math.round(Math.hypot(gate.x - player.x, gate.y - player.y)) : null;
       const gateText = gateDistance ? ` | Gate ${gateDistance}m` : '';
+      const hub = !mission.active && !contract.active ? getNearestHubTarget() : null;
       const goalText = !mission.active && !contract.active
-        ? ' | Goal: Complete hub contracts for Atlas sigils (G)'
+        ? ` | Goal: Atlas sigils (G)${hub ? ` | Hub ${Math.round(hub.distance)}m` : ''}`
         : '';
       hudObjective.textContent = `Objective: ${chapter.objective}${missionText}${contractText}${gateText}${goalText}`;
     }
@@ -10032,6 +10070,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     } else {
       lines.push({ text: 'Alignment: Unaligned', color: '#9fb4d9' });
     }
+    if (!mission.active && !contract.active) {
+      const hub = getNearestHubTarget();
+      if (hub) {
+        lines.push({ text: `Nearest Hub: ${hub.label} ${Math.round(hub.distance)}m`, color: '#9ad6ff' });
+        lines.push({ text: 'Dock at hubs for contracts and Atlas sigils.', color: '#9fb4d9' });
+      }
+    }
     const gate = getGateData();
     if (gate) {
       const distance = Math.hypot(gate.x - player.x, gate.y - player.y);
@@ -10230,6 +10275,52 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fillStyle = 'rgba(159,180,217,0.7)';
       ctx.fillText('No echoes', centerX - 26, centerY + 4);
     }
+  }
+
+  function drawHyperJumpFX() {
+    const fx = state.hyperJumpFx;
+    if (!fx || fx.timer <= 0) return;
+    const t = clamp(fx.timer / (fx.duration || 1), 0, 1);
+    const alpha = 0.15 + t * 0.6;
+    const cx = VIEW.centerX;
+    const cy = VIEW.centerY;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = alpha;
+
+    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, VIEW.height * 0.7);
+    core.addColorStop(0, `rgba(154,214,255,${0.55 * t})`);
+    core.addColorStop(0.35, `rgba(109,240,255,${0.25 * t})`);
+    core.addColorStop(1, 'rgba(5,10,18,0)');
+    ctx.fillStyle = core;
+    ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+
+    const streakCount = 26;
+    ctx.strokeStyle = `rgba(154,214,255,${0.25 + t * 0.35})`;
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < streakCount; i += 1) {
+      const angle = (Math.PI * 2 * i) / streakCount + state.time * 0.4;
+      const length = lerp(80, 320, t) + Math.random() * 40;
+      const inner = 30 + Math.random() * 40;
+      const x1 = cx + Math.cos(angle) * inner;
+      const y1 = cy + Math.sin(angle) * inner;
+      const x2 = cx + Math.cos(angle) * length;
+      const y2 = cy + Math.sin(angle) * length;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = `rgba(109,240,255,${0.25 + t * 0.35})`;
+    for (let i = 0; i < 3; i += 1) {
+      const radius = lerp(60, 220, 1 - t) + i * 26;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
   function getHudAlpha() {
@@ -10935,6 +11026,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const sector = getCurrentSector();
     drawSectorObjects(sector, camera);
     drawEntities(camera, sector);
+    drawHyperJumpFX();
     const hudMode = state.hudMode || 'full';
     if (hudMode === 'full') drawMiniMap();
     drawShipStatus();
