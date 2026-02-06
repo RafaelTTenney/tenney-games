@@ -1471,6 +1471,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     tutorialReady: false,
     tutorialFlags: { moved: false, boosted: false, scanned: false },
     tutorialOrigin: { x: 0, y: 0 },
+    trafficSpawnTimer: 0,
+    cargoHinted: false,
+    purposeHinted: false,
     spawnGrace: 0,
     escape: { active: false, timer: 0, reason: '' },
     capture: { active: false, faction: '', label: '', origin: '' },
@@ -2879,6 +2882,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             points: generateAsteroidShape(rng, radius)
           });
         }
+        const salvageCount = Math.max(1, Math.floor(rng() * (sector.isVoid ? 2 : 3)));
+        for (let s = 0; s < salvageCount; s += 1) {
+          const wreck = {
+            x: fieldCenter.x + randRange(rng, -fieldSpan, fieldSpan),
+            y: fieldCenter.y + randRange(rng, -fieldSpan, fieldSpan),
+            radius: randRange(rng, 16, 32),
+            salvage: 1 + Math.floor(rng() * (sector.isVoid ? 2 : 3))
+          };
+          if (!inClearZone(wreck.x, wreck.y)) {
+            sector.objects.wrecks.push(wreck);
+          }
+        }
       }
     }
 
@@ -2897,6 +2912,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           radius: size,
           ghost: rng() < 0.65,
           points: generateAsteroidShape(rng, size)
+        });
+      }
+      if (rng() < 0.45) {
+        sector.objects.wrecks.push({
+          x: center.x + randRange(rng, -innerField, innerField),
+          y: center.y + randRange(rng, -innerField, innerField),
+          radius: randRange(rng, 18, 34),
+          salvage: 1 + Math.floor(rng() * 2)
         });
       }
     }
@@ -3998,6 +4021,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.tutorialReady = false;
       state.tutorialFlags = { moved: false, boosted: false, scanned: false };
       state.tutorialOrigin = { x: 0, y: 0 };
+      state.trafficSpawnTimer = 0;
+      state.cargoHinted = false;
+      state.purposeHinted = false;
       state.spawnGrace = 25;
       state.escape = { active: false, timer: 0, reason: '' };
       state.capture = { active: false, faction: '', label: '', origin: '' };
@@ -4380,6 +4406,91 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     return friendly;
   }
 
+  function ensureTrafficRoute(sector, rng, { hidden = true } = {}) {
+    if (!sector?.objects) return null;
+    if (sector.objects.tradeRoutes?.length) {
+      return sector.objects.tradeRoutes[Math.floor(rng() * sector.objects.tradeRoutes.length)];
+    }
+    const center = posFromGrid(sector.gx, sector.gy);
+    const angle = rng() * Math.PI * 2;
+    const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+    const perp = { x: -dir.y, y: dir.x };
+    const length = WORLD.sectorSize * randRange(rng, 0.45, 0.7);
+    const midOffset = randRange(rng, -WORLD.sectorSize * 0.22, WORLD.sectorSize * 0.22);
+    const mid = { x: center.x + perp.x * midOffset, y: center.y + perp.y * midOffset };
+    const half = length / 2;
+    const route = {
+      id: `${sector.key}-traffic-${Math.floor(rng() * 99999)}`,
+      x1: mid.x - dir.x * half,
+      y1: mid.y - dir.y * half,
+      x2: mid.x + dir.x * half,
+      y2: mid.y + dir.y * half,
+      width: randRange(rng, 100, 170),
+      hidden
+    };
+    const dx = route.x2 - route.x1;
+    const dy = route.y2 - route.y1;
+    route.length = Math.hypot(dx, dy);
+    route.angle = Math.atan2(dy, dx);
+    route.nx = -dy / (route.length || 1);
+    route.ny = dx / (route.length || 1);
+    sector.objects.tradeRoutes.push(route);
+    return route;
+  }
+
+  function spawnCivilianShip(sector, options = {}) {
+    if (!sector?.objects) return null;
+    const rng = options.rng || Math.random;
+    const type = options.type || CIVILIAN_TYPES[Math.floor(rng() * CIVILIAN_TYPES.length)];
+    const center = posFromGrid(sector.gx, sector.gy);
+    const route = options.route || null;
+    let x = options.x ?? center.x + randRange(rng, -WORLD.sectorSize * 0.35, WORLD.sectorSize * 0.35);
+    let y = options.y ?? center.y + randRange(rng, -WORLD.sectorSize * 0.35, WORLD.sectorSize * 0.35);
+    let angle = options.angle ?? rng() * Math.PI * 2;
+    let routeId = '';
+    let routeT = 0;
+    let routeDir = 1;
+    let routeOffset = 0;
+    if (route) {
+      const dx = route.x2 - route.x1;
+      const dy = route.y2 - route.y1;
+      routeT = rng();
+      routeDir = rng() < 0.5 ? 1 : -1;
+      routeOffset = randRange(rng, -route.width * 0.3, route.width * 0.3);
+      x = route.x1 + dx * routeT + route.nx * routeOffset;
+      y = route.y1 + dy * routeT + route.ny * routeOffset;
+      angle = route.angle + (routeDir < 0 ? Math.PI : 0);
+      routeId = route.id;
+    }
+    const civFaction = options.faction || (sector.faction?.id && rng() < 0.6 ? sector.faction.id : 'neutral');
+    const livery = getLiveryForFaction(civFaction);
+    const ship = {
+      id: options.id || `${sector.key}-traffic-${Math.floor(rng() * 1e6)}`,
+      type: type.id,
+      label: type.label,
+      x,
+      y,
+      angle,
+      speed: randRange(rng, type.speed * 0.8, type.speed * 1.3),
+      size: type.size,
+      color: type.color,
+      faction: civFaction,
+      livery,
+      hp: type.hp,
+      maxHp: type.hp,
+      shield: type.id === 'freighter' ? 18 : type.id === 'hauler' ? 12 : 0,
+      armor: type.id === 'freighter' ? 0.08 : 0.04,
+      routeId,
+      routeT,
+      routeDir,
+      routeOffset,
+      turn: randRange(rng, -0.1, 0.1),
+      sway: rng() * Math.PI * 2
+    };
+    sector.objects.civilians.push(ship);
+    return ship;
+  }
+
   function spawnBoss(x, y) {
     const factionId = getCurrentSector()?.faction?.id || '';
     entities.enemies.push({
@@ -4745,6 +4856,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (sector) startEscortContract(sector);
     }
     noteStatus(`Faction task assigned: ${contract.text}`);
+    pushStoryLog('Complete contracts to earn credits and Atlas sigils.');
   }
 
   function resolveCaptureJoin() {
@@ -6081,6 +6193,73 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
   }
 
+  function updateTraffic(dt) {
+    const sector = getCurrentSector();
+    if (!sector || sector.isCivic) return;
+    state.trafficSpawnTimer = Math.max(0, (state.trafficSpawnTimer || 0) - dt);
+    if (state.trafficSpawnTimer > 0) return;
+    state.trafficSpawnTimer = 5 + Math.random() * 5;
+
+    const civCount = sector.objects.civilians?.length || 0;
+    const friendlyCount = sector.objects.friendlies?.length || 0;
+    const traderCount = sector.objects.traders?.length || 0;
+    const isExpanse = sector.zoneType === 'expanse';
+    const isLane = sector.zoneType === 'lane';
+    const targetCiv = isExpanse ? 12 : isLane ? 9 : 6;
+    const targetFriendly = isExpanse ? 3 : isLane ? 2 : 1;
+    const targetTraders = isExpanse ? 2 : 1;
+
+    const rng = Math.random;
+    const route = ensureTrafficRoute(sector, rng, { hidden: true });
+
+    const spawnCiv = Math.min(3, Math.max(0, targetCiv - civCount));
+    for (let i = 0; i < spawnCiv; i += 1) {
+      spawnCivilianShip(sector, { rng, route });
+    }
+
+    if (friendlyCount < targetFriendly) {
+      const spawnCount = Math.min(2, targetFriendly - friendlyCount);
+      for (let i = 0; i < spawnCount; i += 1) {
+        const def = FRIENDLY_TYPES[Math.floor(rng() * FRIENDLY_TYPES.length)];
+        const routeT = rng();
+        const offset = randRange(rng, -route.width * 0.25, route.width * 0.25);
+        const dx = route.x2 - route.x1;
+        const dy = route.y2 - route.y1;
+        spawnFriendly(def.id, route.x1 + dx * routeT + route.nx * offset, route.y1 + dy * routeT + route.ny * offset, {
+          sector,
+          angle: route.angle,
+          faction: player.affiliation || 'aetherline',
+          routeId: route.id,
+          routeT,
+          routeDir: rng() < 0.5 ? 1 : -1,
+          routeOffset: offset,
+          rng
+        });
+      }
+    }
+
+    if (traderCount < targetTraders && rng() < 0.6) {
+      const traderType = TRADER_TYPES[Math.floor(rng() * TRADER_TYPES.length)];
+      const dx = route.x2 - route.x1;
+      const dy = route.y2 - route.y1;
+      const routeT = rng();
+      const offset = randRange(rng, -route.width * 0.2, route.width * 0.2);
+      sector.objects.traders.push({
+        id: `${sector.key}-traffic-trader-${Math.floor(rng() * 1e6)}`,
+        type: traderType.id,
+        label: traderType.label,
+        color: traderType.color,
+        vibe: traderType.vibe,
+        x: route.x1 + dx * routeT + route.nx * offset,
+        y: route.y1 + dy * routeT + route.ny * offset,
+        radius: randRange(rng, 22, 30),
+        driftX: randRange(rng, -10, 10),
+        driftY: randRange(rng, -10, 10),
+        phase: rng() * Math.PI * 2
+      });
+    }
+  }
+
   function applyGravityToEntity(entity, sector, dt) {
     if (!sector || !sector.objects.planets.length) return;
     sector.objects.planets.forEach((planet) => {
@@ -6230,6 +6409,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           if (getCargoCount() < cachedStats.cargoMax) {
             player.inventory.cargo.salvage += drop.value || 1;
             awardCredits(30, 'Salvage recovered');
+            if (!state.cargoHinted) {
+              noteStatus('Salvage stored. Dock at any station/city to sell or refine.');
+              state.cargoHinted = true;
+            }
           } else {
             noteStatus('Cargo bay full.');
           }
@@ -6586,6 +6769,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           player.inventory.cargo.salvage += wreck.salvage;
           if (Math.random() < 0.35) player.inventory.cargo.alloys += 1;
           awardCredits(60 + wreck.salvage * 20, 'Salvage recovered');
+          if (!state.cargoHinted) {
+            noteStatus('Cargo updated. Sell/refine at stations (menu option 8).');
+            state.cargoHinted = true;
+          }
         } else {
           noteStatus('Cargo bay full.');
         }
@@ -7263,6 +7450,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     updateIntroSequence(dt);
 
+    if (!state.purposeHinted && state.time > 20 && state.mode === 'flight') {
+      noteStatus('Goal: Earn Atlas sigils by completing hub contracts. Press G for goals.');
+      state.purposeHinted = true;
+    }
+
     if (!state.intro?.active && !state.startEncounterSeeded) {
       state.startEncounterTimer -= dt;
       if (state.startEncounterTimer <= 0) {
@@ -7346,6 +7538,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     updateTraders(dt);
     updateCivilians(dt);
     updateFriendlies(dt);
+    updateTraffic(dt);
     updateProjectiles(dt);
     updateDrones(dt);
     updateLoot(dt);
@@ -7394,12 +7587,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const gate = getGateData();
       const gateDistance = gate ? Math.round(Math.hypot(gate.x - player.x, gate.y - player.y)) : null;
       const gateText = gateDistance ? ` | Gate ${gateDistance}m` : '';
-      hudObjective.textContent = `Objective: ${chapter.objective}${missionText}${contractText}${gateText}`;
+      const goalText = !mission.active && !contract.active
+        ? ' | Goal: Complete hub contracts for Atlas sigils (G)'
+        : '';
+      hudObjective.textContent = `Objective: ${chapter.objective}${missionText}${contractText}${gateText}${goalText}`;
     }
     if (upgradeNote) {
       upgradeNote.textContent = state.codexSeen
         ? 'Upgrades persist. Dock at stations for shipyard and store access.'
-        : 'Tip: Press K for the Pilot Codex (fuel, heat, docking, uploads).';
+        : 'Tip: Press K for the Pilot Codex. Press G for Expedition Goals.';
     }
   }
 
@@ -9883,7 +10079,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function drawSignalScope() {
     const sector = getCurrentSector();
     if (!sector) return;
-    const { x: centerX, y: centerY, radius, range } = SIGNAL_SCOPE;
+    const { radius, range } = SIGNAL_SCOPE;
+    const baseX = SIGNAL_SCOPE.x ?? 96;
+    const baseY = SIGNAL_SCOPE.y ?? 248;
+    const centerX = clamp(baseX, radius + 14, VIEW.width - radius - 14);
+    const centerY = clamp(baseY, radius + 14, VIEW.height - radius - 14);
     const alpha = getHudAlpha() * 0.85;
 
     const contacts = [];
@@ -9966,7 +10166,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     ctx.fillStyle = 'rgba(159,180,217,0.8)';
     ctx.font = '10px sans-serif';
-    ctx.fillText('Signal Scope', centerX - 34, centerY + radius + 18);
+    ctx.fillText('Radar', centerX - 18, centerY + radius + 18);
   }
 
   function drawHyperRadar() {
@@ -10698,9 +10898,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Biome pockets hold stations and hazards. The Interstice is the quiet void between clusters.', 24, 180);
     ctx.fillText('Use Signal Scope to find traders (teal) and stations (green) for fuel and ammo.', 24, 202);
     ctx.fillText('Fuel and hyper charge do not regenerate. Dock or hail traders to resupply.', 24, 224);
-    ctx.fillText('Bastion City is a safe no-fire hub with fuel, ammo, and discovery uploads.', 24, 246);
-    ctx.fillText('You begin unaligned. Patrols may capture you; joining grants faction access.', 24, 268);
-    ctx.fillText('Press U to toggle minimal HUD. Press Enter to launch or Esc to skip.', 24, 290);
+    ctx.fillText('Wrecks and rubble fields yield salvage. Sell/refine cargo at stations.', 24, 246);
+    ctx.fillText('Bastion City is a safe no-fire hub with fuel, ammo, and discovery uploads.', 24, 268);
+    ctx.fillText('You begin unaligned. Patrols may capture you; joining grants faction access.', 24, 290);
+    ctx.fillText('Press G for Expedition Goals. Press U to toggle minimal HUD.', 24, 312);
+    ctx.fillText('Press Enter to launch or Esc to skip.', 24, 334);
   }
 
   function drawOverlay() {
@@ -10825,10 +11027,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const affiliationLine = player.affiliation
         ? `Alignment: ${FACTIONS.find((f) => f.id === player.affiliation)?.name || player.affiliation}.`
         : 'Status: Unaligned pilot. Dock at any hub to join a faction.';
+      const loopLine = 'Loop: find wrecks/ruins, haul salvage, sell/refine, upgrade, and complete hub contracts for Atlas sigils.';
       const introLine = state.intro?.active
         ? 'Start adrift with a full hyper charge. A patrol will intercept and offer a pact; Bastion City coordinates unlock after first contact.'
         : '';
-      briefBody.textContent = `${chapter.intro} ${atlasLine} ${navLine} ${affiliationLine} ${introLine}`;
+      briefBody.textContent = `${chapter.intro} ${atlasLine} ${navLine} ${affiliationLine} ${loopLine} ${introLine}`;
     }
     if (briefPrimary) briefPrimary.textContent = chapter.objective;
     if (briefOptional) {
