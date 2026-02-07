@@ -92,6 +92,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     maxJumpMinutes: 10,
     radarRangeMult: 1.8
   };
+  const HYPER_LIST_PAGE_SIZE = 18;
 
   const PHYSICS = {
     linearDamp: 0.986,
@@ -228,7 +229,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   const ZONE_TYPES = {
     cluster: { id: 'cluster', label: 'Cluster', boostMult: 1, spawnScale: 1, dustScale: 1 },
-    lane: { id: 'lane', label: 'Transit Lane', boostMult: 1.5, spawnScale: 0.5, dustScale: 0.6 },
+    lane: { id: 'lane', label: 'Transit Lane', boostMult: 1.5, spawnScale: 0.85, dustScale: 0.6 },
     expanse: { id: 'expanse', label: 'Interstice Expanse', boostMult: 2.45, spawnScale: 0.12, dustScale: 0.1 },
     rift: { id: 'rift', label: 'Rift Channel', boostMult: 1.65, spawnScale: 0.35, dustScale: 0.35 }
   };
@@ -1502,6 +1503,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     escape: { active: false, timer: 0, reason: '' },
     capture: { active: false, faction: '', label: '', origin: '' },
     captureCooldown: 0,
+    routeLock: { active: false, routeId: '' },
     capturePressure: 0,
     captureWindow: 0,
     startEncounterTimer: 0,
@@ -2076,8 +2078,119 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     return world.convergenceGate;
   }
 
+  function getMissionTargetData() {
+    if (!mission.active) return null;
+    const type = mission.type;
+    if (type === 'reach_gate') {
+      const gate = getGateData();
+      if (gate) {
+        return { label: 'Relay Gate', x: gate.x, y: gate.y, color: PALETTE.gold, kind: 'gate' };
+      }
+    }
+    if (type === 'base' || type === 'boss') {
+      if (mission.gateKey) {
+        const [gx, gy] = mission.gateKey.split(',').map((value) => Number.parseInt(value, 10));
+        const sector = getSector(gx, gy);
+        const base = sector?.objects?.bases?.[0];
+        const center = posFromGrid(gx, gy);
+        return {
+          label: type === 'boss' ? 'Guardian Locus' : 'Outpost Target',
+          x: base?.x ?? center.x,
+          y: base?.y ?? center.y,
+          color: '#ffb347',
+          kind: 'mission'
+        };
+      }
+    }
+    if (type === 'carrier' || type === 'convoy') {
+      const role = type === 'carrier' ? 'carrier' : 'transport';
+      let best = null;
+      let bestDist = Infinity;
+      entities.enemies.forEach((enemy) => {
+        if (enemy.hp <= 0) return;
+        if (enemy.role !== role) return;
+        const d = dist(player.x, player.y, enemy.x, enemy.y);
+        if (d < bestDist) {
+          best = enemy;
+          bestDist = d;
+        }
+      });
+      if (best) {
+        return {
+          label: role === 'carrier' ? 'Enemy Carrier' : 'Enemy Convoy',
+          x: best.x,
+          y: best.y,
+          color: '#ff9f6b',
+          kind: 'mission'
+        };
+      }
+      if (mission.gateKey) {
+        const [gx, gy] = mission.gateKey.split(',').map((value) => Number.parseInt(value, 10));
+        const center = posFromGrid(gx, gy);
+        return { label: 'Convoy Sector', x: center.x, y: center.y, color: '#ff9f6b', kind: 'mission' };
+      }
+    }
+    if (type === 'scan') {
+      const sector = getCurrentSector();
+      if (sector?.objects?.anomalies?.length) {
+        let best = null;
+        let bestDist = Infinity;
+        sector.objects.anomalies.forEach((anomaly) => {
+          const d = dist(player.x, player.y, anomaly.x, anomaly.y);
+          if (d < bestDist) {
+            best = anomaly;
+            bestDist = d;
+          }
+        });
+        if (best) {
+          return { label: 'Anomaly Scan', x: best.x, y: best.y, color: PALETTE.violet, kind: 'mission' };
+        }
+      }
+    }
+    return null;
+  }
+
+  function getContractTargetData(sector) {
+    if (!contract.active) return null;
+    if (contract.type === 'escort') {
+      const convoyId = contract.convoyId;
+      const convoyShip = convoyId ? findClosestCivilian(player.x, player.y, 9999, sector, convoyId) : null;
+      if (convoyShip) {
+        return { label: 'Escort Convoy', x: convoyShip.x, y: convoyShip.y, color: '#ffd166', kind: 'contract' };
+      }
+      if (contract.convoyKey) {
+        const [gx, gy] = contract.convoyKey.split(',').map((value) => Number.parseInt(value, 10));
+        const center = posFromGrid(gx, gy);
+        return { label: 'Convoy Route', x: center.x, y: center.y, color: '#ffd166', kind: 'contract' };
+      }
+    }
+    return null;
+  }
+
+  function getObjectiveTargets(sector) {
+    const targets = [];
+    const missionTarget = getMissionTargetData();
+    if (missionTarget) targets.push(missionTarget);
+    const contractTarget = getContractTargetData(sector);
+    if (contractTarget) targets.push(contractTarget);
+    const convoyAlert = getNearestConvoyAlert(sector);
+    if (convoyAlert) {
+      const label = convoyAlert.encounter.type === 'raid' ? 'Convoy Raid' : 'Convoy Route';
+      const color = convoyAlert.encounter.type === 'raid' ? '#ff6b6b' : '#ffd166';
+      targets.push({ label, x: convoyAlert.encounter.x, y: convoyAlert.encounter.y, color, kind: 'route' });
+    }
+    return targets;
+  }
+
   function sectorKey(gx, gy) {
     return `${gx},${gy}`;
+  }
+
+  function parseSectorKey(key) {
+    if (!key) return null;
+    const [gx, gy] = key.split(',').map((value) => Number.parseInt(value, 10));
+    if (Number.isNaN(gx) || Number.isNaN(gy)) return null;
+    return { gx, gy };
   }
 
   function depthFromGrid(gx, gy) {
@@ -2593,7 +2706,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     };
 
     cities.forEach((city) => {
-      const desired = city.type === 'capital' ? 5 : 4;
+      const desired = city.type === 'capital' ? 7 : 6;
       const others = cities
         .filter((other) => other.id !== city.id)
         .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
@@ -2603,9 +2716,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     });
 
-    const maxFixPasses = 4;
+    const maxFixPasses = 5;
     for (let pass = 0; pass < maxFixPasses; pass += 1) {
-      const lowCities = cities.filter((city) => (degrees.get(city.id) || 0) < 3);
+      const lowCities = cities.filter((city) => (degrees.get(city.id) || 0) < 5);
       if (!lowCities.length) break;
       lowCities.forEach((city) => {
         const others = cities
@@ -2613,13 +2726,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
           .sort((a, b) => a.d - b.d);
         for (let i = 0; i < others.length; i += 1) {
-          if ((degrees.get(city.id) || 0) >= 3) break;
+          if ((degrees.get(city.id) || 0) >= 5) break;
           addLane(city, others[i].other);
         }
       });
     }
 
-    const extraLinks = Math.max(0, Math.floor(cities.length * 0.35));
+    const extraLinks = Math.max(0, Math.floor(cities.length * 0.6));
     for (let i = 0; i < extraLinks; i += 1) {
       const a = cities[Math.floor(rng() * cities.length)];
       const b = cities[Math.floor(rng() * cities.length)];
@@ -2649,6 +2762,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (length < 60) return;
       routes.push({
         id: `${lane.id}-${sector.key}`,
+        laneId: lane.id,
         x1: clipped.x1,
         y1: clipped.y1,
         x2: clipped.x2,
@@ -3379,6 +3493,54 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       seedRouteEncounters(sector, route, rng, null);
     });
 
+    if (laneRoutes.length && !sector.isVoid) {
+      const stationChance = sector.zoneType === 'lane' ? 0.65 : 0.35;
+      if (rng() < stationChance && (!hasStation || rng() < 0.4)) {
+        const route = laneRoutes[Math.floor(rng() * laneRoutes.length)];
+        if (route) {
+          const t = rng();
+          const dx = route.x2 - route.x1;
+          const dy = route.y2 - route.y1;
+          const offset = randRange(rng, -route.width * 0.15, route.width * 0.15);
+          const x = route.x1 + dx * t + route.nx * offset;
+          const y = route.y1 + dy * t + route.ny * offset;
+          sector.objects.stations.push(makeStation({
+            x,
+            y,
+            radius: randRange(rng, 60, 84),
+            biome: sector.biome,
+            type: 'waystation',
+            name: 'Lane Waystation'
+          }));
+          hasStation = true;
+        }
+      }
+      if (rng() < 0.75) {
+        const traderCount = 1 + Math.floor(rng() * 2);
+        for (let i = 0; i < traderCount; i += 1) {
+          const traderType = TRADER_TYPES[Math.floor(rng() * TRADER_TYPES.length)];
+          const route = laneRoutes[Math.floor(rng() * laneRoutes.length)];
+          const t = rng();
+          const dx = route.x2 - route.x1;
+          const dy = route.y2 - route.y1;
+          const offset = randRange(rng, -route.width * 0.25, route.width * 0.25);
+          sector.objects.traders.push({
+            id: `${sector.key}-lane-trader-${i}`,
+            type: traderType.id,
+            label: traderType.label,
+            color: traderType.color,
+            vibe: traderType.vibe,
+            x: route.x1 + dx * t + route.nx * offset,
+            y: route.y1 + dy * t + route.ny * offset,
+            radius: randRange(rng, 22, 30),
+            driftX: randRange(rng, -8, 8),
+            driftY: randRange(rng, -8, 8),
+            phase: rng() * Math.PI * 2
+          });
+        }
+      }
+    }
+
     const routeChance = sector.isVoid
       ? TRADE_ROUTE_CONFIG.voidChance
       : sector.zoneType === 'lane'
@@ -3489,10 +3651,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           const route = routes[Math.floor(rng() * routes.length)];
           if (!route) continue;
           const convoyId = `${sector.key}-civconvoy-${i}-${Math.floor(rng() * 9999)}`;
-          const count = 2 + Math.floor(rng() * 2);
+          const count = 3 + Math.floor(rng() * 2);
           const spacing = 0.015 + rng() * 0.01;
           const baseT = rng();
           const routeDir = rng() < 0.5 ? 1 : -1;
+          const convoyFaction = route.faction || sector.faction?.id || 'neutral';
           for (let j = 0; j < count; j += 1) {
             const type = CIVILIAN_TYPES[Math.floor(rng() * CIVILIAN_TYPES.length)];
             spawnCivilianShip(sector, {
@@ -3501,6 +3664,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
               routeT: (baseT + (j - (count - 1) / 2) * spacing) % 1,
               routeDir,
               type,
+              faction: convoyFaction,
               convoyId,
               convoyRole: j === Math.floor(count / 2) ? 'lead' : 'wing'
             });
@@ -3516,7 +3680,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
               spawnFriendly(def.id, ex, ey, {
                 sector,
                 angle: route.angle + (routeDir < 0 ? Math.PI : 0),
-                faction: route.faction || sector.faction?.id || 'neutral',
+                faction: convoyFaction,
                 routeId: route.id,
                 routeT: escortT,
                 routeDir,
@@ -4321,6 +4485,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.escape = { active: false, timer: 0, reason: '' };
       state.capture = { active: false, faction: '', label: '', origin: '' };
       state.captureCooldown = 0;
+      state.routeLock = { active: false, routeId: '' };
       state.capturePressure = 0;
       state.captureWindow = 120;
       state.startEncounterTimer = 4;
@@ -4888,7 +5053,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (withEscorts) {
       const baseEscorts = options.escortCount
         ?? (TRADE_ROUTE_CONFIG.escortMin + Math.floor(rng() * (TRADE_ROUTE_CONFIG.escortMax - TRADE_ROUTE_CONFIG.escortMin + 1)));
-      const escortCount = Math.max(2, Math.round(baseEscorts * (1.05 + (count - 2) * 0.12)));
+      const escortCount = Math.max(3, Math.round(baseEscorts * (1.1 + (count - 2) * 0.18)));
       const dx = route.x2 - route.x1;
       const dy = route.y2 - route.y1;
       for (let i = 0; i < escortCount; i += 1) {
@@ -4925,7 +5090,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const convoyGroups = Math.max(1, Math.round(baseCount * boost * 0.75));
     for (let i = 0; i < convoyGroups; i += 1) {
       spawnConvoyOnRoute(sector, route, rng, {
-        count: 3 + Math.floor(rng() * 3),
+        count: 4 + Math.floor(rng() * 3),
         escortChance: Math.min(1, TRADE_ROUTE_CONFIG.escortChance * (0.95 + boost * 0.25))
       });
     }
@@ -4942,29 +5107,33 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const raidChance = route.source === 'lane' ? 0.78 : 0.5;
     const convoyChance = route.source === 'lane' ? 0.6 : 0.35;
     if (rng() < convoyChance) {
+      const sight = route.source === 'lane' ? randRange(rng, 1100, 1600) : randRange(rng, 740, 1120);
+      const radius = route.source === 'lane' ? randRange(rng, 220, 360) : randRange(rng, 180, 320);
       encounters.push({
         id: `${sector.key}-enc-convoy-${Math.floor(rng() * 9999)}`,
         type: 'convoy',
         x: midX,
         y: midY,
         strength: randRange(rng, 0.95, 1.35),
-        sight: randRange(rng, 740, 1120),
-        radius: randRange(rng, 180, 320),
-        waves: 1,
+        sight,
+        radius,
+        waves: route.source === 'lane' ? 2 : 1,
         cooldown: randRange(rng, 2, 4),
         cleared: false
       });
     }
     if (rng() < raidChance) {
+      const sight = route.source === 'lane' ? randRange(rng, 1150, 1700) : randRange(rng, 760, 1140);
+      const radius = route.source === 'lane' ? randRange(rng, 220, 360) : randRange(rng, 180, 320);
       encounters.push({
         id: `${sector.key}-enc-raid-${Math.floor(rng() * 9999)}`,
         type: 'raid',
         x: midX,
         y: midY,
         strength: randRange(rng, 1.05, 1.45),
-        sight: randRange(rng, 760, 1140),
-        radius: randRange(rng, 180, 320),
-        waves: 1,
+        sight,
+        radius,
+        waves: route.source === 'lane' ? 2 : 1,
         cooldown: randRange(rng, 2, 4),
         cleared: false
       });
@@ -5736,37 +5905,106 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function getHyperTargets(maxRange = getHyperRange()) {
     const radarRange = maxRange * HYPER.radarRangeMult;
     const targets = [];
+    const seen = new Set();
+    const pushTarget = (id, label, x, y, radius = 0, type = 'site') => {
+      if (x == null || y == null) return;
+      if (seen.has(id)) return;
+      targets.push(buildHyperTarget(id, label, x, y, radius, type));
+      seen.add(id);
+    };
 
     (world.clusterFields || []).forEach((cluster, index) => {
-      targets.push(buildHyperTarget(`cluster-${index}`, `Cluster Field ${index + 1}`, cluster.x, cluster.y, cluster.radius, 'cluster'));
+      pushTarget(`cluster-${index}`, `Cluster Field ${index + 1}`, cluster.x, cluster.y, cluster.radius, 'cluster');
     });
 
     Object.entries(world.biomeStations || {}).forEach(([biomeId, entry]) => {
       const sector = getSector(entry.gx, entry.gy);
       const station = sector.objects.stations.find((s) => s.hub) || sector.objects.stations[0];
       const pos = station || { x: entry.gx * WORLD.sectorSize, y: entry.gy * WORLD.sectorSize, radius: 40 };
-      targets.push(buildHyperTarget(`hub-${biomeId}`, `${BIOMES[biomeId]?.name || biomeId} Hub`, pos.x, pos.y, pos.radius || 40, 'hub'));
+      pushTarget(`hub-${biomeId}`, `${BIOMES[biomeId]?.name || biomeId} Hub`, pos.x, pos.y, pos.radius || 40, 'hub');
     });
 
     (world.relayStations || []).forEach((entry, idx) => {
       const sector = getSector(entry.gx, entry.gy);
       const station = sector.objects.stations.find((s) => s.type === 'relay') || sector.objects.stations[0];
       const pos = station || { x: entry.gx * WORLD.sectorSize, y: entry.gy * WORLD.sectorSize, radius: 40 };
-      targets.push(buildHyperTarget(`relay-${idx}`, 'Interstice Relay', pos.x, pos.y, pos.radius || 40, 'relay'));
+      pushTarget(`relay-${idx}`, 'Interstice Relay', pos.x, pos.y, pos.radius || 40, 'relay');
     });
 
+    const missionTarget = getMissionTargetData();
+    if (missionTarget) {
+      pushTarget(`mission-${missionTarget.label}`, missionTarget.label, missionTarget.x, missionTarget.y, 60, 'mission');
+    }
+
+    if (contract.active && contract.originKey) {
+      const origin = parseSectorKey(contract.originKey);
+      if (origin) {
+        const sector = getSector(origin.gx, origin.gy);
+        let targetLabel = 'Contract Hub';
+        let pos = posFromGrid(origin.gx, origin.gy);
+        if (sector?.objects?.stations?.length) {
+          const station = sector.objects.stations.find((s) => s.hub || s.type === 'relay' || s.type === 'waystation') || sector.objects.stations[0];
+          if (station) {
+            pos = station;
+            targetLabel = station.label || station.name || 'Contract Station';
+          }
+        }
+        if (world.cities?.length) {
+          const city = world.cities.find((entry) => entry.gx === origin.gx && entry.gy === origin.gy);
+          if (city) {
+            pos = city;
+            targetLabel = `${city.label} Contracts`;
+          }
+        }
+        pushTarget('contract-origin', targetLabel, pos.x, pos.y, pos.radius || 60, 'contract');
+      }
+    }
+
+    const gate = getGateData();
+    if (gate && (!missionTarget || missionTarget.kind !== 'gate')) {
+      pushTarget('chapter-gate', 'Relay Gate', gate.x, gate.y, 60, 'gate');
+    }
+
     if (world.convergenceGate) {
-      targets.push(buildHyperTarget('atlas-gate', 'Atlas Convergence', world.convergenceGate.x, world.convergenceGate.y, 60, 'gate'));
+      pushTarget('atlas-gate', 'Atlas Convergence', world.convergenceGate.x, world.convergenceGate.y, 60, 'gate');
     }
 
     if (world.homeBase) {
-      targets.push(buildHyperTarget('home', 'Bastion City', world.homeBase.x, world.homeBase.y, world.homeBase.radius || 60, 'home'));
+      pushTarget('home', 'Bastion City', world.homeBase.x, world.homeBase.y, world.homeBase.radius || 60, 'home');
     }
 
     if (world.cities && world.cities.length) {
       world.cities.forEach((city) => {
         if (city.type === 'capital') return;
-        targets.push(buildHyperTarget(city.id, city.label, city.x, city.y, city.radius || 60, 'city'));
+        pushTarget(city.id, city.label, city.x, city.y, city.radius || 60, 'city');
+      });
+    }
+
+    if (world.sectors && world.sectors.size) {
+      world.sectors.forEach((sector, key) => {
+        if (!sector?.objects) return;
+        if (!sector.discovered && sector.revealedUntil <= state.time) return;
+        sector.objects.stations.forEach((station, idx) => {
+          if (station.hub || station.type === 'relay' || station.type === 'waystation') return;
+          pushTarget(`station-${key}-${idx}`, station.label || station.name || 'Station', station.x, station.y, station.radius || 40, 'station');
+        });
+        sector.objects.bases.forEach((base, idx) => {
+          const label = BASE_TYPES[base.type]?.label || 'Hostile Base';
+          pushTarget(`base-${key}-${idx}`, label, base.x, base.y, base.radius || 60, 'base');
+        });
+        sector.objects.ruins.forEach((ruin, idx) => {
+          if (world.ruinClaims?.[sector.key]) return;
+          const label = ruin.tier === 'vault' ? 'Vault Ruin' : 'Ruin Site';
+          pushTarget(`ruin-${key}-${idx}`, label, ruin.x, ruin.y, ruin.radius || 40, 'ruin');
+        });
+        sector.objects.landmarks.forEach((landmark, idx) => {
+          if (world.landmarkClaims?.[sector.key]) return;
+          pushTarget(`landmark-${key}-${idx}`, landmark.name || 'Landmark', landmark.x, landmark.y, landmark.radius || 50, 'landmark');
+        });
+        sector.objects.surveyBeacons.forEach((beacon, idx) => {
+          if (world.beaconClaims?.[sector.key]) return;
+          pushTarget(`beacon-${key}-${idx}`, 'Survey Beacon', beacon.x, beacon.y, 30, 'beacon');
+        });
       });
     }
 
@@ -6124,6 +6362,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const thrusting = input.keys['KeyW'] || input.keys['ArrowUp'];
     const reversing = input.keys['KeyS'] || input.keys['ArrowDown'];
     const sector = getCurrentSector();
+    const routeContext = getNearestTradeRoute(sector);
+    const routeWidth = routeContext?.route?.width || 0;
+    const inRoute = routeContext && routeWidth > 0 && routeContext.distance <= routeWidth * 0.55;
+    const routeSpeedMult = (inRoute || state.routeLock.active) ? 3 : 1;
     const zoneBoost = sector.zone?.boostMult || 1;
     const fuelDrainBase = sector.zoneType === 'rift'
       ? 2.6
@@ -6156,13 +6398,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const lateral = { x: -dir.y, y: dir.x };
 
     if (thrusting) {
-      player.vx += dir.x * cachedStats.thrust * dt;
-      player.vy += dir.y * cachedStats.thrust * dt;
+      player.vx += dir.x * cachedStats.thrust * routeSpeedMult * dt;
+      player.vy += dir.y * cachedStats.thrust * routeSpeedMult * dt;
       spawnParticle(player.x - dir.x * 18, player.y - dir.y * 18, 'rgba(125,252,154,0.6)', 0.4, 3, -dir.x * 40, -dir.y * 40);
     }
     if (reversing) {
-      player.vx -= dir.x * cachedStats.reverseThrust * dt;
-      player.vy -= dir.y * cachedStats.reverseThrust * dt;
+      player.vx -= dir.x * cachedStats.reverseThrust * routeSpeedMult * dt;
+      player.vy -= dir.y * cachedStats.reverseThrust * routeSpeedMult * dt;
     }
 
     applyGravityToEntity(player, sector, dt);
@@ -6171,7 +6413,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.shiftBoost.active = boostHeld && player.fuel > 12;
 
     if (state.shiftBoost.active) {
-      const boostThrust = cachedStats.thrust * 1.8 * zoneBoost;
+      const boostThrust = cachedStats.thrust * 1.8 * zoneBoost * routeSpeedMult;
       player.vx += dir.x * boostThrust * dt;
       player.vy += dir.y * boostThrust * dt;
       player.boost = clamp(player.boost + cachedStats.boostRegen * dt, 0, cachedStats.boostMax);
@@ -6207,7 +6449,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.vy *= Math.pow(localDamp, dt * 60);
 
     const speed = Math.hypot(player.vx, player.vy);
-    const maxSpeed = cachedStats.maxSpeed * zoneBoost * (state.shiftBoost.active ? 1.5 : 1);
+    const maxSpeed = cachedStats.maxSpeed * zoneBoost * routeSpeedMult * (state.shiftBoost.active ? 1.5 : 1);
     if (speed > maxSpeed) {
       const scale = maxSpeed / (speed || 1);
       player.vx *= scale;
@@ -6216,6 +6458,38 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     player.x += player.vx * dt;
     player.y += player.vy * dt;
+
+    if (state.routeLock.active) {
+      const lockRoute = sector?.objects?.tradeRoutes?.find((route) => route.id === state.routeLock.routeId || route.laneId === state.routeLock.routeId);
+      const activeRoute = lockRoute || routeContext?.route;
+      if (!activeRoute) {
+        state.routeLock.active = false;
+        state.routeLock.routeId = '';
+      } else {
+        const dx = activeRoute.x2 - activeRoute.x1;
+        const dy = activeRoute.y2 - activeRoute.y1;
+        const lenSq = dx * dx + dy * dy;
+        if (lenSq > 0) {
+          const t = clamp(((player.x - activeRoute.x1) * dx + (player.y - activeRoute.y1) * dy) / lenSq, 0, 1);
+          const px = activeRoute.x1 + dx * t;
+          const py = activeRoute.y1 + dy * t;
+          const nx = activeRoute.nx ?? -dy / Math.hypot(dx, dy);
+          const ny = activeRoute.ny ?? dx / Math.hypot(dx, dy);
+          const offset = clamp((player.x - px) * nx + (player.y - py) * ny, -activeRoute.width * 0.35, activeRoute.width * 0.35);
+          player.x = px + nx * offset;
+          player.y = py + ny * offset;
+          const dirX = dx / Math.hypot(dx, dy);
+          const dirY = dy / Math.hypot(dx, dy);
+          const along = player.vx * dirX + player.vy * dirY;
+          player.vx = dirX * along;
+          player.vy = dirY * along;
+          state.routeLock.routeId = activeRoute.laneId || activeRoute.id;
+        } else {
+          state.routeLock.active = false;
+          state.routeLock.routeId = '';
+        }
+      }
+    }
 
     const radial = Math.hypot(player.x, player.y);
     const hardBoundary = WORLD.boundary;
@@ -8294,6 +8568,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (input.justPressed['KeyT']) {
       player.flightAssist = !player.flightAssist;
       noteStatus(`Flight assist ${player.flightAssist ? 'engaged' : 'disengaged'}.`);
+    }
+
+    if (input.justPressed['KeyZ']) {
+      const lane = getNearestTradeRoute(sector);
+      if (state.routeLock.active) {
+        state.routeLock.active = false;
+        state.routeLock.routeId = '';
+        noteStatus('Trade lane unlocked.');
+      } else if (lane && lane.route && lane.distance <= (lane.route.width || 160) * 0.6) {
+        state.routeLock.active = true;
+        state.routeLock.routeId = lane.route.laneId || lane.route.id;
+        noteStatus('Trade lane locked. Speed boost engaged.');
+      } else {
+        noteStatus('No trade lane in range.');
+      }
     }
 
     if (input.justPressed['Digit1']) player.weapons.primary = 'laser';
@@ -10727,17 +11016,33 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ctx.stroke();
       }
     }
+
+    const objectiveTargets = getObjectiveTargets(sector);
+    if (objectiveTargets.length) {
+      objectiveTargets.forEach((target) => {
+        const grid = gridFromPos(target.x, target.y);
+        const gx = grid.gx - centerGrid.gx;
+        const gy = grid.gy - centerGrid.gy;
+        if (Math.abs(gx) > viewRadius || Math.abs(gy) > viewRadius) return;
+        const tx = mapX + (gx + viewRadius) * cellSize + cellSize * 0.5;
+        const ty = mapY + (gy + viewRadius) * cellSize + cellSize * 0.5;
+        ctx.fillStyle = toRgba(target.color || '#ffd166', 0.9);
+        ctx.beginPath();
+        ctx.arc(tx, ty, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
   }
 
   function drawShipStatus() {
     const hudAlpha = getHudAlpha();
     ctx.save();
     ctx.globalAlpha = hudAlpha;
-    const panelTop = VIEW.height - 154;
+    const panelTop = VIEW.height - 170;
     ctx.fillStyle = 'rgba(5,10,18,0.55)';
-    ctx.fillRect(12, panelTop, 300, 144);
+    ctx.fillRect(12, panelTop, 300, 160);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
-    ctx.strokeRect(12, panelTop, 300, 144);
+    ctx.strokeRect(12, panelTop, 300, 160);
     ctx.fillStyle = PALETTE.glow;
     ctx.font = '12px sans-serif';
     let lineY = panelTop + 18;
@@ -10764,6 +11069,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     lineY += 16;
     ctx.fillText(`Hyper ${Math.round(player.hyperCharge)}% | Dial ${getHyperChargeLevel() * 10}%`, 22, lineY);
     lineY += 16;
+    if (state.routeLock.active) {
+      ctx.fillStyle = PALETTE.gold;
+      ctx.fillText('Lane Lock: ON', 22, lineY);
+      ctx.fillStyle = PALETTE.glow;
+      lineY += 16;
+    }
     const sector = getCurrentSector();
     const repFaction = sector?.faction?.id || player.affiliation;
     if (repFaction) {
@@ -10836,6 +11147,56 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.arc(sx, sy, 50, 0, Math.PI * 2);
       ctx.stroke();
     }
+  }
+
+  function drawObjectiveIndicator(target, index = 0) {
+    if (!target) return;
+    const dx = target.x - player.x;
+    const dy = target.y - player.y;
+    const distance = Math.hypot(dx, dy);
+    if (!Number.isFinite(distance)) return;
+    const angle = Math.atan2(dy, dx);
+    const margin = 64 + index * 18;
+    const radius = Math.min(VIEW.centerX - margin, VIEW.centerY - margin);
+    const x = VIEW.centerX + Math.cos(angle) * radius;
+    const y = VIEW.centerY + Math.sin(angle) * radius;
+    const color = target.color || '#ffd166';
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.fillStyle = toRgba(color, 0.95);
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = toRgba(color, 0.85);
+    ctx.beginPath();
+    ctx.moveTo(18, 0);
+    ctx.lineTo(-10, 10);
+    ctx.lineTo(-6, 0);
+    ctx.lineTo(-10, -10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = color;
+    ctx.font = '11px sans-serif';
+    ctx.fillText(`${target.label} ${Math.round(distance)}m`, x - 46, y - 16);
+
+    if (distance < 420) {
+      const sx = target.x - (player.x - VIEW.centerX);
+      const sy = target.y - (player.y - VIEW.centerY);
+      ctx.strokeStyle = toRgba(color, 0.45);
+      ctx.beginPath();
+      ctx.arc(sx, sy, 46, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  function drawObjectiveIndicators(sector) {
+    const targets = getObjectiveTargets(sector);
+    if (!targets.length) return;
+    targets.slice(0, 3).forEach((target, idx) => {
+      drawObjectiveIndicator(target, idx);
+    });
   }
 
   function drawHomeIndicator() {
@@ -10961,6 +11322,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     lines.push({ text: 'Convoys carry cargo. Disable transports to seize or salvage.', color: '#9fb4d9' });
     lines.push({ text: 'Cargo sells for credits; fuel cells refine into fuel/hyper at stations.', color: '#9fb4d9' });
     lines.push({ text: 'Reputation affects prices; negative rep triggers guards.', color: '#9fb4d9' });
+    const lane = getNearestTradeRoute(sector);
+    if (lane && lane.route && lane.distance <= (lane.route.width || 160) * 0.7) {
+      const laneText = state.routeLock.active ? 'Press Z to unlock trade lane.' : 'Press Z to lock to trade lane (3x speed).';
+      lines.push({ text: laneText, color: '#ffd166' });
+    }
     if (!lines.length) return;
     const width = 520;
     const height = lines.length * 16 + 12;
@@ -10976,6 +11342,64 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     lines.forEach((line, index) => {
       ctx.fillStyle = line.color;
       ctx.fillText(line.text, x + 12, y + 20 + index * 16);
+    });
+    ctx.restore();
+  }
+
+  function drawContractWidget(sector) {
+    if (!mission.active && !contract.active) return;
+    const lines = [];
+    const missionTarget = getMissionTargetData();
+    const contractTarget = getContractTargetData(sector);
+
+    if (mission.active) {
+      lines.push({ text: `Mission: ${mission.text}`, color: PALETTE.gold });
+      let progressValue = Math.round(mission.progress);
+      let progressTarget = mission.target;
+      if (mission.type === 'distance') {
+        progressValue = Math.round(player.distanceThisChapter);
+        progressTarget = mission.target;
+      }
+      const timeText = mission.timeRemaining > 0 ? ` | ${Math.max(0, Math.floor(mission.timeRemaining))}s` : '';
+      lines.push({ text: `Progress: ${progressValue}/${progressTarget}${timeText}`, color: '#e0f2ff' });
+      if (missionTarget) {
+        const distance = Math.round(dist(player.x, player.y, missionTarget.x, missionTarget.y));
+        lines.push({ text: `Target: ${missionTarget.label} ${distance}m`, color: '#9ad6ff' });
+      }
+      lines.push({ text: `Reward: ${Math.round(mission.reward)} credits`, color: '#9fb4d9' });
+    }
+
+    if (contract.active) {
+      lines.push({ text: `Contract: ${contract.text}`, color: '#ffd166' });
+      if (contract.type === 'escort') {
+        const escortTime = Math.ceil(contract.escortTime);
+        const escortTotal = Math.max(1, Math.ceil(contract.escortTotal));
+        lines.push({ text: `Escort: ${escortTime}s / ${escortTotal}s`, color: '#e0f2ff' });
+      } else {
+        lines.push({ text: `Progress: ${contract.progress}/${contract.target}`, color: '#e0f2ff' });
+      }
+      if (contractTarget) {
+        const distance = Math.round(dist(player.x, player.y, contractTarget.x, contractTarget.y));
+        lines.push({ text: `Target: ${contractTarget.label} ${distance}m`, color: '#9ad6ff' });
+      }
+      lines.push({ text: `Reward: ${Math.round(contract.reward)} credits`, color: '#9fb4d9' });
+    }
+
+    if (!lines.length) return;
+    const width = 340;
+    const height = lines.length * 16 + 12;
+    const x = 16;
+    const y = 90;
+    ctx.save();
+    ctx.globalAlpha = getHudAlpha();
+    ctx.fillStyle = 'rgba(5,10,18,0.6)';
+    ctx.fillRect(x, y, width, height);
+    ctx.strokeStyle = 'rgba(125,252,154,0.3)';
+    ctx.strokeRect(x, y, width, height);
+    ctx.font = '12px sans-serif';
+    lines.forEach((line, index) => {
+      ctx.fillStyle = line.color;
+      ctx.fillText(line.text, x + 10, y + 20 + index * 16);
     });
     ctx.restore();
   }
@@ -11299,6 +11723,31 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     return best;
   }
 
+  function getNearestTradeRoute(sector, x = player.x, y = player.y) {
+    if (!sector?.objects?.tradeRoutes?.length) return null;
+    let best = null;
+    let bestDist = Infinity;
+    sector.objects.tradeRoutes.forEach((route) => {
+      if (!route) return;
+      const dx = route.x2 - route.x1;
+      const dy = route.y2 - route.y1;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq <= 0) return;
+      const t = clamp(((x - route.x1) * dx + (y - route.y1) * dy) / lenSq, 0, 1);
+      const px = route.x1 + dx * t;
+      const py = route.y1 + dy * t;
+      const distTo = Math.hypot(x - px, y - py);
+      if (distTo < bestDist) {
+        const nx = route.nx ?? -dy / Math.hypot(dx, dy);
+        const ny = route.ny ?? dx / Math.hypot(dx, dy);
+        const offset = (x - px) * nx + (y - py) * ny;
+        bestDist = distTo;
+        best = { route, distance: distTo, t, px, py, offset };
+      }
+    });
+    return best;
+  }
+
   function getNearestConvoyAlert(sector) {
     if (!sector?.encounters?.length) return null;
     let best = null;
@@ -11566,19 +12015,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.font = '12px sans-serif';
     ctx.fillStyle = '#9fb4d9';
     ctx.fillText('Press 1-9 for 10-90% or 0 for 100% charge. Use arrows to pick a target.', 24, 58);
-    ctx.fillText('Press Enter to jump. Press V or Esc to close.', 24, 76);
-    ctx.fillText('Hyper cost scales with distance; short jumps use less charge.', 24, 94);
+    ctx.fillText('Targets include cities, stations, contracts, and ruins when discovered.', 24, 76);
+    ctx.fillText('PageUp/PageDown or [ / ] to change pages. Press Enter to jump.', 24, 94);
+    ctx.fillText('Press V or Esc to close. Hyper cost scales with distance.', 24, 112);
 
     const estCost = selected ? getHyperJumpCost(selected.distance, chargeLevel) : maxCost;
     ctx.fillStyle = '#e0f2ff';
-    ctx.fillText(`Charge Dial: ${chargePercent}% | Max Cost: ${maxCost}% | Est: ${estCost}% | Range: ${Math.round(maxRange)}m (Radar ${Math.round(radarRange)}m)`, 24, 116);
+    ctx.fillText(`Charge Dial: ${chargePercent}% | Max Cost: ${maxCost}% | Est: ${estCost}% | Range: ${Math.round(maxRange)}m (Radar ${Math.round(radarRange)}m)`, 24, 134);
 
     const currentGrid = gridFromPos(player.x, player.y);
     const mapRadius = 4;
     const cell = 12;
     const mapSize = (mapRadius * 2 + 1) * cell;
     const mapX = VIEW.width - mapSize - 32;
-    const mapY = 132;
+    const mapY = 150;
     ctx.fillStyle = 'rgba(5,10,18,0.55)';
     ctx.fillRect(mapX - 12, mapY - 28, mapSize + 24, mapSize + 52);
     ctx.strokeStyle = 'rgba(109,240,255,0.25)';
@@ -11611,7 +12061,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Lane tiles glow gold.', mapX - 2, mapY + mapSize + 18);
 
     const listX = 24;
-    let listY = 128;
+    const listY = 132;
     ctx.font = '13px sans-serif';
     if (!targets.length) {
       ctx.fillStyle = '#9fb4d9';
@@ -11619,14 +12069,26 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       return;
     }
 
-    targets.forEach((target, idx) => {
-      if (idx > 14) return;
+    const selectedIndex = clamp(state.hyperNav?.targetIndex || 0, 0, targets.length - 1);
+    state.hyperNav.targetIndex = selectedIndex;
+    const pageSize = HYPER_LIST_PAGE_SIZE;
+    const page = Math.floor(selectedIndex / pageSize);
+    const totalPages = Math.max(1, Math.ceil(targets.length / pageSize));
+    const start = page * pageSize;
+    const end = Math.min(targets.length, start + pageSize);
+
+    ctx.fillStyle = '#9fb4d9';
+    ctx.fillText(`Targets: ${targets.length} | Page ${page + 1}/${totalPages} (PageUp/PageDown or [ / ])`, listX, listY - 16);
+
+    for (let i = start; i < end; i += 1) {
+      const target = targets[i];
+      const row = i - start;
       const inRange = target.distance <= maxRange;
-      const isSelected = selected && target.id === selected.id;
+      const isSelected = selectedIndex === i;
       const label = `${isSelected ? '▶' : ' '} ${target.label} — ${Math.round(target.distance)}m`;
       ctx.fillStyle = inRange ? (isSelected ? PALETTE.gold : '#e0f2ff') : 'rgba(159,180,217,0.7)';
-      ctx.fillText(`${label}${inRange ? '' : ' (out of range)'}`, listX, listY + idx * 20);
-    });
+      ctx.fillText(`${label}${inRange ? '' : ' (out of range)'}`, listX, listY + row * 20);
+    }
   }
 
   function drawPromptOverlay() {
@@ -11769,18 +12231,48 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fillStyle = idx === state.menuSelection ? PALETTE.gold : '#e0f2ff';
       ctx.fillText(opt, 24, infoY + idx * 22);
     });
+    const footerY = infoY + options.length * 22 + 8;
+    const salvage = player.inventory.cargo.salvage || 0;
+    const alloys = player.inventory.cargo.alloys || 0;
+    const relics = player.inventory.cargo.relics || 0;
+    const fuelCells = player.inventory.cargo.fuelCells || 0;
     ctx.fillStyle = '#e0f2ff';
-    ctx.fillText(`Cargo: Salvage ${player.inventory.cargo.salvage} | Alloys ${player.inventory.cargo.alloys} | Relics ${player.inventory.cargo.relics} | Fuel Cells ${player.inventory.cargo.fuelCells || 0}`, 24, infoY + options.length * 22 + 8);
-    const cargoValue = player.inventory.cargo.salvage * 40
-      + player.inventory.cargo.alloys * 60
-      + player.inventory.cargo.relics * 110
-      + (player.inventory.cargo.fuelCells || 0) * 55;
+    ctx.fillText(`Cargo: Salvage ${salvage} | Alloys ${alloys} | Relics ${relics} | Fuel Cells ${fuelCells}`, 24, footerY);
+    const cargoValue = salvage * 40 + alloys * 60 + relics * 110 + fuelCells * 55;
     ctx.fillStyle = '#9fb4d9';
-    ctx.fillText(`Estimated Cargo Value: ${Math.round(cargoValue)} credits`, 24, infoY + options.length * 22 + 28);
-    ctx.fillText(`Service Costs: Repair ${costs.baseRepair} | Fuel ${costs.baseFuel} | Hyper ${costs.baseHyper}`, 24, infoY + options.length * 22 + 46);
+    ctx.fillText(`Estimated Cargo Value: ${Math.round(cargoValue)} credits`, 24, footerY + 20);
+    ctx.fillText(`Service Costs: Repair ${costs.baseRepair} | Fuel ${costs.baseFuel} | Hyper ${costs.baseHyper}`, 24, footerY + 38);
+
+    let ledgerY = footerY + 58;
+    const ledgerLines = [];
+    if (salvage > 0) {
+      ledgerLines.push(`Salvage x${salvage}: Sell ${salvage * 40}c | Refine +${salvage * 28} fuel +${salvage * 18}c`);
+    }
+    if (alloys > 0) {
+      ledgerLines.push(`Alloys x${alloys}: Sell ${alloys * 60}c | Refine +${alloys * 40} fuel +${alloys * 6} hyper +${alloys * 30}c`);
+    }
+    if (relics > 0) {
+      ledgerLines.push(`Relics x${relics}: Sell ${relics * 110}c | Refine +${relics * 4} hyper +${relics * 120}c`);
+    }
+    if (fuelCells > 0) {
+      ledgerLines.push(`Fuel Cells x${fuelCells}: Sell ${fuelCells * 55}c | Refine +${fuelCells * 80} fuel +${fuelCells * 8} hyper +${fuelCells * 20}c`);
+    }
+    if (ledgerLines.length) {
+      ctx.fillStyle = PALETTE.gold;
+      ctx.fillText('Cargo Ledger', 24, ledgerY);
+      ctx.fillStyle = '#9fb4d9';
+      ledgerLines.forEach((line, idx) => {
+        ctx.fillText(line, 24, ledgerY + 18 + idx * 16);
+      });
+      ledgerY += 18 + ledgerLines.length * 16 + 8;
+    } else {
+      ctx.fillStyle = '#9fb4d9';
+      ctx.fillText('Cargo Ledger: empty bay.', 24, ledgerY);
+      ledgerY += 20;
+    }
 
     if (state.civicTutorial?.active && (activeStation?.type === 'city' || activeStation?.type === 'home')) {
-      const baseY = infoY + options.length * 22 + 34;
+      const baseY = ledgerY + 6;
       ctx.fillStyle = PALETTE.gold;
       ctx.fillText(`${state.civicTutorial.label} Orientation`, 24, baseY);
       ctx.fillStyle = '#9fb4d9';
@@ -12059,12 +12551,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drawShipStatus();
     if (hudMode === 'full') {
       drawNavigationHud(sector);
+      drawContractWidget(sector);
       drawConvoyAlert(sector);
       drawCargoManifestPanel();
     }
     drawSignalScope();
     drawHyperRadar();
-    drawGateIndicator();
+    drawObjectiveIndicators(sector);
+    if (!(mission.active && mission.type === 'reach_gate')) {
+      drawGateIndicator();
+    }
     drawHomeIndicator();
     drawConvergenceIndicator();
     drawVignette();
@@ -12689,6 +13185,25 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const targets = getHyperTargets(getHyperRange());
       const maxIndex = Math.max(0, targets.length - 1);
       state.hyperNav.targetIndex = Math.min(maxIndex, (state.hyperNav.targetIndex || 0) + 1);
+      return;
+    }
+    if (code === 'PageUp' || code === 'BracketLeft') {
+      state.hyperNav.targetIndex = Math.max(0, (state.hyperNav.targetIndex || 0) - HYPER_LIST_PAGE_SIZE);
+      return;
+    }
+    if (code === 'PageDown' || code === 'BracketRight') {
+      const targets = getHyperTargets(getHyperRange());
+      const maxIndex = Math.max(0, targets.length - 1);
+      state.hyperNav.targetIndex = Math.min(maxIndex, (state.hyperNav.targetIndex || 0) + HYPER_LIST_PAGE_SIZE);
+      return;
+    }
+    if (code === 'Home') {
+      state.hyperNav.targetIndex = 0;
+      return;
+    }
+    if (code === 'End') {
+      const targets = getHyperTargets(getHyperRange());
+      state.hyperNav.targetIndex = Math.max(0, targets.length - 1);
       return;
     }
     if (code.startsWith('Digit')) {
