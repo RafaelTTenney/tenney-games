@@ -93,6 +93,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     radarRangeMult: 1.8
   };
 
+  const HYPER_LIST_PAGE_SIZE = 16;
+
+  const BOARDING = {
+    hpRatio: 0.22,
+    shieldMax: 6,
+    range: 70
+  };
+
   const PHYSICS = {
     linearDamp: 0.986,
     assistDamp: 0.88,
@@ -122,6 +130,76 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     range: 3600,
     x: 96,
     y: 248
+  };
+
+  const FACTION_STANDINGS = {
+    hostile: -30,
+    wary: -10,
+    friendly: 20,
+    honored: 50
+  };
+
+  const COMMUNITY_GOALS = [
+    {
+      id: 'convoy_guard',
+      label: 'Convoy Guard',
+      metric: 'convoy',
+      target: 220,
+      tiers: [60, 140, 220],
+      rewards: [
+        { credits: 320 },
+        { credits: 520, blueprint: 'shield_overdrive' },
+        { credits: 760, blueprint: 'carrier_core' }
+      ]
+    },
+    {
+      id: 'cargo_run',
+      label: 'Cargo Runs',
+      metric: 'cargo',
+      target: 420,
+      tiers: [120, 260, 420],
+      rewards: [
+        { credits: 260 },
+        { credits: 420, fuel: 240 },
+        { credits: 680, hyper: 25 }
+      ]
+    },
+    {
+      id: 'archive_uploads',
+      label: 'Archive Uploads',
+      metric: 'uploads',
+      target: 180,
+      tiers: [50, 110, 180],
+      rewards: [
+        { credits: 240 },
+        { credits: 420, blueprint: 'scanner_drone' },
+        { credits: 620, blueprint: 'grav_dampers' }
+      ]
+    },
+    {
+      id: 'capital_captures',
+      label: 'Capital Captures',
+      metric: 'capitals',
+      target: 60,
+      tiers: [15, 35, 60],
+      rewards: [
+        { credits: 360 },
+        { credits: 520, blueprint: 'plasma_cannon' },
+        { credits: 760, blueprint: 'nanofiber_shield' }
+      ]
+    }
+  ];
+
+  const SEASON_DEF = {
+    id: 'season-1',
+    label: 'Season One: Drift Accord',
+    durationDays: 30,
+    milestones: [
+      { id: 'distance', label: 'Traverse 2,200,000m', target: 2200000, reward: { credits: 520 } },
+      { id: 'ruins', label: 'Recover 8 ruins', target: 8, reward: { blueprint: 'grav_dampers', credits: 320 } },
+      { id: 'uploads', label: 'Upload 24 discovery logs', target: 24, reward: { credits: 420 } },
+      { id: 'cargo', label: 'Deliver 180 cargo units', target: 180, reward: { credits: 480, fuel: 260 } }
+    ]
   };
 
   const EXPLORATION_MILESTONES = [
@@ -228,7 +306,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   const ZONE_TYPES = {
     cluster: { id: 'cluster', label: 'Cluster', boostMult: 1, spawnScale: 1, dustScale: 1 },
-    lane: { id: 'lane', label: 'Transit Lane', boostMult: 1.5, spawnScale: 0.5, dustScale: 0.6 },
+    lane: { id: 'lane', label: 'Transit Lane', boostMult: 1.5, spawnScale: 0.85, dustScale: 0.6 },
     expanse: { id: 'expanse', label: 'Interstice Expanse', boostMult: 2.45, spawnScale: 0.12, dustScale: 0.1 },
     rift: { id: 'rift', label: 'Rift Channel', boostMult: 1.65, spawnScale: 0.35, dustScale: 0.35 }
   };
@@ -487,22 +565,23 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   const TRADE_ROUTE_CONFIG = {
     laneChance: 1,
-    expanseChance: 0.98,
-    clusterChance: 0.7,
-    voidChance: 0.75,
-    maxRoutesLane: 8,
-    maxRoutesExpanse: 7,
-    maxRoutesCluster: 5,
+    expanseChance: 0.995,
+    clusterChance: 0.82,
+    voidChance: 0.82,
+    maxRoutesLane: 18,
+    maxRoutesExpanse: 14,
+    maxRoutesCluster: 10,
     widthMin: 160,
     widthMax: 280,
     lengthMin: 0.65,
     lengthMax: 1.05,
-    convoyMin: 7,
-    convoyMaxLane: 12,
-    convoyMaxExpanse: 10,
-    escortChance: 0.97,
-    escortMin: 2,
-    escortMax: 5
+    convoyMin: 12,
+    convoyMaxLane: 22,
+    convoyMaxExpanse: 18,
+    escortChance: 0.98,
+    escortMin: 4,
+    escortMax: 8,
+    speedMult: 3.2
   };
 
   const IFF_COLORS = {
@@ -799,7 +878,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       title: 'Hyper Navigation',
       lines: [
         '- Press V to open Hyper Nav, 1-9/0 to set charge, Enter to jump.',
-        '- Higher charge = longer range, higher hyper cost.'
+        '- Higher charge = longer range, higher hyper cost.',
+        '- Press Tab to toggle minor signals (stations, ruins, lane relays).'
       ]
     },
     {
@@ -816,7 +896,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       lines: [
         '- Completing contracts or defending convoys raises faction reputation.',
         '- Raiding convoys lowers reputation; at -12 guards will engage.',
-        '- Reputation adjusts station prices and access to safe lanes.'
+        '- Reputation adjusts station prices and access to safe lanes.',
+        '- Hostile rep triggers city guard fire outside safety rings.'
       ]
     },
     {
@@ -1287,7 +1368,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     flak_scatter: { id: 'flak_scatter', name: 'Flak Scatter', unlock: { weapon: 'flak' }, effect: { damageMult: 1.04 } },
     torpedo_lance: { id: 'torpedo_lance', name: 'Torpedo Lance', unlock: { weapon: 'torpedo' }, effect: { damageMult: 1.08 } },
     magnetic_mines: { id: 'magnetic_mines', name: 'Magnetic Mines', unlock: { weapon: 'mine' }, effect: { damageMult: 1.02 } },
-    grav_dampers: { id: 'grav_dampers', name: 'Grav Dampers', unlock: {}, effect: { massMult: 0.92 } }
+    grav_dampers: { id: 'grav_dampers', name: 'Grav Dampers', unlock: {}, effect: { massMult: 0.92 } },
+    carrier_core: { id: 'carrier_core', name: 'Carrier Core Salvage', unlock: {}, effect: { hullMult: 1.18, shieldMult: 1.12 } }
   };
 
   const STORE_ITEMS = [
@@ -1477,8 +1559,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     prompt: null,
     loreScroll: 0,
     hyperDrive: { cooldown: 0 },
-    hyperNav: { chargeLevel: 10, targetIndex: 0 },
-    hyperJumpFx: { timer: 0, duration: 0.85, pending: null },
+    hyperNav: { chargeLevel: 10, targetIndex: 0, showMinor: true },
+    hyperJumpFx: { timer: 0, duration: 0.75, pending: null },
+    routeLock: { active: false, id: '' },
     lastBiome: '',
     biomeHintTimer: 0,
     boundaryTimer: 0,
@@ -1513,6 +1596,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     noFireCooldown: 0,
     scoopCooldown: 0,
     beaconHintCooldown: 0,
+    laneHinted: false,
+    capitalBoard: { active: false, targetId: '', faction: '', label: '', role: '', manifest: null, units: 0 },
+    community: { base: {}, pending: {}, lastSync: 0, loaded: false },
+    season: { id: SEASON_DEF.id, startAt: 0, endAt: 0, globalBase: {}, pending: {}, lastSync: 0 },
+    seasonDistanceCheckpoint: 0,
     codexSeen: false,
     codexScroll: 0,
     codexReturn: 'flight',
@@ -1530,6 +1618,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     gatePositions: {},
     convergenceGate: null,
     clusterFields: [],
+    ruinSignals: [],
+    laneWaypoints: [],
     discovered: new Set(),
     bossDefeated: {},
     stationContracts: {},
@@ -1659,7 +1749,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     blueprints: new Set(),
     toys: new Set(),
     lore: new Set(),
-    atlasSigils: new Set()
+    atlasSigils: new Set(),
+    communityRewards: {},
+    seasonProgress: {},
+    seasonClaims: {}
   };
 
   const mission = {
@@ -2159,6 +2252,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function buildClusterMap() {
     const rng = mulberry32(WORLD_SEED * 7 + 123);
     const clusters = [];
+    const ruinSignals = [];
     const centerRatio = randRange(rng, 0.9, 1.2);
     clusters.push({
       x: 0,
@@ -2185,6 +2279,23 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     }
     world.clusterFields = clusters;
+    clusters.forEach((cluster, idx) => {
+      const signalCount = idx === 0 ? 3 : 2;
+      for (let i = 0; i < signalCount; i += 1) {
+        const angle = rng() * Math.PI * 2;
+        const radius = cluster.radius * randRange(rng, 0.35, 0.8);
+        const offset = randRange(rng, -0.12, 0.12) * cluster.radius;
+        const x = cluster.x + Math.cos(angle) * radius + Math.cos(angle + Math.PI / 2) * offset;
+        const y = cluster.y + Math.sin(angle) * radius + Math.sin(angle + Math.PI / 2) * offset;
+        ruinSignals.push({
+          id: `ruin-signal-${idx}-${i}`,
+          x,
+          y,
+          radius: randRange(rng, 36, 60)
+        });
+      }
+    });
+    world.ruinSignals = ruinSignals;
   }
 
   function getVoidCorridorFactor(gx, gy) {
@@ -2406,8 +2517,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     home.services = home.services || CITY_SERVICES;
     addCity(home);
 
-    const desired = Math.max(50, Math.min(90, Math.floor(WORLD.gridRadius * 1.6)));
-    const minSeparation = Math.max(2, Math.floor(WORLD.gridRadius / 16));
+    const desired = Math.max(120, Math.min(180, Math.floor(WORLD.gridRadius * 3)));
+    const minSeparation = Math.max(1, Math.floor(WORLD.gridRadius / 24));
 
     const isReservedKey = (key) => {
       if (key === homeKey) return true;
@@ -2493,11 +2604,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
 
     const outerDepth = Math.floor(WORLD.gridRadius * 0.55);
-    const outerTarget = Math.max(14, Math.floor(desired * 0.6));
+    const outerTarget = Math.max(40, Math.floor(desired * 0.82));
     let outerCount = cities.filter((city) => Math.max(Math.abs(city.gx), Math.abs(city.gy)) >= outerDepth).length;
     let extraIndex = cities.length;
     let outerAttempts = 0;
-    while (outerCount < outerTarget && outerAttempts < 240) {
+    while (outerCount < outerTarget && outerAttempts < 360) {
       outerAttempts += 1;
       const candidates = [];
       for (let gx = -WORLD.gridRadius; gx <= WORLD.gridRadius; gx += 1) {
@@ -2559,9 +2670,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function buildTradeLanes() {
     const rng = mulberry32(WORLD_SEED * 31 + 515);
     const lanes = [];
+    const laneWaypoints = [];
     const cities = world.cities || [];
     if (!cities.length) {
       world.tradeLanes = lanes;
+      world.laneWaypoints = laneWaypoints;
       return;
     }
     const degrees = new Map();
@@ -2593,7 +2706,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     };
 
     cities.forEach((city) => {
-      const desired = city.type === 'capital' ? 5 : 4;
+      const desired = city.type === 'capital' ? 12 : 10;
       const others = cities
         .filter((other) => other.id !== city.id)
         .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
@@ -2603,23 +2716,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     });
 
-    const maxFixPasses = 4;
+    const maxFixPasses = 5;
     for (let pass = 0; pass < maxFixPasses; pass += 1) {
-      const lowCities = cities.filter((city) => (degrees.get(city.id) || 0) < 3);
+      const lowCities = cities.filter((city) => {
+        const minLinks = city.type === 'capital' ? 10 : 9;
+        return (degrees.get(city.id) || 0) < minLinks;
+      });
       if (!lowCities.length) break;
       lowCities.forEach((city) => {
+        const minLinks = city.type === 'capital' ? 10 : 9;
         const others = cities
           .filter((other) => other.id !== city.id)
           .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
           .sort((a, b) => a.d - b.d);
         for (let i = 0; i < others.length; i += 1) {
-          if ((degrees.get(city.id) || 0) >= 3) break;
+          if ((degrees.get(city.id) || 0) >= minLinks) break;
           addLane(city, others[i].other);
         }
       });
     }
 
-    const extraLinks = Math.max(0, Math.floor(cities.length * 0.35));
+    const extraLinks = Math.max(0, Math.floor(cities.length * 1.6));
     for (let i = 0; i < extraLinks; i += 1) {
       const a = cities[Math.floor(rng() * cities.length)];
       const b = cities[Math.floor(rng() * cities.length)];
@@ -2628,7 +2745,30 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       addLane(a, b);
     }
 
+    lanes.forEach((lane, idx) => {
+      const dx = lane.x2 - lane.x1;
+      const dy = lane.y2 - lane.y1;
+      const length = Math.hypot(dx, dy) || 1;
+      const nx = -dy / length;
+      const ny = dx / length;
+      const points = [0.2, 0.5, 0.8];
+      points.forEach((t, pIdx) => {
+        const offset = randRange(rng, -lane.width * 0.18, lane.width * 0.18);
+        const x = lane.x1 + dx * t + nx * offset;
+        const y = lane.y1 + dy * t + ny * offset;
+        laneWaypoints.push({
+          id: `lane-waypoint-${idx}-${pIdx}`,
+          label: pIdx === 0 ? 'Lane Waystation' : 'Trade Relay',
+          x,
+          y,
+          radius: randRange(rng, 52, 78),
+          laneId: lane.id
+        });
+      });
+    });
+
     world.tradeLanes = lanes;
+    world.laneWaypoints = laneWaypoints;
   }
 
   function addTradeLanesToSector(sector) {
@@ -2646,9 +2786,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const dx = clipped.x2 - clipped.x1;
       const dy = clipped.y2 - clipped.y1;
       const length = Math.hypot(dx, dy);
-      if (length < 60) return;
+      if (length < 20) return;
       routes.push({
         id: `${lane.id}-${sector.key}`,
+        laneId: lane.id,
         x1: clipped.x1,
         y1: clipped.y1,
         x2: clipped.x2,
@@ -2669,6 +2810,34 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       sector.objects.tradeRoutes.push(...routes);
     }
     return routes;
+  }
+
+  function getRouteContext(route, x, y) {
+    if (!route) return null;
+    const dx = route.x2 - route.x1;
+    const dy = route.y2 - route.y1;
+    const lengthSq = dx * dx + dy * dy;
+    if (lengthSq <= 0.0001) return null;
+    let t = ((x - route.x1) * dx + (y - route.y1) * dy) / lengthSq;
+    t = clamp(t, 0, 1);
+    const projX = route.x1 + dx * t;
+    const projY = route.y1 + dy * t;
+    const nx = route.nx ?? (-dy / Math.sqrt(lengthSq));
+    const ny = route.ny ?? (dx / Math.sqrt(lengthSq));
+    const offset = (x - projX) * nx + (y - projY) * ny;
+    const distance = Math.abs(offset);
+    return { route, t, projX, projY, offset, distance };
+  }
+
+  function getNearestTradeRoute(sector, x = player.x, y = player.y) {
+    if (!sector?.objects?.tradeRoutes?.length) return null;
+    let best = null;
+    sector.objects.tradeRoutes.forEach((route) => {
+      const ctx = getRouteContext(route, x, y);
+      if (!ctx) return;
+      if (!best || ctx.distance < best.distance) best = ctx;
+    });
+    return best;
   }
 
   function getSector(gx, gy) {
@@ -2853,7 +3022,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
-    const routeCount = 2 + Math.floor(civicRng() * 2);
+    const routeCount = 6 + Math.floor(civicRng() * 5);
     for (let r = 0; r < routeCount; r += 1) {
       const angle = randRange(civicRng, 0, Math.PI * 2);
       const length = WORLD.sectorSize * randRange(civicRng, 0.6, 0.9);
@@ -2884,7 +3053,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     }
 
-    const traderCount = 4 + Math.floor(civicRng() * 3);
+    const traderCount = 6 + Math.floor(civicRng() * 4);
     for (let i = 0; i < traderCount; i += 1) {
       const traderType = TRADER_TYPES[Math.floor(civicRng() * TRADER_TYPES.length)];
       sector.objects.traders.push({
@@ -2902,7 +3071,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     }
 
-    const trafficCount = 14 + Math.floor(civicRng() * 8);
+    const trafficCount = 30 + Math.floor(civicRng() * 16);
     for (let i = 0; i < trafficCount; i += 1) {
       const type = CIVILIAN_TYPES[Math.floor(civicRng() * CIVILIAN_TYPES.length)];
       const civFaction = civicFactionId;
@@ -2959,7 +3128,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (city) attachCitySpurs(sector, city, laneRoutes);
 
     if (city) {
-      const escortCount = 6 + Math.floor(civicRng() * 4);
+      const escortCount = 8 + Math.floor(civicRng() * 6);
       for (let i = 0; i < escortCount; i += 1) {
         const def = FRIENDLY_TYPES[Math.floor(civicRng() * FRIENDLY_TYPES.length)];
         const angle = randRange(civicRng, 0, Math.PI * 2);
@@ -2977,7 +3146,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
-    sector.encounters = [];
+    sector.encounters = sector.encounters || [];
   }
 
   function generateSectorObjects(sector) {
@@ -3113,16 +3282,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
-    if (isExpanse && rng() < (sector.isVoid ? 0.82 : 0.65)) {
-      const rubbleFields = 3 + Math.floor(rng() * (sector.isVoid ? 3 : sector.isCore ? 3 : 2));
-      const rubbleScale = sector.isVoid ? 0.65 : 0.52;
+    if (isExpanse && rng() < (sector.isVoid ? 0.92 : 0.78)) {
+      const rubbleFields = 6 + Math.floor(rng() * (sector.isVoid ? 6 : sector.isCore ? 5 : 4));
+      const rubbleScale = sector.isVoid ? 0.85 : 0.75;
       for (let f = 0; f < rubbleFields; f += 1) {
         const fieldCenter = {
           x: center.x + randRange(rng, -wideField, wideField),
           y: center.y + randRange(rng, -wideField, wideField)
         };
         const fieldSpan = randRange(rng, fieldRadius * 0.35, fieldRadius * 0.7);
-        const count = Math.max(8, Math.floor(randRange(rng, 10, 22) * densityScale * rubbleScale));
+        const count = Math.max(12, Math.floor(randRange(rng, 14, 26) * densityScale * rubbleScale));
         for (let i = 0; i < count; i += 1) {
           const radius = randRange(rng, 10, 30);
           const ax = fieldCenter.x + randRange(rng, -fieldSpan, fieldSpan);
@@ -3136,7 +3305,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             points: generateAsteroidShape(rng, radius)
           });
         }
-        const salvageCount = Math.max(2, Math.floor(rng() * (sector.isVoid ? 2 : 4)));
+        const salvageCount = Math.max(5, Math.floor(rng() * (sector.isVoid ? 4 : 6)));
         for (let s = 0; s < salvageCount; s += 1) {
           const wreck = {
             x: fieldCenter.x + randRange(rng, -fieldSpan, fieldSpan),
@@ -3148,7 +3317,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             sector.objects.wrecks.push(wreck);
           }
         }
-        const nodeCount = Math.max(4, Math.floor(randRange(rng, 5, 10) * densityScale * rubbleScale));
+        const nodeCount = Math.max(8, Math.floor(randRange(rng, 9, 14) * densityScale * rubbleScale));
         for (let n = 0; n < nodeCount; n += 1) {
           const node = {
             x: fieldCenter.x + randRange(rng, -fieldSpan, fieldSpan),
@@ -3162,6 +3331,36 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             sector.objects.salvageNodes.push(node);
           }
         }
+      }
+    }
+
+    if (isExpanse && rng() < 0.65) {
+      const driftCenter = {
+        x: center.x + randRange(rng, -wideField * 0.9, wideField * 0.9),
+        y: center.y + randRange(rng, -wideField * 0.9, wideField * 0.9)
+      };
+      const driftSpan = randRange(rng, fieldRadius * 0.25, fieldRadius * 0.45);
+      const driftNodes = 6 + Math.floor(rng() * 6);
+      for (let i = 0; i < driftNodes; i += 1) {
+        const nx = driftCenter.x + randRange(rng, -driftSpan, driftSpan);
+        const ny = driftCenter.y + randRange(rng, -driftSpan, driftSpan);
+        if (inClearZone(nx, ny)) continue;
+        sector.objects.salvageNodes.push({
+          x: nx,
+          y: ny,
+          radius: randRange(rng, 8, 14),
+          value: 1 + Math.floor(rng() * 2),
+          hue: randRange(rng, biome.hue - 10, biome.hue + 28),
+          pulse: rng() * Math.PI * 2
+        });
+      }
+      if (rng() < 0.55) {
+        sector.objects.wrecks.push({
+          x: driftCenter.x + randRange(rng, -driftSpan * 0.6, driftSpan * 0.6),
+          y: driftCenter.y + randRange(rng, -driftSpan * 0.6, driftSpan * 0.6),
+          radius: randRange(rng, 18, 30),
+          salvage: 1 + Math.floor(rng() * 3)
+        });
       }
     }
 
@@ -3354,7 +3553,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const traderChance = (isCluster ? 0.45 * densityScale * coreBoost : 0.28 * densityScale) * (isExpanse ? 0.9 : 1);
     const traderScale = sector.isVoid ? 0.45 : 1;
     if (sector.zoneType !== 'rift' && rng() < traderChance * traderScale) {
-      const traderCount = 1 + Math.floor(rng() * (sector.isCore ? 3 : 2));
+      const traderCount = 2 + Math.floor(rng() * (sector.isCore ? 4 : 3));
       for (let i = 0; i < traderCount; i += 1) {
         const traderType = TRADER_TYPES[Math.floor(rng() * TRADER_TYPES.length)];
         sector.objects.traders.push({
@@ -3379,6 +3578,44 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       seedRouteEncounters(sector, route, rng, null);
     });
 
+    if (world.laneWaypoints?.length) {
+      const half = WORLD.sectorSize / 2;
+      const minX = center.x - half;
+      const maxX = center.x + half;
+      const minY = center.y - half;
+      const maxY = center.y + half;
+      world.laneWaypoints.forEach((waypoint) => {
+        if (!waypoint) return;
+        if (waypoint.x < minX || waypoint.x > maxX || waypoint.y < minY || waypoint.y > maxY) return;
+        if (sector.objects.stations.some((station) => dist(station.x, station.y, waypoint.x, waypoint.y) < 60)) return;
+        sector.objects.stations.push(makeStation({
+          x: waypoint.x,
+          y: waypoint.y,
+          radius: waypoint.radius || 60,
+          biome: sector.biome,
+          type: 'waystation',
+          name: waypoint.label || 'Lane Waystation'
+        }));
+        hasStation = true;
+        if (rng() < 0.6) {
+          const traderType = TRADER_TYPES[Math.floor(rng() * TRADER_TYPES.length)];
+          sector.objects.traders.push({
+            id: `${sector.key}-lane-trader-${Math.floor(rng() * 1e6)}`,
+            type: traderType.id,
+            label: traderType.label,
+            color: traderType.color,
+            vibe: traderType.vibe,
+            x: waypoint.x + randRange(rng, -120, 120),
+            y: waypoint.y + randRange(rng, -120, 120),
+            radius: randRange(rng, 22, 30),
+            driftX: randRange(rng, -8, 8),
+            driftY: randRange(rng, -8, 8),
+            phase: rng() * Math.PI * 2
+          });
+        }
+      });
+    }
+
     const routeChance = sector.isVoid
       ? TRADE_ROUTE_CONFIG.voidChance
       : sector.zoneType === 'lane'
@@ -3392,7 +3629,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         : isExpanse
           ? TRADE_ROUTE_CONFIG.maxRoutesExpanse
           : TRADE_ROUTE_CONFIG.maxRoutesCluster;
-      const routeCount = 1 + Math.floor(rng() * maxRoutes);
+      const routeCount = 2 + Math.floor(rng() * maxRoutes);
       for (let r = 0; r < routeCount; r += 1) {
         const angle = rng() * Math.PI * 2;
         const length = WORLD.sectorSize * randRange(rng, TRADE_ROUTE_CONFIG.lengthMin, TRADE_ROUTE_CONFIG.lengthMax);
@@ -3476,20 +3713,40 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
-    const trafficChance = (sector.isVoid ? 0.75 : isExpanse ? 1.05 : isCluster ? 0.95 : 0.86) * (1 - openSpace * 0.2);
+    if (sector.objects.tradeRoutes.length && !sector.objects.stations.length && rng() < (isExpanse ? 0.45 : 0.3)) {
+      const route = sector.objects.tradeRoutes[Math.floor(rng() * sector.objects.tradeRoutes.length)];
+      if (route) {
+        const t = rng();
+        const offset = randRange(rng, -(route.width || 160) * 0.25, (route.width || 160) * 0.25);
+        const dx = route.x2 - route.x1;
+        const dy = route.y2 - route.y1;
+        const sx = route.x1 + dx * t + (route.nx || 0) * offset;
+        const sy = route.y1 + dy * t + (route.ny || 0) * offset;
+        sector.objects.stations.push(makeStation({
+          x: sx,
+          y: sy,
+          radius: randRange(rng, 50, 72),
+          biome: sector.biome,
+          type: rng() < 0.6 ? 'depot' : 'waystation',
+          name: rng() < 0.5 ? 'Lane Service Pier' : 'Trade Route Dock'
+        }));
+      }
+    }
+
+    const trafficChance = (sector.isVoid ? 0.85 : isExpanse ? 1.25 : isCluster ? 1.05 : 0.95) * (1 - openSpace * 0.15);
     if (rng() < trafficChance) {
       const trafficCount = sector.isVoid
-        ? 3 + Math.floor(rng() * 4)
-        : 4 + Math.floor(rng() * (sector.isCore ? 8 : 6));
+        ? 4 + Math.floor(rng() * 5)
+        : 6 + Math.floor(rng() * (sector.isCore ? 10 : 8));
       const routes = sector.objects.tradeRoutes || [];
       const preferRoute = routes.length && rng() < 0.75;
       if (preferRoute) {
-        const convoyGroups = Math.max(1, Math.floor(trafficCount / 2));
+        const convoyGroups = Math.max(2, Math.floor(trafficCount / 2));
         for (let i = 0; i < convoyGroups; i += 1) {
           const route = routes[Math.floor(rng() * routes.length)];
           if (!route) continue;
           const convoyId = `${sector.key}-civconvoy-${i}-${Math.floor(rng() * 9999)}`;
-          const count = 2 + Math.floor(rng() * 2);
+          const count = 3 + Math.floor(rng() * 2);
           const spacing = 0.015 + rng() * 0.01;
           const baseT = rng();
           const routeDir = rng() < 0.5 ? 1 : -1;
@@ -3505,8 +3762,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
               convoyRole: j === Math.floor(count / 2) ? 'lead' : 'wing'
             });
           }
-          if (rng() < 0.6) {
-            const escortCount = 1 + Math.floor(rng() * 2);
+          if (rng() < 0.75) {
+            const escortCount = 2 + Math.floor(rng() * 2);
             for (let e = 0; e < escortCount; e += 1) {
               const def = FRIENDLY_TYPES[Math.floor(rng() * FRIENDLY_TYPES.length)];
               const escortT = (baseT + (e - escortCount / 2) * spacing) % 1;
@@ -3779,7 +4036,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     rng = structureRng;
     const ruinChance = sector.zoneType === 'expanse'
-      ? (sector.isVoid ? 0.1 : 0.15)
+      ? (sector.isVoid ? 0.14 : 0.2)
       : sector.zoneType === 'rift'
         ? 0.18
         : isCluster
@@ -3800,7 +4057,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
 
     const landmarkChance = sector.zoneType === 'expanse'
-      ? (sector.isVoid ? 0.28 : 0.14)
+      ? (sector.isVoid ? 0.32 : 0.2)
       : isCluster
         ? 0.18 * densityScale * (sector.isCore ? 1.2 : 1)
         : 0.1 * densityScale;
@@ -4298,8 +4555,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.unlockedDepth = 1;
       state.lastZoneType = '';
       state.hyperDrive = { cooldown: 0 };
-      state.hyperNav = { chargeLevel: 10, targetIndex: 0 };
-      state.hyperJumpFx = { timer: 0, duration: 0.85, pending: null };
+      state.hyperNav = { chargeLevel: 10, targetIndex: 0, showMinor: true };
+      state.hyperJumpFx = { timer: 0, duration: 0.75, pending: null };
       state.boundaryTimer = 0;
       state.boundaryWarning = 0;
       state.broadcastCooldown = 0;
@@ -4327,11 +4584,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.startEncounterSeeded = true;
       state.radioCooldown = 0;
       state.enemyQuietTimer = 0;
+      state.routeLock = { active: false, id: '' };
       state.hudMode = 'full';
       state.inNoFireZone = false;
       state.noFireCooldown = 0;
       state.scoopCooldown = 0;
       state.beaconHintCooldown = 0;
+      state.laneHinted = false;
+      state.capitalBoard = { active: false, targetId: '', faction: '', label: '', role: '', manifest: null, units: 0 };
+      state.community = { base: {}, pending: {}, lastSync: 0, loaded: false };
+      state.season = { id: SEASON_DEF.id, startAt: 0, endAt: 0, globalBase: {}, pending: {}, lastSync: 0 };
+      state.seasonDistanceCheckpoint = 0;
       state.codexSeen = false;
       state.codexScroll = 0;
       state.codexReturn = 'flight';
@@ -4413,7 +4676,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function isFactionHostile(factionId) {
     if (!factionId) return false;
     if (isAlliedFaction(factionId)) return false;
-    return getFactionRep(factionId) <= -12;
+    return getFactionRep(factionId) <= FACTION_STANDINGS.hostile;
   }
 
   function getLiveryForFaction(factionId) {
@@ -4448,6 +4711,222 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function applyFactionPrice(cost, factionId) {
     const discount = getFactionDiscount(factionId);
     return Math.max(1, Math.round(cost * (1 - discount)));
+  }
+
+  function getFactionStandingTier(factionId) {
+    const rep = getFactionRep(factionId);
+    if (rep <= FACTION_STANDINGS.hostile) return 'hostile';
+    if (rep <= FACTION_STANDINGS.wary) return 'wary';
+    if (rep >= FACTION_STANDINGS.honored) return 'honored';
+    if (rep >= FACTION_STANDINGS.friendly) return 'friendly';
+    return 'neutral';
+  }
+
+  function getFactionTaxRate(factionId) {
+    const tier = getFactionStandingTier(factionId);
+    if (tier === 'hostile') return 0.25;
+    if (tier === 'wary') return 0.18;
+    if (tier === 'neutral') return 0.08;
+    if (tier === 'friendly') return 0.04;
+    return 0;
+  }
+
+  function getFactionSellMultiplier(factionId) {
+    const tier = getFactionStandingTier(factionId);
+    if (tier === 'hostile') return 0.7;
+    if (tier === 'wary') return 0.85;
+    if (tier === 'friendly') return 1.05;
+    if (tier === 'honored') return 1.12;
+    return 1;
+  }
+
+  function getFactionRestrictions(factionId) {
+    const tier = getFactionStandingTier(factionId);
+    return {
+      dockingDenied: tier === 'hostile',
+      contractsLocked: tier === 'hostile' || tier === 'wary',
+      shipyardLocked: tier === 'hostile' || tier === 'wary',
+      storeLocked: false
+    };
+  }
+
+  function isFactionAggressive(factionId) {
+    if (!factionId) return false;
+    if (isAlliedFaction(factionId)) return false;
+    return getFactionRep(factionId) <= -12;
+  }
+
+  function getCommunityProgress(goalId) {
+    const base = state.community?.base?.[goalId] || 0;
+    const pending = state.community?.pending?.[goalId] || 0;
+    return base + pending;
+  }
+
+  function applyRewardPackage(reward, reason = '') {
+    if (!reward) return;
+    if (reward.credits) awardCredits(reward.credits, reason || 'Reward');
+    if (reward.fuel) player.fuel = clamp(player.fuel + reward.fuel, 0, cachedStats.fuelMax);
+    if (reward.hyper) player.hyperCharge = clamp(player.hyperCharge + reward.hyper, 0, HYPER.maxCharge);
+    if (reward.blueprint) applyBlueprint(reward.blueprint, true);
+  }
+
+  function checkCommunityRewards() {
+    COMMUNITY_GOALS.forEach((goal) => {
+      const progress = getCommunityProgress(goal.id);
+      const claimed = player.communityRewards?.[goal.id] || 0;
+      const tiers = goal.tiers || [];
+      let nextTier = claimed;
+      for (let i = claimed; i < tiers.length; i += 1) {
+        if (progress >= tiers[i]) nextTier = i + 1;
+      }
+      if (nextTier > claimed) {
+        player.communityRewards = player.communityRewards || {};
+        player.communityRewards[goal.id] = nextTier;
+        const reward = goal.rewards?.[nextTier - 1];
+        applyRewardPackage(reward, 'Community reward');
+        noteStatus(`Community goal tier unlocked: ${goal.label}`);
+      }
+    });
+  }
+
+  function advanceCommunityGoal(goalId, amount = 1) {
+    if (!goalId || amount <= 0) return;
+    if (!state.community) state.community = { base: {}, pending: {}, lastSync: 0, loaded: false };
+    state.community.pending[goalId] = (state.community.pending[goalId] || 0) + amount;
+    checkCommunityRewards();
+  }
+
+  function initSeasonState(force = false) {
+    const now = Date.now();
+    const duration = SEASON_DEF.durationDays * 24 * 60 * 60 * 1000;
+    if (!state.season) {
+      state.season = { id: SEASON_DEF.id, startAt: now, endAt: now + duration, globalBase: {}, pending: {}, lastSync: 0 };
+      player.seasonProgress = {};
+      player.seasonClaims = {};
+      return;
+    }
+    if (force || !state.season.startAt || !state.season.endAt || now > state.season.endAt) {
+      state.season.startAt = now;
+      state.season.endAt = now + duration;
+      player.seasonProgress = {};
+      player.seasonClaims = {};
+    }
+  }
+
+  function getSeasonLocalProgress(metric) {
+    return player.seasonProgress?.[metric] || 0;
+  }
+
+  function checkSeasonRewards() {
+    SEASON_DEF.milestones.forEach((milestone) => {
+      const progress = getSeasonLocalProgress(milestone.id);
+      const claimed = player.seasonClaims?.[milestone.id] || false;
+      if (!claimed && progress >= milestone.target) {
+        player.seasonClaims = player.seasonClaims || {};
+        player.seasonClaims[milestone.id] = true;
+        applyRewardPackage(milestone.reward, 'Season reward');
+        noteStatus(`Season milestone cleared: ${milestone.label}`);
+      }
+    });
+  }
+
+  function advanceSeasonProgress(metric, amount = 1) {
+    if (!metric || amount <= 0) return;
+    initSeasonState();
+    player.seasonProgress = player.seasonProgress || {};
+    player.seasonProgress[metric] = (player.seasonProgress[metric] || 0) + amount;
+    state.season.pending[metric] = (state.season.pending[metric] || 0) + amount;
+    checkSeasonRewards();
+  }
+
+  async function pullCommunityGoals() {
+    if (!hasFirebaseConfig()) return;
+    if (!state.cloudReady) return;
+    try {
+      const docRef = doc(db, 'communityGoals', `${GAME_ID}-community`);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) return;
+      const data = snap.data();
+      state.community.base = data?.progress || {};
+      state.community.loaded = true;
+      checkCommunityRewards();
+    } catch (err) {
+      console.warn('Community goals fetch failed', err);
+    }
+  }
+
+  async function syncCommunityGoals() {
+    if (!hasFirebaseConfig()) return;
+    if (!state.cloudReady) return;
+    if (!state.community) return;
+    const pendingEntries = Object.entries(state.community.pending || {}).filter(([, val]) => val > 0);
+    if (!pendingEntries.length) return;
+    try {
+      const docRef = doc(db, 'communityGoals', `${GAME_ID}-community`);
+      const snap = await getDoc(docRef);
+      const base = snap.exists() ? (snap.data()?.progress || {}) : {};
+      const merged = { ...base };
+      pendingEntries.forEach(([id, val]) => {
+        merged[id] = (merged[id] || 0) + val;
+      });
+      await setDoc(docRef, {
+        gameId: GAME_ID,
+        progress: merged,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      state.community.base = merged;
+      state.community.pending = {};
+      checkCommunityRewards();
+    } catch (err) {
+      console.warn('Community goals sync failed', err);
+    }
+  }
+
+  async function pullSeasonProgress() {
+    if (!hasFirebaseConfig()) return;
+    if (!state.cloudReady) return;
+    try {
+      const docRef = doc(db, 'seasonProgress', `${GAME_ID}-${SEASON_DEF.id}`);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) return;
+      const data = snap.data();
+      state.season.globalBase = data?.progress || {};
+      if (data?.startAt && data?.endAt) {
+        state.season.startAt = data.startAt;
+        state.season.endAt = data.endAt;
+      }
+    } catch (err) {
+      console.warn('Season progress fetch failed', err);
+    }
+  }
+
+  async function syncSeasonProgress() {
+    if (!hasFirebaseConfig()) return;
+    if (!state.cloudReady) return;
+    if (!state.season) return;
+    const pendingEntries = Object.entries(state.season.pending || {}).filter(([, val]) => val > 0);
+    if (!pendingEntries.length) return;
+    try {
+      const docRef = doc(db, 'seasonProgress', `${GAME_ID}-${SEASON_DEF.id}`);
+      const snap = await getDoc(docRef);
+      const base = snap.exists() ? (snap.data()?.progress || {}) : {};
+      const merged = { ...base };
+      pendingEntries.forEach(([metric, val]) => {
+        merged[metric] = (merged[metric] || 0) + val;
+      });
+      await setDoc(docRef, {
+        gameId: GAME_ID,
+        seasonId: SEASON_DEF.id,
+        progress: merged,
+        startAt: state.season.startAt,
+        endAt: state.season.endAt,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      state.season.globalBase = merged;
+      state.season.pending = {};
+    } catch (err) {
+      console.warn('Season progress sync failed', err);
+    }
   }
 
   function awardAtlasSigil(biome) {
@@ -4632,6 +5111,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const variant = Math.floor(Math.random() * 3);
     const trim = Math.random();
     const enemy = {
+      id: options.id || `${type}-${Math.floor(Math.random() * 1e7)}`,
       type,
       role: def.role,
       x,
@@ -4714,6 +5194,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function ensureTrafficRoute(sector, rng, { hidden = true } = {}) {
     if (!sector?.objects) return null;
     if (sector.objects.tradeRoutes?.length) {
+      const laneRoutes = sector.objects.tradeRoutes.filter((route) => route.source === 'lane' || route.laneId);
+      if (laneRoutes.length && rng() < 0.8) {
+        return laneRoutes[Math.floor(rng() * laneRoutes.length)];
+      }
       return sector.objects.tradeRoutes[Math.floor(rng() * sector.objects.tradeRoutes.length)];
     }
     const center = posFromGrid(sector.gx, sector.gy);
@@ -4863,11 +5347,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const spacing = options.spacing ?? (0.014 + rng() * 0.012);
     const convoyFaction = options.faction || pickRouteFaction(route, rng, sector.faction?.id || 'neutral');
     const manifest = options.manifest || pickCargoManifest(rng);
-    const mid = (count - 1) / 2;
     const offsetBase = randRange(rng, -route.width * 0.18, route.width * 0.18);
+    const formation = [{ tOffset: 0, lateral: 0 }];
+    let row = 1;
+    while (formation.length < count) {
+      const tOffset = -spacing * row * 0.85;
+      const lateral = route.width * (0.18 + row * 0.05);
+      formation.push({ tOffset, lateral: -lateral });
+      if (formation.length < count) formation.push({ tOffset, lateral });
+      row += 1;
+    }
     for (let i = 0; i < count; i += 1) {
-      const t = ((baseT + (i - mid) * spacing) % 1 + 1) % 1;
-      const offset = offsetBase + randRange(rng, -route.width * 0.12, route.width * 0.12);
+      const slot = formation[i] || formation[0];
+      const t = ((baseT + slot.tOffset) % 1 + 1) % 1;
+      const offset = offsetBase + slot.lateral + randRange(rng, -route.width * 0.05, route.width * 0.05);
       const type = options.type || pickConvoyType(rng);
       spawnCivilianShip(sector, {
         rng,
@@ -4878,7 +5371,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         type,
         faction: convoyFaction,
         convoyId,
-        convoyRole: i === Math.floor(mid) ? 'lead' : 'wing',
+        convoyRole: i === 0 ? 'lead' : 'wing',
         manifest
       });
     }
@@ -4893,8 +5386,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const dy = route.y2 - route.y1;
       for (let i = 0; i < escortCount; i += 1) {
         const def = FRIENDLY_TYPES[Math.floor(rng() * FRIENDLY_TYPES.length)];
-        const escortT = ((baseT + (i - (escortCount - 1) / 2) * spacing) % 1 + 1) % 1;
-        const escortOffset = randRange(rng, -route.width * 0.35, route.width * 0.35);
+        const escortT = ((baseT + (i - (escortCount - 1) / 2) * spacing * 0.7) % 1 + 1) % 1;
+        const escortOffset = randRange(rng, -route.width * 0.55, route.width * 0.55);
         const ex = route.x1 + dx * escortT + route.nx * escortOffset;
         const ey = route.y1 + dy * escortT + route.ny * escortOffset;
         spawnFriendly(def.id, ex, ey, {
@@ -4922,10 +5415,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ? TRADE_ROUTE_CONFIG.convoyMaxExpanse
         : TRADE_ROUTE_CONFIG.convoyMin + 1;
     const baseCount = TRADE_ROUTE_CONFIG.convoyMin + Math.floor(rng() * (convoyMax - TRADE_ROUTE_CONFIG.convoyMin + 1));
-    const convoyGroups = Math.max(1, Math.round(baseCount * boost * 0.75));
+    const convoyGroups = Math.max(1, Math.round(baseCount * boost * 1.2));
     for (let i = 0; i < convoyGroups; i += 1) {
       spawnConvoyOnRoute(sector, route, rng, {
-        count: 3 + Math.floor(rng() * 3),
+        count: 4 + Math.floor(rng() * 3),
         escortChance: Math.min(1, TRADE_ROUTE_CONFIG.escortChance * (0.95 + boost * 0.25))
       });
     }
@@ -4935,12 +5428,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (!sector || !route) return;
     const encounters = sector.encounters || (sector.encounters = []);
     const existing = encounters.filter((enc) => enc && !enc.cleared);
-    if (existing.length > 4) return;
+    if (existing.length > 6) return;
     const midX = (route.x1 + route.x2) / 2 + route.nx * randRange(rng, -route.width * 0.25, route.width * 0.25);
     const midY = (route.y1 + route.y2) / 2 + route.ny * randRange(rng, -route.width * 0.25, route.width * 0.25);
     if (city && dist(midX, midY, city.x, city.y) < (city.safeRadius || city.radius + 200)) return;
-    const raidChance = route.source === 'lane' ? 0.78 : 0.5;
-    const convoyChance = route.source === 'lane' ? 0.6 : 0.35;
+    const raidChance = route.source === 'lane' ? 0.95 : 0.75;
+    const convoyChance = route.source === 'lane' ? 0.85 : 0.6;
     if (rng() < convoyChance) {
       encounters.push({
         id: `${sector.key}-enc-convoy-${Math.floor(rng() * 9999)}`,
@@ -4950,7 +5443,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         strength: randRange(rng, 0.95, 1.35),
         sight: randRange(rng, 740, 1120),
         radius: randRange(rng, 180, 320),
-        waves: 1,
+        waves: route.source === 'lane' ? 3 : 2,
         cooldown: randRange(rng, 2, 4),
         cleared: false
       });
@@ -4964,7 +5457,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         strength: randRange(rng, 1.05, 1.45),
         sight: randRange(rng, 760, 1140),
         radius: randRange(rng, 180, 320),
-        waves: 1,
+        waves: route.source === 'lane' ? 3 : 2,
         cooldown: randRange(rng, 2, 4),
         cleared: false
       });
@@ -5311,6 +5804,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function attemptCapture() {
     if (state.capture?.active) return true;
     if (state.captureCooldown > 0) return false;
+    if (player.affiliation) return false;
     const sector = getCurrentSector();
     if (!sector) return false;
     const nearest = findClosestEnemy(player.x, player.y, 520);
@@ -5325,6 +5819,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function triggerCapture(factionId, label) {
+    if (player.affiliation) return;
     if (isAlliedFaction(factionId)) return;
     state.capture = {
       active: true,
@@ -5467,6 +5962,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function handleEnemyDeath(enemy) {
+    if (enemy.boarded) {
+      spawnEffect(enemy.x, enemy.y, '#7dfc9a');
+      return;
+    }
     awardCredits(Math.round(28 + enemy.maxHp * 0.45));
     const sector = getCurrentSector();
     const factionId = enemy.faction || sector?.faction?.id;
@@ -5709,7 +6208,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const boostSpeed = cachedStats.maxSpeed * 1.5 * (ZONE_TYPES.expanse?.boostMult || 1.6);
     const rangeMult = cachedStats.hyperRangeMult || 1;
     const boostRange = boostSpeed * 60 * HYPER.maxJumpMinutes;
-    const worldSpan = WORLD.size * 1.2;
+    const worldSpan = WORLD.size * 1.6;
     return Math.max(boostRange, worldSpan) * rangeMult;
   }
 
@@ -5733,44 +6232,170 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     };
   }
 
-  function getHyperTargets(maxRange = getHyperRange()) {
-    const radarRange = maxRange * HYPER.radarRangeMult;
+  function parseSectorKey(key) {
+    if (!key || typeof key !== 'string') return null;
+    const parts = key.split(',');
+    if (parts.length < 2) return null;
+    const gx = Number.parseInt(parts[0], 10);
+    const gy = Number.parseInt(parts[1], 10);
+    if (Number.isNaN(gx) || Number.isNaN(gy)) return null;
+    const pos = posFromGrid(gx, gy);
+    return { gx, gy, key: sectorKey(gx, gy), x: pos.x, y: pos.y };
+  }
+
+  function getGatePositionForKey(key) {
+    if (!key) return null;
+    const gateEntries = world.gatePositions ? Object.values(world.gatePositions) : [];
+    for (let i = 0; i < gateEntries.length; i += 1) {
+      const entry = gateEntries[i];
+      if (entry && entry.key === key) {
+        return { x: entry.x, y: entry.y };
+      }
+    }
+    const grid = parseSectorKey(key);
+    if (!grid) return null;
+    return { x: grid.x, y: grid.y };
+  }
+
+  function getMissionTargetData() {
+    if (!mission.active) return null;
+    if (mission.gateKey) {
+      const pos = getGatePositionForKey(mission.gateKey) || getGateData();
+      if (pos) {
+        const label = mission.type === 'reach_gate' ? 'Mission Gate' : 'Mission Target';
+        return { label, x: pos.x, y: pos.y, type: 'mission' };
+      }
+    }
+    if (mission.type === 'base' && mission.gateKey) {
+      const grid = parseSectorKey(mission.gateKey);
+      if (grid) {
+        const sector = getSector(grid.gx, grid.gy);
+        const base = sector?.objects?.bases?.[0];
+        return { label: 'Mission Base', x: base?.x ?? grid.x, y: base?.y ?? grid.y, type: 'mission' };
+      }
+    }
+    return null;
+  }
+
+  function getContractTargets() {
     const targets = [];
+    if (!contract.active) return targets;
+    if (contract.originKey) {
+      const origin = parseSectorKey(contract.originKey);
+      if (origin) {
+        targets.push({ label: 'Contract Origin', x: origin.x, y: origin.y, type: 'contract' });
+      }
+    }
+    if (contract.type === 'escort' && contract.convoyId) {
+      const sector = getCurrentSector();
+      const convoyShip = findClosestCivilian(player.x, player.y, 9999, sector, contract.convoyId);
+      if (convoyShip) {
+        targets.push({ label: 'Escort Convoy', x: convoyShip.x, y: convoyShip.y, type: 'convoy' });
+      } else if (contract.convoyKey) {
+        const convoySector = parseSectorKey(contract.convoyKey);
+        if (convoySector) {
+          targets.push({ label: 'Convoy Route', x: convoySector.x, y: convoySector.y, type: 'convoy' });
+        }
+      }
+    }
+    return targets;
+  }
+
+  function getHyperMenuTargets(options = {}) {
+    const includeMinor = options.includeMinor ?? (state.hyperNav?.showMinor !== false);
+    const targets = [];
+    const seen = new Set();
+    const add = (id, label, x, y, radius = 0, type = 'cluster') => {
+      if (x == null || y == null) return;
+      if (seen.has(id)) return;
+      seen.add(id);
+      targets.push(buildHyperTarget(id, label, x, y, radius, type));
+    };
 
     (world.clusterFields || []).forEach((cluster, index) => {
-      targets.push(buildHyperTarget(`cluster-${index}`, `Cluster Field ${index + 1}`, cluster.x, cluster.y, cluster.radius, 'cluster'));
+      add(`cluster-${index}`, `Cluster Field ${index + 1}`, cluster.x, cluster.y, cluster.radius, 'cluster');
     });
 
     Object.entries(world.biomeStations || {}).forEach(([biomeId, entry]) => {
       const sector = getSector(entry.gx, entry.gy);
       const station = sector.objects.stations.find((s) => s.hub) || sector.objects.stations[0];
       const pos = station || { x: entry.gx * WORLD.sectorSize, y: entry.gy * WORLD.sectorSize, radius: 40 };
-      targets.push(buildHyperTarget(`hub-${biomeId}`, `${BIOMES[biomeId]?.name || biomeId} Hub`, pos.x, pos.y, pos.radius || 40, 'hub'));
+      add(`hub-${biomeId}`, `${BIOMES[biomeId]?.name || biomeId} Hub`, pos.x, pos.y, pos.radius || 40, 'hub');
     });
 
     (world.relayStations || []).forEach((entry, idx) => {
       const sector = getSector(entry.gx, entry.gy);
       const station = sector.objects.stations.find((s) => s.type === 'relay') || sector.objects.stations[0];
       const pos = station || { x: entry.gx * WORLD.sectorSize, y: entry.gy * WORLD.sectorSize, radius: 40 };
-      targets.push(buildHyperTarget(`relay-${idx}`, 'Interstice Relay', pos.x, pos.y, pos.radius || 40, 'relay'));
+      add(`relay-${idx}`, 'Interstice Relay', pos.x, pos.y, pos.radius || 40, 'relay');
     });
 
+    if (includeMinor) {
+      (world.laneWaypoints || []).forEach((waypoint) => {
+        add(waypoint.id, waypoint.label || 'Trade Relay', waypoint.x, waypoint.y, waypoint.radius || 60, 'waypoint');
+      });
+
+      (world.ruinSignals || []).forEach((signal) => {
+        add(signal.id, 'Ruin Signal', signal.x, signal.y, signal.radius || 50, 'ruin');
+      });
+    }
+
     if (world.convergenceGate) {
-      targets.push(buildHyperTarget('atlas-gate', 'Atlas Convergence', world.convergenceGate.x, world.convergenceGate.y, 60, 'gate'));
+      add('atlas-gate', 'Atlas Convergence', world.convergenceGate.x, world.convergenceGate.y, 60, 'gate');
     }
 
     if (world.homeBase) {
-      targets.push(buildHyperTarget('home', 'Bastion City', world.homeBase.x, world.homeBase.y, world.homeBase.radius || 60, 'home'));
+      add('home', 'Bastion City', world.homeBase.x, world.homeBase.y, world.homeBase.radius || 60, 'home');
     }
 
     if (world.cities && world.cities.length) {
       world.cities.forEach((city) => {
-        if (city.type === 'capital') return;
-        targets.push(buildHyperTarget(city.id, city.label, city.x, city.y, city.radius || 60, 'city'));
+        if (!city) return;
+        const label = city.type === 'capital' ? 'Bastion City' : (city.label || city.name || 'City');
+        add(city.id, label, city.x, city.y, city.radius || 60, 'city');
       });
     }
 
-    return targets
+    if (includeMinor && world.sectors && world.sectors.size) {
+      world.sectors.forEach((sector) => {
+        if (!sector?.objects?.stations?.length) return;
+        sector.objects.stations.forEach((station, idx) => {
+          const label = station.label || station.name || 'Station';
+          add(`station-${sector.key}-${idx}`, label, station.x, station.y, station.radius || 40, 'station');
+        });
+      });
+    }
+
+    if (includeMinor && world.sectors && world.sectors.size) {
+      world.sectors.forEach((sector) => {
+        if (!sector?.objects) return;
+        if (sector.objects.ruins?.length && !world.ruinClaims?.[sector.key]) {
+          sector.objects.ruins.forEach((ruin, idx) => {
+            add(`ruin-${sector.key}-${idx}`, 'Ancient Ruin', ruin.x, ruin.y, ruin.radius || 50, 'ruin');
+          });
+        }
+        if (sector.objects.landmarks?.length && !world.landmarkClaims?.[sector.key]) {
+          sector.objects.landmarks.forEach((landmark, idx) => {
+            add(`landmark-${sector.key}-${idx}`, 'Signal Landmark', landmark.x, landmark.y, landmark.radius || 50, 'landmark');
+          });
+        }
+      });
+    }
+
+    const missionTarget = getMissionTargetData();
+    if (missionTarget) {
+      add('mission-target', missionTarget.label, missionTarget.x, missionTarget.y, 60, missionTarget.type);
+    }
+    getContractTargets().forEach((target, idx) => {
+      add(`contract-${idx}-${target.label}`, target.label, target.x, target.y, 50, target.type);
+    });
+
+    return targets.sort((a, b) => a.distance - b.distance);
+  }
+
+  function getHyperTargets(maxRange = getHyperRange()) {
+    const radarRange = maxRange * HYPER.radarRangeMult;
+    return getHyperMenuTargets({ includeMinor: false })
       .filter((target) => target.distance > HYPER.minDistance && target.distance <= radarRange)
       .sort((a, b) => a.distance - b.distance);
   }
@@ -5831,7 +6456,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.mode !== 'flight') return;
     state.mode = 'hyper';
     state.paused = true;
-    const targets = getHyperTargets();
+    const targets = getHyperMenuTargets();
     state.hyperNav.targetIndex = clamp(state.hyperNav.targetIndex || 0, 0, Math.max(0, targets.length - 1));
   }
 
@@ -5839,6 +6464,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.mode !== 'hyper') return;
     state.mode = 'flight';
     state.paused = false;
+  }
+
+  function toggleRouteLock() {
+    const sector = getCurrentSector();
+    if (!sector) return;
+    if (state.routeLock?.active) {
+      state.routeLock.active = false;
+      state.routeLock.id = '';
+      noteStatus('Trade lane lock released.');
+      return;
+    }
+    const routeContext = getNearestTradeRoute(sector, player.x, player.y);
+    if (!routeContext || routeContext.distance > (routeContext.route.width || 160) * 0.7) {
+      noteStatus('No trade lane in range.');
+      return;
+    }
+    state.routeLock = {
+      active: true,
+      id: routeContext.route.laneId || routeContext.route.id
+    };
+    noteStatus('Trade lane lock engaged.');
   }
 
   function completeHyperJump(pending) {
@@ -6063,6 +6709,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const reward = pending.length * DISCOVERY_UPLOAD.rewardPerSector;
     awardCredits(reward, 'Discovery upload');
     pushStoryLog(`Uploaded ${pending.length} discovery logs.`);
+    advanceCommunityGoal('archive_uploads', pending.length);
+    advanceSeasonProgress('uploads', pending.length);
     saveLocal();
     advanceCivicTutorial('upload');
   }
@@ -6124,6 +6772,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const thrusting = input.keys['KeyW'] || input.keys['ArrowUp'];
     const reversing = input.keys['KeyS'] || input.keys['ArrowDown'];
     const sector = getCurrentSector();
+    const routeContext = getNearestTradeRoute(sector, player.x, player.y);
+    const routeWidth = routeContext?.route?.width || 0;
+    const inRoute = routeContext && routeContext.distance <= routeWidth * 0.55;
+    const routeSpeedMult = (state.routeLock?.active || inRoute) ? (TRADE_ROUTE_CONFIG.speedMult || 3) : 1;
+    if (!state.laneHinted && routeContext && routeContext.distance <= routeWidth * 0.75) {
+      state.laneHinted = true;
+      noteStatus('Trade lane detected. Press Z to lock to the lane and boost speed.');
+    }
     const zoneBoost = sector.zone?.boostMult || 1;
     const fuelDrainBase = sector.zoneType === 'rift'
       ? 2.6
@@ -6139,7 +6795,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         : sector.zoneType === 'rift'
           ? 2.8
           : 3.2;
-    const fuelDrain = fuelDrainBase * fuelDrainMult * 2.1;
+    const fuelDrain = fuelDrainBase * fuelDrainMult * 3.2;
     const fuelEfficiency = cachedStats.fuelEfficiency || 1;
 
     if (state.hyperDrive.cooldown > 0) {
@@ -6156,13 +6812,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const lateral = { x: -dir.y, y: dir.x };
 
     if (thrusting) {
-      player.vx += dir.x * cachedStats.thrust * dt;
-      player.vy += dir.y * cachedStats.thrust * dt;
+      player.vx += dir.x * cachedStats.thrust * routeSpeedMult * dt;
+      player.vy += dir.y * cachedStats.thrust * routeSpeedMult * dt;
       spawnParticle(player.x - dir.x * 18, player.y - dir.y * 18, 'rgba(125,252,154,0.6)', 0.4, 3, -dir.x * 40, -dir.y * 40);
     }
     if (reversing) {
-      player.vx -= dir.x * cachedStats.reverseThrust * dt;
-      player.vy -= dir.y * cachedStats.reverseThrust * dt;
+      player.vx -= dir.x * cachedStats.reverseThrust * routeSpeedMult * dt;
+      player.vy -= dir.y * cachedStats.reverseThrust * routeSpeedMult * dt;
     }
 
     applyGravityToEntity(player, sector, dt);
@@ -6171,7 +6827,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.shiftBoost.active = boostHeld && player.fuel > 12;
 
     if (state.shiftBoost.active) {
-      const boostThrust = cachedStats.thrust * 1.8 * zoneBoost;
+      const boostThrust = cachedStats.thrust * 1.8 * zoneBoost * routeSpeedMult;
       player.vx += dir.x * boostThrust * dt;
       player.vy += dir.y * boostThrust * dt;
       player.boost = clamp(player.boost + cachedStats.boostRegen * dt, 0, cachedStats.boostMax);
@@ -6207,7 +6863,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.vy *= Math.pow(localDamp, dt * 60);
 
     const speed = Math.hypot(player.vx, player.vy);
-    const maxSpeed = cachedStats.maxSpeed * zoneBoost * (state.shiftBoost.active ? 1.5 : 1);
+    const maxSpeed = cachedStats.maxSpeed * zoneBoost * routeSpeedMult * (state.shiftBoost.active ? 1.5 : 1);
     if (speed > maxSpeed) {
       const scale = maxSpeed / (speed || 1);
       player.vx *= scale;
@@ -6216,6 +6872,29 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     player.x += player.vx * dt;
     player.y += player.vy * dt;
+
+    if (state.routeLock?.active) {
+      let lockContext = null;
+      if (routeContext && (routeContext.route.laneId === state.routeLock.id || routeContext.route.id === state.routeLock.id)) {
+        lockContext = getRouteContext(routeContext.route, player.x, player.y);
+      } else if (sector?.objects?.tradeRoutes?.length) {
+        const match = sector.objects.tradeRoutes.find((route) => route.laneId === state.routeLock.id || route.id === state.routeLock.id);
+        if (match) lockContext = getRouteContext(match, player.x, player.y);
+      }
+      if (!lockContext) {
+        state.routeLock.active = false;
+        state.routeLock.id = '';
+      } else {
+        const maxOffset = (lockContext.route.width || 160) * 0.45;
+        const clampedOffset = clamp(lockContext.offset, -maxOffset, maxOffset);
+        player.x = lockContext.projX + (lockContext.route.nx || 0) * clampedOffset;
+        player.y = lockContext.projY + (lockContext.route.ny || 0) * clampedOffset;
+        const dirLock = normalize(lockContext.route.x2 - lockContext.route.x1, lockContext.route.y2 - lockContext.route.y1);
+        const vParallel = player.vx * dirLock.x + player.vy * dirLock.y;
+        player.vx = dirLock.x * vParallel;
+        player.vy = dirLock.y * vParallel;
+      }
+    }
 
     const radial = Math.hypot(player.x, player.y);
     const hardBoundary = WORLD.boundary;
@@ -6449,7 +7128,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       return;
     }
 
-    if (enemy.role === 'transport' && enemy.hp < enemy.maxHp * 0.25) {
+    if ((enemy.role === 'transport' || enemy.role === 'carrier') && enemy.hp < enemy.maxHp * BOARDING.hpRatio) {
       enemy.disabled = true;
       enemy.state = 'disabled';
     }
@@ -6663,7 +7342,96 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
   }
 
+  function findBoardableCapital() {
+    let best = null;
+    let bestDist = Infinity;
+    entities.enemies.forEach((enemy) => {
+      if (!enemy || enemy.hp <= 0) return;
+      if (enemy.role !== 'carrier') return;
+      if (isAlliedFaction(enemy.faction)) return;
+      if (!enemy.disabled || enemy.shield > BOARDING.shieldMax) return;
+      const d = dist(player.x, player.y, enemy.x, enemy.y);
+      if (d < enemy.size + BOARDING.range && d < bestDist) {
+        best = enemy;
+        bestDist = d;
+      }
+    });
+    return best;
+  }
+
+  function openCapitalBoard(target) {
+    if (!target) return;
+    const manifest = target.cargoManifest || pickCargoManifest(Math.random);
+    const units = Math.max(1, Math.round((target.cargo || 3) * 1.2));
+    state.capitalBoard = {
+      active: true,
+      targetId: target.id,
+      faction: target.faction || '',
+      label: 'Carrier',
+      role: target.role,
+      manifest,
+      units
+    };
+    state.mode = 'capital';
+    state.paused = true;
+    noteStatus('Carrier boarding engaged.');
+  }
+
+  function resolveCapitalBoard(choice) {
+    const board = state.capitalBoard;
+    if (!board?.active) return;
+    const target = entities.enemies.find((enemy) => enemy.id === board.targetId);
+    const factionId = board.faction;
+    const isCarrier = board.role === 'carrier';
+    if (choice === 1) {
+      const creditReward = isCarrier ? 520 : 260;
+      awardCredits(creditReward, 'Core claimed');
+      if (isCarrier) {
+        applyBlueprint('carrier_core', true);
+        advanceCommunityGoal('capital_captures', 1);
+      }
+      if (factionId) adjustFactionRep(factionId, -6, 'Capital boarded');
+      pushStoryLog('Claimed a carrier core. Fleet chatter spiked.');
+    } else if (choice === 2) {
+      applyCargoManifestLoot(board.manifest, board.units, 'Capital cargo stripped');
+      if (factionId) adjustFactionRep(factionId, -8, 'Capital raided');
+    } else if (choice === 3) {
+      if (factionId) adjustFactionRep(factionId, 4, 'Carrier crew released');
+      awardCredits(140, 'Crew released');
+      pushStoryLog('Released carrier crew with a warning flare.');
+    }
+    if (target) {
+      spawnExplosion(target.x, target.y, target.color || '#ffb347');
+      target.boarded = true;
+      target.hp = 0;
+      entities.enemies = entities.enemies.filter((enemy) => enemy !== target);
+    }
+    if (isCarrier) {
+      if (mission.active && mission.type === 'carrier') {
+        mission.progress += 1;
+        if (mission.progress >= mission.target) completeMission();
+      }
+      if (contract.active && contract.type === 'carrier') {
+        contract.progress += 1;
+        if (contract.progress >= contract.target) completeContract();
+      }
+    }
+    state.capitalBoard = { active: false, targetId: '', faction: '', label: '', role: '', manifest: null, units: 0 };
+    state.mode = 'flight';
+    state.paused = false;
+  }
+
+  function handleCapitalBoarding() {
+    if (state.mode !== 'flight') return;
+    const target = findBoardableCapital();
+    if (!target) return;
+    noteStatus('Carrier disabled. Press E to board.');
+    if (!input.justPressed['KeyE']) return;
+    openCapitalBoard(target);
+  }
+
   function handleTransportCapture() {
+    if (state.mode !== 'flight') return;
     const sector = getCurrentSector();
     if (!sector) return;
     let target = null;
@@ -6758,7 +7526,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       base.turrets.forEach((turret) => {
         turret.cooldown -= dt;
         if (turret.cooldown > 0) return;
-        const target = findClosestEnemy(base.x, base.y, base.defenseRange || 900);
+        const defenseRange = base.defenseRange || 900;
+        const safeRadius = base.noFireRadius || base.safeRadius || base.radius;
+        const playerDist = dist(base.x, base.y, player.x, player.y);
+        const hostilePlayer = isFactionAggressive(base.faction) && playerDist < defenseRange && playerDist > safeRadius * 0.6;
+        const target = hostilePlayer ? player : findClosestEnemy(base.x, base.y, defenseRange);
         if (!target) return;
         turret.cooldown = 0.7 + Math.random() * 0.5;
         const dir = normalize(target.x - base.x, target.y - base.y);
@@ -6896,7 +7668,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           ship.cooldown = 0.5;
           return;
         }
-        const hostileToPlayer = isFactionHostile(ship.faction);
+        const hostileToPlayer = isFactionAggressive(ship.faction);
         if (hostileToPlayer) {
           const distanceToPlayer = dist(ship.x, ship.y, player.x, player.y);
           if (distanceToPlayer < (ship.range || 520)) {
@@ -6944,25 +7716,25 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (!sector || sector.isCivic) return;
     state.trafficSpawnTimer = Math.max(0, (state.trafficSpawnTimer || 0) - dt);
     if (state.trafficSpawnTimer > 0) return;
-    state.trafficSpawnTimer = 3.5 + Math.random() * 4.5;
+    state.trafficSpawnTimer = 2.6 + Math.random() * 3.8;
 
     const civCount = sector.objects.civilians?.length || 0;
     const friendlyCount = sector.objects.friendlies?.length || 0;
     const traderCount = sector.objects.traders?.length || 0;
     const isExpanse = sector.zoneType === 'expanse';
     const isLane = sector.zoneType === 'lane';
-    const targetCiv = isExpanse ? 20 : isLane ? 14 : 9;
-    const targetFriendly = isExpanse ? 5 : isLane ? 3 : 2;
-    const targetTraders = isExpanse ? 3 : 2;
+    const targetCiv = isExpanse ? 40 : isLane ? 32 : 18;
+    const targetFriendly = isExpanse ? 10 : isLane ? 7 : 4;
+    const targetTraders = isExpanse ? 6 : 4;
 
     const rng = Math.random;
     const route = ensureTrafficRoute(sector, rng, { hidden: true });
 
     const spawnCiv = Math.max(0, targetCiv - civCount);
     if (spawnCiv > 0) {
-      const convoyGroups = Math.max(1, Math.ceil(spawnCiv / 3));
+      const convoyGroups = Math.max(2, Math.ceil(spawnCiv / 3));
       for (let i = 0; i < convoyGroups; i += 1) {
-        spawnConvoyOnRoute(sector, route, rng, { count: 2 + Math.floor(rng() * 3) });
+        spawnConvoyOnRoute(sector, route, rng, { count: 3 + Math.floor(rng() * 3) });
       }
     }
 
@@ -7617,6 +8389,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (distanceToRuin < ruin.radius + cachedStats.size) {
         world.ruinClaims = world.ruinClaims || {};
         world.ruinClaims[sector.key] = true;
+        advanceSeasonProgress('ruins', 1);
         if (ruin.loot === 'vault') {
           const blueprint = pickRandomBlueprint(Math.random);
           state.prompt = { type: 'blueprint', id: blueprint, name: BLUEPRINTS[blueprint].name };
@@ -7818,6 +8591,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     updateExplorationMilestones();
 
+    if (state.seasonDistanceCheckpoint === undefined || state.seasonDistanceCheckpoint === null) {
+      state.seasonDistanceCheckpoint = player.distanceTotal;
+    }
+    const seasonDelta = player.distanceTotal - state.seasonDistanceCheckpoint;
+    if (seasonDelta >= 200) {
+      const gain = Math.floor(seasonDelta);
+      advanceSeasonProgress('distance', gain);
+      state.seasonDistanceCheckpoint = player.distanceTotal;
+    }
+
     const checkpoints = Math.min(3, Math.floor((player.distanceThisChapter / (WORLD.sectorSize * 3)) * 3));
     if (checkpoints > player.checkpointIndex) {
       player.checkpointIndex = checkpoints;
@@ -7921,15 +8704,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const home = world.homeBase && dist(player.x, player.y, world.homeBase.x, world.homeBase.y) < world.homeBase.radius + 50 ? world.homeBase : null;
     if (city) {
       const stationFaction = city.faction || sector.faction?.id || 'aetherline';
-      if (isFactionHostile(stationFaction)) {
-        noteStatus(`${city.label} guard alert. Docking may be risky.`);
+      const restrictions = getFactionRestrictions(stationFaction);
+      if (restrictions.dockingDenied) {
+        noteStatus(`${city.label} denies docking due to hostile standing.`);
+        return;
+      }
+      if (isFactionAggressive(stationFaction)) {
+        noteStatus(`${city.label} guard alert. Docking under scrutiny.`);
       }
       noteStatus(`${city.label} in range. Press E to dock.`);
       if (input.justPressed['KeyE']) {
         state.mode = 'station';
         state.paused = true;
         state.menuSelection = 0;
-        state.activeStation = { ...city, biome: sector.biome, type: 'city', faction: stationFaction };
+        state.activeStation = { ...city, biome: sector.biome, type: 'city', faction: stationFaction, restrictions };
         if (!player.affiliation) {
           player.affiliation = stationFaction;
           noteStatus(`Aligned with ${FACTIONS.find((f) => f.id === stationFaction)?.name || stationFaction}.`);
@@ -7941,16 +8729,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       return;
     }
     if (station) {
+      const stationFaction = station.faction || sector.faction?.id || '';
+      const restrictions = getFactionRestrictions(stationFaction);
+      if (restrictions.dockingDenied) {
+        noteStatus(`${station.label || 'Station'} denies docking due to hostile standing.`);
+        return;
+      }
       noteStatus(`${station.label || 'Station'} in range. Press E to dock.`);
       if (input.justPressed['KeyE']) {
         state.mode = 'station';
         state.paused = true;
         state.menuSelection = 0;
-        state.activeStation = { ...station, faction: sector.faction?.id || '' };
-        if (!player.affiliation && sector.faction?.id) {
-          player.affiliation = sector.faction.id;
-          noteStatus(`Aligned with ${sector.faction.name}.`);
-          pushStoryLog(`Joined ${sector.faction.name}.`);
+        state.activeStation = { ...station, faction: stationFaction, restrictions };
+        if (!player.affiliation && stationFaction) {
+          player.affiliation = stationFaction;
+          noteStatus(`Aligned with ${FACTIONS.find((f) => f.id === stationFaction)?.name || stationFaction}.`);
+          pushStoryLog(`Joined ${FACTIONS.find((f) => f.id === stationFaction)?.name || stationFaction}.`);
         }
         noteStatus('Docked at station.');
       }
@@ -7958,12 +8752,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
     if (home) {
       const stationFaction = home.faction || sector.faction?.id || 'aetherline';
+      const restrictions = getFactionRestrictions(stationFaction);
+      if (restrictions.dockingDenied) {
+        noteStatus('Bastion City denies docking due to hostile standing.');
+        return;
+      }
       noteStatus('Bastion City in range. Press E to dock.');
       if (input.justPressed['KeyE']) {
         state.mode = 'station';
         state.paused = true;
         state.menuSelection = 0;
-        state.activeStation = { ...home, biome: sector.biome, type: 'home', faction: stationFaction };
+        state.activeStation = { ...home, biome: sector.biome, type: 'home', faction: stationFaction, restrictions };
         if (!player.affiliation && !state.intro?.active) {
           player.affiliation = stationFaction;
           noteStatus(`Aligned with ${FACTIONS.find((f) => f.id === stationFaction)?.name || stationFaction}.`);
@@ -8165,6 +8964,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function completeContract() {
     if (!contract.active) return;
     awardCredits(contract.reward, 'Contract complete');
+    if (contract.type === 'escort') {
+      advanceCommunityGoal('convoy_guard', 1);
+    }
     const originBiome = contract.originBiome;
     const originKey = contract.originKey;
     const hubKey = originBiome ? world.biomeStations?.[originBiome]?.key : null;
@@ -8326,6 +9128,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     handleCollisions(dt);
     updateProgress(dt);
     updateDifficulty();
+    handleCapitalBoarding();
     handleTransportCapture();
     updateStationInteraction();
     updateContractProgress();
@@ -10701,6 +11504,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const sector = getCurrentSector();
     // Encounters are discovered via Signal Scope, not map pings.
 
+    const objectives = getObjectiveTargets();
+    objectives.forEach((target) => {
+      const grid = gridFromPos(target.x, target.y);
+      const gx = grid.gx - centerGrid.gx;
+      const gy = grid.gy - centerGrid.gy;
+      if (Math.abs(gx) > viewRadius || Math.abs(gy) > viewRadius) return;
+      const ox = mapX + (gx + viewRadius) * cellSize + cellSize * 0.5;
+      const oy = mapY + (gy + viewRadius) * cellSize + cellSize * 0.5;
+      ctx.fillStyle = target.color || '#ffd166';
+      ctx.beginPath();
+      ctx.arc(ox, oy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
     if (world.homeBase) {
       const homeGrid = gridFromPos(world.homeBase.x, world.homeBase.y);
       const hx = homeGrid.gx - centerGrid.gx;
@@ -10733,11 +11550,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const hudAlpha = getHudAlpha();
     ctx.save();
     ctx.globalAlpha = hudAlpha;
-    const panelTop = VIEW.height - 154;
+    const panelTop = VIEW.height - 170;
     ctx.fillStyle = 'rgba(5,10,18,0.55)';
-    ctx.fillRect(12, panelTop, 300, 144);
+    ctx.fillRect(12, panelTop, 300, 160);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
-    ctx.strokeRect(12, panelTop, 300, 144);
+    ctx.strokeRect(12, panelTop, 300, 160);
     ctx.fillStyle = PALETTE.glow;
     ctx.font = '12px sans-serif';
     let lineY = panelTop + 18;
@@ -10764,6 +11581,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     lineY += 16;
     ctx.fillText(`Hyper ${Math.round(player.hyperCharge)}% | Dial ${getHyperChargeLevel() * 10}%`, 22, lineY);
     lineY += 16;
+    if (state.routeLock?.active) {
+      ctx.fillStyle = PALETTE.gold;
+      ctx.fillText('Trade Lane Lock: ON', 22, lineY);
+      ctx.fillStyle = PALETTE.glow;
+      lineY += 16;
+    }
     const sector = getCurrentSector();
     const repFaction = sector?.faction?.id || player.affiliation;
     if (repFaction) {
@@ -10950,6 +11773,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.capturePressure > 0) {
       lines.push({ text: `Capture Lock: ${Math.round(state.capturePressure)}%`, color: '#9ad6ff' });
     }
+    const routeContext = getNearestTradeRoute(sector, player.x, player.y);
+    if (state.routeLock?.active) {
+      lines.push({ text: 'Trade Lane Lock: ON (Z to release)', color: PALETTE.gold });
+    } else if (routeContext && routeContext.distance < (routeContext.route.width || 160) * 0.7) {
+      lines.push({ text: 'Trade Lane nearby: press Z to lock and boost speed.', color: '#9fb4d9' });
+    }
     const hyperLevel = getHyperChargeLevel();
     const hyperLabel = state.hyperDrive.cooldown > 0
       ? `Cooling ${state.hyperDrive.cooldown.toFixed(1)}s`
@@ -11027,6 +11856,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (world.beaconClaims?.[sector.key]) return;
       addContact('survey', beacon.x, beacon.y, '#c77dff', 2.6);
     });
+    sector.objects.wrecks.forEach((wreck) => addContact('wreck', wreck.x, wreck.y, '#c7b28a', 2.2));
+    sector.objects.salvageNodes.forEach((node) => addContact('salvage', node.x, node.y, '#ffd166', 2));
 
     contacts.sort((a, b) => a.distance - b.distance);
 
@@ -11111,7 +11942,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (!target) return;
     const ship = target.ship;
     const factionName = ship.faction ? (FACTIONS.find((f) => f.id === ship.faction)?.name || ship.faction) : 'Unknown';
-    const label = target.kind === 'enemy' ? 'Hostile Transport' : 'Transport';
+    const isCarrier = ship.role === 'carrier';
+    const label = target.kind === 'enemy' ? (isCarrier ? 'Hostile Carrier' : 'Hostile Transport') : (isCarrier ? 'Carrier' : 'Transport');
     const panelW = 240;
     const panelH = 84;
     const x = VIEW.width - panelW - 16;
@@ -11131,9 +11963,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText(`${ship.cargoLabel || 'Cargo'} x${ship.cargo || 0}`, x + 10, y + 54);
     ctx.fillStyle = '#9fb4d9';
     if (ship.disabled) {
-      ctx.fillText('Disabled: Press E to seize', x + 10, y + 72);
+      ctx.fillText(isCarrier ? 'Disabled: Press E to board' : 'Disabled: Press E to seize', x + 10, y + 72);
     } else {
-      ctx.fillText('Disable to seize cargo', x + 10, y + 72);
+      ctx.fillText(isCarrier ? 'Disable to board' : 'Disable to seize cargo', x + 10, y + 72);
     }
     ctx.restore();
   }
@@ -11144,10 +11976,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const targets = getHyperTargets();
     const maxRange = getHyperRange();
     const radarRange = maxRange * HYPER.radarRangeMult;
-    const centerX = VIEW.width - 92;
-    const centerY = 210;
+    const centerX = 96;
+    const centerY = 110;
     const radius = 52;
     const alpha = (state.mode === 'hyper' ? 0.95 : 0.65) * getHudAlpha();
+    const menuTargets = state.mode === 'hyper' ? getHyperMenuTargets() : null;
+    const selected = menuTargets && menuTargets.length
+      ? menuTargets[clamp(state.hyperNav?.targetIndex || 0, 0, menuTargets.length - 1)]
+      : null;
 
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -11173,7 +12009,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.lineTo(centerX, centerY - radius);
     ctx.stroke();
 
-    const selected = state.mode === 'hyper' ? getSelectedHyperTarget(targets) : null;
     targets.forEach((target) => {
       const rel = target.angle - player.angle;
       const angle = Math.atan2(Math.sin(rel), Math.cos(rel)) - Math.PI / 2;
@@ -11220,7 +12055,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillStyle = core;
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
 
-    const streakCount = 30;
+    const streakCount = 42;
     ctx.strokeStyle = `rgba(154,214,255,${0.25 + t * 0.35})`;
     ctx.lineWidth = 1.2;
     for (let i = 0; i < streakCount; i += 1) {
@@ -11257,7 +12092,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.stroke();
     }
 
-    const barCount = 12;
+    const barCount = 18;
     ctx.strokeStyle = `rgba(125,252,154,${0.18 + t * 0.25})`;
     ctx.lineWidth = 1;
     for (let i = 0; i < barCount; i += 1) {
@@ -11275,7 +12110,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function getHudAlpha() {
-    if (state.mode === 'hyper' || state.mode === 'map' || state.mode === 'capture') return 1;
+    if (state.mode === 'hyper' || state.mode === 'map' || state.mode === 'capture' || state.mode === 'capital') return 1;
     const dangerEnemy = findClosestEnemy(player.x, player.y, 900);
     if (dangerEnemy) return 1;
     const sector = getCurrentSector();
@@ -11337,6 +12172,94 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText(label, x + 10, y + 18);
     ctx.fillStyle = '#e0f2ff';
     ctx.fillText(`${Math.round(distance)}m`, x + 10, y + 36);
+    ctx.restore();
+  }
+
+  function getObjectiveTargets() {
+    const targets = [];
+    const missionTarget = getMissionTargetData();
+    if (missionTarget) {
+      targets.push({ ...missionTarget, color: PALETTE.gold });
+    }
+    const contractTargets = getContractTargets();
+    contractTargets.forEach((target) => {
+      const color = target.type === 'convoy' ? '#ffd166' : '#9ad6ff';
+      targets.push({ ...target, color });
+    });
+    return targets;
+  }
+
+  function drawObjectiveIndicators() {
+    const targets = getObjectiveTargets();
+    if (!targets.length) return;
+    targets.forEach((target) => {
+      const dx = target.x - player.x;
+      const dy = target.y - player.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance < 320) return;
+      const angle = Math.atan2(dy, dx);
+      const margin = 58;
+      const radius = Math.min(VIEW.centerX - margin, VIEW.centerY - margin);
+      const x = VIEW.centerX + Math.cos(angle) * radius;
+      const y = VIEW.centerY + Math.sin(angle) * radius;
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.fillStyle = target.color || '#9ad6ff';
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = target.color || '#9ad6ff';
+      ctx.beginPath();
+      ctx.moveTo(16, 0);
+      ctx.lineTo(-10, 10);
+      ctx.lineTo(-6, 0);
+      ctx.lineTo(-10, -10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      ctx.fillStyle = target.color || '#9ad6ff';
+      ctx.font = '11px sans-serif';
+      ctx.fillText(`${target.label} ${Math.round(distance)}m`, x - 50, y - 14);
+    });
+  }
+
+  function drawContractsHud() {
+    if (!mission.active && !contract.active) return;
+    const lines = [];
+    const missionTarget = getMissionTargetData();
+    if (mission.active) {
+      lines.push({ text: `Mission: ${mission.text} ${Math.round(mission.progress)}/${mission.target}`, color: PALETTE.gold });
+      if (missionTarget) {
+        const distToTarget = Math.round(dist(player.x, player.y, missionTarget.x, missionTarget.y));
+        lines.push({ text: `Mission Target: ${distToTarget}m`, color: '#9fb4d9' });
+      }
+    }
+    const contractTargets = getContractTargets();
+    if (contract.active) {
+      lines.push({ text: `Contract: ${contract.text} ${contract.progress}/${contract.target}`, color: '#9ad6ff' });
+      if (contractTargets.length) {
+        contractTargets.forEach((target) => {
+          const distToTarget = Math.round(dist(player.x, player.y, target.x, target.y));
+          lines.push({ text: `${target.label}: ${distToTarget}m`, color: '#9fb4d9' });
+        });
+      }
+    }
+    const width = 320;
+    const height = lines.length * 16 + 12;
+    const x = VIEW.width - width - 16;
+    const y = 12;
+    ctx.save();
+    ctx.globalAlpha = getHudAlpha();
+    ctx.fillStyle = 'rgba(5,10,18,0.6)';
+    ctx.fillRect(x, y, width, height);
+    ctx.strokeStyle = 'rgba(125,252,154,0.3)';
+    ctx.strokeRect(x, y, width, height);
+    ctx.font = '12px sans-serif';
+    lines.forEach((line, idx) => {
+      ctx.fillStyle = line.color;
+      ctx.fillText(line.text, x + 10, y + 20 + idx * 16);
+    });
     ctx.restore();
   }
 
@@ -11467,13 +12390,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
+    const mapPoint = (posX, posY) => {
+      const grid = gridFromPos(posX, posY);
+      const mx = offsetX + Math.floor((grid.gx + WORLD.gridRadius) / stride) * cell + cell / 2;
+      const my = offsetY + Math.floor((grid.gy + WORLD.gridRadius) / stride) * cell + cell / 2;
+      return { x: mx, y: my };
+    };
+
     if (world.tradeLanes && world.tradeLanes.length) {
-      const mapPoint = (posX, posY) => {
-        const grid = gridFromPos(posX, posY);
-        const mx = offsetX + Math.floor((grid.gx + WORLD.gridRadius) / stride) * cell + cell / 2;
-        const my = offsetY + Math.floor((grid.gy + WORLD.gridRadius) / stride) * cell + cell / 2;
-        return { x: mx, y: my };
-      };
       ctx.save();
       ctx.globalAlpha = 0.5;
       ctx.lineWidth = 1.4;
@@ -11489,14 +12413,23 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.restore();
     }
 
-    if (world.homeBase) {
-      const homeGrid = gridFromPos(world.homeBase.x, world.homeBase.y);
-      const hx = offsetX + Math.floor((homeGrid.gx + WORLD.gridRadius) / stride) * cell + cell / 2;
-      const hy = offsetY + Math.floor((homeGrid.gy + WORLD.gridRadius) / stride) * cell + cell / 2;
-      ctx.fillStyle = 'rgba(109,240,255,0.9)';
-      ctx.beginPath();
-      ctx.arc(hx, hy, 6, 0, Math.PI * 2);
-      ctx.fill();
+    if (world.cities && world.cities.length) {
+      world.cities.forEach((city) => {
+        if (!city) return;
+        const point = mapPoint(city.x, city.y);
+        const isDiscovered = world.discovered?.has(city.key);
+        const alpha = isDiscovered || city.type === 'capital' ? 0.9 : 0.45;
+        ctx.fillStyle = toRgba(getFactionColor(city.faction, '#6df0ff'), alpha);
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, city.type === 'capital' ? 6 : 4, 0, Math.PI * 2);
+        ctx.fill();
+        if (isDiscovered || city.type === 'capital') {
+          ctx.fillStyle = 'rgba(224,242,255,0.7)';
+          ctx.font = '10px sans-serif';
+          const label = city.label || city.name || 'City';
+          ctx.fillText(label, point.x + 6, point.y - 6);
+        }
+      });
     }
 
     if (world.cities && world.cities.length) {
@@ -11556,8 +12489,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const chargePercent = Math.round(getHyperChargePercent(chargeLevel) * 100);
     const maxCost = getHyperChargeCost(chargeLevel);
     const cost = getHyperChargeCost(chargeLevel);
-    const targets = getHyperTargets(maxRange);
+    const includeMinor = state.hyperNav?.showMinor !== false;
+    const targets = getHyperMenuTargets({ includeMinor });
     const selected = getSelectedHyperTarget(targets);
+    const pageSize = HYPER_LIST_PAGE_SIZE;
+    const totalPages = Math.max(1, Math.ceil(targets.length / pageSize));
+    const page = clamp(Math.floor((state.hyperNav.targetIndex || 0) / pageSize), 0, totalPages - 1);
+    const pageStart = page * pageSize;
+    const pageTargets = targets.slice(pageStart, pageStart + pageSize);
 
     ctx.fillStyle = 'rgba(5,10,18,0.9)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
@@ -11567,12 +12506,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.font = '12px sans-serif';
     ctx.fillStyle = '#9fb4d9';
     ctx.fillText('Press 1-9 for 10-90% or 0 for 100% charge. Use arrows to pick a target.', 24, 58);
-    ctx.fillText('Press Enter to jump. Press V or Esc to close.', 24, 76);
+    ctx.fillText('Press Enter to jump. PgUp/PgDn or [ ] to page. Tab toggles minor signals.', 24, 76);
     ctx.fillText('Hyper cost scales with distance; short jumps use less charge.', 24, 94);
 
     const estCost = selected ? getHyperJumpCost(selected.distance, chargeLevel) : maxCost;
     ctx.fillStyle = '#e0f2ff';
     ctx.fillText(`Charge Dial: ${chargePercent}% | Max Cost: ${maxCost}% | Est: ${estCost}% | Range: ${Math.round(maxRange)}m (Radar ${Math.round(radarRange)}m)`, 24, 116);
+    ctx.fillStyle = '#9fb4d9';
+    ctx.fillText(`Targets: ${targets.length} | Page ${page + 1}/${totalPages} | Minor: ${includeMinor ? 'ON' : 'OFF'}`, 24, 134);
 
     const currentGrid = gridFromPos(player.x, player.y);
     const mapRadius = 4;
@@ -11612,7 +12553,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Lane tiles glow gold.', mapX - 2, mapY + mapSize + 18);
 
     const listX = 24;
-    let listY = 128;
+    let listY = 154;
     ctx.font = '13px sans-serif';
     if (!targets.length) {
       ctx.fillStyle = '#9fb4d9';
@@ -11620,10 +12561,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       return;
     }
 
-    targets.forEach((target, idx) => {
-      if (idx > 14) return;
+    pageTargets.forEach((target, idx) => {
+      const absoluteIndex = pageStart + idx;
       const inRange = target.distance <= maxRange;
-      const isSelected = selected && target.id === selected.id;
+      const isSelected = selected && absoluteIndex === state.hyperNav.targetIndex;
       const label = `${isSelected ? '▶' : ' '} ${target.label} — ${Math.round(target.distance)}m`;
       ctx.fillStyle = inRange ? (isSelected ? PALETTE.gold : '#e0f2ff') : 'rgba(159,180,217,0.7)';
       ctx.fillText(`${label}${inRange ? '' : ' (out of range)'}`, listX, listY + idx * 20);
@@ -11710,6 +12651,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Press 1/2 or Y/N.', 24, 182);
   }
 
+  function drawCapitalBoardOverlay() {
+    const board = state.capitalBoard;
+    if (!board?.active) return;
+    ctx.fillStyle = 'rgba(5,10,18,0.9)';
+    ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+    drawCaptureCarrierBackdrop();
+    ctx.fillStyle = PALETTE.glow;
+    ctx.font = '22px sans-serif';
+    ctx.fillText('Carrier Boarding', 24, 40);
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#e0f2ff';
+    ctx.fillText('The carrier hull is disabled. Choose your action:', 24, 70);
+    ctx.fillStyle = PALETTE.gold;
+    ctx.fillText('1. Claim core (blueprint + credits, reputation loss).', 24, 110);
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText(`2. Strip cargo (${board.manifest?.label || 'Manifest'} x${board.units}, reputation loss).`, 24, 132);
+    ctx.fillStyle = '#9ad6ff';
+    ctx.fillText('3. Release crew (reputation gain, smaller payout).', 24, 154);
+    ctx.fillStyle = '#9fb4d9';
+    ctx.fillText('Press 1/2/3 or Esc to abort.', 24, 186);
+  }
+
   function drawStationOverlay() {
     ctx.fillStyle = 'rgba(5,10,18,0.78)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
@@ -11734,7 +12697,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const discount = getFactionDiscount(factionId);
       const label = discount > 0 ? `Discount ${Math.round(discount * 100)}%` : discount < 0 ? `Markup ${Math.round(Math.abs(discount) * 100)}%` : 'Standard rates';
       ctx.fillStyle = '#9fb4d9';
-      ctx.fillText(`Reputation: ${rep >= 0 ? '+' : ''}${rep} (${label})`, 24, 92);
+      const taxRate = Math.round(getFactionTaxRate(factionId) * 100);
+      ctx.fillText(`Reputation: ${rep >= 0 ? '+' : ''}${rep} (${label}) | Tax ${taxRate}%`, 24, 92);
     }
     ctx.fillStyle = '#9fb4d9';
     ctx.fillText(`Alignment: ${player.affiliation ? (FACTIONS.find((f) => f.id === player.affiliation)?.name || player.affiliation) : 'Unaligned'}`, 24, 108);
@@ -11752,13 +12716,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       infoY += 16;
     }
     ctx.font = '13px sans-serif';
+    const restrictions = activeStation?.restrictions || {};
     const costs = computeServiceCosts(factionId);
     const ammoCost = applyFactionPrice(240, factionId);
     const options = [
       `1. Repair + Refuel + Hyper (${costs.total} credits)`,
-      '2. Shipyard - Configure Modules',
-      '3. Store - Supplies & Cosmetics',
-      '4. Accept Contract',
+      `2. Shipyard - ${restrictions.shipyardLocked ? 'LOCKED' : 'Configure Modules'}`,
+      `3. Store - ${restrictions.storeLocked ? 'LOCKED' : 'Supplies & Cosmetics'}`,
+      `4. Accept Contract${restrictions.contractsLocked ? ' (LOCKED)' : ''}`,
       '5. Install Stored Blueprints',
       '6. Start Chapter Mission',
       '7. Undock',
@@ -11779,6 +12744,34 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillStyle = '#9fb4d9';
     ctx.fillText(`Estimated Cargo Value: ${Math.round(cargoValue)} credits`, 24, infoY + options.length * 22 + 28);
     ctx.fillText(`Service Costs: Repair ${costs.baseRepair} | Fuel ${costs.baseFuel} | Hyper ${costs.baseHyper}`, 24, infoY + options.length * 22 + 46);
+
+    const ledgerX = VIEW.width - 320;
+    const ledgerY = 120;
+    const ledgerW = 290;
+    const ledgerH = 180;
+    ctx.fillStyle = 'rgba(5,10,18,0.6)';
+    ctx.fillRect(ledgerX, ledgerY, ledgerW, ledgerH);
+    ctx.strokeStyle = 'rgba(125,252,154,0.3)';
+    ctx.strokeRect(ledgerX, ledgerY, ledgerW, ledgerH);
+    ctx.fillStyle = PALETTE.glow;
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Cargo Ledger', ledgerX + 10, ledgerY + 18);
+    ctx.font = '11px sans-serif';
+    const manifestRows = [
+      { label: 'Salvage', count: player.inventory.cargo.salvage || 0, sell: 40, fuel: 28, hyper: 0, credits: 18 },
+      { label: 'Alloys', count: player.inventory.cargo.alloys || 0, sell: 60, fuel: 40, hyper: 6, credits: 30 },
+      { label: 'Relics', count: player.inventory.cargo.relics || 0, sell: 110, fuel: 0, hyper: 4, credits: 120 },
+      { label: 'Fuel Cells', count: player.inventory.cargo.fuelCells || 0, sell: 55, fuel: 80, hyper: 8, credits: 20 }
+    ];
+    manifestRows.forEach((row, idx) => {
+      const rowY = ledgerY + 40 + idx * 34;
+      const sellTotal = row.sell * row.count;
+      ctx.fillStyle = '#e0f2ff';
+      ctx.fillText(`${row.label} x${row.count}`, ledgerX + 10, rowY);
+      ctx.fillStyle = '#9fb4d9';
+      ctx.fillText(`Sell: ${row.sell}c ea (${sellTotal}c)`, ledgerX + 10, rowY + 14);
+      ctx.fillText(`Refine: +${row.fuel} fuel +${row.hyper} hyper +${row.credits}c ea`, ledgerX + 10, rowY + 28);
+    });
 
     if (state.civicTutorial?.active && (activeStation?.type === 'city' || activeStation?.type === 'home')) {
       const baseY = infoY + options.length * 22 + 34;
@@ -11988,6 +12981,37 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (nextMilestone) {
       ctx.fillText(`Next milestone: ${nextMilestone.label} at ${Math.round(nextMilestone.distance)}m.`, 24, flowY + 96);
     }
+
+    let infoY = flowY + 130;
+    ctx.fillStyle = PALETTE.glow;
+    ctx.fillText('Community Goals', 24, infoY);
+    infoY += 18;
+    ctx.font = '12px sans-serif';
+    COMMUNITY_GOALS.forEach((goal) => {
+      const progress = getCommunityProgress(goal.id);
+      const tier = player.communityRewards?.[goal.id] || 0;
+      const done = progress >= goal.target;
+      ctx.fillStyle = done ? PALETTE.gold : '#9fb4d9';
+      ctx.fillText(`${done ? '●' : '○'} ${goal.label} ${Math.floor(progress)}/${goal.target} (Tier ${tier}/${goal.tiers?.length || 0})`, 24, infoY);
+      infoY += 16;
+    });
+
+    initSeasonState();
+    const now = Date.now();
+    const seasonRemaining = Math.max(0, (state.season?.endAt || 0) - now);
+    const remainingDays = Math.max(0, Math.ceil(seasonRemaining / (24 * 60 * 60 * 1000)));
+    infoY += 10;
+    ctx.fillStyle = PALETTE.glow;
+    ctx.fillText(`${SEASON_DEF.label} (${remainingDays}d left)`, 24, infoY);
+    infoY += 18;
+    ctx.font = '12px sans-serif';
+    SEASON_DEF.milestones.forEach((milestone) => {
+      const progress = getSeasonLocalProgress(milestone.id);
+      const done = progress >= milestone.target;
+      ctx.fillStyle = done ? PALETTE.gold : '#9fb4d9';
+      ctx.fillText(`${done ? '●' : '○'} ${milestone.label} ${Math.floor(progress)}/${milestone.target}`, 24, infoY);
+      infoY += 16;
+    });
   }
 
   function drawTutorialOverlay() {
@@ -12020,8 +13044,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Low reputation triggers guards outside city safe rings.', 24, 290);
     ctx.fillText('Bastion City is a safe hub with fuel, ammo, and discovery uploads.', 24, 312);
     ctx.fillText('You begin unaligned. Patrols may capture you; joining grants faction access.', 24, 334);
-    ctx.fillText('Press G for Expedition Goals. Press U to toggle minimal HUD.', 24, 356);
-    ctx.fillText('Press Enter to launch or Esc to skip.', 24, 378);
+    ctx.fillText('Trade lanes: press Z to lock in and ride boosted transit.', 24, 356);
+    ctx.fillText('Hyper Nav: press V, Tab toggles minor signals.', 24, 378);
+    ctx.fillText('Press G for Expedition Goals. Press U to toggle minimal HUD.', 24, 400);
+    ctx.fillText('Press Enter to launch or Esc to skip.', 24, 422);
   }
 
   function drawOverlay() {
@@ -12029,6 +13055,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (state.mode === 'hyper') drawHyperMapOverlay();
     if (state.mode === 'prompt') drawPromptOverlay();
     if (state.mode === 'capture') drawCaptureOverlay();
+    if (state.mode === 'capital') drawCapitalBoardOverlay();
     if (state.mode === 'station') drawStationOverlay();
     if (state.mode === 'shipyard') drawShipyardOverlay();
     if (state.mode === 'store') drawStoreOverlay();
@@ -12060,11 +13087,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drawShipStatus();
     if (hudMode === 'full') {
       drawNavigationHud(sector);
+      drawContractsHud();
       drawConvoyAlert(sector);
       drawCargoManifestPanel();
     }
     drawSignalScope();
     drawHyperRadar();
+    drawObjectiveIndicators();
     drawGateIndicator();
     drawHomeIndicator();
     drawConvergenceIndicator();
@@ -12094,6 +13123,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         state.lastCloudAt = 0;
         const snapshot = saveLocal();
         pushCloudSave(snapshot);
+        syncCommunityGoals();
+        syncSeasonProgress();
       }
     } else {
       updateStatusTimer(dt);
@@ -12234,6 +13265,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         toys: Array.from(player.toys),
         lore: Array.from(player.lore),
         atlasSigils: Array.from(player.atlasSigils),
+        communityRewards: player.communityRewards,
+        seasonProgress: player.seasonProgress,
+        seasonClaims: player.seasonClaims,
         modules: player.modules,
         weapons: player.weapons,
         unlocked: player.unlocked,
@@ -12270,7 +13304,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         civicTutorialDone: state.civicTutorialDone,
         introCompleted: state.introCompleted,
         atlasUnlocked: state.atlasUnlocked,
-        atlasCompleted: state.atlasCompleted
+        atlasCompleted: state.atlasCompleted,
+        laneHinted: state.laneHinted,
+        season: {
+          id: state.season?.id || SEASON_DEF.id,
+          startAt: state.season?.startAt || 0,
+          endAt: state.season?.endAt || 0
+        }
       },
       mission,
       contract,
@@ -12337,6 +13377,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.toys = new Set(savedPlayer.toys || []);
     player.lore = new Set(savedPlayer.lore || []);
     player.atlasSigils = new Set(savedPlayer.atlasSigils || []);
+    player.communityRewards = savedPlayer.communityRewards || player.communityRewards || {};
+    player.seasonProgress = savedPlayer.seasonProgress || player.seasonProgress || {};
+    player.seasonClaims = savedPlayer.seasonClaims || player.seasonClaims || {};
     player.modules = savedPlayer.modules || player.modules;
     player.weapons = savedPlayer.weapons || player.weapons;
     player.unlocked = savedPlayer.unlocked || player.unlocked;
@@ -12366,6 +13409,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.codexScroll = 0;
     state.codexReturn = 'flight';
     state.civicTutorialDone = save.state?.civicTutorialDone ?? state.civicTutorialDone;
+    state.laneHinted = save.state?.laneHinted ?? state.laneHinted;
     state.civicTutorial = { active: false, step: 0, label: '' };
     state.introCompleted = save.state?.introCompleted ?? state.introCompleted;
     state.intro = { active: !state.introCompleted, phase: 'drift', timer: 0, captureQueued: false };
@@ -12375,10 +13419,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.tutorialOrigin = { x: player.x, y: player.y };
     state.atlasUnlocked = save.state?.atlasUnlocked ?? (player.atlasSigils.size >= ATLAS_REQUIRED);
     state.atlasCompleted = save.state?.atlasCompleted || false;
+    const seasonState = save.state?.season || {};
+    state.season = {
+      ...state.season,
+      id: seasonState.id || SEASON_DEF.id,
+      startAt: seasonState.startAt || state.season.startAt || 0,
+      endAt: seasonState.endAt || state.season.endAt || 0
+    };
+    state.seasonDistanceCheckpoint = player.distanceTotal;
     state.spawnGrace = Math.max(state.spawnGrace || 0, 8);
     state.hyperNav = {
       chargeLevel: state.hyperNav?.chargeLevel || 10,
-      targetIndex: 0
+      targetIndex: 0,
+      showMinor: state.hyperNav?.showMinor ?? true
     };
     state.capture = { active: false, faction: '', label: '', origin: '' };
     state.capturePressure = 0;
@@ -12387,6 +13440,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.startEncounterSeeded = true;
     state.radioCooldown = 0;
     state.enemyQuietTimer = 0;
+    state.routeLock = { active: false, id: '' };
     state.inNoFireZone = false;
     state.noFireCooldown = 0;
     state.scoopCooldown = 0;
@@ -12452,6 +13506,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
     state.cloudReady = true;
     if (authNote) authNote.textContent = 'Cloud sync ready.';
+    initSeasonState();
+    await pullCommunityGoals();
+    await pullSeasonProgress();
     try {
       const docRef = doc(db, 'gameSaves', `${user.uid}_swarmBreaker`);
       const snap = await getDoc(docRef);
@@ -12518,6 +13575,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         return;
       }
 
+      if (state.mode === 'capital') {
+        handleCapitalBoardInput(e.code);
+        return;
+      }
+
       if (state.tutorialActive && (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape')) {
         if (e.code === 'Escape' && !state.tutorialReady) {
           completeTutorial(true);
@@ -12539,6 +13601,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
       if (e.code === 'KeyV' && state.mode === 'flight') {
         openHyperMap();
+        return;
+      }
+
+      if (e.code === 'KeyZ' && state.mode === 'flight') {
+        toggleRouteLock();
         return;
       }
 
@@ -12648,6 +13715,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
   }
 
+  function handleCapitalBoardInput(code) {
+    if (code === 'Digit1') resolveCapitalBoard(1);
+    if (code === 'Digit2') resolveCapitalBoard(2);
+    if (code === 'Digit3') resolveCapitalBoard(3);
+    if (code === 'Escape') {
+      state.capitalBoard = { active: false, targetId: '', faction: '', label: '', role: '', manifest: null, units: 0 };
+      state.mode = 'flight';
+      state.paused = false;
+      noteStatus('Boarding cancelled.');
+    }
+  }
+
   function handleStationMenuInput(code) {
     if (code.startsWith('Digit')) {
       const digit = parseInt(code.replace('Digit', ''), 10);
@@ -12655,10 +13734,29 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         state.menuSelection = digit === 0 ? 9 : digit - 1;
       }
     }
+    const restrictions = state.activeStation?.restrictions;
     if (code === 'Digit1') stationRepair();
-    if (code === 'Digit2') openShipyard();
-    if (code === 'Digit3') openStore();
-    if (code === 'Digit4') stationContract();
+    if (code === 'Digit2') {
+      if (restrictions?.shipyardLocked) {
+        noteStatus('Shipyard locked due to standing.');
+      } else {
+        openShipyard();
+      }
+    }
+    if (code === 'Digit3') {
+      if (restrictions?.storeLocked) {
+        noteStatus('Store locked due to standing.');
+      } else {
+        openStore();
+      }
+    }
+    if (code === 'Digit4') {
+      if (restrictions?.contractsLocked) {
+        noteStatus('Contracts locked due to standing.');
+      } else {
+        stationContract();
+      }
+    }
     if (code === 'Digit5') installStoredBlueprints();
     if (code === 'Digit6') startMissionFromStation();
     if (code === 'Digit7') undock();
@@ -12673,9 +13771,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       closeHyperMap();
       return;
     }
+    if (code === 'Tab') {
+      state.hyperNav.showMinor = !state.hyperNav.showMinor;
+      const targets = getHyperMenuTargets({ includeMinor: state.hyperNav.showMinor });
+      state.hyperNav.targetIndex = clamp(state.hyperNav.targetIndex || 0, 0, Math.max(0, targets.length - 1));
+      noteStatus(`Hyper targets: ${state.hyperNav.showMinor ? 'All signals' : 'Major hubs only'}.`);
+      return;
+    }
     if (code === 'Enter' || code === 'Space') {
-      const maxRange = getHyperRange();
-      const targets = getHyperTargets(maxRange);
+      const targets = getHyperMenuTargets();
       const target = getSelectedHyperTarget(targets);
       if (executeHyperJump(target)) {
         closeHyperMap();
@@ -12687,9 +13791,32 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       return;
     }
     if (code === 'ArrowDown' || code === 'ArrowRight') {
-      const targets = getHyperTargets(getHyperRange());
+      const targets = getHyperMenuTargets();
       const maxIndex = Math.max(0, targets.length - 1);
       state.hyperNav.targetIndex = Math.min(maxIndex, (state.hyperNav.targetIndex || 0) + 1);
+      return;
+    }
+    if (code === 'PageUp' || code === 'BracketLeft') {
+      const targets = getHyperMenuTargets();
+      const maxIndex = Math.max(0, targets.length - 1);
+      const nextIndex = (state.hyperNav.targetIndex || 0) - HYPER_LIST_PAGE_SIZE;
+      state.hyperNav.targetIndex = clamp(nextIndex, 0, maxIndex);
+      return;
+    }
+    if (code === 'PageDown' || code === 'BracketRight') {
+      const targets = getHyperMenuTargets();
+      const maxIndex = Math.max(0, targets.length - 1);
+      const nextIndex = (state.hyperNav.targetIndex || 0) + HYPER_LIST_PAGE_SIZE;
+      state.hyperNav.targetIndex = clamp(nextIndex, 0, maxIndex);
+      return;
+    }
+    if (code === 'Home') {
+      state.hyperNav.targetIndex = 0;
+      return;
+    }
+    if (code === 'End') {
+      const targets = getHyperMenuTargets();
+      state.hyperNav.targetIndex = Math.max(0, targets.length - 1);
       return;
     }
     if (code.startsWith('Digit')) {
@@ -12822,8 +13949,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const baseRepair = Math.round(SERVICE_PRICES.repairFull * repairPct);
     const baseFuel = Math.round(SERVICE_PRICES.fuelFull * fuelPct);
     const baseHyper = Math.round(SERVICE_PRICES.hyperFull * hyperPct);
-    const total = applyFactionPrice(baseRepair + baseFuel + baseHyper, factionId);
-    return { repairPct, fuelPct, hyperPct, baseRepair, baseFuel, baseHyper, total };
+    const subtotal = applyFactionPrice(baseRepair + baseFuel + baseHyper, factionId);
+    const taxRate = getFactionTaxRate(factionId);
+    const tax = Math.round(subtotal * taxRate);
+    const total = subtotal + tax;
+    return { repairPct, fuelPct, hyperPct, baseRepair, baseFuel, baseHyper, subtotal, taxRate, tax, total };
   }
 
   function stationRepair() {
@@ -12852,14 +13982,23 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function sellCargo() {
     const cargo = player.inventory.cargo;
     const fuelCells = cargo.fuelCells || 0;
-    const totalValue = cargo.salvage * 40 + cargo.alloys * 60 + cargo.relics * 110 + fuelCells * 55;
-    if (totalValue <= 0) {
+    const baseValue = cargo.salvage * 40 + cargo.alloys * 60 + cargo.relics * 110 + fuelCells * 55;
+    if (baseValue <= 0) {
       noteStatus('No cargo to sell.');
       return;
     }
+    const factionId = state.activeStation?.faction || '';
+    const multiplier = getFactionSellMultiplier(factionId);
+    const taxedValue = Math.round(baseValue * multiplier);
+    const taxRate = getFactionTaxRate(factionId);
+    const tax = Math.round(taxedValue * taxRate);
+    const totalValue = Math.max(0, taxedValue - tax);
     player.credits += totalValue;
     player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0, fuelCells: 0 };
-    noteStatus(`Cargo sold for ${totalValue} credits.`);
+    noteStatus(`Cargo sold for ${totalValue} credits${tax > 0 ? ` (tax ${tax})` : ''}.`);
+    const units = cargo.salvage + cargo.alloys + cargo.relics + fuelCells;
+    advanceCommunityGoal('cargo_run', units);
+    advanceSeasonProgress('cargo', units);
   }
 
   function stationCargoAction() {
@@ -12883,12 +14022,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
     const fuelGain = salvage * 28 + alloys * 40 + fuelCells * 80;
     const hyperGain = alloys * 6 + relics * 4 + fuelCells * 8;
-    const creditGain = salvage * 18 + alloys * 30 + relics * 120 + fuelCells * 20;
+    const baseCredits = salvage * 18 + alloys * 30 + relics * 120 + fuelCells * 20;
+    const factionId = state.activeStation?.faction || '';
+    const multiplier = getFactionSellMultiplier(factionId);
+    const taxedValue = Math.round(baseCredits * multiplier);
+    const taxRate = getFactionTaxRate(factionId);
+    const tax = Math.round(taxedValue * taxRate);
+    const creditGain = Math.max(0, taxedValue - tax);
     player.fuel = clamp(player.fuel + fuelGain, 0, cachedStats.fuelMax);
     player.hyperCharge = clamp(player.hyperCharge + hyperGain, 0, HYPER.maxCharge);
     player.credits += creditGain;
     player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0, fuelCells: 0 };
     noteStatus('Refinery processed cargo into fuel reserves.');
+    const units = salvage + alloys + relics + fuelCells;
+    advanceCommunityGoal('cargo_run', units);
+    advanceSeasonProgress('cargo', units);
   }
 
   function bulkRestockAmmo() {
@@ -12958,6 +14106,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function stationContract() {
+    if (state.activeStation?.restrictions?.contractsLocked) {
+      noteStatus('Contracts locked due to standing.');
+      return;
+    }
     const sector = getCurrentSector();
     createContractForSector(sector);
     acceptContract(sector);
@@ -13122,15 +14274,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       window.addEventListener('beforeunload', () => {
         const snapshot = saveLocal();
         pushCloudSave(snapshot);
+        syncCommunityGoals();
+        syncSeasonProgress();
       });
       window.addEventListener('pagehide', () => {
         const snapshot = saveLocal();
         pushCloudSave(snapshot);
+        syncCommunityGoals();
+        syncSeasonProgress();
       });
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
           const snapshot = saveLocal();
           pushCloudSave(snapshot);
+          syncCommunityGoals();
+          syncSeasonProgress();
         }
       });
     }
@@ -13152,6 +14310,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     } else {
       resetRun({ full: true });
     }
+    initSeasonState();
 
     getHighScore(GAME_ID).then((score) => {
       state.bestDistance = score || 0;
