@@ -570,7 +570,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   const FRIENDLY_TYPES = [
     { id: 'escort', label: 'Escort Wing', role: 'escort', size: 18, speed: 96, color: '#6df0ff', fireRate: 0.9, damage: 10, range: 520, hp: 70, shield: 24 },
     { id: 'patrol', label: 'Patrol Craft', role: 'patrol', size: 22, speed: 82, color: '#9ad6ff', fireRate: 1.1, damage: 12, range: 560, hp: 95, shield: 36 },
-    { id: 'guardian', label: 'Guardian Frigate', role: 'guardian', size: 34, speed: 62, color: '#7dfc9a', fireRate: 1.4, damage: 16, range: 640, hp: 160, shield: 70 }
+    { id: 'guardian', label: 'Guardian Frigate', role: 'guardian', size: 34, speed: 62, color: '#7dfc9a', fireRate: 1.4, damage: 16, range: 640, hp: 160, shield: 70 },
+    { id: 'sentinel', label: 'City Sentinel', role: 'sentinel', size: 26, speed: 88, color: '#7be8ff', fireRate: 0.85, damage: 14, range: 600, hp: 110, shield: 48 },
+    { id: 'service', label: 'Service Skiff', role: 'service', size: 16, speed: 54, color: '#b9c8e8', fireRate: 1.8, damage: 6, range: 360, hp: 60, shield: 18 }
   ];
 
   const TRADE_ROUTE_CONFIG = {
@@ -1647,6 +1649,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     relayStations: [],
     systemNames: new Map(),
     tradeLanes: [],
+    riskRoutes: [],
     homeBase: {
       x: 0,
       y: 0,
@@ -2784,8 +2787,86 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     world.laneWaypoints = laneWaypoints;
   }
 
+  function buildRiskRoutes() {
+    const rng = mulberry32(WORLD_SEED * 41 + 933);
+    const routes = [];
+    const cities = world.cities || [];
+    const relays = world.relayStations || [];
+    const ruins = world.ruinSignals || [];
+    const used = new Set();
+
+    const addRoute = (a, b, options = {}) => {
+      if (!a || !b) return;
+      const key = a.id && b.id
+        ? (a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`)
+        : `${a.key || a.label || 'node'}|${b.key || b.label || 'node'}`;
+      const routeKey = `risk-${key}`;
+      if (used.has(routeKey)) return;
+      used.add(routeKey);
+      const distance = dist(a.x, a.y, b.x, b.y);
+      const width = randRange(rng, 120, 190);
+      const trafficBoost = 1.4 + Math.min(0.7, distance / (WORLD.sectorSize * 7));
+      routes.push({
+        id: routeKey,
+        x1: a.x,
+        y1: a.y,
+        x2: b.x,
+        y2: b.y,
+        width,
+        trafficBoost,
+        risk: true,
+        source: 'risk',
+        from: a.id || '',
+        to: b.id || '',
+        destination: options.destination || '',
+        faction: options.faction || ''
+      });
+    };
+
+    const relayNodes = relays.map((relay, idx) => {
+      const center = posFromGrid(relay.gx, relay.gy);
+      return { id: `relay-${idx}`, x: center.x, y: center.y, key: relay.key, type: 'relay' };
+    });
+    const ruinNodes = ruins.map((ruin, idx) => ({
+      id: `ruin-${idx}`,
+      x: ruin.x,
+      y: ruin.y,
+      key: ruin.id,
+      type: 'ruin'
+    }));
+
+    cities.forEach((city) => {
+      if (!city) return;
+      if (relayNodes.length && rng() < 0.65) {
+        const nearestRelay = relayNodes
+          .map((node) => ({ node, d: dist(city.x, city.y, node.x, node.y) }))
+          .sort((a, b) => a.d - b.d)[0];
+        if (nearestRelay) addRoute(city, nearestRelay.node, { destination: 'relay' });
+      }
+      if (ruinNodes.length && rng() < 0.45) {
+        const nearestRuin = ruinNodes
+          .map((node) => ({ node, d: dist(city.x, city.y, node.x, node.y) }))
+          .sort((a, b) => a.d - b.d)[0];
+        if (nearestRuin && nearestRuin.d > WORLD.sectorSize * 3) {
+          addRoute(city, nearestRuin.node, { destination: 'ruin' });
+        }
+      }
+    });
+
+    const longhaulCount = Math.max(8, Math.floor(cities.length * 0.35));
+    for (let i = 0; i < longhaulCount; i += 1) {
+      const a = cities[Math.floor(rng() * cities.length)];
+      const b = cities[Math.floor(rng() * cities.length)];
+      if (!a || !b || a.id === b.id) continue;
+      if (dist(a.x, a.y, b.x, b.y) < WORLD.sectorSize * 8) continue;
+      addRoute(a, b, { faction: a.faction === b.faction ? a.faction : '' });
+    }
+
+    world.riskRoutes = routes;
+  }
+
   function addTradeLanesToSector(sector) {
-    if (!world.tradeLanes?.length) return [];
+    if (!world.tradeLanes?.length && !world.riskRoutes?.length) return [];
     const center = posFromGrid(sector.gx, sector.gy);
     const half = WORLD.sectorSize / 2;
     const minX = center.x - half;
@@ -2793,6 +2874,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const minY = center.y - half;
     const maxY = center.y + half;
     const routes = [];
+    const riskRoutes = [];
     world.tradeLanes.forEach((lane) => {
       const clipped = clipLineToBox(lane.x1, lane.y1, lane.x2, lane.y2, minX, maxX, minY, maxY);
       if (!clipped) return;
@@ -2822,7 +2904,39 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (routes.length) {
       sector.objects.tradeRoutes.push(...routes);
     }
-    return routes;
+    if (world.riskRoutes?.length) {
+      world.riskRoutes.forEach((risk) => {
+        const clipped = clipLineToBox(risk.x1, risk.y1, risk.x2, risk.y2, minX, maxX, minY, maxY);
+        if (!clipped) return;
+        const dx = clipped.x2 - clipped.x1;
+        const dy = clipped.y2 - clipped.y1;
+        const length = Math.hypot(dx, dy);
+        if (length < 20) return;
+        riskRoutes.push({
+          id: `${risk.id}-${sector.key}`,
+          laneId: risk.id,
+          x1: clipped.x1,
+          y1: clipped.y1,
+          x2: clipped.x2,
+          y2: clipped.y2,
+          width: risk.width || 140,
+          length,
+          angle: Math.atan2(dy, dx),
+          nx: -dy / (length || 1),
+          ny: dx / (length || 1),
+          source: 'risk',
+          risk: true,
+          trafficBoost: risk.trafficBoost || 1.6,
+          from: risk.from,
+          to: risk.to,
+          faction: risk.faction || ''
+        });
+      });
+    }
+    if (riskRoutes.length) {
+      sector.objects.tradeRoutes.push(...riskRoutes);
+    }
+    return [...routes, ...riskRoutes];
   }
 
   function getRouteContext(route, x, y) {
@@ -3108,18 +3222,40 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       seedRouteEncounters(sector, route, civicRng, city);
     });
     if (city) attachCitySpurs(sector, city, laneRoutes);
+    if (city) {
+      const extraRoutes = ensureCityRoutes(sector, city, civicRng);
+      extraRoutes.forEach((route) => {
+        seedRouteTraffic(sector, route, civicRng, route.trafficBoost || 1.5);
+        seedRouteEncounters(sector, route, civicRng, city);
+      });
+    }
 
     if (city) {
-      const escortCount = 14 + Math.floor(civicRng() * 10);
-      for (let i = 0; i < escortCount; i += 1) {
-        const roll = civicRng();
-        const def = roll < 0.45
-          ? FRIENDLY_TYPES.find((entry) => entry.id === 'patrol') || FRIENDLY_TYPES[0]
-          : roll < 0.8
-            ? FRIENDLY_TYPES.find((entry) => entry.id === 'guardian') || FRIENDLY_TYPES[0]
-            : FRIENDLY_TYPES.find((entry) => entry.id === 'escort') || FRIENDLY_TYPES[0];
+      const serviceCount = 8 + Math.floor(civicRng() * 6);
+      const serviceType = FRIENDLY_TYPES.find((entry) => entry.id === 'service') || FRIENDLY_TYPES[0];
+      for (let i = 0; i < serviceCount; i += 1) {
         const angle = randRange(civicRng, 0, Math.PI * 2);
-        const radius = randRange(civicRng, city.radius + 520, city.radius + 980);
+        const radius = randRange(civicRng, city.radius + 240, city.radius + 520);
+        spawnFriendly(serviceType.id, city.x + Math.cos(angle) * radius, city.y + Math.sin(angle) * radius, {
+          sector,
+          angle: angle + Math.PI / 2,
+          faction: civicFactionId,
+          anchor: { x: city.x, y: city.y },
+          orbitRadius: radius,
+          orbitAngle: angle,
+          guard: false,
+          rng: civicRng
+        });
+      }
+
+      const guardCount = 6 + Math.floor(civicRng() * 4);
+      for (let i = 0; i < guardCount; i += 1) {
+        const roll = civicRng();
+        const def = roll < 0.65
+          ? FRIENDLY_TYPES.find((entry) => entry.id === 'sentinel') || FRIENDLY_TYPES[0]
+          : FRIENDLY_TYPES.find((entry) => entry.id === 'guardian') || FRIENDLY_TYPES[0];
+        const angle = randRange(civicRng, 0, Math.PI * 2);
+        const radius = randRange(civicRng, city.radius + 560, city.radius + 980);
         spawnFriendly(def.id, city.x + Math.cos(angle) * radius, city.y + Math.sin(angle) * radius, {
           sector,
           angle: angle + Math.PI / 2,
@@ -3819,7 +3955,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         x2: mid.x + dir.x * length * 0.5,
         y2: mid.y + dir.y * length * 0.5,
         width: randRange(rng, 80, 140),
-        hidden: true
+        hidden: false,
+        source: 'risk',
+        risk: true,
+        trafficBoost: 1.5
       };
       const dx = route.x2 - route.x1;
       const dy = route.y2 - route.y1;
@@ -3861,6 +4000,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (!sector.isVoid && !isCluster && rng() < (isExpanse ? 0.12 : 0.06) * densityScale && !world.baseClaims?.[sector.key] && !(sector.gx === 0 && sector.gy === 0)) {
       const baseKeys = isExpanse ? ['outpost', 'relay', 'refinery'] : Object.keys(BASE_TYPES);
       const baseType = BASE_TYPES[baseKeys[Math.min(baseKeys.length - 1, Math.floor(rng() * baseKeys.length))]];
+      const hasRiskRoute = sector.objects.tradeRoutes.some((route) => route.risk);
+      const hiddenBase = isExpanse && hasRiskRoute && rng() < 0.7;
       sector.objects.bases.push({
         id: `${sector.key}-base`,
         type: baseType.id,
@@ -3875,7 +4016,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           cooldown: randRange(rng, 0.4, 1.2)
         })),
         spawnTimer: randRange(rng, 2, 4),
-        def: baseType
+        def: baseType,
+        hidden: hiddenBase,
+        revealRange: hiddenBase ? 900 : 0
       });
     }
 
@@ -4620,6 +4763,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       buildStationMap();
       buildCityMap();
       buildTradeLanes();
+      buildRiskRoutes();
       buildSkygridBackground();
       resetHomeDefense();
       contract.active = false;
@@ -5407,17 +5551,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function seedRouteTraffic(sector, route, rng, boost = 1) {
     if (!sector || !route) return;
+    const riskBoost = route.risk ? 1.25 : 1;
     const convoyMax = sector.zoneType === 'lane'
       ? TRADE_ROUTE_CONFIG.convoyMaxLane
       : sector.zoneType === 'expanse'
         ? TRADE_ROUTE_CONFIG.convoyMaxExpanse
         : TRADE_ROUTE_CONFIG.convoyMin + 1;
     const baseCount = TRADE_ROUTE_CONFIG.convoyMin + Math.floor(rng() * (convoyMax - TRADE_ROUTE_CONFIG.convoyMin + 1));
-    const convoyGroups = Math.max(1, Math.round(baseCount * boost * 1.2));
+    const convoyGroups = Math.max(1, Math.round(baseCount * boost * riskBoost * 1.2));
     for (let i = 0; i < convoyGroups; i += 1) {
       spawnConvoyOnRoute(sector, route, rng, {
         count: 4 + Math.floor(rng() * 3),
-        escortChance: Math.min(1, TRADE_ROUTE_CONFIG.escortChance * (0.95 + boost * 0.25))
+        escortChance: Math.min(1, TRADE_ROUTE_CONFIG.escortChance * (0.95 + boost * 0.25 + (route.risk ? 0.2 : 0)))
       });
     }
   }
@@ -5430,9 +5575,27 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const midX = (route.x1 + route.x2) / 2 + route.nx * randRange(rng, -route.width * 0.25, route.width * 0.25);
     const midY = (route.y1 + route.y2) / 2 + route.ny * randRange(rng, -route.width * 0.25, route.width * 0.25);
     if (city && dist(midX, midY, city.x, city.y) < (city.safeRadius || city.radius + 200)) return;
-    const raidChance = route.source === 'lane' ? 0.95 : 0.75;
-    const convoyChance = route.source === 'lane' ? 0.85 : 0.6;
+    const isLane = route.source === 'lane';
+    const isRisk = route.risk || route.source === 'risk';
+    const raidChance = isRisk ? 0.98 : isLane ? 0.95 : 0.75;
+    const convoyChance = isRisk ? 0.9 : isLane ? 0.85 : 0.6;
+    const capitalChance = isRisk ? 0.38 : isLane ? 0.18 : 0.08;
     let added = false;
+    if (rng() < capitalChance) {
+      encounters.push({
+        id: `${sector.key}-enc-capital-${Math.floor(rng() * 9999)}`,
+        type: 'capital',
+        x: midX,
+        y: midY,
+        strength: randRange(rng, 1.1, 1.5),
+        sight: randRange(rng, 900, 1320),
+        radius: randRange(rng, 220, 360),
+        waves: isRisk || isLane ? 2 : 1,
+        cooldown: randRange(rng, 3, 5),
+        cleared: false
+      });
+      added = true;
+    }
     if (rng() < convoyChance) {
       encounters.push({
         id: `${sector.key}-enc-convoy-${Math.floor(rng() * 9999)}`,
@@ -5442,7 +5605,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         strength: randRange(rng, 0.95, 1.35),
         sight: randRange(rng, 740, 1120),
         radius: randRange(rng, 180, 320),
-        waves: route.source === 'lane' ? 3 : 2,
+        waves: isLane ? 3 : 2,
         cooldown: randRange(rng, 2, 4),
         cleared: false
       });
@@ -5457,7 +5620,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         strength: randRange(rng, 1.05, 1.45),
         sight: randRange(rng, 760, 1140),
         radius: randRange(rng, 180, 320),
-        waves: route.source === 'lane' ? 3 : 2,
+        waves: isLane ? 3 : 2,
         cooldown: randRange(rng, 2, 4),
         cleared: false
       });
@@ -5511,6 +5674,68 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         source: 'spur'
       });
     });
+  }
+
+  function ensureCityRoutes(sector, city, rng = Math.random) {
+    if (!sector || !city) return;
+    const visibleRoutes = sector.objects.tradeRoutes.filter((route) => route && !route.hidden);
+    const needed = Math.max(0, 2 - visibleRoutes.length);
+    if (needed <= 0) return [];
+    const half = WORLD.sectorSize / 2;
+    const center = posFromGrid(sector.gx, sector.gy);
+    const minX = center.x - half;
+    const maxX = center.x + half;
+    const minY = center.y - half;
+    const maxY = center.y + half;
+
+    const destinationNodes = [];
+    (world.cities || []).forEach((other) => {
+      if (!other || other.id === city.id) return;
+      destinationNodes.push({ id: other.id, x: other.x, y: other.y, type: 'city', faction: other.faction });
+    });
+    (world.relayStations || []).forEach((relay, idx) => {
+      const center = posFromGrid(relay.gx, relay.gy);
+      destinationNodes.push({ id: `relay-${idx}`, x: center.x, y: center.y, type: 'relay' });
+    });
+    (world.ruinSignals || []).forEach((ruin, idx) => {
+      destinationNodes.push({ id: `ruin-${idx}`, x: ruin.x, y: ruin.y, type: 'ruin' });
+    });
+
+    destinationNodes.sort((a, b) => dist(city.x, city.y, a.x, a.y) - dist(city.x, city.y, b.x, b.y));
+    const addedRoutes = [];
+    let added = 0;
+    for (let i = 0; i < destinationNodes.length && added < needed; i += 1) {
+      const dest = destinationNodes[i];
+      const clipped = clipLineToBox(city.x, city.y, dest.x, dest.y, minX, maxX, minY, maxY);
+      if (!clipped) continue;
+      const dx = clipped.x2 - clipped.x1;
+      const dy = clipped.y2 - clipped.y1;
+      const length = Math.hypot(dx, dy);
+      if (length < 20) continue;
+      const isRisk = dest.type !== 'city';
+      const route = {
+        id: `city-${city.id}-${dest.id}`,
+        x1: clipped.x1,
+        y1: clipped.y1,
+        x2: clipped.x2,
+        y2: clipped.y2,
+        width: 180,
+        length,
+        angle: Math.atan2(dy, dx),
+        nx: -dy / (length || 1),
+        ny: dx / (length || 1),
+        source: isRisk ? 'risk' : 'city',
+        risk: isRisk,
+        trafficBoost: isRisk ? 1.7 : 1.4,
+        from: city.id,
+        to: dest.id,
+        faction: city.faction || ''
+      };
+      sector.objects.tradeRoutes.push(route);
+      addedRoutes.push(route);
+      added += 1;
+    }
+    return addedRoutes;
   }
 
   function spawnBoss(x, y) {
@@ -7021,7 +7246,26 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       return spawnEnemy(type, x, y, threatScale, { captureBias, faction: factionId });
     };
 
-    if (active.type === 'convoy') {
+    if (active.type === 'capital') {
+      const carrierCount = sector.depth >= 6 && rng() < 0.45 ? 2 : 1;
+      for (let c = 0; c < carrierCount; c += 1) {
+        const angle = rng() * Math.PI * 2;
+        const radius = randRange(rng, 80, 180);
+        spawnGroup('carrier', active.x + Math.cos(angle) * radius, active.y + Math.sin(angle) * radius);
+      }
+      const escortCount = 4 + Math.floor(rng() * 3);
+      for (let e = 0; e < escortCount; e += 1) {
+        const angle = rng() * Math.PI * 2;
+        const radius = randRange(rng, 140, 260);
+        const escortType = rng() < 0.4 ? 'gunship' : rng() < 0.8 ? 'fighter' : 'interceptor';
+        spawnGroup(escortType, active.x + Math.cos(angle) * radius, active.y + Math.sin(angle) * radius);
+      }
+      if (rng() < 0.5) {
+        const angle = rng() * Math.PI * 2;
+        const radius = randRange(rng, 120, 220);
+        spawnGroup('transport', active.x + Math.cos(angle) * radius, active.y + Math.sin(angle) * radius);
+      }
+    } else if (active.type === 'convoy') {
       const convoyType = sector.depth >= 8 && rng() < 0.35 ? 'carrier' : 'transport';
       spawnGroup(convoyType, active.x, active.y);
       const escorts = convoyType === 'carrier' ? 3 : 2;
@@ -7495,6 +7739,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (!sector.objects.bases.length) return;
     sector.objects.bases.forEach((base) => {
       if (base.hp <= 0) return;
+      if (base.hidden) {
+        const revealRange = base.revealRange || 900;
+        if (dist(base.x, base.y, player.x, player.y) > revealRange) {
+          return;
+        }
+        base.hidden = false;
+        noteStatus('Hidden base revealed.');
+      }
       const baseFaction = base.faction || sector.faction?.id || '';
       if (isAlliedFaction(baseFaction)) {
         base.spawnTimer = Math.max(base.spawnTimer, 2.5);
@@ -7544,8 +7796,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         const defenseRange = base.defenseRange || 900;
         const safeRadius = base.noFireRadius || base.safeRadius || base.radius;
         const playerDist = dist(base.x, base.y, player.x, player.y);
-        const hostilePlayer = isFactionAggressive(base.faction) && playerDist < defenseRange && playerDist > safeRadius * 0.6;
-        const target = hostilePlayer ? player : findClosestEnemy(base.x, base.y, defenseRange);
+        const target = findClosestEnemy(base.x, base.y, defenseRange);
         if (!target) return;
         turret.cooldown = 0.7 + Math.random() * 0.5;
         const dir = normalize(target.x - base.x, target.y - base.y);
@@ -10031,6 +10282,25 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.arc(size * 0.95, size * 0.2, size * 0.3, 0, Math.PI * 2);
       ctx.arc(-size * 0.95, size * 0.2, size * 0.3, 0, Math.PI * 2);
       ctx.fill();
+    } else if (ship.role === 'sentinel') {
+      ctx.beginPath();
+      ctx.moveTo(0, -size * 1.35);
+      ctx.lineTo(size * 0.55, -size * 0.25);
+      ctx.lineTo(size * 0.95, size * 0.75);
+      ctx.lineTo(0, size * 0.45);
+      ctx.lineTo(-size * 0.95, size * 0.75);
+      ctx.lineTo(-size * 0.55, -size * 0.25);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = mixColor(color, '#0b1426', 0.45);
+      ctx.beginPath();
+      ctx.moveTo(0, -size * 0.75);
+      ctx.lineTo(size * 0.28, size * 0.15);
+      ctx.lineTo(0, size * 0.35);
+      ctx.lineTo(-size * 0.28, size * 0.15);
+      ctx.closePath();
+      ctx.fill();
     } else if (ship.role === 'patrol') {
       ctx.beginPath();
       ctx.moveTo(0, -size * 1.2);
@@ -10042,6 +10312,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+    } else if (ship.role === 'service') {
+      ctx.beginPath();
+      ctx.moveTo(0, -size * 0.95);
+      ctx.quadraticCurveTo(size * 0.55, -size * 0.4, size * 0.65, size * 0.2);
+      ctx.lineTo(0, size * 0.5);
+      ctx.lineTo(-size * 0.65, size * 0.2);
+      ctx.quadraticCurveTo(-size * 0.55, -size * 0.4, 0, -size * 0.95);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = mixColor(color, '#0b1426', 0.5);
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.25, 0, Math.PI * 2);
+      ctx.fill();
     } else {
       ctx.beginPath();
       ctx.moveTo(0, -size * 1.1);
@@ -10076,6 +10360,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function drawBase(base, camera) {
+    if (base.hidden && dist(base.x, base.y, player.x, player.y) > (base.revealRange || 900)) return;
     const x = base.x - camera.x + VIEW.centerX;
     const y = base.y - camera.y + VIEW.centerY;
     const color = base.def.color;
@@ -10840,21 +11125,25 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const nx = route.nx || 0;
     const ny = route.ny || 0;
     const isLane = route.source === 'lane';
+    const isRisk = route.risk || route.source === 'risk';
     const isSpur = route.source === 'spur';
-    const base = getFactionColor(route.faction, isLane ? '#ffd166' : '#6df0ff');
+    const isCity = route.source === 'city';
+    const base = isRisk
+      ? '#ff6b6b'
+      : getFactionColor(route.faction, isLane || isCity ? '#ffd166' : '#6df0ff');
     const mainColor = isSpur ? mixColor(base, '#7dfc9a', 0.35) : base;
     ctx.save();
-    ctx.globalAlpha = isLane ? 0.85 : 0.7;
-    ctx.strokeStyle = toRgba(mainColor, isLane ? 0.55 : 0.4);
-    ctx.lineWidth = isLane ? 3 : 2.2;
-    ctx.setLineDash([14, 10]);
+    ctx.globalAlpha = isLane ? 0.85 : isRisk ? 0.9 : 0.7;
+    ctx.strokeStyle = toRgba(mainColor, isLane || isCity ? 0.55 : isRisk ? 0.6 : 0.4);
+    ctx.lineWidth = isLane || isCity ? 3 : isRisk ? 2.6 : 2.2;
+    ctx.setLineDash(isRisk ? [10, 8] : [14, 10]);
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.strokeStyle = toRgba(mainColor, isLane ? 0.3 : 0.18);
-    ctx.lineWidth = isLane ? 2.8 : 2.2;
+    ctx.strokeStyle = toRgba(mainColor, isLane || isCity ? 0.3 : isRisk ? 0.22 : 0.18);
+    ctx.lineWidth = isLane || isCity ? 2.8 : isRisk ? 2.3 : 2.2;
     ctx.beginPath();
     ctx.moveTo(x1 + nx * offset, y1 + ny * offset);
     ctx.lineTo(x2 + nx * offset, y2 + ny * offset);
@@ -10865,14 +11154,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const chevrons = Math.max(3, Math.floor(length / 320));
     const angle = Math.atan2(dy, dx);
     for (let i = 0; i < chevrons; i += 1) {
-      const t = (state.time * (isLane ? 0.04 : 0.03) + i / chevrons) % 1;
+      const t = (state.time * (isLane || isCity ? 0.04 : 0.03) + i / chevrons) % 1;
       const cx = x1 + dx * t;
       const cy = y1 + dy * t;
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(angle);
-      ctx.globalAlpha = isLane ? 0.75 : 0.55;
-      ctx.fillStyle = toRgba(mainColor, isLane ? 0.85 : 0.65);
+      ctx.globalAlpha = isLane || isCity ? 0.75 : isRisk ? 0.7 : 0.55;
+      ctx.fillStyle = toRgba(mainColor, isLane || isCity ? 0.85 : isRisk ? 0.8 : 0.65);
       ctx.beginPath();
       ctx.moveTo(-7, -4);
       ctx.lineTo(8, 0);
@@ -11913,7 +12202,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
     sector.objects.friendlies.forEach((ship) => {
       const color = getFactionColor(ship.faction, IFF_COLORS.friendly);
-      addContact('friendly', ship.x, ship.y, color, ship.role === 'guardian' ? 3.4 : 2.4);
+      addContact('friendly', ship.x, ship.y, color, ship.role === 'guardian' || ship.role === 'sentinel' ? 3.4 : 2.4);
     });
     sector.objects.traders.forEach((trader) => addContact('trader', trader.x, trader.y, '#6df0ff', 2.4));
     sector.objects.stations.forEach((station) => addContact('station', station.x, station.y, '#7dfc9a', 3));
@@ -11923,7 +12212,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         addContact('city', city.x, city.y, '#6df0ff', 3.6);
       });
     }
-    sector.objects.bases.forEach((base) => addContact('base', base.x, base.y, '#ff6b6b', 3.4));
+    sector.objects.bases.forEach((base) => {
+      if (base.hidden && dist(base.x, base.y, player.x, player.y) > (base.revealRange || 900)) return;
+      addContact('base', base.x, base.y, '#ff6b6b', 3.4);
+    });
     sector.objects.civilians.forEach((ship) => {
       const size = ship.convoyId ? 2.8 : 2;
       const color = ship.convoyId ? '#ffd166' : IFF_COLORS.civilian;
@@ -12358,6 +12650,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ? 'Convoy'
         : encounter.type === 'ambush'
           ? 'Ambush'
+          : encounter.type === 'capital'
+            ? 'Carrier'
           : encounter.type === 'guard'
             ? 'Guard'
             : 'Patrol';
@@ -12367,6 +12661,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ? '#ff6b6b'
         : encounter.type === 'convoy'
           ? '#ffd166'
+          : encounter.type === 'capital'
+            ? '#ff9f6b'
           : '#ffb347';
 
     ctx.save();
@@ -12460,7 +12756,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           ctx.strokeStyle = 'rgba(154,214,255,0.45)';
           ctx.strokeRect(x + 5, y + 5, cell - 10, cell - 10);
         }
-        if (sector.objects.bases.length && !world.baseClaims?.[sector.key]) {
+        if (sector.objects.bases.some((base) => !base.hidden) && !world.baseClaims?.[sector.key]) {
           ctx.fillStyle = 'rgba(255,107,107,0.9)';
           ctx.fillRect(x + cell / 2 - 3, y + cell / 2 - 3, 6, 6);
         }
@@ -12502,6 +12798,24 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
       });
+      ctx.restore();
+    }
+
+    if (world.riskRoutes && world.riskRoutes.length) {
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([6, 6]);
+      world.riskRoutes.forEach((route) => {
+        const a = mapPoint(route.x1, route.y1);
+        const b = mapPoint(route.x2, route.y2);
+        ctx.strokeStyle = 'rgba(255,107,107,0.45)';
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      });
+      ctx.setLineDash([]);
       ctx.restore();
     }
 
@@ -14447,6 +14761,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     buildStationMap();
     buildCityMap();
     buildTradeLanes();
+    buildRiskRoutes();
     buildSkygridBackground();
 
     const localSave = loadLocal();
