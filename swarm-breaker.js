@@ -93,7 +93,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     radarRangeMult: 1.8
   };
 
-  const HYPER_LIST_PAGE_SIZE = 16;
+  const HYPER_LIST_PAGE_SIZE = 20;
 
   const BOARDING = {
     hpRatio: 0.22,
@@ -126,10 +126,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   };
 
   const SIGNAL_SCOPE = {
-    radius: 72,
+    radius: 58,
     range: 3600,
-    x: 96,
-    y: 248
+    x: 84,
+    y: 236
   };
 
   const FACTION_STANDINGS = {
@@ -1293,9 +1293,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   ];
 
   const HULLS = {
-    small: { id: 'small', label: 'Small Hull', baseHp: 110, baseShield: 80, size: 14, mass: 0.95, armor: 0.04, cargo: 6, fuelCapacity: 1500, unlockLevel: 1 },
-    medium: { id: 'medium', label: 'Medium Hull', baseHp: 150, baseShield: 110, size: 18, mass: 1.1, armor: 0.06, cargo: 10, fuelCapacity: 2000, unlockLevel: 3 },
-    large: { id: 'large', label: 'Large Hull', baseHp: 200, baseShield: 150, size: 24, mass: 1.3, armor: 0.08, cargo: 14, fuelCapacity: 2500, unlockLevel: 6 }
+    small: { id: 'small', label: 'Small Hull', baseHp: 110, baseShield: 80, size: 14, mass: 0.95, armor: 0.04, cargo: 6, fuelCapacity: 3000, unlockLevel: 1 },
+    medium: { id: 'medium', label: 'Medium Hull', baseHp: 150, baseShield: 110, size: 18, mass: 1.1, armor: 0.06, cargo: 10, fuelCapacity: 4000, unlockLevel: 3 },
+    large: { id: 'large', label: 'Large Hull', baseHp: 200, baseShield: 150, size: 24, mass: 1.3, armor: 0.08, cargo: 14, fuelCapacity: 5000, unlockLevel: 6 }
   };
 
   const ENGINES = {
@@ -3022,37 +3022,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
-    const routeCount = 6 + Math.floor(civicRng() * 5);
-    for (let r = 0; r < routeCount; r += 1) {
-      const angle = randRange(civicRng, 0, Math.PI * 2);
-      const length = WORLD.sectorSize * randRange(civicRng, 0.6, 0.9);
-      const dir = { x: Math.cos(angle), y: Math.sin(angle) };
-      const perp = { x: -dir.y, y: dir.x };
-      const offset = randRange(civicRng, -WORLD.sectorSize * 0.2, WORLD.sectorSize * 0.2);
-      const mid = { x: center.x + perp.x * offset, y: center.y + perp.y * offset };
-      const half = length / 2;
-      const route = {
-        id: `${sector.key}-civic-route-${r}`,
-        x1: mid.x - dir.x * half,
-        y1: mid.y - dir.y * half,
-        x2: mid.x + dir.x * half,
-        y2: mid.y + dir.y * half,
-        width: randRange(civicRng, 140, 220)
-      };
-      const dx = route.x2 - route.x1;
-      const dy = route.y2 - route.y1;
-      route.length = Math.hypot(dx, dy);
-      route.angle = Math.atan2(dy, dx);
-      route.nx = -dy / (route.length || 1);
-      route.ny = dx / (route.length || 1);
-      sector.objects.tradeRoutes.push(route);
-      spawnConvoyOnRoute(sector, route, civicRng, {
-        faction: civicFactionId,
-        count: 2 + Math.floor(civicRng() * 3),
-        escortChance: 0.95
-      });
-    }
-
     const traderCount = 6 + Math.floor(civicRng() * 4);
     for (let i = 0; i < traderCount; i += 1) {
       const traderType = TRADER_TYPES[Math.floor(civicRng() * TRADER_TYPES.length)];
@@ -3128,11 +3097,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (city) attachCitySpurs(sector, city, laneRoutes);
 
     if (city) {
-      const escortCount = 8 + Math.floor(civicRng() * 6);
+      const escortCount = 12 + Math.floor(civicRng() * 8);
       for (let i = 0; i < escortCount; i += 1) {
         const def = FRIENDLY_TYPES[Math.floor(civicRng() * FRIENDLY_TYPES.length)];
         const angle = randRange(civicRng, 0, Math.PI * 2);
-        const radius = randRange(civicRng, city.radius + 260, city.radius + 520);
+        const radius = randRange(civicRng, city.radius + 320, city.radius + 720);
         spawnFriendly(def.id, city.x + Math.cos(angle) * radius, city.y + Math.sin(angle) * radius, {
           sector,
           angle: angle + Math.PI / 2,
@@ -3616,6 +3585,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     }
 
+    const allowRandomRoutes = false;
     const routeChance = sector.isVoid
       ? TRADE_ROUTE_CONFIG.voidChance
       : sector.zoneType === 'lane'
@@ -3623,7 +3593,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         : isExpanse
           ? TRADE_ROUTE_CONFIG.expanseChance
           : TRADE_ROUTE_CONFIG.clusterChance;
-    if (rng() < routeChance) {
+    if (allowRandomRoutes && rng() < routeChance) {
       const maxRoutes = sector.zoneType === 'lane'
         ? TRADE_ROUTE_CONFIG.maxRoutesLane
         : isExpanse
@@ -5434,6 +5404,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (city && dist(midX, midY, city.x, city.y) < (city.safeRadius || city.radius + 200)) return;
     const raidChance = route.source === 'lane' ? 0.95 : 0.75;
     const convoyChance = route.source === 'lane' ? 0.85 : 0.6;
+    let added = false;
     if (rng() < convoyChance) {
       encounters.push({
         id: `${sector.key}-enc-convoy-${Math.floor(rng() * 9999)}`,
@@ -5447,6 +5418,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         cooldown: randRange(rng, 2, 4),
         cleared: false
       });
+      added = true;
     }
     if (rng() < raidChance) {
       encounters.push({
@@ -5458,6 +5430,21 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         sight: randRange(rng, 760, 1140),
         radius: randRange(rng, 180, 320),
         waves: route.source === 'lane' ? 3 : 2,
+        cooldown: randRange(rng, 2, 4),
+        cleared: false
+      });
+      added = true;
+    }
+    if (!added) {
+      encounters.push({
+        id: `${sector.key}-enc-raid-${Math.floor(rng() * 9999)}`,
+        type: 'raid',
+        x: midX,
+        y: midY,
+        strength: randRange(rng, 1, 1.2),
+        sight: randRange(rng, 720, 980),
+        radius: randRange(rng, 180, 300),
+        waves: route.source === 'lane' ? 2 : 1,
         cooldown: randRange(rng, 2, 4),
         cleared: false
       });
@@ -7728,7 +7715,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const targetTraders = isExpanse ? 6 : 4;
 
     const rng = Math.random;
-    const route = ensureTrafficRoute(sector, rng, { hidden: true });
+    const routes = sector.objects.tradeRoutes || [];
+    if (!routes.length) return;
+    const route = routes[Math.floor(rng() * routes.length)];
 
     const spawnCiv = Math.max(0, targetCiv - civCount);
     if (spawnCiv > 0) {
@@ -7736,6 +7725,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       for (let i = 0; i < convoyGroups; i += 1) {
         spawnConvoyOnRoute(sector, route, rng, { count: 3 + Math.floor(rng() * 3) });
       }
+    }
+
+    if ((sector.encounters?.length || 0) < 2 && rng() < 0.55) {
+      seedRouteEncounters(sector, route, rng, sector.city || null);
     }
 
     if (friendlyCount < targetFriendly) {
@@ -11438,7 +11431,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function drawMiniMap() {
-    const mapSize = 130;
+    const mapSize = 110;
     const padding = 12;
     const mapX = VIEW.width - mapSize - padding;
     const mapY = padding;
@@ -11447,7 +11440,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.strokeStyle = 'rgba(125,252,154,0.4)';
     ctx.strokeRect(mapX, mapY, mapSize, mapSize);
 
-    const viewRadius = 6;
+    const viewRadius = 5;
     const centerGrid = gridFromPos(player.x, player.y);
     const cells = viewRadius * 2 + 1;
     const cellSize = mapSize / cells;
@@ -11550,19 +11543,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const hudAlpha = getHudAlpha();
     ctx.save();
     ctx.globalAlpha = hudAlpha;
-    const panelTop = VIEW.height - 170;
+    const panelWidth = 250;
+    const panelHeight = 138;
+    const panelTop = VIEW.height - panelHeight - 12;
     ctx.fillStyle = 'rgba(5,10,18,0.55)';
-    ctx.fillRect(12, panelTop, 300, 160);
+    ctx.fillRect(12, panelTop, panelWidth, panelHeight);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
-    ctx.strokeRect(12, panelTop, 300, 160);
+    ctx.strokeRect(12, panelTop, panelWidth, panelHeight);
     ctx.fillStyle = PALETTE.glow;
-    ctx.font = '12px sans-serif';
-    let lineY = panelTop + 18;
+    ctx.font = '11px sans-serif';
+    let lineY = panelTop + 16;
+    const lineGap = 14;
     if (state.inNoFireZone) {
       ctx.fillStyle = PALETTE.gold;
       ctx.fillText('NO-FIRE ZONE', 22, lineY);
       ctx.fillStyle = PALETTE.glow;
-      lineY += 16;
+      lineY += lineGap;
     }
     const heatValue = player.heat || 0;
     const heatPct = Math.round((heatValue / HEAT.max) * 100);
@@ -11570,22 +11566,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillStyle = heatColor;
     ctx.fillText(`Heat ${heatPct}%`, 22, lineY);
     ctx.fillStyle = PALETTE.glow;
-    lineY += 16;
+    lineY += lineGap;
     ctx.fillText(`Hull ${Math.round(player.hp)}/${Math.round(cachedStats.maxHp)}`, 22, lineY);
-    lineY += 16;
+    lineY += lineGap;
     ctx.fillText(`Shield ${Math.round(player.shield)}/${Math.round(cachedStats.maxShield)}`, 22, lineY);
-    lineY += 16;
+    lineY += lineGap;
     ctx.fillText(`Energy ${Math.round(player.energy)}/${Math.round(cachedStats.energyMax)}`, 22, lineY);
-    lineY += 16;
+    lineY += lineGap;
     ctx.fillText(`Fuel ${Math.round(player.fuel)}/${Math.round(cachedStats.fuelMax)}`, 22, lineY);
-    lineY += 16;
+    lineY += lineGap;
     ctx.fillText(`Hyper ${Math.round(player.hyperCharge)}% | Dial ${getHyperChargeLevel() * 10}%`, 22, lineY);
-    lineY += 16;
+    lineY += lineGap;
     if (state.routeLock?.active) {
       ctx.fillStyle = PALETTE.gold;
       ctx.fillText('Trade Lane Lock: ON', 22, lineY);
       ctx.fillStyle = PALETTE.glow;
-      lineY += 16;
+      lineY += lineGap;
     }
     const sector = getCurrentSector();
     const repFaction = sector?.faction?.id || player.affiliation;
@@ -11594,7 +11590,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const repLabel = FACTIONS.find((f) => f.id === repFaction)?.name || repFaction;
       ctx.fillStyle = repValue < 0 ? '#ff9f6b' : PALETTE.glow;
       ctx.fillText(`Rep ${repLabel}: ${repValue >= 0 ? '+' : ''}${repValue}`, 22, lineY);
-      const barWidth = 140;
+      const barWidth = 120;
       const barX = 22;
       const barY = lineY + 6;
       ctx.fillStyle = 'rgba(255,255,255,0.15)';
@@ -11609,14 +11605,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const primaryAmmo = primaryWeapon?.ammoType ? `${player.ammo[primaryWeapon.ammoType] || 0}` : 'inf';
     const secondaryAmmo = secondaryWeapon?.ammoType ? `${player.ammo[secondaryWeapon.ammoType] || 0}` : 'inf';
     ctx.fillStyle = 'rgba(5,10,18,0.6)';
-    ctx.fillRect(VIEW.width - 220, VIEW.height - 92, 200, 80);
+    ctx.fillRect(VIEW.width - 200, VIEW.height - 76, 180, 64);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
-    ctx.strokeRect(VIEW.width - 220, VIEW.height - 92, 200, 80);
+    ctx.strokeRect(VIEW.width - 200, VIEW.height - 76, 180, 64);
     ctx.fillStyle = PALETTE.glow;
-    ctx.fillText(`P: ${primaryWeapon?.label || 'None'} (${primaryAmmo})`, VIEW.width - 208, VIEW.height - 64);
-    ctx.fillText(`S: ${secondaryWeapon?.label || 'None'} (${secondaryAmmo})`, VIEW.width - 208, VIEW.height - 44);
-    ctx.fillText(`Cargo ${getCargoCount()}/${cachedStats.cargoMax}`, VIEW.width - 208, VIEW.height - 24);
-    ctx.fillText(`Assist: ${player.flightAssist ? 'ON' : 'OFF'}`, VIEW.width - 208, VIEW.height - 8);
+    ctx.fillText(`P: ${primaryWeapon?.label || 'None'} (${primaryAmmo})`, VIEW.width - 188, VIEW.height - 56);
+    ctx.fillText(`S: ${secondaryWeapon?.label || 'None'} (${secondaryAmmo})`, VIEW.width - 188, VIEW.height - 40);
+    ctx.fillText(`Cargo ${getCargoCount()}/${cachedStats.cargoMax}`, VIEW.width - 188, VIEW.height - 24);
+    ctx.fillText(`Assist: ${player.flightAssist ? 'ON' : 'OFF'}`, VIEW.width - 188, VIEW.height - 10);
     ctx.restore();
   }
 
@@ -11787,12 +11783,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     lines.push({ text: 'Return Jump (J): City retreat with mission penalty', color: '#9fb4d9' });
     lines.push({ text: 'Signal Scope: hostile=faction, friendly=cyan, civilian=gray', color: '#9fb4d9' });
     lines.push({ text: 'Signal Scope: trader/city=teal, station=green, survey=violet', color: '#9fb4d9' });
-    lines.push({ text: 'Convoys carry cargo. Disable transports to seize or salvage.', color: '#9fb4d9' });
-    lines.push({ text: 'Cargo sells for credits; fuel cells refine into fuel/hyper at stations.', color: '#9fb4d9' });
+    lines.push({ text: 'Convoys carry cargo. Disable transports to seize.', color: '#9fb4d9' });
+    lines.push({ text: 'Cargo sells for credits; fuel cells refine into fuel/hyper.', color: '#9fb4d9' });
     lines.push({ text: 'Reputation affects prices; negative rep triggers guards.', color: '#9fb4d9' });
     if (!lines.length) return;
-    const width = 520;
-    const height = lines.length * 16 + 12;
+    const width = 430;
+    const height = lines.length * 14 + 12;
     const x = VIEW.centerX - width / 2;
     const y = 8;
     ctx.save();
@@ -11801,10 +11797,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillRect(x, y, width, height);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
     ctx.strokeRect(x, y, width, height);
-    ctx.font = '12px sans-serif';
+    ctx.font = '11px sans-serif';
     lines.forEach((line, index) => {
       ctx.fillStyle = line.color;
-      ctx.fillText(line.text, x + 12, y + 20 + index * 16);
+      ctx.fillText(line.text, x + 12, y + 20 + index * 14);
     });
     ctx.restore();
   }
@@ -11944,8 +11940,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const factionName = ship.faction ? (FACTIONS.find((f) => f.id === ship.faction)?.name || ship.faction) : 'Unknown';
     const isCarrier = ship.role === 'carrier';
     const label = target.kind === 'enemy' ? (isCarrier ? 'Hostile Carrier' : 'Hostile Transport') : (isCarrier ? 'Carrier' : 'Transport');
-    const panelW = 240;
-    const panelH = 84;
+    const panelW = 210;
+    const panelH = 70;
     const x = VIEW.width - panelW - 16;
     const y = VIEW.height - panelH - 140;
     ctx.save();
@@ -11955,17 +11951,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.strokeStyle = ship.cargoColor || '#ffd166';
     ctx.strokeRect(x, y, panelW, panelH);
     ctx.fillStyle = '#e0f2ff';
-    ctx.font = '12px sans-serif';
+    ctx.font = '11px sans-serif';
     ctx.fillText('Cargo Manifest', x + 10, y + 18);
     ctx.fillStyle = '#9fb4d9';
-    ctx.fillText(`${label} — ${factionName}`, x + 10, y + 36);
+    ctx.fillText(`${label} — ${factionName}`, x + 10, y + 34);
     ctx.fillStyle = ship.cargoColor || '#ffd166';
-    ctx.fillText(`${ship.cargoLabel || 'Cargo'} x${ship.cargo || 0}`, x + 10, y + 54);
+    ctx.fillText(`${ship.cargoLabel || 'Cargo'} x${ship.cargo || 0}`, x + 10, y + 50);
     ctx.fillStyle = '#9fb4d9';
     if (ship.disabled) {
-      ctx.fillText(isCarrier ? 'Disabled: Press E to board' : 'Disabled: Press E to seize', x + 10, y + 72);
+      ctx.fillText(isCarrier ? 'Disabled: Press E to board' : 'Disabled: Press E to seize', x + 10, y + 64);
     } else {
-      ctx.fillText(isCarrier ? 'Disable to board' : 'Disable to seize cargo', x + 10, y + 72);
+      ctx.fillText(isCarrier ? 'Disable to board' : 'Disable to seize cargo', x + 10, y + 64);
     }
     ctx.restore();
   }
@@ -11976,9 +11972,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const targets = getHyperTargets();
     const maxRange = getHyperRange();
     const radarRange = maxRange * HYPER.radarRangeMult;
-    const centerX = 96;
-    const centerY = 110;
-    const radius = 52;
+    const centerX = 88;
+    const centerY = 98;
+    const radius = 44;
     const alpha = (state.mode === 'hyper' ? 0.95 : 0.65) * getHudAlpha();
     const menuTargets = state.mode === 'hyper' ? getHyperMenuTargets() : null;
     const selected = menuTargets && menuTargets.length
@@ -12157,8 +12153,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const { encounter, distance } = alert;
     const label = encounter.type === 'raid' ? 'Convoy Raid' : 'Convoy Transit';
     const color = encounter.type === 'raid' ? '#ff6b6b' : '#ffd166';
-    const panelW = 200;
-    const panelH = 48;
+    const panelW = 170;
+    const panelH = 42;
     const x = VIEW.width - panelW - 16;
     const y = 96;
     ctx.save();
@@ -12168,10 +12164,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.strokeStyle = toRgba(color, 0.6);
     ctx.strokeRect(x, y, panelW, panelH);
     ctx.fillStyle = color;
-    ctx.font = '12px sans-serif';
-    ctx.fillText(label, x + 10, y + 18);
+    ctx.font = '11px sans-serif';
+    ctx.fillText(label, x + 10, y + 16);
     ctx.fillStyle = '#e0f2ff';
-    ctx.fillText(`${Math.round(distance)}m`, x + 10, y + 36);
+    ctx.fillText(`${Math.round(distance)}m`, x + 10, y + 32);
     ctx.restore();
   }
 
@@ -12245,8 +12241,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         });
       }
     }
-    const width = 320;
-    const height = lines.length * 16 + 12;
+    const width = 270;
+    const height = lines.length * 14 + 12;
     const x = VIEW.width - width - 16;
     const y = 12;
     ctx.save();
@@ -12255,10 +12251,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillRect(x, y, width, height);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
     ctx.strokeRect(x, y, width, height);
-    ctx.font = '12px sans-serif';
+    ctx.font = '11px sans-serif';
     lines.forEach((line, idx) => {
       ctx.fillStyle = line.color;
-      ctx.fillText(line.text, x + 10, y + 20 + idx * 16);
+      ctx.fillText(line.text, x + 10, y + 20 + idx * 14);
     });
     ctx.restore();
   }
@@ -12745,10 +12741,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText(`Estimated Cargo Value: ${Math.round(cargoValue)} credits`, 24, infoY + options.length * 22 + 28);
     ctx.fillText(`Service Costs: Repair ${costs.baseRepair} | Fuel ${costs.baseFuel} | Hyper ${costs.baseHyper}`, 24, infoY + options.length * 22 + 46);
 
-    const ledgerX = VIEW.width - 320;
-    const ledgerY = 120;
-    const ledgerW = 290;
-    const ledgerH = 180;
+    const ledgerX = VIEW.width - 360;
+    const ledgerY = 110;
+    const ledgerW = 330;
+    const ledgerH = 210;
     ctx.fillStyle = 'rgba(5,10,18,0.6)';
     ctx.fillRect(ledgerX, ledgerY, ledgerW, ledgerH);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
