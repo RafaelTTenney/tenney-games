@@ -587,12 +587,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     widthMax: 280,
     lengthMin: 0.65,
     lengthMax: 1.05,
-    convoyMin: 12,
-    convoyMaxLane: 22,
-    convoyMaxExpanse: 18,
+    convoyMin: 5,
+    convoyMaxLane: 9,
+    convoyMaxExpanse: 7,
     escortChance: 0.98,
     escortMin: 4,
-    escortMax: 8,
+    escortMax: 7,
     speedMult: 3.2
   };
 
@@ -2722,7 +2722,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     };
 
     cities.forEach((city) => {
-      const desired = city.type === 'capital' ? 14 : 12;
+      const desired = city.type === 'capital' ? 6 : 4;
       const others = cities
         .filter((other) => other.id !== city.id)
         .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
@@ -2735,12 +2735,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const maxFixPasses = 5;
     for (let pass = 0; pass < maxFixPasses; pass += 1) {
       const lowCities = cities.filter((city) => {
-        const minLinks = city.type === 'capital' ? 12 : 10;
+        const minLinks = city.type === 'capital' ? 4 : 2;
         return (degrees.get(city.id) || 0) < minLinks;
       });
       if (!lowCities.length) break;
       lowCities.forEach((city) => {
-        const minLinks = city.type === 'capital' ? 12 : 10;
+        const minLinks = city.type === 'capital' ? 4 : 2;
         const others = cities
           .filter((other) => other.id !== city.id)
           .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
@@ -2752,7 +2752,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     }
 
-    const extraLinks = Math.max(0, Math.floor(cities.length * 2.3));
+    const extraLinks = Math.max(0, Math.floor(cities.length * 0.6));
     for (let i = 0; i < extraLinks; i += 1) {
       const a = cities[Math.floor(rng() * cities.length)];
       const b = cities[Math.floor(rng() * cities.length)];
@@ -3167,7 +3167,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     }
 
-    const trafficCount = 30 + Math.floor(civicRng() * 16);
+    const trafficCount = 18 + Math.floor(civicRng() * 10);
     for (let i = 0; i < trafficCount; i += 1) {
       const type = CIVILIAN_TYPES[Math.floor(civicRng() * CIVILIAN_TYPES.length)];
       const civFaction = civicFactionId;
@@ -3221,14 +3221,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       seedRouteTraffic(sector, route, civicRng, route.trafficBoost || 1.6);
       seedRouteEncounters(sector, route, civicRng, city);
     });
-    if (city) attachCitySpurs(sector, city, laneRoutes);
-    if (city) {
-      const extraRoutes = ensureCityRoutes(sector, city, civicRng);
-      extraRoutes.forEach((route) => {
-        seedRouteTraffic(sector, route, civicRng, route.trafficBoost || 1.5);
-        seedRouteEncounters(sector, route, civicRng, city);
-      });
-    }
 
     if (city) {
       const serviceCount = 8 + Math.floor(civicRng() * 6);
@@ -3742,6 +3734,31 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     }
 
+    if (sector.objects.tradeRoutes.length) {
+      const needDepot = sector.objects.stations.length === 0;
+      const extraDepot = rng() < 0.25;
+      const depotCount = (needDepot ? 1 : 0) + (extraDepot ? 1 : 0);
+      for (let i = 0; i < depotCount; i += 1) {
+        const route = sector.objects.tradeRoutes[Math.floor(rng() * sector.objects.tradeRoutes.length)];
+        if (!route) break;
+        const t = randRange(rng, 0.2, 0.8);
+        const offset = randRange(rng, -route.width * 0.25, route.width * 0.25);
+        const dx = route.x2 - route.x1;
+        const dy = route.y2 - route.y1;
+        const sx = route.x1 + dx * t + route.nx * offset;
+        const sy = route.y1 + dy * t + route.ny * offset;
+        if (sector.objects.stations.some((station) => dist(station.x, station.y, sx, sy) < 120)) continue;
+        sector.objects.stations.push(makeStation({
+          x: sx,
+          y: sy,
+          radius: randRange(rng, 58, 80),
+          biome: sector.biome,
+          type: 'waystation',
+          name: 'Route Fuel Depot'
+        }));
+      }
+    }
+
     const allowRandomRoutes = false;
     const routeChance = sector.isVoid
       ? TRADE_ROUTE_CONFIG.voidChance
@@ -3860,57 +3877,23 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
-    const trafficChance = (sector.isVoid ? 0.85 : isExpanse ? 1.25 : isCluster ? 1.05 : 0.95) * (1 - openSpace * 0.15);
+    const trafficChance = (sector.isVoid ? 0.65 : isExpanse ? 1.05 : isCluster ? 0.9 : 0.8) * (1 - openSpace * 0.15);
     if (rng() < trafficChance) {
       const trafficCount = sector.isVoid
-        ? 4 + Math.floor(rng() * 5)
-        : 6 + Math.floor(rng() * (sector.isCore ? 10 : 8));
+        ? 3 + Math.floor(rng() * 4)
+        : 5 + Math.floor(rng() * (sector.isCore ? 7 : 5));
       const routes = sector.objects.tradeRoutes || [];
       const preferRoute = routes.length && rng() < 0.75;
       if (preferRoute) {
-        const convoyGroups = Math.max(2, Math.floor(trafficCount / 2));
+        const convoyGroups = Math.max(1, Math.floor(trafficCount / 3));
         for (let i = 0; i < convoyGroups; i += 1) {
           const route = routes[Math.floor(rng() * routes.length)];
           if (!route) continue;
-          const convoyId = `${sector.key}-civconvoy-${i}-${Math.floor(rng() * 9999)}`;
-          const count = 3 + Math.floor(rng() * 2);
-          const spacing = 0.015 + rng() * 0.01;
-          const baseT = rng();
-          const routeDir = rng() < 0.5 ? 1 : -1;
-          for (let j = 0; j < count; j += 1) {
-            const type = CIVILIAN_TYPES[Math.floor(rng() * CIVILIAN_TYPES.length)];
-            spawnCivilianShip(sector, {
-              rng,
-              route,
-              routeT: (baseT + (j - (count - 1) / 2) * spacing) % 1,
-              routeDir,
-              type,
-              convoyId,
-              convoyRole: j === Math.floor(count / 2) ? 'lead' : 'wing'
-            });
-          }
-          if (rng() < 0.75) {
-            const escortCount = 2 + Math.floor(rng() * 2);
-            for (let e = 0; e < escortCount; e += 1) {
-              const def = FRIENDLY_TYPES[Math.floor(rng() * FRIENDLY_TYPES.length)];
-              const escortT = (baseT + (e - escortCount / 2) * spacing) % 1;
-              const escortOffset = randRange(rng, -route.width * 0.4, route.width * 0.4);
-              const ex = route.x1 + (route.x2 - route.x1) * escortT + route.nx * escortOffset;
-              const ey = route.y1 + (route.y2 - route.y1) * escortT + route.ny * escortOffset;
-              spawnFriendly(def.id, ex, ey, {
-                sector,
-                angle: route.angle + (routeDir < 0 ? Math.PI : 0),
-                faction: route.faction || sector.faction?.id || 'neutral',
-                routeId: route.id,
-                routeT: escortT,
-                routeDir,
-                routeOffset: escortOffset,
-                convoyId,
-                guard: true,
-                rng
-              });
-            }
-          }
+          spawnConvoyOnRoute(sector, route, rng, {
+            count: 6 + Math.floor(rng() * 3),
+            escortCount: 4 + Math.floor(rng() * 3),
+            escortChance: 1
+          });
         }
       } else {
         for (let i = 0; i < trafficCount; i += 1) {
@@ -3937,42 +3920,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             sway: rng() * Math.PI * 2
           });
         }
-      }
-    }
-
-    if (isExpanse && rng() < (sector.isVoid ? 0.55 : 0.4)) {
-      const convoyCount = 2 + Math.floor(rng() * (sector.isVoid ? 2 : 3));
-      const angle = rng() * Math.PI * 2;
-      const dir = { x: Math.cos(angle), y: Math.sin(angle) };
-      const perp = { x: -dir.y, y: dir.x };
-      const length = WORLD.sectorSize * randRange(rng, 0.4, 0.7);
-      const midOffset = randRange(rng, -WORLD.sectorSize * 0.25, WORLD.sectorSize * 0.25);
-      const mid = { x: center.x + perp.x * midOffset, y: center.y + perp.y * midOffset };
-      const route = {
-        id: `${sector.key}-drift-route-${Math.floor(rng() * 9999)}`,
-        x1: mid.x - dir.x * length * 0.5,
-        y1: mid.y - dir.y * length * 0.5,
-        x2: mid.x + dir.x * length * 0.5,
-        y2: mid.y + dir.y * length * 0.5,
-        width: randRange(rng, 80, 140),
-        hidden: false,
-        source: 'risk',
-        risk: true,
-        trafficBoost: 1.5
-      };
-      const dx = route.x2 - route.x1;
-      const dy = route.y2 - route.y1;
-      route.length = Math.hypot(dx, dy);
-      route.angle = Math.atan2(dy, dx);
-      route.nx = -dy / (route.length || 1);
-      route.ny = dx / (route.length || 1);
-      sector.objects.tradeRoutes.push(route);
-
-      for (let i = 0; i < convoyCount; i += 1) {
-        spawnConvoyOnRoute(sector, route, rng, {
-          count: 2 + Math.floor(rng() * 3),
-          escortChance: 0.85
-        });
       }
     }
 
@@ -5485,7 +5432,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const convoyId = options.convoyId || `${sector.key}-convoy-${Math.floor(rng() * 1e6)}`;
     const routeDir = options.routeDir ?? (rng() < 0.5 ? 1 : -1);
     const baseT = options.routeT ?? rng();
-    const count = options.count ?? (2 + Math.floor(rng() * 3));
+    const baseCargoCount = 6 + Math.floor(rng() * 3);
+    const count = Math.max(options.count ?? 0, baseCargoCount);
     const spacing = options.spacing ?? (0.014 + rng() * 0.012);
     const convoyFaction = options.faction || pickRouteFaction(route, rng, sector.faction?.id || 'neutral');
     const manifest = options.manifest || pickCargoManifest(rng);
@@ -5523,7 +5471,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (withEscorts) {
       const baseEscorts = options.escortCount
         ?? (TRADE_ROUTE_CONFIG.escortMin + Math.floor(rng() * (TRADE_ROUTE_CONFIG.escortMax - TRADE_ROUTE_CONFIG.escortMin + 1)));
-      const escortCount = Math.max(2, Math.round(baseEscorts * (1.05 + (count - 2) * 0.12)));
+      let escortCount = Math.max(3, Math.round(baseEscorts * (1.02 + Math.max(0, count - 6) * 0.08)));
+      const minTotal = 10;
+      if (count + escortCount < minTotal) escortCount = minTotal - count;
       const dx = route.x2 - route.x1;
       const dy = route.y2 - route.y1;
       for (let i = 0; i < escortCount; i += 1) {
@@ -5558,10 +5508,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ? TRADE_ROUTE_CONFIG.convoyMaxExpanse
         : TRADE_ROUTE_CONFIG.convoyMin + 1;
     const baseCount = TRADE_ROUTE_CONFIG.convoyMin + Math.floor(rng() * (convoyMax - TRADE_ROUTE_CONFIG.convoyMin + 1));
-    const convoyGroups = Math.max(1, Math.round(baseCount * boost * riskBoost * 1.2));
+    const convoyGroups = Math.max(1, Math.round(baseCount * boost * riskBoost));
     for (let i = 0; i < convoyGroups; i += 1) {
       spawnConvoyOnRoute(sector, route, rng, {
-        count: 4 + Math.floor(rng() * 3),
+        count: 6 + Math.floor(rng() * 3),
         escortChance: Math.min(1, TRADE_ROUTE_CONFIG.escortChance * (0.95 + boost * 0.25 + (route.risk ? 0.2 : 0)))
       });
     }
@@ -8039,9 +7989,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const isCivic = sector.isCivic;
     const isExpanse = sector.zoneType === 'expanse';
     const isLane = sector.zoneType === 'lane';
-    const targetCiv = isCivic ? 52 : isExpanse ? 40 : isLane ? 32 : 18;
-    const targetFriendly = isCivic ? 14 : isExpanse ? 10 : isLane ? 7 : 4;
-    const targetTraders = isCivic ? 8 : isExpanse ? 6 : 4;
+    const targetCiv = isCivic ? 32 : isExpanse ? 26 : isLane ? 22 : 12;
+    const targetFriendly = isCivic ? 10 : isExpanse ? 8 : isLane ? 6 : 3;
+    const targetTraders = isCivic ? 6 : isExpanse ? 5 : 3;
 
     const rng = Math.random;
     const routes = sector.objects.tradeRoutes || [];
@@ -8053,9 +8003,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     const spawnCiv = Math.max(0, targetCiv - civCount);
     if (spawnCiv > 0) {
-      const convoyGroups = Math.max(2, Math.ceil(spawnCiv / 3));
+      const convoyGroups = Math.max(1, Math.ceil(spawnCiv / 4));
       for (let i = 0; i < convoyGroups; i += 1) {
-        spawnConvoyOnRoute(sector, route, rng, { count: 3 + Math.floor(rng() * 3) });
+        spawnConvoyOnRoute(sector, route, rng, {
+          count: 6 + Math.floor(rng() * 3),
+          escortCount: 4 + Math.floor(rng() * 3),
+          escortChance: 1
+        });
       }
     }
 
@@ -11801,7 +11755,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function drawMiniMap() {
-    const mapSize = 110;
+    const scale = clamp(state.hudScale || 1, 0.7, 1.3);
+    const mapSize = Math.round(110 * scale);
     const padding = 12;
     const mapX = VIEW.width - mapSize - padding;
     const mapY = padding;
@@ -11842,7 +11797,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           ctx.strokeStyle = PALETTE.gold;
           ctx.strokeRect(cellX + 1, cellY + 1, cellSize - 2, cellSize - 2);
         }
-        if (sector.objects.bases.length && !world.baseClaims?.[sector.key]) {
+        if (sector.objects.bases.some((base) => !base.hidden) && !world.baseClaims?.[sector.key]) {
           ctx.fillStyle = 'rgba(255,107,107,0.85)';
           ctx.fillRect(cellX + cellSize * 0.35, cellY + cellSize * 0.35, cellSize * 0.3, cellSize * 0.3);
         }
@@ -11913,17 +11868,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const hudAlpha = getHudAlpha();
     ctx.save();
     ctx.globalAlpha = hudAlpha;
-    const panelWidth = 250;
-    const panelHeight = 138;
+    const scale = clamp(state.hudScale || 1, 0.7, 1.3);
+    const panelWidth = Math.round(250 * scale);
+    const panelHeight = Math.round(138 * scale);
     const panelTop = VIEW.height - panelHeight - 12;
     ctx.fillStyle = 'rgba(5,10,18,0.55)';
     ctx.fillRect(12, panelTop, panelWidth, panelHeight);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
     ctx.strokeRect(12, panelTop, panelWidth, panelHeight);
     ctx.fillStyle = PALETTE.glow;
-    ctx.font = '11px sans-serif';
+    ctx.font = `${Math.max(9, Math.round(11 * scale))}px sans-serif`;
     let lineY = panelTop + 16;
-    const lineGap = 14;
+    const lineGap = Math.round(14 * scale);
     if (state.inNoFireZone) {
       ctx.fillStyle = PALETTE.gold;
       ctx.fillText('NO-FIRE ZONE', 22, lineY);
@@ -12102,6 +12058,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function drawNavigationHud(sector) {
     const hudAlpha = getHudAlpha();
+    const scale = clamp(state.hudScale || 1, 0.7, 1.3);
     const lines = [];
     const biomeName = BIOMES[sector.biome]?.name || sector.biome;
     const biomeNote = BIOME_NOTES[sector.biome] || 'Unknown conditions.';
@@ -12157,8 +12114,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     lines.push({ text: 'Cargo sells for credits; fuel cells refine into fuel/hyper.', color: '#9fb4d9' });
     lines.push({ text: 'Reputation affects prices; negative rep triggers guards.', color: '#9fb4d9' });
     if (!lines.length) return;
-    const width = 430;
-    const height = lines.length * 14 + 12;
+    const width = Math.round(430 * scale);
+    const lineGap = Math.round(14 * scale);
+    const height = lines.length * lineGap + Math.round(12 * scale);
     const x = VIEW.centerX - width / 2;
     const y = 8;
     ctx.save();
@@ -12167,10 +12125,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillRect(x, y, width, height);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
     ctx.strokeRect(x, y, width, height);
-    ctx.font = '11px sans-serif';
+    ctx.font = `${Math.max(9, Math.round(11 * scale))}px sans-serif`;
     lines.forEach((line, index) => {
       ctx.fillStyle = line.color;
-      ctx.fillText(line.text, x + 12, y + 20 + index * 14);
+      ctx.fillText(line.text, x + Math.round(12 * scale), y + Math.round(20 * scale) + index * lineGap);
     });
     ctx.restore();
   }
@@ -12178,7 +12136,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function drawSignalScope() {
     const sector = getCurrentSector();
     if (!sector) return;
-    const { radius, range } = SIGNAL_SCOPE;
+    const scale = clamp(state.hudScale || 1, 0.7, 1.3);
+    const radius = SIGNAL_SCOPE.radius * scale;
+    const range = SIGNAL_SCOPE.range;
     const baseX = SIGNAL_SCOPE.x ?? 96;
     const baseY = SIGNAL_SCOPE.y ?? 248;
     const centerX = clamp(baseX, radius + 14, VIEW.width - radius - 14);
@@ -12273,7 +12233,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.restore();
 
     ctx.fillStyle = 'rgba(159,180,217,0.8)';
-    ctx.font = '10px sans-serif';
+    ctx.font = `${Math.max(9, Math.round(10 * scale))}px sans-serif`;
     ctx.fillText('Radar', centerX - 18, centerY + radius + 18);
   }
 
@@ -12309,12 +12269,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function drawCargoManifestPanel() {
     const target = findNearestCargoShip();
     if (!target) return;
+    const scale = clamp(state.hudScale || 1, 0.7, 1.3);
     const ship = target.ship;
     const factionName = ship.faction ? (FACTIONS.find((f) => f.id === ship.faction)?.name || ship.faction) : 'Unknown';
     const isCarrier = ship.role === 'carrier';
     const label = target.kind === 'enemy' ? (isCarrier ? 'Hostile Carrier' : 'Hostile Transport') : (isCarrier ? 'Carrier' : 'Transport');
-    const panelW = 210;
-    const panelH = 70;
+    const panelW = Math.round(210 * scale);
+    const panelH = Math.round(70 * scale);
     const x = VIEW.width - panelW - 16;
     const y = VIEW.height - panelH - 140;
     ctx.save();
@@ -12324,17 +12285,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.strokeStyle = ship.cargoColor || '#ffd166';
     ctx.strokeRect(x, y, panelW, panelH);
     ctx.fillStyle = '#e0f2ff';
-    ctx.font = '11px sans-serif';
-    ctx.fillText('Cargo Manifest', x + 10, y + 18);
+    ctx.font = `${Math.max(9, Math.round(11 * scale))}px sans-serif`;
+    ctx.fillText('Cargo Manifest', x + Math.round(10 * scale), y + Math.round(18 * scale));
     ctx.fillStyle = '#9fb4d9';
-    ctx.fillText(`${label} — ${factionName}`, x + 10, y + 34);
+    ctx.fillText(`${label} — ${factionName}`, x + Math.round(10 * scale), y + Math.round(34 * scale));
     ctx.fillStyle = ship.cargoColor || '#ffd166';
-    ctx.fillText(`${ship.cargoLabel || 'Cargo'} x${ship.cargo || 0}`, x + 10, y + 50);
+    ctx.fillText(`${ship.cargoLabel || 'Cargo'} x${ship.cargo || 0}`, x + Math.round(10 * scale), y + Math.round(50 * scale));
     ctx.fillStyle = '#9fb4d9';
     if (ship.disabled) {
-      ctx.fillText(isCarrier ? 'Disabled: Press E to board' : 'Disabled: Press E to seize', x + 10, y + 64);
+      ctx.fillText(isCarrier ? 'Disabled: Press E to board' : 'Disabled: Press E to seize', x + Math.round(10 * scale), y + Math.round(64 * scale));
     } else {
-      ctx.fillText(isCarrier ? 'Disable to board' : 'Disable to seize cargo', x + 10, y + 64);
+      ctx.fillText(isCarrier ? 'Disable to board' : 'Disable to seize cargo', x + Math.round(10 * scale), y + Math.round(64 * scale));
     }
     ctx.restore();
   }
@@ -12342,12 +12303,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function drawHyperRadar() {
     const sector = getCurrentSector();
     if (!sector) return;
+    const scale = clamp(state.hudScale || 1, 0.7, 1.3);
     const targets = getHyperTargets();
     const maxRange = getHyperRange();
     const radarRange = maxRange * HYPER.radarRangeMult;
     const centerX = 88;
     const centerY = 98;
-    const radius = 44;
+    const radius = 44 * scale;
     const alpha = (state.mode === 'hyper' ? 0.95 : 0.65) * getHudAlpha();
     const menuTargets = state.mode === 'hyper' ? getHyperMenuTargets() : null;
     const selected = menuTargets && menuTargets.length
@@ -12389,13 +12351,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const isSelected = selected && selected.id === target.id;
       ctx.fillStyle = inRange ? 'rgba(154,214,255,0.9)' : 'rgba(154,214,255,0.35)';
       ctx.beginPath();
-      ctx.arc(tx, ty, isSelected ? 4.6 : inRange ? 3.4 : 2.3, 0, Math.PI * 2);
+      ctx.arc(tx, ty, (isSelected ? 4.6 : inRange ? 3.4 : 2.3) * scale, 0, Math.PI * 2);
       ctx.fill();
     });
     ctx.restore();
 
     ctx.fillStyle = 'rgba(154,214,255,0.8)';
-    ctx.font = '10px sans-serif';
+    ctx.font = `${Math.max(9, Math.round(10 * scale))}px sans-serif`;
     ctx.fillText('Hyper Echoes', centerX - 34, centerY + radius + 18);
     ctx.fillStyle = 'rgba(159,180,217,0.8)';
     ctx.fillText(`Dial ${getHyperChargeLevel() * 10}%`, centerX - 24, centerY + radius + 32);
@@ -12523,11 +12485,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function drawConvoyAlert(sector) {
     const alert = getNearestConvoyAlert(sector);
     if (!alert) return;
+    const scale = clamp(state.hudScale || 1, 0.7, 1.3);
     const { encounter, distance } = alert;
     const label = encounter.type === 'raid' ? 'Convoy Raid' : 'Convoy Transit';
     const color = encounter.type === 'raid' ? '#ff6b6b' : '#ffd166';
-    const panelW = 170;
-    const panelH = 42;
+    const panelW = Math.round(170 * scale);
+    const panelH = Math.round(42 * scale);
     const x = VIEW.width - panelW - 16;
     const y = 96;
     ctx.save();
@@ -12537,10 +12500,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.strokeStyle = toRgba(color, 0.6);
     ctx.strokeRect(x, y, panelW, panelH);
     ctx.fillStyle = color;
-    ctx.font = '11px sans-serif';
-    ctx.fillText(label, x + 10, y + 16);
+    ctx.font = `${Math.max(9, Math.round(11 * scale))}px sans-serif`;
+    ctx.fillText(label, x + Math.round(10 * scale), y + Math.round(16 * scale));
     ctx.fillStyle = '#e0f2ff';
-    ctx.fillText(`${Math.round(distance)}m`, x + 10, y + 32);
+    ctx.fillText(`${Math.round(distance)}m`, x + Math.round(10 * scale), y + Math.round(32 * scale));
     ctx.restore();
   }
 
@@ -12595,6 +12558,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function drawContractsHud() {
     if (!mission.active && !contract.active) return;
+    const scale = clamp(state.hudScale || 1, 0.7, 1.3);
     const lines = [];
     const missionTarget = getMissionTargetData();
     if (mission.active) {
@@ -12614,8 +12578,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         });
       }
     }
-    const width = 270;
-    const height = lines.length * 14 + 12;
+    const width = Math.round(270 * scale);
+    const lineGap = Math.round(14 * scale);
+    const height = lines.length * lineGap + Math.round(12 * scale);
     const x = VIEW.width - width - 16;
     const y = 12;
     ctx.save();
@@ -12624,10 +12589,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillRect(x, y, width, height);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
     ctx.strokeRect(x, y, width, height);
-    ctx.font = '11px sans-serif';
+    ctx.font = `${Math.max(9, Math.round(11 * scale))}px sans-serif`;
     lines.forEach((line, idx) => {
       ctx.fillStyle = line.color;
-      ctx.fillText(line.text, x + 10, y + 20 + idx * 14);
+      ctx.fillText(line.text, x + Math.round(10 * scale), y + Math.round(20 * scale) + idx * lineGap);
     });
     ctx.restore();
   }
@@ -13492,10 +13457,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drawEntities(camera, sector);
     drawHyperJumpFX();
     const hudMode = state.hudMode || 'full';
-    const hudScale = clamp(state.hudScale || 1, 0.7, 1.3);
-    ctx.save();
-    ctx.translate(VIEW.centerX * (1 - hudScale), VIEW.centerY * (1 - hudScale));
-    ctx.scale(hudScale, hudScale);
     if (hudMode === 'full') drawMiniMap();
     drawShipStatus();
     if (hudMode === 'full') {
@@ -13510,7 +13471,6 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drawGateIndicator();
     drawHomeIndicator();
     drawConvergenceIndicator();
-    ctx.restore();
     drawVignette();
     drawOverlay();
   }
