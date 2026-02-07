@@ -35,6 +35,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   const upgradeButtons = Array.from(document.querySelectorAll('[data-swarm-upgrade]'));
   const upgradeNote = document.getElementById('swarm-upgrade-note');
+  const hudScaleInput = document.getElementById('swarm-hud-scale');
+  const hudScaleValue = document.getElementById('swarm-hud-scale-value');
 
   const input = {
     keys: {},
@@ -99,6 +101,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     hpRatio: 0.22,
     shieldMax: 6,
     range: 70
+  };
+
+  const GUARD_AI = {
+    engageRange: 1200,
+    leashRange: 1600,
+    breakoffRange: 1900,
+    chaseSpeedMult: 1.15,
+    returnSpeedMult: 1.1
   };
 
   const PHYSICS = {
@@ -1592,6 +1602,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     radioCooldown: 0,
     enemyQuietTimer: 0,
     hudMode: 'full',
+    hudScale: 1,
     inNoFireZone: false,
     noFireCooldown: 0,
     scoopCooldown: 0,
@@ -1601,6 +1612,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     community: { base: {}, pending: {}, lastSync: 0, loaded: false },
     season: { id: SEASON_DEF.id, startAt: 0, endAt: 0, globalBase: {}, pending: {}, lastSync: 0 },
     seasonDistanceCheckpoint: 0,
+    mapLaneOnly: false,
+    mapTrafficFilter: 'all',
     codexSeen: false,
     codexScroll: 0,
     codexReturn: 'flight',
@@ -2706,7 +2719,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     };
 
     cities.forEach((city) => {
-      const desired = city.type === 'capital' ? 12 : 10;
+      const desired = city.type === 'capital' ? 14 : 12;
       const others = cities
         .filter((other) => other.id !== city.id)
         .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
@@ -2719,12 +2732,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const maxFixPasses = 5;
     for (let pass = 0; pass < maxFixPasses; pass += 1) {
       const lowCities = cities.filter((city) => {
-        const minLinks = city.type === 'capital' ? 10 : 9;
+        const minLinks = city.type === 'capital' ? 12 : 10;
         return (degrees.get(city.id) || 0) < minLinks;
       });
       if (!lowCities.length) break;
       lowCities.forEach((city) => {
-        const minLinks = city.type === 'capital' ? 10 : 9;
+        const minLinks = city.type === 'capital' ? 12 : 10;
         const others = cities
           .filter((other) => other.id !== city.id)
           .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
@@ -2736,7 +2749,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     }
 
-    const extraLinks = Math.max(0, Math.floor(cities.length * 1.6));
+    const extraLinks = Math.max(0, Math.floor(cities.length * 2.3));
     for (let i = 0; i < extraLinks; i += 1) {
       const a = cities[Math.floor(rng() * cities.length)];
       const b = cities[Math.floor(rng() * cities.length)];
@@ -3097,11 +3110,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (city) attachCitySpurs(sector, city, laneRoutes);
 
     if (city) {
-      const escortCount = 12 + Math.floor(civicRng() * 8);
+      const escortCount = 14 + Math.floor(civicRng() * 10);
       for (let i = 0; i < escortCount; i += 1) {
-        const def = FRIENDLY_TYPES[Math.floor(civicRng() * FRIENDLY_TYPES.length)];
+        const roll = civicRng();
+        const def = roll < 0.45
+          ? FRIENDLY_TYPES.find((entry) => entry.id === 'patrol') || FRIENDLY_TYPES[0]
+          : roll < 0.8
+            ? FRIENDLY_TYPES.find((entry) => entry.id === 'guardian') || FRIENDLY_TYPES[0]
+            : FRIENDLY_TYPES.find((entry) => entry.id === 'escort') || FRIENDLY_TYPES[0];
         const angle = randRange(civicRng, 0, Math.PI * 2);
-        const radius = randRange(civicRng, city.radius + 320, city.radius + 720);
+        const radius = randRange(civicRng, city.radius + 520, city.radius + 980);
         spawnFriendly(def.id, city.x + Math.cos(angle) * radius, city.y + Math.sin(angle) * radius, {
           sector,
           angle: angle + Math.PI / 2,
@@ -3110,6 +3128,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           orbitRadius: radius,
           orbitAngle: angle,
           guard: true,
+          guardEngage: (city.radius || 160) + GUARD_AI.engageRange,
+          guardLeash: (city.radius || 160) + GUARD_AI.leashRange,
+          guardBreakoff: (city.radius || 160) + GUARD_AI.breakoffRange,
           rng: civicRng
         });
       }
@@ -4556,6 +4577,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.enemyQuietTimer = 0;
       state.routeLock = { active: false, id: '' };
       state.hudMode = 'full';
+      state.hudScale = 1;
       state.inNoFireZone = false;
       state.noFireCooldown = 0;
       state.scoopCooldown = 0;
@@ -4565,6 +4587,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.community = { base: {}, pending: {}, lastSync: 0, loaded: false };
       state.season = { id: SEASON_DEF.id, startAt: 0, endAt: 0, globalBase: {}, pending: {}, lastSync: 0 };
       state.seasonDistanceCheckpoint = 0;
+      state.mapLaneOnly = false;
+      state.mapTrafficFilter = 'all';
       state.codexSeen = false;
       state.codexScroll = 0;
       state.codexReturn = 'flight';
@@ -5153,6 +5177,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       orbitAngle: options.orbitAngle || 0,
       convoyId: options.convoyId || '',
       guard: options.guard || false,
+      guardState: options.guardState || (options.guard ? 'orbit' : ''),
+      guardEngage: options.guardEngage || 0,
+      guardLeash: options.guardLeash || 0,
+      guardBreakoff: options.guardBreakoff || 0,
       lastDamageSource: ''
     };
     if (options.sector?.objects?.friendlies) {
@@ -7635,15 +7663,64 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         const maxShield = ship.maxShield ?? (ship.maxHp ? ship.maxHp * 0.45 : 60);
         ship.shield = clamp(ship.shield + dt * 6, 0, maxShield);
       }
+      let moved = false;
       if (ship.routeId && routeMap) {
         const route = routeMap.get(ship.routeId);
         advanceRouteEntity(ship, route, dt);
-      } else if (ship.anchor) {
+        moved = true;
+      }
+
+      if (!moved && ship.guard && ship.anchor) {
+        const guardEngage = ship.guardEngage || GUARD_AI.engageRange;
+        const guardLeash = ship.guardLeash || GUARD_AI.leashRange;
+        const guardBreakoff = ship.guardBreakoff || GUARD_AI.breakoffRange;
+        if (!ship.guardState) ship.guardState = 'orbit';
+        const hostileToPlayer = isFactionAggressive(ship.faction);
+        const distToPlayer = dist(ship.x, ship.y, player.x, player.y);
+        const distFromAnchor = dist(ship.x, ship.y, ship.anchor.x, ship.anchor.y);
+        const playerInSafeZone = isNoFireZone(player.x, player.y);
+
+        if (ship.guardState === 'orbit') {
+          if (hostileToPlayer && !playerInSafeZone && distToPlayer < guardEngage && distFromAnchor < guardLeash) {
+            ship.guardState = 'chase';
+          }
+        } else if (ship.guardState === 'chase') {
+          if (!hostileToPlayer || playerInSafeZone || distFromAnchor > guardBreakoff || distToPlayer > guardEngage * 1.4) {
+            ship.guardState = 'return';
+          }
+        } else if (ship.guardState === 'return') {
+          if (distFromAnchor < (ship.orbitRadius || 260) * 0.9) {
+            ship.guardState = 'orbit';
+          }
+        }
+
+        if (ship.guardState === 'orbit') {
+          ship.orbitAngle = (ship.orbitAngle || 0) + dt * (ship.speed * 0.006);
+          ship.x = ship.anchor.x + Math.cos(ship.orbitAngle) * (ship.orbitRadius || 220);
+          ship.y = ship.anchor.y + Math.sin(ship.orbitAngle) * (ship.orbitRadius || 220);
+          ship.angle = ship.orbitAngle + Math.PI / 2;
+        } else {
+          const target = ship.guardState === 'chase' ? player : ship.anchor;
+          const targetAngle = Math.atan2(target.y - ship.y, target.x - ship.x);
+          const delta = Math.atan2(Math.sin(targetAngle - ship.angle), Math.cos(targetAngle - ship.angle));
+          const turnRate = ship.guardState === 'chase' ? 2.2 : 1.6;
+          ship.angle += clamp(delta, -turnRate * dt, turnRate * dt);
+          const speedMult = ship.guardState === 'chase' ? GUARD_AI.chaseSpeedMult : GUARD_AI.returnSpeedMult;
+          ship.x += Math.cos(ship.angle) * ship.speed * speedMult * dt;
+          ship.y += Math.sin(ship.angle) * ship.speed * speedMult * dt;
+        }
+        moved = true;
+      }
+
+      if (!moved && ship.anchor) {
         ship.orbitAngle = (ship.orbitAngle || 0) + dt * (ship.speed * 0.006);
         ship.x = ship.anchor.x + Math.cos(ship.orbitAngle) * (ship.orbitRadius || 220);
         ship.y = ship.anchor.y + Math.sin(ship.orbitAngle) * (ship.orbitRadius || 220);
         ship.angle = ship.orbitAngle + Math.PI / 2;
-      } else {
+        moved = true;
+      }
+
+      if (!moved) {
         ship.angle += dt * 0.4;
         ship.x += Math.cos(ship.angle) * ship.speed * dt;
         ship.y += Math.sin(ship.angle) * ship.speed * dt;
@@ -7700,7 +7777,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function updateTraffic(dt) {
     const sector = getCurrentSector();
-    if (!sector || sector.isCivic) return;
+    if (!sector) return;
     state.trafficSpawnTimer = Math.max(0, (state.trafficSpawnTimer || 0) - dt);
     if (state.trafficSpawnTimer > 0) return;
     state.trafficSpawnTimer = 2.6 + Math.random() * 3.8;
@@ -7708,16 +7785,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const civCount = sector.objects.civilians?.length || 0;
     const friendlyCount = sector.objects.friendlies?.length || 0;
     const traderCount = sector.objects.traders?.length || 0;
+    const isCivic = sector.isCivic;
     const isExpanse = sector.zoneType === 'expanse';
     const isLane = sector.zoneType === 'lane';
-    const targetCiv = isExpanse ? 40 : isLane ? 32 : 18;
-    const targetFriendly = isExpanse ? 10 : isLane ? 7 : 4;
-    const targetTraders = isExpanse ? 6 : 4;
+    const targetCiv = isCivic ? 52 : isExpanse ? 40 : isLane ? 32 : 18;
+    const targetFriendly = isCivic ? 14 : isExpanse ? 10 : isLane ? 7 : 4;
+    const targetTraders = isCivic ? 8 : isExpanse ? 6 : 4;
 
     const rng = Math.random;
     const routes = sector.objects.tradeRoutes || [];
     if (!routes.length) return;
-    const route = routes[Math.floor(rng() * routes.length)];
+    const nearest = getNearestTradeRoute(sector, player.x, player.y);
+    const route = (nearest && nearest.distance < (nearest.route.width || 160) * 1.8)
+      ? nearest.route
+      : routes[Math.floor(rng() * routes.length)];
 
     const spawnCiv = Math.max(0, targetCiv - civCount);
     if (spawnCiv > 0) {
@@ -12308,6 +12389,17 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText(`${label} ${Math.round(distance)}m`, x - 34, y - 12);
   }
 
+  function hasCityNearby(gx, gy, radius = 2) {
+    if (!world.cities || !world.cities.length) return false;
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        const key = sectorKey(gx + dx, gy + dy);
+        if (world.cityMap?.has(key)) return true;
+      }
+    }
+    return false;
+  }
+
   function drawGalaxyMap() {
     ctx.fillStyle = 'rgba(5,10,18,0.85)';
     ctx.fillRect(0, 0, VIEW.width, VIEW.height);
@@ -12315,15 +12407,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.font = '20px sans-serif';
     ctx.fillText('Aetherline Sector Grid', 24, 36);
     ctx.font = '12px sans-serif';
-    ctx.fillText('Press M to close map.', 24, 54);
+    ctx.fillText('Press M to close map. L toggles lane view. T toggles traffic filter.', 24, 54);
+    ctx.fillText(`Lane View: ${state.mapLaneOnly ? 'ON' : 'OFF'} | Traffic Filter: ${state.mapTrafficFilter === 'cities' ? 'Cities' : 'All'}`, 24, 72);
     const currentSector = getCurrentSector();
     ctx.fillStyle = '#e0f2ff';
-    ctx.fillText(`System: ${currentSector.name}`, 24, 74);
-    ctx.fillText(`Faction: ${currentSector.faction?.name || 'Unaligned'}`, 24, 92);
-    ctx.fillText(`Alignment: ${player.affiliation ? (FACTIONS.find((f) => f.id === player.affiliation)?.name || player.affiliation) : 'Unaligned'}`, 24, 110);
+    ctx.fillText(`System: ${currentSector.name}`, 24, 92);
+    ctx.fillText(`Faction: ${currentSector.faction?.name || 'Unaligned'}`, 24, 110);
+    ctx.fillText(`Alignment: ${player.affiliation ? (FACTIONS.find((f) => f.id === player.affiliation)?.name || player.affiliation) : 'Unaligned'}`, 24, 128);
     ctx.fillStyle = '#9fb4d9';
-    ctx.fillText('Biomes form clustered pockets; Interstice Expanse are wide void lanes between clusters.', 24, 128);
-    ctx.fillText('Props and hazards change per biome. Hubs are marked by bright station rings.', 24, 146);
+    ctx.fillText('Biomes form clustered pockets; Interstice Expanse are wide void lanes between clusters.', 24, 146);
+    ctx.fillText('Props and hazards change per biome. Hubs are marked by bright station rings.', 24, 164);
 
     const stride = Math.max(1, Math.floor(WORLD.gridRadius / 24));
     const sampleSize = Math.floor((WORLD.gridRadius * 2) / stride) + 1;
@@ -12340,8 +12433,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         const visible = sector.discovered || sector.revealedUntil > state.time;
         const x = offsetX + ix * cell;
         const y = offsetY + iy * cell;
+        const cityPresent = world.cityMap?.has(sector.key);
         if (!visible) {
           ctx.fillStyle = 'rgba(60,70,90,0.4)';
+        } else if (state.mapLaneOnly && sector.zoneType !== 'lane' && !cityPresent) {
+          ctx.fillStyle = 'rgba(16,22,36,0.6)';
         } else if (sector.isVoid) {
           ctx.fillStyle = 'rgba(25,35,55,0.6)';
         } else {
@@ -12522,7 +12618,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.strokeStyle = 'rgba(109,240,255,0.25)';
     ctx.strokeRect(mapX - 12, mapY - 28, mapSize + 24, mapSize + 52);
     ctx.fillStyle = '#9fb4d9';
-    ctx.fillText('Traffic Density', mapX - 2, mapY - 10);
+    ctx.fillText(`Traffic Density (${state.mapTrafficFilter === 'cities' ? 'Cities' : 'All'})`, mapX - 2, mapY - 10);
 
     for (let gy = -mapRadius; gy <= mapRadius; gy += 1) {
       for (let gx = -mapRadius; gx <= mapRadius; gx += 1) {
@@ -12535,7 +12631,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           ctx.fillRect(cellX, cellY, cell - 1, cell - 1);
           continue;
         }
-        const density = getRouteDensityForSector(sgx, sgy);
+        let density = getRouteDensityForSector(sgx, sgy);
+        if (state.mapTrafficFilter === 'cities' && !hasCityNearby(sgx, sgy, 2)) {
+          density = 0;
+        }
         const profile = getSectorProfile(sgx, sgy);
         const alpha = 0.08 + density * 0.7;
         const tint = profile.zoneType === 'lane' ? `rgba(255,209,102,${alpha})` : `rgba(109,240,255,${alpha})`;
@@ -12546,7 +12645,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.strokeStyle = 'rgba(255,209,102,0.6)';
     ctx.strokeRect(mapX + mapRadius * cell, mapY + mapRadius * cell, cell - 1, cell - 1);
     ctx.fillStyle = '#9fb4d9';
-    ctx.fillText('Lane tiles glow gold.', mapX - 2, mapY + mapSize + 18);
+    ctx.fillText('Lane tiles glow gold. Toggle filter in map (T).', mapX - 2, mapY + mapSize + 18);
 
     const listX = 24;
     let listY = 154;
@@ -13079,6 +13178,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drawEntities(camera, sector);
     drawHyperJumpFX();
     const hudMode = state.hudMode || 'full';
+    const hudScale = clamp(state.hudScale || 1, 0.7, 1.3);
+    ctx.save();
+    ctx.translate(VIEW.centerX * (1 - hudScale), VIEW.centerY * (1 - hudScale));
+    ctx.scale(hudScale, hudScale);
     if (hudMode === 'full') drawMiniMap();
     drawShipStatus();
     if (hudMode === 'full') {
@@ -13093,6 +13196,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drawGateIndicator();
     drawHomeIndicator();
     drawConvergenceIndicator();
+    ctx.restore();
     drawVignette();
     drawOverlay();
   }
@@ -13296,12 +13400,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         failureLedger: state.failureLedger,
         tutorialSeen: state.tutorialSeen,
         hudMode: state.hudMode,
+        hudScale: state.hudScale,
         codexSeen: state.codexSeen,
         civicTutorialDone: state.civicTutorialDone,
         introCompleted: state.introCompleted,
         atlasUnlocked: state.atlasUnlocked,
         atlasCompleted: state.atlasCompleted,
         laneHinted: state.laneHinted,
+        mapLaneOnly: state.mapLaneOnly,
+        mapTrafficFilter: state.mapTrafficFilter,
         season: {
           id: state.season?.id || SEASON_DEF.id,
           startAt: state.season?.startAt || 0,
@@ -13401,11 +13508,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.failureLedger = save.state?.failureLedger || {};
     state.tutorialSeen = save.state?.tutorialSeen ?? state.tutorialSeen;
     state.hudMode = save.state?.hudMode || state.hudMode || 'full';
+    state.hudScale = save.state?.hudScale ?? state.hudScale ?? 1;
     state.codexSeen = save.state?.codexSeen ?? state.codexSeen;
     state.codexScroll = 0;
     state.codexReturn = 'flight';
     state.civicTutorialDone = save.state?.civicTutorialDone ?? state.civicTutorialDone;
     state.laneHinted = save.state?.laneHinted ?? state.laneHinted;
+    state.mapLaneOnly = save.state?.mapLaneOnly ?? state.mapLaneOnly ?? false;
+    state.mapTrafficFilter = save.state?.mapTrafficFilter || state.mapTrafficFilter || 'all';
     state.civicTutorial = { active: false, step: 0, label: '' };
     state.introCompleted = save.state?.introCompleted ?? state.introCompleted;
     state.intro = { active: !state.introCompleted, phase: 'drift', timer: 0, captureQueued: false };
@@ -13595,6 +13705,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         return;
       }
 
+      if (state.mode === 'map') {
+        handleMapInput(e.code);
+        return;
+      }
+
       if (e.code === 'KeyV' && state.mode === 'flight') {
         openHyperMap();
         return;
@@ -13711,6 +13826,26 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     });
   }
 
+  function syncHudScaleUi() {
+    if (!hudScaleInput) return;
+    const scale = clamp(state.hudScale || 1, 0.7, 1.3);
+    hudScaleInput.value = scale.toFixed(2);
+    if (hudScaleValue) hudScaleValue.textContent = `${Math.round(scale * 100)}%`;
+  }
+
+  function bindHudScaleControls() {
+    if (!hudScaleInput) return;
+    if (window.__swarmHudScaleBound) return;
+    window.__swarmHudScaleBound = true;
+    const applyScale = () => {
+      const value = Number.parseFloat(hudScaleInput.value || '1');
+      state.hudScale = clamp(value, 0.7, 1.3);
+      if (hudScaleValue) hudScaleValue.textContent = `${Math.round(state.hudScale * 100)}%`;
+    };
+    hudScaleInput.addEventListener('input', applyScale);
+    applyScale();
+  }
+
   function handleCapitalBoardInput(code) {
     if (code === 'Digit1') resolveCapitalBoard(1);
     if (code === 'Digit2') resolveCapitalBoard(2);
@@ -13820,6 +13955,23 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (!Number.isNaN(digit) && digit >= 1 && digit <= 10) {
         state.hyperNav.chargeLevel = digit;
       }
+    }
+  }
+
+  function handleMapInput(code) {
+    if (code === 'KeyM' || code === 'Escape') {
+      state.mode = 'flight';
+      state.paused = false;
+      return;
+    }
+    if (code === 'KeyL') {
+      state.mapLaneOnly = !state.mapLaneOnly;
+      noteStatus(`Map lane view ${state.mapLaneOnly ? 'ON' : 'OFF'}.`);
+      return;
+    }
+    if (code === 'KeyT') {
+      state.mapTrafficFilter = state.mapTrafficFilter === 'cities' ? 'all' : 'cities';
+      noteStatus(`Map traffic filter: ${state.mapTrafficFilter === 'cities' ? 'cities only' : 'all'}.`);
     }
   }
 
@@ -14252,6 +14404,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function initSwarm() {
     bindInputs();
+    bindHudScaleControls();
     if (!window.__swarmUiBound) {
       window.__swarmUiBound = true;
       if (startBtn) startBtn.addEventListener('click', handleStart);
@@ -14307,6 +14460,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       resetRun({ full: true });
     }
     initSeasonState();
+    syncHudScaleUi();
 
     getHighScore(GAME_ID).then((score) => {
       state.bestDistance = score || 0;

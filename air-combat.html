@@ -117,6 +117,9 @@
       max-width: 1200px;
       width: 100%;
     }
+    #swarmModal .modal-content {
+      max-width: 1400px;
+    }
     .modal-header {
       display: flex;
       justify-content: space-between;
@@ -151,7 +154,7 @@
     }
     .swarm-layout {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 260px;
+      grid-template-columns: minmax(0, 1fr) 240px;
       gap: 12px;
       align-items: start;
     }
@@ -162,6 +165,24 @@
       color: var(--muted);
       font-size: 12px;
       letter-spacing: 0.2px;
+    }
+    .swarm-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .swarm-controls label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .swarm-controls input[type="range"] {
+      width: 140px;
+      accent-color: var(--accent-3);
     }
     .swarm-briefing {
       position: absolute;
@@ -676,7 +697,7 @@
               <button class="btn" id="swarm-brief-launch">Begin Chapter</button>
             </div>
           </div>
-          <canvas id="swarm-canvas" width="900" height="560"></canvas>
+          <canvas id="swarm-canvas" width="1024" height="640"></canvas>
           <div class="hud">
             <span id="swarm-hp">Hull: 110</span>
             <span id="swarm-shield">Shield: 80</span>
@@ -685,6 +706,12 @@
             <span id="swarm-checkpoint">Checkpoint: 0/3</span>
             <span id="swarm-score">Distance: 0</span>
             <span id="swarm-objective">Objective: -</span>
+          </div>
+          <div class="swarm-controls">
+            <label>HUD Scale
+              <input type="range" id="swarm-hud-scale" min="0.75" max="1.25" step="0.05" value="1">
+              <span id="swarm-hud-scale-value">100%</span>
+            </label>
           </div>
           <div class="swarm-status" id="swarm-status"></div>
         </div>
