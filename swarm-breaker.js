@@ -52,6 +52,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   };
 
   const GAME_ID = 'spacex-exploration-flagship';
+  const BUILD_ID = '2026-02-07a';
   const SAVE_VERSION = 11;
   const SAVE_KEY = `swarmBreakerSave_v${SAVE_VERSION}`;
   const SAVE_BACKUP_KEY = `swarmBreakerSaveBackup_v${SAVE_VERSION}`;
@@ -1619,6 +1620,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     codexSeen: false,
     codexScroll: 0,
     codexReturn: 'flight',
+    debugHud: false,
+    forceCloud: false,
+    cloudDebug: { lastPull: 0, lastPush: 0, lastCloudUpdated: 0, lastDocUpdated: 0, lastError: '' },
     civicTutorialDone: false,
     civicTutorial: { active: false, step: 0, label: '' },
     introCompleted: false,
@@ -9172,6 +9176,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       route.ny = dx / (route.length || 1);
       sector.objects.tradeRoutes.push(route);
     }
+    route.contract = true;
 
     const convoyCount = 6 + Math.floor(rng() * 3);
     const convoyFaction = player.affiliation || 'aetherline';
@@ -11099,15 +11104,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const isRisk = route.risk || route.source === 'risk';
     const isSpur = route.source === 'spur';
     const isCity = route.source === 'city';
-    const base = isRisk
-      ? '#ff6b6b'
-      : getFactionColor(route.faction, isLane || isCity ? '#ffd166' : '#6df0ff');
+    const isContract = route.contract;
+    const base = isContract
+      ? '#ffd166'
+      : isRisk
+        ? '#ff6b6b'
+        : getFactionColor(route.faction, isLane || isCity ? '#ffd166' : '#6df0ff');
     const mainColor = isSpur ? mixColor(base, '#7dfc9a', 0.35) : base;
     ctx.save();
-    ctx.globalAlpha = isLane ? 0.85 : isRisk ? 0.9 : 0.7;
-    ctx.strokeStyle = toRgba(mainColor, isLane || isCity ? 0.55 : isRisk ? 0.6 : 0.4);
-    ctx.lineWidth = isLane || isCity ? 3 : isRisk ? 2.6 : 2.2;
-    ctx.setLineDash(isRisk ? [10, 8] : [14, 10]);
+    ctx.globalAlpha = isContract ? 0.95 : isLane ? 0.85 : isRisk ? 0.9 : 0.7;
+    ctx.strokeStyle = toRgba(mainColor, isContract ? 0.75 : isLane || isCity ? 0.55 : isRisk ? 0.6 : 0.4);
+    ctx.lineWidth = isContract ? 3.6 : isLane || isCity ? 3 : isRisk ? 2.6 : 2.2;
+    ctx.setLineDash(isContract ? [] : isRisk ? [10, 8] : [14, 10]);
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
@@ -12457,6 +12465,51 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.restore();
   }
 
+  function drawDebugOverlay() {
+    if (!state.debugHud) return;
+    const sector = getCurrentSector();
+    const routes = sector?.objects?.tradeRoutes || [];
+    const laneCount = routes.filter((r) => r.source === 'lane').length;
+    const riskCount = routes.filter((r) => r.source === 'risk').length;
+    const cityCount = routes.filter((r) => r.source === 'city').length;
+    const convoyShips = sector?.objects?.civilians?.filter((ship) => ship.convoyId).length || 0;
+    const convoyGroups = sector?.objects?.civilians
+      ? new Set(sector.objects.civilians.filter((ship) => ship.convoyId).map((ship) => ship.convoyId)).size
+      : 0;
+    const escortShips = sector?.objects?.friendlies?.filter((ship) => ship.convoyId).length || 0;
+    const contractConvoyShips = contract.convoyId && sector
+      ? sector.objects.civilians.filter((ship) => ship.convoyId === contract.convoyId).length
+      : 0;
+    const debugLines = [
+      `Build: ${BUILD_ID}`,
+      `Sector: ${sector?.key || '?'} ${sector?.zoneType || '?'} ${sector?.biome || ''} civic=${!!sector?.isCivic}`,
+      `World lanes: ${world.tradeLanes?.length || 0} | risk routes: ${world.riskRoutes?.length || 0} | cities: ${world.cities?.length || 0}`,
+      `Sector routes: ${routes.length} (lane ${laneCount} / risk ${riskCount} / city ${cityCount})`,
+      `Convoys: ships ${convoyShips} groups ${convoyGroups} escorts ${escortShips}`,
+      `Contract: ${contract.active ? contract.type : 'none'} convoyId=${contract.convoyId || 'n/a'} ships=${contractConvoyShips}`,
+      `Cloud: ready=${state.cloudReady} user=${state.cloudUser || 'n/a'} force=${state.forceCloud}`,
+      `Cloud times: local=${Math.round(loadLocal()?.savedAt || 0)} cloud=${Math.round(state.cloudDebug.lastCloudUpdated || 0)} doc=${Math.round(state.cloudDebug.lastDocUpdated || 0)}`,
+      `Cloud last pull=${state.cloudDebug.lastPull ? new Date(state.cloudDebug.lastPull).toLocaleTimeString() : 'n/a'} push=${state.cloudDebug.lastPush ? new Date(state.cloudDebug.lastPush).toLocaleTimeString() : 'n/a'}`,
+      state.cloudDebug.lastError ? `Cloud error: ${state.cloudDebug.lastError}` : ''
+    ].filter(Boolean);
+    const width = 420;
+    const height = debugLines.length * 14 + 12;
+    const x = 12;
+    const y = VIEW.height - height - 12;
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = 'rgba(5,10,18,0.7)';
+    ctx.fillRect(x, y, width, height);
+    ctx.strokeStyle = 'rgba(255,209,102,0.35)';
+    ctx.strokeRect(x, y, width, height);
+    ctx.fillStyle = '#e0f2ff';
+    ctx.font = '11px monospace';
+    debugLines.forEach((line, idx) => {
+      ctx.fillText(line, x + 10, y + 20 + idx * 14);
+    });
+    ctx.restore();
+  }
+
   function getHudAlpha() {
     if (state.mode === 'hyper' || state.mode === 'map' || state.mode === 'capture' || state.mode === 'capital') return 1;
     const dangerEnemy = findClosestEnemy(player.x, player.y, 900);
@@ -13488,6 +13541,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     drawGateIndicator();
     drawHomeIndicator();
     drawConvergenceIndicator();
+    drawDebugOverlay();
     drawVignette();
     drawOverlay();
   }
@@ -13902,6 +13956,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       return;
     }
     state.cloudReady = true;
+    state.cloudUser = user.uid;
     if (authNote) authNote.textContent = 'Cloud sync ready.';
     initSeasonState();
     await pullCommunityGoals();
@@ -13915,14 +13970,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const cloudUpdated = cloud?.clientUpdatedAt || 0;
       const snapUpdated = snap.updateTime?.toMillis ? snap.updateTime.toMillis() : 0;
       const effectiveUpdated = Math.max(cloudUpdated, snapUpdated);
+      state.cloudDebug.lastCloudUpdated = cloudUpdated;
+      state.cloudDebug.lastDocUpdated = snapUpdated;
+      state.cloudDebug.lastPull = Date.now();
       const local = loadLocal();
       const localUpdated = local?.savedAt || 0;
-      if (cloudSave && (effectiveUpdated >= localUpdated || !localUpdated)) {
+      if (cloudSave && (state.forceCloud || effectiveUpdated >= localUpdated || !localUpdated)) {
         applySave(cloudSave);
         noteStatus('Cloud save loaded.');
       }
     } catch (err) {
       console.warn('Cloud sync failed', err);
+      state.cloudDebug.lastError = String(err?.message || err);
     }
   }
 
@@ -13930,6 +13989,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (!state.cloudReady) return;
     const user = await waitForAuth();
     if (!user) return;
+    state.cloudUser = user.uid;
     const save = saveOverride || loadLocal();
     if (!save) return;
     try {
@@ -13941,8 +14001,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         clientUpdatedAt: save.savedAt,
         updatedAt: serverTimestamp()
       }, { merge: true });
+      state.cloudDebug.lastPush = Date.now();
     } catch (err) {
       console.warn('Cloud save push failed', err);
+      state.cloudDebug.lastError = String(err?.message || err);
     }
   }
 
@@ -14698,6 +14760,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function initSwarm() {
     bindInputs();
     bindHudScaleControls();
+    state.forceCloud = localStorage.getItem('swarmForceCloud') === '1';
+    if (state.forceCloud) noteStatus('Force cloud load enabled (F9 to toggle).');
     if (!window.__swarmUiBound) {
       window.__swarmUiBound = true;
       if (startBtn) startBtn.addEventListener('click', handleStart);
@@ -14781,3 +14845,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   window.initSwarm = initSwarm;
   window.stopSwarm = stopSwarm;
 })();
+      if (e.code === 'KeyO') {
+        state.debugHud = !state.debugHud;
+        noteStatus(`Debug HUD ${state.debugHud ? 'ON' : 'OFF'}.`);
+        return;
+      }
+      if (e.code === 'F9') {
+        state.forceCloud = !state.forceCloud;
+        localStorage.setItem('swarmForceCloud', state.forceCloud ? '1' : '0');
+        noteStatus(`Force cloud load ${state.forceCloud ? 'ENABLED' : 'disabled'}.`);
+        if (state.forceCloud) pullCloudSave();
+        return;
+      }
