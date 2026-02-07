@@ -2722,7 +2722,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     };
 
     cities.forEach((city) => {
-      const desired = city.type === 'capital' ? 6 : 4;
+      const desired = city.type === 'capital' ? 4 : 3;
       const others = cities
         .filter((other) => other.id !== city.id)
         .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
@@ -2735,12 +2735,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const maxFixPasses = 5;
     for (let pass = 0; pass < maxFixPasses; pass += 1) {
       const lowCities = cities.filter((city) => {
-        const minLinks = city.type === 'capital' ? 4 : 2;
+        const minLinks = city.type === 'capital' ? 3 : 2;
         return (degrees.get(city.id) || 0) < minLinks;
       });
       if (!lowCities.length) break;
       lowCities.forEach((city) => {
-        const minLinks = city.type === 'capital' ? 4 : 2;
+        const minLinks = city.type === 'capital' ? 3 : 2;
         const others = cities
           .filter((other) => other.id !== city.id)
           .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
@@ -2752,7 +2752,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       });
     }
 
-    const extraLinks = Math.max(0, Math.floor(cities.length * 0.6));
+    const extraLinks = Math.max(0, Math.floor(cities.length * 0.8));
     for (let i = 0; i < extraLinks; i += 1) {
       const a = cities[Math.floor(rng() * cities.length)];
       const b = cities[Math.floor(rng() * cities.length)];
@@ -2760,6 +2760,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (dist(a.x, a.y, b.x, b.y) < WORLD.sectorSize * 4) continue;
       addLane(a, b);
     }
+
+    const ensureMinLinks = 2;
+    cities.forEach((city) => {
+      if ((degrees.get(city.id) || 0) >= ensureMinLinks) return;
+      const others = cities
+        .filter((other) => other.id !== city.id)
+        .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
+        .sort((a, b) => a.d - b.d);
+      for (let i = 0; i < others.length; i += 1) {
+        if ((degrees.get(city.id) || 0) >= ensureMinLinks) break;
+        addLane(city, others[i].other);
+      }
+    });
 
     lanes.forEach((lane, idx) => {
       const dx = lane.x2 - lane.x1;
@@ -9146,7 +9159,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         y1: mid.y - dir.y * half,
         x2: mid.x + dir.x * half,
         y2: mid.y + dir.y * half,
-        width: randRange(rng, 140, 220)
+        width: randRange(rng, 160, 240),
+        source: 'lane',
+        trafficBoost: 1.3,
+        faction: player.affiliation || 'aetherline'
       };
       const dx = route.x2 - route.x1;
       const dy = route.y2 - route.y1;
@@ -9157,7 +9173,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       sector.objects.tradeRoutes.push(route);
     }
 
-    const convoyCount = 3 + Math.floor(rng() * 3);
+    const convoyCount = 6 + Math.floor(rng() * 3);
     const convoyFaction = player.affiliation || 'aetherline';
     spawnConvoyOnRoute(sector, route, rng, {
       convoyId,
@@ -9165,7 +9181,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       count: convoyCount,
       routeDir: 1,
       routeT: 0.2 + rng() * 0.6,
-      escortChance: 1
+      escortChance: 1,
+      escortCount: 4 + Math.floor(rng() * 3)
     });
   }
 
@@ -13896,9 +13913,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const cloud = snap.data();
       const cloudSave = cloud?.data;
       const cloudUpdated = cloud?.clientUpdatedAt || 0;
+      const snapUpdated = snap.updateTime?.toMillis ? snap.updateTime.toMillis() : 0;
+      const effectiveUpdated = Math.max(cloudUpdated, snapUpdated);
       const local = loadLocal();
       const localUpdated = local?.savedAt || 0;
-      if (cloudSave && cloudUpdated > localUpdated) {
+      if (cloudSave && (effectiveUpdated >= localUpdated || !localUpdated)) {
         applySave(cloudSave);
         noteStatus('Cloud save loaded.');
       }
