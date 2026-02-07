@@ -52,7 +52,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   };
 
   const GAME_ID = 'spacex-exploration-flagship';
-  const BUILD_ID = '2026-02-07a';
+  const BUILD_ID = '2026-02-07b';
   const SAVE_VERSION = 11;
   const SAVE_KEY = `swarmBreakerSave_v${SAVE_VERSION}`;
   const SAVE_BACKUP_KEY = `swarmBreakerSaveBackup_v${SAVE_VERSION}`;
@@ -3238,6 +3238,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       seedRouteTraffic(sector, route, civicRng, route.trafficBoost || 1.6);
       seedRouteEncounters(sector, route, civicRng, city);
     });
+    if (!laneRoutes.length && city) {
+      const forcedRoutes = ensureCityRoutes(sector, city, civicRng);
+      forcedRoutes.forEach((route) => {
+        seedRouteTraffic(sector, route, civicRng, route.trafficBoost || 1.5);
+        seedRouteEncounters(sector, route, civicRng, city);
+      });
+    }
 
     if (city) {
       const serviceCount = 8 + Math.floor(civicRng() * 6);
@@ -7893,7 +7900,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         const guardLeash = ship.guardLeash || GUARD_AI.leashRange;
         const guardBreakoff = ship.guardBreakoff || GUARD_AI.breakoffRange;
         if (!ship.guardState) ship.guardState = 'orbit';
-        const hostileToPlayer = isFactionAggressive(ship.faction);
+        const hostileToPlayer = isFactionAggressive(ship.faction) || getFactionRep(ship.faction) <= -6;
         const distToPlayer = dist(ship.x, ship.y, player.x, player.y);
         const distFromAnchor = dist(ship.x, ship.y, ship.anchor.x, ship.anchor.y);
         const playerInSafeZone = isNoFireZone(player.x, player.y);
@@ -7950,7 +7957,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           ship.cooldown = 0.5;
           return;
         }
-        const hostileToPlayer = isFactionAggressive(ship.faction);
+        const hostileToPlayer = isFactionAggressive(ship.faction) || getFactionRep(ship.faction) <= -6;
         if (hostileToPlayer) {
           const distanceToPlayer = dist(ship.x, ship.y, player.x, player.y);
           if (distanceToPlayer < (ship.range || 520)) {
@@ -12488,7 +12495,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       `Convoys: ships ${convoyShips} groups ${convoyGroups} escorts ${escortShips}`,
       `Contract: ${contract.active ? contract.type : 'none'} convoyId=${contract.convoyId || 'n/a'} ships=${contractConvoyShips}`,
       `Cloud: ready=${state.cloudReady} user=${state.cloudUser || 'n/a'} force=${state.forceCloud}`,
-      `Cloud times: local=${Math.round(loadLocal()?.savedAt || 0)} cloud=${Math.round(state.cloudDebug.lastCloudUpdated || 0)} doc=${Math.round(state.cloudDebug.lastDocUpdated || 0)}`,
+      `Cloud times: local=disabled cloud=${Math.round(state.cloudDebug.lastCloudUpdated || 0)} doc=${Math.round(state.cloudDebug.lastDocUpdated || 0)}`,
       `Cloud last pull=${state.cloudDebug.lastPull ? new Date(state.cloudDebug.lastPull).toLocaleTimeString() : 'n/a'} push=${state.cloudDebug.lastPush ? new Date(state.cloudDebug.lastPush).toLocaleTimeString() : 'n/a'}`,
       state.cloudDebug.lastError ? `Cloud error: ${state.cloudDebug.lastError}` : ''
     ].filter(Boolean);
@@ -13764,34 +13771,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       contract,
       checkpoint: state.checkpoint
     };
-    try {
-      const existing = localStorage.getItem(SAVE_KEY);
-      if (existing) localStorage.setItem(SAVE_BACKUP_KEY, existing);
-      localStorage.setItem(SAVE_KEY, JSON.stringify(save));
-    } catch (err) {
-      console.warn('Save failed', err);
-      return null;
-    }
     return save;
   }
 
   function loadLocal() {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) {
-        const backup = localStorage.getItem(SAVE_BACKUP_KEY);
-        if (!backup) return null;
-        const fallback = JSON.parse(backup);
-        if (!fallback || fallback.version !== SAVE_VERSION) return null;
-        return fallback;
-      }
-      const save = JSON.parse(raw);
-      if (!save || save.version !== SAVE_VERSION) return null;
-      return save;
-    } catch (err) {
-      console.warn('Load failed', err);
-      return null;
-    }
+    return null;
   }
 
   function applySave(save) {
@@ -13973,8 +13957,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.cloudDebug.lastCloudUpdated = cloudUpdated;
       state.cloudDebug.lastDocUpdated = snapUpdated;
       state.cloudDebug.lastPull = Date.now();
-      const local = loadLocal();
-      const localUpdated = local?.savedAt || 0;
+      const localUpdated = 0;
       if (cloudSave && (state.forceCloud || effectiveUpdated >= localUpdated || !localUpdated)) {
         applySave(cloudSave);
         noteStatus('Cloud save loaded.');
@@ -14126,6 +14109,18 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       if (e.code === 'KeyU' && state.mode === 'flight') {
         state.hudMode = state.hudMode === 'minimal' ? 'full' : 'minimal';
         noteStatus(`HUD ${state.hudMode === 'minimal' ? 'minimal' : 'full'} mode.`);
+        return;
+      }
+
+      if (e.code === 'KeyO') {
+        state.debugHud = !state.debugHud;
+        noteStatus(`Debug HUD ${state.debugHud ? 'ON' : 'OFF'}.`);
+        return;
+      }
+      if (e.code === 'F9') {
+        state.forceCloud = !state.forceCloud;
+        noteStatus(`Force cloud load ${state.forceCloud ? 'ENABLED' : 'disabled'}.`);
+        if (state.forceCloud) pullCloudSave();
         return;
       }
 
@@ -14760,8 +14755,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   function initSwarm() {
     bindInputs();
     bindHudScaleControls();
-    state.forceCloud = localStorage.getItem('swarmForceCloud') === '1';
-    if (state.forceCloud) noteStatus('Force cloud load enabled (F9 to toggle).');
+    state.forceCloud = false;
     if (!window.__swarmUiBound) {
       window.__swarmUiBound = true;
       if (startBtn) startBtn.addEventListener('click', handleStart);
@@ -14807,16 +14801,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     buildRiskRoutes();
     buildSkygridBackground();
 
-    const localSave = loadLocal();
-    if (localSave) {
-      applySave(localSave);
-      state.awaitingBrief = false;
-      state.mode = 'flight';
-      state.paused = true;
-      noteStatus('Local save loaded.');
-    } else {
-      resetRun({ full: true });
-    }
+    resetRun({ full: true });
     initSeasonState();
     syncHudScaleUi();
 
@@ -14845,15 +14830,3 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   window.initSwarm = initSwarm;
   window.stopSwarm = stopSwarm;
 })();
-      if (e.code === 'KeyO') {
-        state.debugHud = !state.debugHud;
-        noteStatus(`Debug HUD ${state.debugHud ? 'ON' : 'OFF'}.`);
-        return;
-      }
-      if (e.code === 'F9') {
-        state.forceCloud = !state.forceCloud;
-        localStorage.setItem('swarmForceCloud', state.forceCloud ? '1' : '0');
-        noteStatus(`Force cloud load ${state.forceCloud ? 'ENABLED' : 'disabled'}.`);
-        if (state.forceCloud) pullCloudSave();
-        return;
-      }
