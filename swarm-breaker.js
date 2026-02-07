@@ -373,6 +373,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   const CITY_SERVICES = ['Shipyard', 'Store', 'Contracts', 'Refuel', 'Ammo', 'Navigation Sync', 'Refinery', 'Crew'];
 
+  const SERVICE_PRICES = {
+    repairFull: 120,
+    fuelFull: 180,
+    hyperFull: 160
+  };
+
   const CITY_NAMES = [
     'Driftline City',
     'Solace Ring',
@@ -481,22 +487,22 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   const TRADE_ROUTE_CONFIG = {
     laneChance: 1,
-    expanseChance: 0.92,
-    clusterChance: 0.55,
-    voidChance: 0.6,
-    maxRoutesLane: 6,
-    maxRoutesExpanse: 5,
-    maxRoutesCluster: 4,
-    widthMin: 140,
-    widthMax: 240,
+    expanseChance: 0.98,
+    clusterChance: 0.7,
+    voidChance: 0.75,
+    maxRoutesLane: 8,
+    maxRoutesExpanse: 7,
+    maxRoutesCluster: 5,
+    widthMin: 160,
+    widthMax: 280,
     lengthMin: 0.65,
     lengthMax: 1.05,
-    convoyMin: 5,
-    convoyMaxLane: 8,
-    convoyMaxExpanse: 7,
-    escortChance: 0.92,
-    escortMin: 1,
-    escortMax: 4
+    convoyMin: 7,
+    convoyMaxLane: 12,
+    convoyMaxExpanse: 10,
+    escortChance: 0.97,
+    escortMin: 2,
+    escortMax: 5
   };
 
   const IFF_COLORS = {
@@ -783,6 +789,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       title: 'Cargo, Wrecks, and Traders',
       lines: [
         '- Wrecks yield salvage/alloys/relics. Fly through to collect.',
+        '- Fuel cells are cargo too; sell or refine them for credits/fuel.',
         '- Cargo capacity appears on the HUD; sell or refine at stations.',
         '- Traders (teal blips) resupply ammo and buy surplus cargo.'
       ]
@@ -801,6 +808,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       lines: [
         '- Hostile contacts tint by faction, friendly combatants are cyan.',
         '- Civilian traffic appears gray; teal is trader/city, green is station.'
+      ]
+    },
+    {
+      id: 'codex_rep',
+      title: 'Reputation & Law',
+      lines: [
+        '- Completing contracts or defending convoys raises faction reputation.',
+        '- Raiding convoys lowers reputation; at -12 guards will engage.',
+        '- Reputation adjusts station prices and access to safe lanes.'
       ]
     },
     {
@@ -1462,7 +1478,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     loreScroll: 0,
     hyperDrive: { cooldown: 0 },
     hyperNav: { chargeLevel: 10, targetIndex: 0 },
-    hyperJumpFx: { timer: 0, duration: 1.0, pending: null },
+    hyperJumpFx: { timer: 0, duration: 0.85, pending: null },
     lastBiome: '',
     biomeHintTimer: 0,
     boundaryTimer: 0,
@@ -1485,6 +1501,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     spawnGrace: 0,
     escape: { active: false, timer: 0, reason: '' },
     capture: { active: false, faction: '', label: '', origin: '' },
+    captureCooldown: 0,
     capturePressure: 0,
     captureWindow: 0,
     startEncounterTimer: 0,
@@ -1629,7 +1646,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       blueprints: [],
       skins: ['nebula'],
       toys: [],
-      cargo: { salvage: 0, alloys: 0, relics: 0 }
+      cargo: { salvage: 0, alloys: 0, relics: 0, fuelCells: 0 }
     },
     ammo: {
       slugs: 60,
@@ -2003,6 +2020,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
   }
 
   function updateCaptureState(dt) {
+    if (state.captureCooldown > 0) {
+      state.captureCooldown = Math.max(0, state.captureCooldown - dt);
+    }
     if (state.captureWindow > 0) {
       state.captureWindow = Math.max(0, state.captureWindow - dt);
     }
@@ -2386,8 +2406,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     home.services = home.services || CITY_SERVICES;
     addCity(home);
 
-    const desired = Math.max(32, Math.min(60, Math.floor(WORLD.gridRadius * 1.3)));
-    const minSeparation = Math.max(3, Math.floor(WORLD.gridRadius / 14));
+    const desired = Math.max(50, Math.min(90, Math.floor(WORLD.gridRadius * 1.6)));
+    const minSeparation = Math.max(2, Math.floor(WORLD.gridRadius / 16));
 
     const isReservedKey = (key) => {
       if (key === homeKey) return true;
@@ -2472,8 +2492,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       addCity(city);
     }
 
-    const outerDepth = Math.floor(WORLD.gridRadius * 0.65);
-    const outerTarget = Math.max(10, Math.floor(desired * 0.45));
+    const outerDepth = Math.floor(WORLD.gridRadius * 0.55);
+    const outerTarget = Math.max(14, Math.floor(desired * 0.6));
     let outerCount = cities.filter((city) => Math.max(Math.abs(city.gx), Math.abs(city.gy)) >= outerDepth).length;
     let extraIndex = cities.length;
     let outerAttempts = 0;
@@ -2573,7 +2593,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     };
 
     cities.forEach((city) => {
-      const desired = city.type === 'capital' ? 4 : 3;
+      const desired = city.type === 'capital' ? 5 : 4;
       const others = cities
         .filter((other) => other.id !== city.id)
         .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
@@ -2585,7 +2605,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
     const maxFixPasses = 4;
     for (let pass = 0; pass < maxFixPasses; pass += 1) {
-      const lowCities = cities.filter((city) => (degrees.get(city.id) || 0) < 2);
+      const lowCities = cities.filter((city) => (degrees.get(city.id) || 0) < 3);
       if (!lowCities.length) break;
       lowCities.forEach((city) => {
         const others = cities
@@ -2593,10 +2613,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           .map((other) => ({ other, d: dist(city.x, city.y, other.x, other.y) }))
           .sort((a, b) => a.d - b.d);
         for (let i = 0; i < others.length; i += 1) {
-          if ((degrees.get(city.id) || 0) >= 2) break;
+          if ((degrees.get(city.id) || 0) >= 3) break;
           addLane(city, others[i].other);
         }
       });
+    }
+
+    const extraLinks = Math.max(0, Math.floor(cities.length * 0.35));
+    for (let i = 0; i < extraLinks; i += 1) {
+      const a = cities[Math.floor(rng() * cities.length)];
+      const b = cities[Math.floor(rng() * cities.length)];
+      if (!a || !b || a.id === b.id) continue;
+      if (dist(a.x, a.y, b.x, b.y) < WORLD.sectorSize * 4) continue;
+      addLane(a, b);
     }
 
     world.tradeLanes = lanes;
@@ -2930,7 +2959,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (city) attachCitySpurs(sector, city, laneRoutes);
 
     if (city) {
-      const escortCount = 4 + Math.floor(civicRng() * 3);
+      const escortCount = 6 + Math.floor(civicRng() * 4);
       for (let i = 0; i < escortCount; i += 1) {
         const def = FRIENDLY_TYPES[Math.floor(civicRng() * FRIENDLY_TYPES.length)];
         const angle = randRange(civicRng, 0, Math.PI * 2);
@@ -3030,8 +3059,62 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
+    if (isCluster && !sector.isVoid && rng() < (sector.isCore ? 0.85 : 0.65)) {
+      const pocketCount = 1 + Math.floor(rng() * (sector.isCore ? 2 : 1));
+      const pocketSpan = fieldRadius * (sector.isCore ? 0.5 : 0.4);
+      for (let p = 0; p < pocketCount; p += 1) {
+        const pocketCenter = {
+          x: center.x + randRange(rng, -innerField, innerField),
+          y: center.y + randRange(rng, -innerField, innerField)
+        };
+        const pocketRadius = randRange(rng, pocketSpan * 0.4, pocketSpan * 0.75);
+        const rockCount = Math.max(8, Math.floor(randRange(rng, 10, 22) * densityScale * 0.9));
+        for (let i = 0; i < rockCount; i += 1) {
+          const angle = rng() * Math.PI * 2;
+          const radius = randRange(rng, pocketRadius * 0.1, pocketRadius);
+          const size = randRange(rng, 10, 28);
+          const ax = pocketCenter.x + Math.cos(angle) * radius;
+          const ay = pocketCenter.y + Math.sin(angle) * radius;
+          if (inClearZone(ax, ay)) continue;
+          sector.objects.asteroids.push({
+            x: ax,
+            y: ay,
+            radius: size,
+            ghost: rng() < 0.45,
+            points: generateAsteroidShape(rng, size)
+          });
+        }
+        const wreckCount = 1 + Math.floor(rng() * 2);
+        for (let w = 0; w < wreckCount; w += 1) {
+          const wx = pocketCenter.x + randRange(rng, -pocketRadius * 0.6, pocketRadius * 0.6);
+          const wy = pocketCenter.y + randRange(rng, -pocketRadius * 0.6, pocketRadius * 0.6);
+          if (inClearZone(wx, wy)) continue;
+          sector.objects.wrecks.push({
+            x: wx,
+            y: wy,
+            radius: randRange(rng, 18, 32),
+            salvage: 1 + Math.floor(rng() * 3)
+          });
+        }
+        const nodeCount = Math.max(4, Math.floor(randRange(rng, 5, 10) * densityScale));
+        for (let n = 0; n < nodeCount; n += 1) {
+          const nx = pocketCenter.x + randRange(rng, -pocketRadius * 0.6, pocketRadius * 0.6);
+          const ny = pocketCenter.y + randRange(rng, -pocketRadius * 0.6, pocketRadius * 0.6);
+          if (inClearZone(nx, ny)) continue;
+          sector.objects.salvageNodes.push({
+            x: nx,
+            y: ny,
+            radius: randRange(rng, 8, 14),
+            value: 1 + Math.floor(rng() * 2),
+            hue: randRange(rng, biome.hue - 10, biome.hue + 35),
+            pulse: rng() * Math.PI * 2
+          });
+        }
+      }
+    }
+
     if (isExpanse && rng() < (sector.isVoid ? 0.82 : 0.65)) {
-      const rubbleFields = 2 + Math.floor(rng() * (sector.isVoid ? 3 : sector.isCore ? 2 : 2));
+      const rubbleFields = 3 + Math.floor(rng() * (sector.isVoid ? 3 : sector.isCore ? 3 : 2));
       const rubbleScale = sector.isVoid ? 0.65 : 0.52;
       for (let f = 0; f < rubbleFields; f += 1) {
         const fieldCenter = {
@@ -3039,7 +3122,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
           y: center.y + randRange(rng, -wideField, wideField)
         };
         const fieldSpan = randRange(rng, fieldRadius * 0.35, fieldRadius * 0.7);
-        const count = Math.max(6, Math.floor(randRange(rng, 8, 18) * densityScale * rubbleScale));
+        const count = Math.max(8, Math.floor(randRange(rng, 10, 22) * densityScale * rubbleScale));
         for (let i = 0; i < count; i += 1) {
           const radius = randRange(rng, 10, 30);
           const ax = fieldCenter.x + randRange(rng, -fieldSpan, fieldSpan);
@@ -3053,7 +3136,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             points: generateAsteroidShape(rng, radius)
           });
         }
-        const salvageCount = Math.max(1, Math.floor(rng() * (sector.isVoid ? 2 : 3)));
+        const salvageCount = Math.max(2, Math.floor(rng() * (sector.isVoid ? 2 : 4)));
         for (let s = 0; s < salvageCount; s += 1) {
           const wreck = {
             x: fieldCenter.x + randRange(rng, -fieldSpan, fieldSpan),
@@ -3065,7 +3148,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             sector.objects.wrecks.push(wreck);
           }
         }
-        const nodeCount = Math.max(3, Math.floor(randRange(rng, 4, 8) * densityScale * rubbleScale));
+        const nodeCount = Math.max(4, Math.floor(randRange(rng, 5, 10) * densityScale * rubbleScale));
         for (let n = 0; n < nodeCount; n += 1) {
           const node = {
             x: fieldCenter.x + randRange(rng, -fieldSpan, fieldSpan),
@@ -3340,13 +3423,114 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
-    const trafficChance = (sector.isVoid ? 0.55 : isExpanse ? 0.98 : isCluster ? 0.85 : 0.78) * (1 - openSpace * 0.2);
+    if (sector.objects.tradeRoutes.length && rng() < (isExpanse ? 0.7 : isCluster ? 0.55 : 0.4)) {
+      const cacheCount = 1 + Math.floor(rng() * (isExpanse ? 2 : 1));
+      for (let c = 0; c < cacheCount; c += 1) {
+        const route = sector.objects.tradeRoutes[Math.floor(rng() * sector.objects.tradeRoutes.length)];
+        if (!route) continue;
+        const t = rng();
+        const offset = randRange(rng, -(route.width || 120) * 0.45, (route.width || 120) * 0.45);
+        const dx = route.x2 - route.x1;
+        const dy = route.y2 - route.y1;
+        const cx = route.x1 + dx * t + (route.nx || 0) * offset;
+        const cy = route.y1 + dy * t + (route.ny || 0) * offset;
+        if (inClearZone(cx, cy)) continue;
+        const debrisCount = 3 + Math.floor(rng() * 4);
+        for (let i = 0; i < debrisCount; i += 1) {
+          const angle = rng() * Math.PI * 2;
+          const radius = randRange(rng, 14, 48);
+          const size = randRange(rng, 8, 20);
+          const ax = cx + Math.cos(angle) * radius;
+          const ay = cy + Math.sin(angle) * radius;
+          if (inClearZone(ax, ay)) continue;
+          sector.objects.asteroids.push({
+            x: ax,
+            y: ay,
+            radius: size,
+            ghost: rng() < 0.55,
+            points: generateAsteroidShape(rng, size)
+          });
+        }
+        if (rng() < 0.7) {
+          sector.objects.wrecks.push({
+            x: cx + randRange(rng, -30, 30),
+            y: cy + randRange(rng, -30, 30),
+            radius: randRange(rng, 18, 32),
+            salvage: 1 + Math.floor(rng() * 2)
+          });
+        }
+        const nodeCount = 2 + Math.floor(rng() * 3);
+        for (let n = 0; n < nodeCount; n += 1) {
+          const nx = cx + randRange(rng, -50, 50);
+          const ny = cy + randRange(rng, -50, 50);
+          if (inClearZone(nx, ny)) continue;
+          sector.objects.salvageNodes.push({
+            x: nx,
+            y: ny,
+            radius: randRange(rng, 8, 13),
+            value: 1 + Math.floor(rng() * 2),
+            hue: randRange(rng, biome.hue - 5, biome.hue + 25),
+            pulse: rng() * Math.PI * 2
+          });
+        }
+      }
+    }
+
+    const trafficChance = (sector.isVoid ? 0.75 : isExpanse ? 1.05 : isCluster ? 0.95 : 0.86) * (1 - openSpace * 0.2);
     if (rng() < trafficChance) {
       const trafficCount = sector.isVoid
-        ? 2 + Math.floor(rng() * 3)
-        : 3 + Math.floor(rng() * (sector.isCore ? 6 : 5));
-      for (let i = 0; i < trafficCount; i += 1) {
-        const type = CIVILIAN_TYPES[Math.floor(rng() * CIVILIAN_TYPES.length)];
+        ? 3 + Math.floor(rng() * 4)
+        : 4 + Math.floor(rng() * (sector.isCore ? 8 : 6));
+      const routes = sector.objects.tradeRoutes || [];
+      const preferRoute = routes.length && rng() < 0.75;
+      if (preferRoute) {
+        const convoyGroups = Math.max(1, Math.floor(trafficCount / 2));
+        for (let i = 0; i < convoyGroups; i += 1) {
+          const route = routes[Math.floor(rng() * routes.length)];
+          if (!route) continue;
+          const convoyId = `${sector.key}-civconvoy-${i}-${Math.floor(rng() * 9999)}`;
+          const count = 2 + Math.floor(rng() * 2);
+          const spacing = 0.015 + rng() * 0.01;
+          const baseT = rng();
+          const routeDir = rng() < 0.5 ? 1 : -1;
+          for (let j = 0; j < count; j += 1) {
+            const type = CIVILIAN_TYPES[Math.floor(rng() * CIVILIAN_TYPES.length)];
+            spawnCivilianShip(sector, {
+              rng,
+              route,
+              routeT: (baseT + (j - (count - 1) / 2) * spacing) % 1,
+              routeDir,
+              type,
+              convoyId,
+              convoyRole: j === Math.floor(count / 2) ? 'lead' : 'wing'
+            });
+          }
+          if (rng() < 0.6) {
+            const escortCount = 1 + Math.floor(rng() * 2);
+            for (let e = 0; e < escortCount; e += 1) {
+              const def = FRIENDLY_TYPES[Math.floor(rng() * FRIENDLY_TYPES.length)];
+              const escortT = (baseT + (e - escortCount / 2) * spacing) % 1;
+              const escortOffset = randRange(rng, -route.width * 0.4, route.width * 0.4);
+              const ex = route.x1 + (route.x2 - route.x1) * escortT + route.nx * escortOffset;
+              const ey = route.y1 + (route.y2 - route.y1) * escortT + route.ny * escortOffset;
+              spawnFriendly(def.id, ex, ey, {
+                sector,
+                angle: route.angle + (routeDir < 0 ? Math.PI : 0),
+                faction: route.faction || sector.faction?.id || 'neutral',
+                routeId: route.id,
+                routeT: escortT,
+                routeDir,
+                routeOffset: escortOffset,
+                convoyId,
+                guard: true,
+                rng
+              });
+            }
+          }
+        }
+      } else {
+        for (let i = 0; i < trafficCount; i += 1) {
+          const type = CIVILIAN_TYPES[Math.floor(rng() * CIVILIAN_TYPES.length)];
           const civFaction = sector.faction?.id && rng() < 0.55 ? sector.faction.id : 'neutral';
           const livery = getLiveryForFaction(civFaction);
           sector.objects.civilians.push({
@@ -3369,6 +3553,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
             sway: rng() * Math.PI * 2
           });
         }
+      }
     }
 
     if (isExpanse && rng() < (sector.isVoid ? 0.55 : 0.4)) {
@@ -4099,7 +4284,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       };
       player.fuel = computeStats().fuelMax;
       player.ammo = { slugs: 60, missiles: 12, torpedoes: 4, flak: 50, mines: 6 };
-      player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0 };
+      player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0, fuelCells: 0 };
       player.crew = { navigator: 0, engineer: 0, quartermaster: 0 };
       player.milestones = new Set();
       player.discoveryUploads = new Set();
@@ -4114,7 +4299,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.lastZoneType = '';
       state.hyperDrive = { cooldown: 0 };
       state.hyperNav = { chargeLevel: 10, targetIndex: 0 };
-      state.hyperJumpFx = { timer: 0, duration: 1.0, pending: null };
+      state.hyperJumpFx = { timer: 0, duration: 0.85, pending: null };
       state.boundaryTimer = 0;
       state.boundaryWarning = 0;
       state.broadcastCooldown = 0;
@@ -4135,6 +4320,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       state.spawnGrace = 25;
       state.escape = { active: false, timer: 0, reason: '' };
       state.capture = { active: false, faction: '', label: '', origin: '' };
+      state.captureCooldown = 0;
       state.capturePressure = 0;
       state.captureWindow = 120;
       state.startEncounterTimer = 4;
@@ -4474,6 +4660,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       captureBias: options.captureBias || 0,
       patrolTag: options.patrolTag || ''
     };
+    assignCargoToEnemy(enemy, Math.random);
     entities.enemies.push(enemy);
     return enemy;
   }
@@ -4574,6 +4761,15 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ship.cargoLabel = manifest.label;
     ship.cargoColor = manifest.color;
     ship.cargoManifest = manifest;
+  }
+
+  function assignCargoToEnemy(enemy, rng = Math.random) {
+    if (!enemy || !enemy.cargo || enemy.cargo <= 0) return;
+    const manifest = pickCargoManifest(rng);
+    enemy.cargoType = manifest.id;
+    enemy.cargoLabel = manifest.label;
+    enemy.cargoColor = manifest.color;
+    enemy.cargoManifest = manifest;
   }
 
   function spawnCivilianShip(sector, options = {}) {
@@ -4692,7 +4888,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     if (withEscorts) {
       const baseEscorts = options.escortCount
         ?? (TRADE_ROUTE_CONFIG.escortMin + Math.floor(rng() * (TRADE_ROUTE_CONFIG.escortMax - TRADE_ROUTE_CONFIG.escortMin + 1)));
-      const escortCount = Math.max(1, Math.round(baseEscorts * (0.9 + (count - 2) * 0.1)));
+      const escortCount = Math.max(2, Math.round(baseEscorts * (1.05 + (count - 2) * 0.12)));
       const dx = route.x2 - route.x1;
       const dy = route.y2 - route.y1;
       for (let i = 0; i < escortCount; i += 1) {
@@ -4726,11 +4922,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         ? TRADE_ROUTE_CONFIG.convoyMaxExpanse
         : TRADE_ROUTE_CONFIG.convoyMin + 1;
     const baseCount = TRADE_ROUTE_CONFIG.convoyMin + Math.floor(rng() * (convoyMax - TRADE_ROUTE_CONFIG.convoyMin + 1));
-    const convoyGroups = Math.max(1, Math.round(baseCount * boost * 0.6));
+    const convoyGroups = Math.max(1, Math.round(baseCount * boost * 0.75));
     for (let i = 0; i < convoyGroups; i += 1) {
       spawnConvoyOnRoute(sector, route, rng, {
-        count: 2 + Math.floor(rng() * 3),
-        escortChance: Math.min(1, TRADE_ROUTE_CONFIG.escortChance * (0.9 + boost * 0.2))
+        count: 3 + Math.floor(rng() * 3),
+        escortChance: Math.min(1, TRADE_ROUTE_CONFIG.escortChance * (0.95 + boost * 0.25))
       });
     }
   }
@@ -4743,8 +4939,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const midX = (route.x1 + route.x2) / 2 + route.nx * randRange(rng, -route.width * 0.25, route.width * 0.25);
     const midY = (route.y1 + route.y2) / 2 + route.ny * randRange(rng, -route.width * 0.25, route.width * 0.25);
     if (city && dist(midX, midY, city.x, city.y) < (city.safeRadius || city.radius + 200)) return;
-    const raidChance = route.source === 'lane' ? 0.68 : 0.4;
-    const convoyChance = route.source === 'lane' ? 0.55 : 0.3;
+    const raidChance = route.source === 'lane' ? 0.78 : 0.5;
+    const convoyChance = route.source === 'lane' ? 0.6 : 0.35;
     if (rng() < convoyChance) {
       encounters.push({
         id: `${sector.key}-enc-convoy-${Math.floor(rng() * 9999)}`,
@@ -5114,6 +5310,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function attemptCapture() {
     if (state.capture?.active) return true;
+    if (state.captureCooldown > 0) return false;
     const sector = getCurrentSector();
     if (!sector) return false;
     const nearest = findClosestEnemy(player.x, player.y, 520);
@@ -5179,6 +5376,32 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     pushStoryLog('Complete contracts to earn credits and Atlas sigils.');
   }
 
+  function convertFactionPatrols(factionId) {
+    if (!factionId) return;
+    const sector = getCurrentSector();
+    if (!sector?.objects?.friendlies) return;
+    const converted = [];
+    entities.enemies = entities.enemies.filter((enemy) => {
+      if (enemy.faction === factionId) {
+        converted.push(enemy);
+        return false;
+      }
+      return true;
+    });
+    if (!converted.length) return;
+    const rng = mulberry32(WORLD_SEED + Math.floor(state.time * 7));
+    converted.forEach((enemy) => {
+      const def = FRIENDLY_TYPES[Math.floor(rng() * FRIENDLY_TYPES.length)];
+      spawnFriendly(def.id, enemy.x, enemy.y, {
+        sector,
+        angle: enemy.angle,
+        faction: factionId,
+        guard: true,
+        rng
+      });
+    });
+  }
+
   function resolveCaptureJoin() {
     const factionId = state.capture?.faction;
     if (factionId) {
@@ -5198,9 +5421,26 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.shield = Math.max(player.shield, cachedStats.maxShield * 0.35);
     if (factionId) {
       entities.enemies = entities.enemies.filter((enemy) => enemy.faction !== factionId);
+      convertFactionPatrols(factionId);
+      const sector = getCurrentSector();
+      if (sector) {
+        const escortCount = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < escortCount; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const radius = randRange(Math.random, 80, 150);
+          const def = FRIENDLY_TYPES[Math.floor(Math.random() * FRIENDLY_TYPES.length)];
+          spawnFriendly(def.id, player.x + Math.cos(angle) * radius, player.y + Math.sin(angle) * radius, {
+            sector,
+            angle: angle + Math.PI / 2,
+            faction: factionId,
+            guard: true
+          });
+        }
+      }
     }
     state.captureWindow = 0;
     state.capturePressure = 0;
+    state.captureCooldown = 40;
     state.spawnGrace = Math.max(state.spawnGrace || 0, 14);
     state.capture = { active: false, faction: '', label: '', origin: '' };
     state.mode = 'flight';
@@ -5219,6 +5459,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     state.capture = { active: false, faction: '', label: '', origin: '' };
     state.mode = 'flight';
     state.paused = false;
+    state.captureCooldown = 25;
     state.spawnGrace = Math.max(state.spawnGrace || 0, 10);
     state.intro.active = false;
     state.introCompleted = true;
@@ -5459,16 +5700,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const maxRange = getHyperRange(getHyperChargePercent(level));
     const maxCost = getHyperChargeCost(level);
     if (maxRange <= 0) return maxCost;
-    const ratio = clamp(distance / maxRange, 0.1, 1);
+    const ratio = clamp(distance / maxRange, 0.05, 1);
     const cost = Math.ceil(maxCost * ratio);
-    return Math.max(Math.ceil(maxCost * 0.1), cost);
+    return Math.max(Math.ceil(maxCost * 0.05), cost);
   }
 
   function getHyperBaseRange() {
     const boostSpeed = cachedStats.maxSpeed * 1.5 * (ZONE_TYPES.expanse?.boostMult || 1.6);
     const rangeMult = cachedStats.hyperRangeMult || 1;
     const boostRange = boostSpeed * 60 * HYPER.maxJumpMinutes;
-    const worldSpan = WORLD.size * 1.05;
+    const worldSpan = WORLD.size * 1.2;
     return Math.max(boostRange, worldSpan) * rangeMult;
   }
 
@@ -5719,30 +5960,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
 
   function getCargoCount() {
     const cargo = player.inventory.cargo;
-    return cargo.salvage + cargo.alloys + cargo.relics;
+    return cargo.salvage + cargo.alloys + cargo.relics + (cargo.fuelCells || 0);
   }
 
   function applyCargoManifestLoot(manifest, units, label = 'Cargo seized') {
     const salvageGain = Math.max(0, Math.round(units * ((manifest?.salvage ?? 1))));
     const alloysGain = Math.max(0, Math.round(units * ((manifest?.alloys ?? 0))));
     const relicsGain = Math.max(0, Math.round(units * ((manifest?.relics ?? 0))));
-    const fuelGain = Math.max(0, Math.round(units * ((manifest?.fuel ?? 0))));
+    const fuelCellsGain = Math.max(0, Math.round(units * ((manifest?.fuel ?? 0))));
     const cargoGain = salvageGain + alloysGain + relicsGain;
-    if (cargoGain > 0 && getCargoCount() + cargoGain <= cachedStats.cargoMax) {
+    if (cargoGain + fuelCellsGain > 0 && getCargoCount() + cargoGain + fuelCellsGain <= cachedStats.cargoMax) {
       player.inventory.cargo.salvage += salvageGain;
       player.inventory.cargo.alloys += alloysGain;
       player.inventory.cargo.relics += relicsGain;
+      player.inventory.cargo.fuelCells = (player.inventory.cargo.fuelCells || 0) + fuelCellsGain;
       awardCredits(120 + cargoGain * 28, label);
       if (!state.cargoHinted) {
         noteStatus('Cargo acquired. Sell or refine at stations.');
         state.cargoHinted = true;
       }
     } else {
-      awardCredits(120 + cargoGain * 20, label);
-      if (cargoGain > 0) noteStatus('Cargo bay full. Converted to credits.');
-    }
-    if (fuelGain > 0) {
-      player.fuel = clamp(player.fuel + fuelGain * 40, 0, cachedStats.fuelMax);
+      awardCredits(120 + cargoGain * 20 + fuelCellsGain * 16, label);
+      if (cargoGain + fuelCellsGain > 0) noteStatus('Cargo bay full. Converted to credits.');
     }
   }
 
@@ -5887,20 +6126,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const sector = getCurrentSector();
     const zoneBoost = sector.zone?.boostMult || 1;
     const fuelDrainBase = sector.zoneType === 'rift'
-      ? 2.2
+      ? 2.6
       : sector.zoneType === 'expanse'
-        ? 1.8
+        ? 2.2
         : sector.zoneType === 'lane'
-          ? 2.6
-          : 3.0;
+          ? 3.0
+          : 3.4;
     const fuelDrainMult = sector.zoneType === 'expanse'
-      ? 2.2
+      ? 2.6
       : sector.zoneType === 'lane'
-        ? 2.6
+        ? 3.0
         : sector.zoneType === 'rift'
-          ? 2.4
-          : 3.0;
-    const fuelDrain = fuelDrainBase * fuelDrainMult * 1.6;
+          ? 2.8
+          : 3.2;
+    const fuelDrain = fuelDrainBase * fuelDrainMult * 2.1;
     const fuelEfficiency = cachedStats.fuelEfficiency || 1;
 
     if (state.hyperDrive.cooldown > 0) {
@@ -8948,6 +9187,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.beginPath();
     ctx.arc(0, size * 0.9, size * 0.14, 0, Math.PI * 2);
     ctx.fill();
+
+    if (ship.guard || ship.convoyId) {
+      ctx.strokeStyle = toRgba(color, 0.45);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 1.5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -9709,27 +9956,54 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const y1 = route.y1 - camera.y + VIEW.centerY;
     const x2 = route.x2 - camera.x + VIEW.centerX;
     const y2 = route.y2 - camera.y + VIEW.centerY;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.hypot(dx, dy) || 1;
     const offset = route.width ? route.width * 0.18 : 24;
     const nx = route.nx || 0;
     const ny = route.ny || 0;
+    const isLane = route.source === 'lane';
+    const isSpur = route.source === 'spur';
+    const base = getFactionColor(route.faction, isLane ? '#ffd166' : '#6df0ff');
+    const mainColor = isSpur ? mixColor(base, '#7dfc9a', 0.35) : base;
     ctx.save();
-    ctx.globalAlpha = 0.5;
-    ctx.strokeStyle = 'rgba(109,240,255,0.2)';
-    ctx.lineWidth = 1.4;
-    ctx.setLineDash([12, 10]);
+    ctx.globalAlpha = isLane ? 0.85 : 0.7;
+    ctx.strokeStyle = toRgba(mainColor, isLane ? 0.55 : 0.4);
+    ctx.lineWidth = isLane ? 3 : 2.2;
+    ctx.setLineDash([14, 10]);
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.strokeStyle = 'rgba(109,240,255,0.08)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = toRgba(mainColor, isLane ? 0.3 : 0.18);
+    ctx.lineWidth = isLane ? 2.8 : 2.2;
     ctx.beginPath();
     ctx.moveTo(x1 + nx * offset, y1 + ny * offset);
     ctx.lineTo(x2 + nx * offset, y2 + ny * offset);
     ctx.moveTo(x1 - nx * offset, y1 - ny * offset);
     ctx.lineTo(x2 - nx * offset, y2 - ny * offset);
     ctx.stroke();
+
+    const chevrons = Math.max(3, Math.floor(length / 320));
+    const angle = Math.atan2(dy, dx);
+    for (let i = 0; i < chevrons; i += 1) {
+      const t = (state.time * (isLane ? 0.04 : 0.03) + i / chevrons) % 1;
+      const cx = x1 + dx * t;
+      const cy = y1 + dy * t;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angle);
+      ctx.globalAlpha = isLane ? 0.75 : 0.55;
+      ctx.fillStyle = toRgba(mainColor, isLane ? 0.85 : 0.65);
+      ctx.beginPath();
+      ctx.moveTo(-7, -4);
+      ctx.lineTo(8, 0);
+      ctx.lineTo(-7, 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
     ctx.restore();
   }
 
@@ -10251,9 +10525,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       const distance = dist(player.x, player.y, enemy.x, enemy.y);
       if (distance < 560) {
         ctx.save();
-        ctx.fillStyle = 'rgba(255,230,180,0.9)';
+        ctx.fillStyle = enemy.cargoColor || 'rgba(255,230,180,0.9)';
         ctx.font = '11px sans-serif';
-        ctx.fillText(`Cargo ${enemy.cargo}`, x + size + 10, y - size - 8);
+        ctx.fillText(`${enemy.cargoLabel || 'Cargo'} ${enemy.cargo}`, x + size + 10, y - size - 8);
         ctx.restore();
       }
     }
@@ -10459,11 +10733,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const hudAlpha = getHudAlpha();
     ctx.save();
     ctx.globalAlpha = hudAlpha;
-    const panelTop = VIEW.height - 138;
+    const panelTop = VIEW.height - 154;
     ctx.fillStyle = 'rgba(5,10,18,0.55)';
-    ctx.fillRect(12, panelTop, 300, 128);
+    ctx.fillRect(12, panelTop, 300, 144);
     ctx.strokeStyle = 'rgba(125,252,154,0.3)';
-    ctx.strokeRect(12, panelTop, 300, 128);
+    ctx.strokeRect(12, panelTop, 300, 144);
     ctx.fillStyle = PALETTE.glow;
     ctx.font = '12px sans-serif';
     let lineY = panelTop + 18;
@@ -10486,11 +10760,26 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     lineY += 16;
     ctx.fillText(`Energy ${Math.round(player.energy)}/${Math.round(cachedStats.energyMax)}`, 22, lineY);
     lineY += 16;
-    ctx.fillText(`Boost ${Math.round(player.boost)}/${Math.round(cachedStats.boostMax)}`, 22, lineY);
-    lineY += 16;
     ctx.fillText(`Fuel ${Math.round(player.fuel)}/${Math.round(cachedStats.fuelMax)}`, 22, lineY);
     lineY += 16;
     ctx.fillText(`Hyper ${Math.round(player.hyperCharge)}% | Dial ${getHyperChargeLevel() * 10}%`, 22, lineY);
+    lineY += 16;
+    const sector = getCurrentSector();
+    const repFaction = sector?.faction?.id || player.affiliation;
+    if (repFaction) {
+      const repValue = Math.round(getFactionRep(repFaction));
+      const repLabel = FACTIONS.find((f) => f.id === repFaction)?.name || repFaction;
+      ctx.fillStyle = repValue < 0 ? '#ff9f6b' : PALETTE.glow;
+      ctx.fillText(`Rep ${repLabel}: ${repValue >= 0 ? '+' : ''}${repValue}`, 22, lineY);
+      const barWidth = 140;
+      const barX = 22;
+      const barY = lineY + 6;
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillRect(barX, barY, barWidth, 5);
+      const t = clamp((repValue + 100) / 200, 0, 1);
+      ctx.fillStyle = repValue < 0 ? '#ff6b6b' : '#7dfc9a';
+      ctx.fillRect(barX, barY, barWidth * t, 5);
+    }
 
     const primaryWeapon = WEAPONS[player.weapons.primary];
     const secondaryWeapon = WEAPONS[player.weapons.secondary];
@@ -10641,6 +10930,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         lines.push({ text: 'Dock at hubs for contracts and Atlas sigils.', color: '#9fb4d9' });
       }
     }
+    if (!state.atlasCompleted) {
+      lines.push({ text: 'Objective: earn Atlas sigils from hub contracts to unlock the Atlas Gate.', color: PALETTE.gold });
+    }
     const gate = getGateData();
     if (gate) {
       const distance = Math.hypot(gate.x - player.x, gate.y - player.y);
@@ -10667,6 +10959,8 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     lines.push({ text: 'Signal Scope: hostile=faction, friendly=cyan, civilian=gray', color: '#9fb4d9' });
     lines.push({ text: 'Signal Scope: trader/city=teal, station=green, survey=violet', color: '#9fb4d9' });
     lines.push({ text: 'Convoys carry cargo. Disable transports to seize or salvage.', color: '#9fb4d9' });
+    lines.push({ text: 'Cargo sells for credits; fuel cells refine into fuel/hyper at stations.', color: '#9fb4d9' });
+    lines.push({ text: 'Reputation affects prices; negative rep triggers guards.', color: '#9fb4d9' });
     if (!lines.length) return;
     const width = 520;
     const height = lines.length * 16 + 12;
@@ -10725,8 +11019,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     }
     sector.objects.bases.forEach((base) => addContact('base', base.x, base.y, '#ff6b6b', 3.4));
     sector.objects.civilians.forEach((ship) => {
-      const size = ship.convoyId ? 2.6 : 2;
-      addContact('civil', ship.x, ship.y, IFF_COLORS.civilian, size);
+      const size = ship.convoyId ? 2.8 : 2;
+      const color = ship.convoyId ? '#ffd166' : IFF_COLORS.civilian;
+      addContact('civil', ship.x, ship.y, color, size);
     });
     sector.objects.surveyBeacons.forEach((beacon) => {
       if (world.beaconClaims?.[sector.key]) return;
@@ -10780,6 +11075,67 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillStyle = 'rgba(159,180,217,0.8)';
     ctx.font = '10px sans-serif';
     ctx.fillText('Radar', centerX - 18, centerY + radius + 18);
+  }
+
+  function findNearestCargoShip() {
+    const sector = getCurrentSector();
+    let best = null;
+    let bestDist = Infinity;
+    entities.enemies.forEach((enemy) => {
+      if (!enemy || enemy.hp <= 0) return;
+      if (enemy.role !== 'transport' && enemy.role !== 'carrier') return;
+      if (!enemy.cargo || enemy.cargo <= 0) return;
+      const d = dist(player.x, player.y, enemy.x, enemy.y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = { ship: enemy, kind: 'enemy' };
+      }
+    });
+    if (sector?.objects?.civilians) {
+      sector.objects.civilians.forEach((ship) => {
+        if (!ship || ship.hp <= 0) return;
+        if (!ship.cargo || ship.cargo <= 0) return;
+        const d = dist(player.x, player.y, ship.x, ship.y);
+        if (d < bestDist) {
+          bestDist = d;
+          best = { ship, kind: 'civilian' };
+        }
+      });
+    }
+    if (!best || bestDist > 620) return null;
+    return best;
+  }
+
+  function drawCargoManifestPanel() {
+    const target = findNearestCargoShip();
+    if (!target) return;
+    const ship = target.ship;
+    const factionName = ship.faction ? (FACTIONS.find((f) => f.id === ship.faction)?.name || ship.faction) : 'Unknown';
+    const label = target.kind === 'enemy' ? 'Hostile Transport' : 'Transport';
+    const panelW = 240;
+    const panelH = 84;
+    const x = VIEW.width - panelW - 16;
+    const y = VIEW.height - panelH - 140;
+    ctx.save();
+    ctx.globalAlpha = getHudAlpha();
+    ctx.fillStyle = 'rgba(5,10,18,0.7)';
+    ctx.fillRect(x, y, panelW, panelH);
+    ctx.strokeStyle = ship.cargoColor || '#ffd166';
+    ctx.strokeRect(x, y, panelW, panelH);
+    ctx.fillStyle = '#e0f2ff';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Cargo Manifest', x + 10, y + 18);
+    ctx.fillStyle = '#9fb4d9';
+    ctx.fillText(`${label} — ${factionName}`, x + 10, y + 36);
+    ctx.fillStyle = ship.cargoColor || '#ffd166';
+    ctx.fillText(`${ship.cargoLabel || 'Cargo'} x${ship.cargo || 0}`, x + 10, y + 54);
+    ctx.fillStyle = '#9fb4d9';
+    if (ship.disabled) {
+      ctx.fillText('Disabled: Press E to seize', x + 10, y + 72);
+    } else {
+      ctx.fillText('Disable to seize cargo', x + 10, y + 72);
+    }
+    ctx.restore();
   }
 
   function drawHyperRadar() {
@@ -10890,6 +11246,31 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.stroke();
     }
 
+    const swirlCount = 6;
+    for (let i = 0; i < swirlCount; i += 1) {
+      const angle = state.time * 0.8 + i * (Math.PI * 2 / swirlCount);
+      const radius = lerp(30, VIEW.height * 0.45, progress) + i * 10;
+      ctx.strokeStyle = `rgba(154,214,255,${0.12 + t * 0.2})`;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, radius * 1.2, radius * 0.6, angle, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    const barCount = 12;
+    ctx.strokeStyle = `rgba(125,252,154,${0.18 + t * 0.25})`;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < barCount; i += 1) {
+      const offset = (i / barCount) * VIEW.width;
+      const shift = (state.time * 220) % VIEW.width;
+      const x = (offset + shift) % VIEW.width;
+      const barHeight = lerp(40, VIEW.height * 0.6, progress);
+      ctx.beginPath();
+      ctx.moveTo(x, cy - barHeight);
+      ctx.lineTo(x, cy + barHeight);
+      ctx.stroke();
+    }
+
     ctx.restore();
   }
 
@@ -10916,6 +11297,47 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     });
     return best;
+  }
+
+  function getNearestConvoyAlert(sector) {
+    if (!sector?.encounters?.length) return null;
+    let best = null;
+    let bestDist = Infinity;
+    sector.encounters.forEach((enc) => {
+      if (enc.cleared) return;
+      if (enc.type !== 'raid' && enc.type !== 'convoy') return;
+      const d = dist(player.x, player.y, enc.x, enc.y);
+      if (d < bestDist) {
+        best = enc;
+        bestDist = d;
+      }
+    });
+    if (!best || bestDist > 2200) return null;
+    return { encounter: best, distance: bestDist };
+  }
+
+  function drawConvoyAlert(sector) {
+    const alert = getNearestConvoyAlert(sector);
+    if (!alert) return;
+    const { encounter, distance } = alert;
+    const label = encounter.type === 'raid' ? 'Convoy Raid' : 'Convoy Transit';
+    const color = encounter.type === 'raid' ? '#ff6b6b' : '#ffd166';
+    const panelW = 200;
+    const panelH = 48;
+    const x = VIEW.width - panelW - 16;
+    const y = 96;
+    ctx.save();
+    ctx.globalAlpha = getHudAlpha();
+    ctx.fillStyle = 'rgba(5,10,18,0.6)';
+    ctx.fillRect(x, y, panelW, panelH);
+    ctx.strokeStyle = toRgba(color, 0.6);
+    ctx.strokeRect(x, y, panelW, panelH);
+    ctx.fillStyle = color;
+    ctx.font = '12px sans-serif';
+    ctx.fillText(label, x + 10, y + 18);
+    ctx.fillStyle = '#e0f2ff';
+    ctx.fillText(`${Math.round(distance)}m`, x + 10, y + 36);
+    ctx.restore();
   }
 
   function drawEncounterIndicator(sector) {
@@ -11045,6 +11467,28 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       }
     }
 
+    if (world.tradeLanes && world.tradeLanes.length) {
+      const mapPoint = (posX, posY) => {
+        const grid = gridFromPos(posX, posY);
+        const mx = offsetX + Math.floor((grid.gx + WORLD.gridRadius) / stride) * cell + cell / 2;
+        const my = offsetY + Math.floor((grid.gy + WORLD.gridRadius) / stride) * cell + cell / 2;
+        return { x: mx, y: my };
+      };
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 1.4;
+      world.tradeLanes.forEach((lane) => {
+        const a = mapPoint(lane.x1, lane.y1);
+        const b = mapPoint(lane.x2, lane.y2);
+        ctx.strokeStyle = lane.faction ? toRgba(getFactionColor(lane.faction, '#ffd166'), 0.55) : 'rgba(255,209,102,0.45)';
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
     if (world.homeBase) {
       const homeGrid = gridFromPos(world.homeBase.x, world.homeBase.y);
       const hx = offsetX + Math.floor((homeGrid.gx + WORLD.gridRadius) / stride) * cell + cell / 2;
@@ -11064,10 +11508,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
         const cx = offsetX + Math.floor((grid.gx + WORLD.gridRadius) / stride) * cell + cell / 2;
         const cy = offsetY + Math.floor((grid.gy + WORLD.gridRadius) / stride) * cell + cell / 2;
         const baseColor = getFactionColor(city.faction, '#9ad6ff');
-        const alpha = discovered ? 0.75 : 0.35;
+        const alpha = discovered ? 0.8 : 0.55;
         ctx.fillStyle = toRgba(baseColor, alpha);
         ctx.beginPath();
-        ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
         ctx.fill();
       });
     }
@@ -11124,10 +11568,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillStyle = '#9fb4d9';
     ctx.fillText('Press 1-9 for 10-90% or 0 for 100% charge. Use arrows to pick a target.', 24, 58);
     ctx.fillText('Press Enter to jump. Press V or Esc to close.', 24, 76);
+    ctx.fillText('Hyper cost scales with distance; short jumps use less charge.', 24, 94);
 
     const estCost = selected ? getHyperJumpCost(selected.distance, chargeLevel) : maxCost;
     ctx.fillStyle = '#e0f2ff';
-    ctx.fillText(`Charge Dial: ${chargePercent}% | Max Cost: ${maxCost}% | Est: ${estCost}% | Range: ${Math.round(maxRange)}m (Radar ${Math.round(radarRange)}m)`, 24, 98);
+    ctx.fillText(`Charge Dial: ${chargePercent}% | Max Cost: ${maxCost}% | Est: ${estCost}% | Range: ${Math.round(maxRange)}m (Radar ${Math.round(radarRange)}m)`, 24, 116);
 
     const currentGrid = gridFromPos(player.x, player.y);
     const mapRadius = 4;
@@ -11307,10 +11752,10 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       infoY += 16;
     }
     ctx.font = '13px sans-serif';
-    const repairCost = applyFactionPrice(120, factionId);
+    const costs = computeServiceCosts(factionId);
     const ammoCost = applyFactionPrice(240, factionId);
     const options = [
-      `1. Repair + Refuel + Hyper (${repairCost} credits)`,
+      `1. Repair + Refuel + Hyper (${costs.total} credits)`,
       '2. Shipyard - Configure Modules',
       '3. Store - Supplies & Cosmetics',
       '4. Accept Contract',
@@ -11326,7 +11771,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
       ctx.fillText(opt, 24, infoY + idx * 22);
     });
     ctx.fillStyle = '#e0f2ff';
-    ctx.fillText(`Cargo: Salvage ${player.inventory.cargo.salvage} | Alloys ${player.inventory.cargo.alloys} | Relics ${player.inventory.cargo.relics}`, 24, infoY + options.length * 22 + 8);
+    ctx.fillText(`Cargo: Salvage ${player.inventory.cargo.salvage} | Alloys ${player.inventory.cargo.alloys} | Relics ${player.inventory.cargo.relics} | Fuel Cells ${player.inventory.cargo.fuelCells || 0}`, 24, infoY + options.length * 22 + 8);
+    const cargoValue = player.inventory.cargo.salvage * 40
+      + player.inventory.cargo.alloys * 60
+      + player.inventory.cargo.relics * 110
+      + (player.inventory.cargo.fuelCells || 0) * 55;
+    ctx.fillStyle = '#9fb4d9';
+    ctx.fillText(`Estimated Cargo Value: ${Math.round(cargoValue)} credits`, 24, infoY + options.length * 22 + 28);
+    ctx.fillText(`Service Costs: Repair ${costs.baseRepair} | Fuel ${costs.baseFuel} | Hyper ${costs.baseHyper}`, 24, infoY + options.length * 22 + 46);
 
     if (state.civicTutorial?.active && (activeStation?.type === 'city' || activeStation?.type === 'home')) {
       const baseY = infoY + options.length * 22 + 34;
@@ -11563,11 +12015,13 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     ctx.fillText('Biome pockets hold stations and hazards. The Interstice is the quiet void between clusters.', 24, 180);
     ctx.fillText('Use Signal Scope to find traders (teal) and stations (green) for fuel and ammo.', 24, 202);
     ctx.fillText('Fuel and hyper charge do not regenerate. Dock or hail traders to resupply.', 24, 224);
-    ctx.fillText('Wrecks and rubble fields yield salvage. Sell/refine cargo at stations.', 24, 246);
-    ctx.fillText('Bastion City is a safe no-fire hub with fuel, ammo, and discovery uploads.', 24, 268);
-    ctx.fillText('You begin unaligned. Patrols may capture you; joining grants faction access.', 24, 290);
-    ctx.fillText('Press G for Expedition Goals. Press U to toggle minimal HUD.', 24, 312);
-    ctx.fillText('Press Enter to launch or Esc to skip.', 24, 334);
+    ctx.fillText('Wrecks, rubble, and cluster fields yield salvage. Sell/refine cargo at stations.', 24, 246);
+    ctx.fillText('Reputation rises by helping convoys and contracts; raiding convoys lowers it.', 24, 268);
+    ctx.fillText('Low reputation triggers guards outside city safe rings.', 24, 290);
+    ctx.fillText('Bastion City is a safe hub with fuel, ammo, and discovery uploads.', 24, 312);
+    ctx.fillText('You begin unaligned. Patrols may capture you; joining grants faction access.', 24, 334);
+    ctx.fillText('Press G for Expedition Goals. Press U to toggle minimal HUD.', 24, 356);
+    ctx.fillText('Press Enter to launch or Esc to skip.', 24, 378);
   }
 
   function drawOverlay() {
@@ -11604,7 +12058,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const hudMode = state.hudMode || 'full';
     if (hudMode === 'full') drawMiniMap();
     drawShipStatus();
-    if (hudMode === 'full') drawNavigationHud(sector);
+    if (hudMode === 'full') {
+      drawNavigationHud(sector);
+      drawConvoyAlert(sector);
+      drawCargoManifestPanel();
+    }
     drawSignalScope();
     drawHyperRadar();
     drawGateIndicator();
@@ -11890,7 +12348,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.inventory.blueprints = save.inventory?.blueprints || [];
     player.inventory.skins = save.inventory?.skins || ['nebula'];
     player.inventory.toys = save.inventory?.toys || [];
-    player.inventory.cargo = save.inventory?.cargo || { salvage: 0, alloys: 0, relics: 0 };
+    player.inventory.cargo = save.inventory?.cargo || { salvage: 0, alloys: 0, relics: 0, fuelCells: 0 };
 
     world.discovered = new Set(save.mapProgress?.sectorsDiscovered || []);
     world.bossDefeated = save.mapProgress?.bossesDefeated || {};
@@ -12357,14 +12815,29 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     noteStatus(`Blueprint acquired: ${BLUEPRINTS[blueprint].name}.`);
   }
 
+  function computeServiceCosts(factionId) {
+    const repairPct = clamp((1 - player.hp / cachedStats.maxHp) * 0.7 + (1 - player.shield / cachedStats.maxShield) * 0.3, 0, 1);
+    const fuelPct = clamp(1 - player.fuel / cachedStats.fuelMax, 0, 1);
+    const hyperPct = clamp(1 - player.hyperCharge / HYPER.maxCharge, 0, 1);
+    const baseRepair = Math.round(SERVICE_PRICES.repairFull * repairPct);
+    const baseFuel = Math.round(SERVICE_PRICES.fuelFull * fuelPct);
+    const baseHyper = Math.round(SERVICE_PRICES.hyperFull * hyperPct);
+    const total = applyFactionPrice(baseRepair + baseFuel + baseHyper, factionId);
+    return { repairPct, fuelPct, hyperPct, baseRepair, baseFuel, baseHyper, total };
+  }
+
   function stationRepair() {
     const factionId = state.activeStation?.faction || '';
-    const repairCost = applyFactionPrice(120, factionId);
-    if (player.credits < repairCost) {
-      noteStatus('Insufficient credits for repairs.');
+    const costs = computeServiceCosts(factionId);
+    if (costs.total <= 0) {
+      noteStatus('Systems already topped up.');
       return;
     }
-    player.credits -= repairCost;
+    if (player.credits < costs.total) {
+      noteStatus('Insufficient credits for services.');
+      return;
+    }
+    player.credits -= costs.total;
     player.hp = cachedStats.maxHp;
     player.shield = cachedStats.maxShield;
     player.boost = cachedStats.boostMax;
@@ -12372,19 +12845,20 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     player.fuel = cachedStats.fuelMax;
     player.hyperCharge = HYPER.maxCharge;
     player.heat = 0;
-    noteStatus('Station services applied.');
+    noteStatus(`Station services applied. -${costs.total} credits.`);
     advanceCivicTutorial('repair');
   }
 
   function sellCargo() {
     const cargo = player.inventory.cargo;
-    const totalValue = cargo.salvage * 40 + cargo.alloys * 60 + cargo.relics * 110;
+    const fuelCells = cargo.fuelCells || 0;
+    const totalValue = cargo.salvage * 40 + cargo.alloys * 60 + cargo.relics * 110 + fuelCells * 55;
     if (totalValue <= 0) {
       noteStatus('No cargo to sell.');
       return;
     }
     player.credits += totalValue;
-    player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0 };
+    player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0, fuelCells: 0 };
     noteStatus(`Cargo sold for ${totalValue} credits.`);
   }
 
@@ -12402,18 +12876,19 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/fi
     const salvage = cargo.salvage || 0;
     const alloys = cargo.alloys || 0;
     const relics = cargo.relics || 0;
-    if (salvage + alloys + relics <= 0) {
+    const fuelCells = cargo.fuelCells || 0;
+    if (salvage + alloys + relics + fuelCells <= 0) {
       noteStatus('No cargo to refine.');
       return;
     }
-    const fuelGain = salvage * 28 + alloys * 40;
-    const hyperGain = alloys * 6 + relics * 4;
-    const creditGain = salvage * 18 + alloys * 30 + relics * 120;
+    const fuelGain = salvage * 28 + alloys * 40 + fuelCells * 80;
+    const hyperGain = alloys * 6 + relics * 4 + fuelCells * 8;
+    const creditGain = salvage * 18 + alloys * 30 + relics * 120 + fuelCells * 20;
     player.fuel = clamp(player.fuel + fuelGain, 0, cachedStats.fuelMax);
     player.hyperCharge = clamp(player.hyperCharge + hyperGain, 0, HYPER.maxCharge);
     player.credits += creditGain;
-    player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0 };
-    noteStatus('Refinery processed cargo into fuel cells.');
+    player.inventory.cargo = { salvage: 0, alloys: 0, relics: 0, fuelCells: 0 };
+    noteStatus('Refinery processed cargo into fuel reserves.');
   }
 
   function bulkRestockAmmo() {
